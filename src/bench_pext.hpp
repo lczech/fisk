@@ -12,9 +12,13 @@
 #include "microbench.hpp"
 #include "pext.hpp"
 
-struct PextInput {
+struct PextInput
+{
     std::uint64_t value;
     std::uint64_t mask;
+
+    // For the preprocessed implementation, we also pre-compute the block tables
+    PextBlockTable block_table;
 };
 
 inline std::uint64_t random_mask_with_popcount(std::mt19937_64& rng, int popcnt)
@@ -39,7 +43,13 @@ inline std::vector<PextInput> make_inputs(std::size_t n, int popcnt, std::uint64
     v.reserve(n);
 
     for (std::size_t i = 0; i < n; ++i) {
-        v.push_back(PextInput{dist_u64(rng), random_mask_with_popcount(rng, popcnt)});
+        std::uint64_t value = dist_u64(rng);
+        std::uint64_t mask  = random_mask_with_popcount(rng, popcnt);
+        v.push_back( PextInput{
+            value,
+            mask,
+            pext_sw_block_table_preprocess_u64( mask )
+        });
     }
     return v;
 }
@@ -48,9 +58,12 @@ inline void bench_pext(std::string const& csv_out)
 {
     using namespace microbench;
 
-    std::size_t const n = (1u << 20);
-    std::size_t const rounds = 10;
-    std::size_t const repeats = 3;
+    std::size_t const n = 10;
+    std::size_t const rounds = (1u << 18);
+    // std::size_t const n = (1u << 20);
+    // std::size_t const rounds = 10;
+
+    std::size_t const repeats = 5;
     bool const show_progress = isatty(fileno(stdout));
 
     // User output
@@ -94,12 +107,16 @@ inline void bench_pext(std::string const& csv_out)
             bench(
                 "pext_sw_table8_u64",
                 [](PextInput const& in){ return pext_sw_table8_u64(in.value, in.mask);
+            }),
+            bench(
+                "pext_sw_block_table_u64",
+                [](PextInput const& in){ return pext_sw_block_table_u64(in.value, in.block_table);
             })
         );
-        if( show_progress ) {
-            std::cout << "\n";
-        }
 
         write_csv_rows(os, "PEXT", case_label, results);
+    }
+    if( show_progress ) {
+        std::cout << "\n";
     }
 }

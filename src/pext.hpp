@@ -12,6 +12,8 @@
 #include <string_view>
 #include <vector>
 #include <algorithm>
+#include <stdexcept>
+#include <limits>
 
 #include "cpu_intrinsics.hpp"
 
@@ -154,4 +156,87 @@ static inline std::uint64_t pext_sw_table8_u64(std::uint64_t x, std::uint64_t ma
         shift += pext_table.popcnt[mm];
     }
     return out;
+}
+
+// -----------------------------------------------------------------------------
+//     Preprocessing with blocks
+// -----------------------------------------------------------------------------
+
+struct PextBlockTable
+{
+    // One entry per run of consecutive 1-bits in the original mask.
+    // First, a mask selecting that run at its original bit positions.
+    // Second, right-shift value to move that run to its packed output position.
+    // In the worst case, we have an interleaved pattern of 32 ones and zeros.
+    // std::vector<std::uint64_t> masks;
+    // std::vector<std::uint64_t> shifts;
+    std::array<std::uint64_t, 32> masks{};
+    std::array<std::uint64_t, 32> shifts{};
+};
+
+inline PextBlockTable pext_sw_block_table_preprocess_u64( std::uint64_t mask )
+{
+    PextBlockTable table;
+    // table.masks.resize( 32, 0 );
+    // table.shifts.resize( 32, 0 );
+
+    // Helper: build a contiguous run mask of length len at bit position start.
+    auto make_run_mask64 = [](unsigned start, unsigned len) -> std::uint64_t
+    {
+        if (len == 0) return 0;
+        if (len >= 64) return ~std::uint64_t{0};
+        return ((std::uint64_t{1} << len) - 1) << start;
+    };
+
+    unsigned out_pos = 0; // number of extracted bits assigned so far (packed output bit index)
+    unsigned bit = 0;
+    size_t arr_idx = 0;
+    while (bit < 64) {
+        // Skip zeros
+        if (((mask >> bit) & 1ULL) == 0ULL) {
+            ++bit;
+            continue;
+        }
+
+        // Found start of a run of ones. Build a mask for that run.
+        unsigned start = bit;
+        while (bit < 64 && (((mask >> bit) & 1ULL) == 1ULL)) {
+            ++bit;
+        }
+        unsigned end = bit - 1;
+        unsigned len = end - start + 1;
+        std::uint64_t block_mask = make_run_mask64(start, len);
+
+        // In PEXT output, this run occupies [out_pos .. out_pos+len-1].
+        // The bits are currently at [start .. start+len-1].
+        // So shift right by (start - out_pos) to align them.
+        // out_pos is always <= start.
+        unsigned shift = start - out_pos;
+
+        // Sanity check. Should not be possible to have more than 32 values.
+        if( arr_idx == 32 ) {
+            throw std::runtime_error( "pext_sw_block_table_preprocess_u64 with arr_idx == 32" );
+        }
+
+        // Add to the table.
+        table.masks[arr_idx]  = block_mask;
+        table.shifts[arr_idx] = shift;
+        ++arr_idx;
+        out_pos += len;
+    }
+
+    return table;
+}
+
+// Apply blockwise-PEXT using the preprocessing above.
+// Semantics match _pext_u64(x, mask) for the same mask.
+static inline std::uint64_t pext_sw_block_table_u64(std::uint64_t x, PextBlockTable const& pb)
+{
+    std::uint64_t res = 0;
+    size_t i = 0;
+    while(pb.masks[i]) {
+        res |= (x & pb.masks[i]) >> pb.shifts[i];
+        ++i;
+    }
+    return res;
 }
