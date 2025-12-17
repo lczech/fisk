@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "arg_parser.hpp"
+#include "cpu_intrinsics.hpp"
 
 struct Options {
     // Input fasta file with sequence data
@@ -50,6 +51,9 @@ int main(int argc, char **argv)
     } else {
         std::cout << "No input file provided\n";
     }
+
+    // User output of CPU features
+    print_intrinsics_support();
 
     return 0;
 }

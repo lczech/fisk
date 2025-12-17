@@ -53,3 +53,22 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         /WX
     )
 endif()
+
+# ==================================================================================================
+#     Detect Instruction Sets
+# ==================================================================================================
+
+include(CheckCXXCompilerFlag)
+
+check_cxx_compiler_flag("-mbmi2"   COMPILER_SUPPORTS_BMI2)
+check_cxx_compiler_flag("-mpclmul" COMPILER_SUPPORTS_PCLMUL)
+
+if (COMPILER_SUPPORTS_BMI2)
+    target_compile_options(${PROJECT_NAME} PRIVATE "-mbmi2")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_BMI2=1)
+endif()
+
+if (COMPILER_SUPPORTS_PCLMUL)
+    target_compile_options(${PROJECT_NAME} PRIVATE "-mpclmul")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAVE_CLMUL=1)
+endif()
