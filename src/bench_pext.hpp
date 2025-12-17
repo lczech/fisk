@@ -11,6 +11,8 @@
 
 #include "microbench.hpp"
 #include "pext.hpp"
+#include "pext_zp7.hpp"
+#include "pext_instlatx64.hpp"
 
 struct PextInput
 {
@@ -111,6 +113,10 @@ inline void bench_pext(std::string const& csv_out)
             bench(
                 "pext_sw_block_table_u64",
                 [](PextInput const& in){ return pext_sw_block_table_u64(in.value, in.block_table);
+            }),
+            bench(
+                "zp7_pext_64",
+                [](PextInput const& in){ return zp7_pext_64(in.value, in.mask);
             })
         );
 
