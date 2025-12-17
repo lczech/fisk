@@ -65,7 +65,7 @@ inline void bench_pext(std::string const& csv_out)
     // std::size_t const n = (1u << 20);
     // std::size_t const rounds = 10;
 
-    std::size_t const repeats = 5;
+    std::size_t const repeats = 10;
     bool const show_progress = isatty(fileno(stdout));
 
     // User output
@@ -95,28 +95,32 @@ inline void bench_pext(std::string const& csv_out)
         std::vector<Result> results;
         results = run_suite_best_of("PEXT", inputs, rounds, repeats,
             bench(
-                "pext_hw_bmi2_u64",
+                "pext_hw_bmi2",
                 [](PextInput const& in){ return pext_hw_bmi2_u64(in.value, in.mask);
             }),
             bench(
-                "pext_sw_bitloop_u64",
+                "pext_sw_bitloop",
                 [](PextInput const& in){ return pext_sw_bitloop_u64(in.value, in.mask);
             }),
             bench(
-                "pext_sw_split32_u64",
+                "pext_sw_split32",
                 [](PextInput const& in){ return pext_sw_split32_u64(in.value, in.mask);
             }),
             bench(
-                "pext_sw_table8_u64",
+                "pext_sw_table8",
                 [](PextInput const& in){ return pext_sw_table8_u64(in.value, in.mask);
             }),
             bench(
-                "pext_sw_block_table_u64",
+                "pext_sw_block_table",
                 [](PextInput const& in){ return pext_sw_block_table_u64(in.value, in.block_table);
             }),
             bench(
-                "zp7_pext_64",
+                "pext_sw_zp7",
                 [](PextInput const& in){ return zp7_pext_64(in.value, in.mask);
+            }),
+            bench(
+                "pext_sw_instlatx",
+                [](PextInput const& in){ return pext64_emu(in.value, in.mask);
             })
         );
 
