@@ -15,7 +15,13 @@
 #include <stdexcept>
 #include <limits>
 
-#include "cpu_intrinsics.hpp"
+#ifdef HAVE_BMI2
+#include <immintrin.h>
+#endif
+
+#ifdef HAVE_CLMUL
+#include <wmmintrin.h>
+#endif
 
 // =================================================================================================
 //     Hardware PEXT

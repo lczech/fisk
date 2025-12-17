@@ -8,8 +8,8 @@
 
 #include "arg_parser.hpp"
 #include "bench_pext.hpp"
-#include "cpu_intrinsics.hpp"
 #include "fs_utils.hpp"
+#include "sys_info.hpp"
 
 struct Options {
     // Input fasta file with sequence data
@@ -54,11 +54,11 @@ int main(int argc, char **argv)
     }
 
     // For now, just checking that the CLI works
-    if (opts.input_file.size()) {
-        std::cout << "Input file: " << opts.input_file << "\n";
-    } else {
-        std::cout << "No input file provided\n";
-    }
+    // if (opts.input_file.size()) {
+    //     std::cout << "Input file: " << opts.input_file << "\n";
+    // } else {
+    //     std::cout << "No input file provided\n";
+    // }
 
     // Prepare output directory
     std::filesystem::path out_dir;
@@ -73,8 +73,10 @@ int main(int argc, char **argv)
     //     Main
     // ------------------------------------------------------------------------
 
-    // User output of CPU features
-    print_intrinsics_support();
+    // User output of system information
+    info_print_cpu();
+    info_print_intrinsics();
+    info_print_compiler();
 
     // Run the benchmarks
     bench_pext( (out_dir / "pext.csv").string() );

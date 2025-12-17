@@ -12,6 +12,29 @@
 #include <wmmintrin.h>
 #endif
 
+// =================================================================================================
+//     Compiler Info
+// =================================================================================================
+
+std::string info_platform();
+std::string info_compiler_family();
+std::string info_compiler_version();
+
+void info_print_compiler();
+
+// =================================================================================================
+//     Hardware Info
+// =================================================================================================
+
+std::string info_cpu_vendor();
+std::string info_cpu_model();
+
+void info_print_cpu();
+
+// =================================================================================================
+//     CPU Intrinsics
+// =================================================================================================
+
 inline bool bmi2_enabled()
 {
     // Cached result for speed
@@ -54,45 +77,4 @@ inline bool clmul_enabled()
     return enabled;
 }
 
-inline void print_intrinsics_support()
-{
-    std::cout << "Instruction set support:\n";
-
-    // -----------------------------
-    // BMI2
-    // -----------------------------
-    bool cmake_bmi2 =
-    #ifdef HAVE_BMI2
-        true;
-    #else
-        false;
-    #endif
-
-    bool cpu_bmi2 = false;
-    #if defined(__GNUC__) || defined(__clang__)
-        __builtin_cpu_init();
-        cpu_bmi2 = __builtin_cpu_supports("bmi2");
-    #endif
-
-    std::cout << "  BMI2  : compiled=" << (cmake_bmi2 ? "yes, " : "no,  ")
-              << "cpu=" << (cpu_bmi2 ? "yes" : "no") << "\n";
-
-    // -----------------------------
-    // CLMUL (PCLMUL)
-    // -----------------------------
-    bool cmake_clmul =
-    #ifdef HAVE_CLMUL
-        true;
-    #else
-        false;
-    #endif
-
-    bool cpu_clmul = false;
-    #if defined(__GNUC__) || defined(__clang__)
-        __builtin_cpu_init();
-        cpu_clmul = __builtin_cpu_supports("pclmul");
-    #endif
-
-    std::cout << "  CLMUL : compiled=" << (cmake_clmul ? "yes, " : "no,  ")
-              << "cpu=" << (cpu_clmul ? "yes" : "no") << "\n";
-}
+void info_print_intrinsics();
