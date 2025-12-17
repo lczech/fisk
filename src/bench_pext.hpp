@@ -83,7 +83,6 @@ inline void bench_pext(std::string const& csv_out)
     // Most of our software implementations of PEXT have a runtime depending on that,
     // so we want to test the effects of different masks on the implementations.
     for (int w = 0; w <= 64; ++w) {
-        auto inputs = make_inputs(n, w, 0xC0FFEEULL ^ static_cast<std::uint64_t>(w));
         std::string case_label = "popcount=" + std::to_string(w);
         if( show_progress ) {
             std::cout << "\rmask popcount "
@@ -92,8 +91,13 @@ inline void bench_pext(std::string const& csv_out)
             // std::cout << case_label << "\n";
         }
 
+        // Helper to generate fresh input for each repetition
+        auto make_inputs_rep = [w]() {
+            return make_inputs(n, w, 0xC0FFEEULL ^ static_cast<std::uint64_t>(w));
+        };
+
         std::vector<Result> results;
-        results = run_suite_best_of("PEXT", inputs, rounds, repeats,
+        results = run_suite_best_of("PEXT", make_inputs_rep, rounds, repeats,
             bench(
                 "pext_hw_bmi2",
                 [](PextInput const& in){ return pext_hw_bmi2_u64(in.value, in.mask);

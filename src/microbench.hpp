@@ -190,19 +190,35 @@ std::vector<Result> run_suite(
 // -----------------------------------------------------------------------------
 
 // Run multiple repeats and report the best (min) ns/op per benchmark.
-template <class Input, class... Benches>
+template <class MakeInputs, class... Benches>
 std::vector<Result> run_suite_best_of(
     std::string_view title,
-    std::vector<Input> const& inputs,
+    MakeInputs make_inputs,
     int rounds,
     int repeats,
     Benches const&... bs
 ) {
-    auto best = run_suite(title, inputs, rounds, bs...);
+    if (repeats <= 0) {
+        throw std::runtime_error("run_suite_best_of_generated: repeats must be > 0");
+    }
+
+    // First run: generate inputs and time once.
+    auto inputs0 = make_inputs();
+    auto best = run_suite(title, inputs0, rounds, bs...);
+
+    // Further repeats: new inputs each time; keep best ns/op.
     for (int k = 1; k < repeats; ++k) {
+        auto inputs = make_inputs();
         auto cur = run_suite(title, inputs, rounds, bs...);
-        for (std::size_t i = 0; i < best.size(); ++i) {
-            if (cur[i].ns_per_op < best[i].ns_per_op) best[i] = cur[i];
+
+        if (cur.size() != best.size()) {
+            throw std::runtime_error("run_suite_best_of_generated: benchmark count changed");
+        }
+
+        for (std::size_t i = 0; i < cur.size(); ++i) {
+            if (cur[i].ns_per_op < best[i].ns_per_op) {
+                best[i] = cur[i];
+            }
         }
     }
 
