@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "arg_parser.hpp"
+#include "bench_pext.hpp"
 #include "cpu_intrinsics.hpp"
 
 struct Options {
@@ -54,6 +55,9 @@ int main(int argc, char **argv)
 
     // User output of CPU features
     print_intrinsics_support();
+
+    // Run the benchmarks
+    bench_pext( "pext.csv" );
 
     return 0;
 }

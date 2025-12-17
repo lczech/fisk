@@ -12,7 +12,7 @@ make
 to build the program, and
 
 ```
-./bin/fisk
+taskset -c 2 ./bin/fisk
 ```
 
-to execute it.
+to execute it (includine thread pinning for optimized performance).
