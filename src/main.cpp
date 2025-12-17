@@ -4,14 +4,19 @@
 #include <vector>
 #include <optional>
 #include <stdexcept>
+#include <filesystem>
 
 #include "arg_parser.hpp"
 #include "bench_pext.hpp"
 #include "cpu_intrinsics.hpp"
+#include "fs_utils.hpp"
 
 struct Options {
     // Input fasta file with sequence data
     std::string input_file;
+
+    // Output directory for benchmark results
+    std::string output_dir = "benchmarks";
 };
 
 int main(int argc, char **argv)
@@ -21,7 +26,7 @@ int main(int argc, char **argv)
     ArgParser parser(argv[0]);
 
     // ------------------------------------------------------------------------
-    //     Declare options
+    //     Declare command line options
     // ------------------------------------------------------------------------
 
     parser.add_option(
@@ -30,8 +35,14 @@ int main(int argc, char **argv)
         opts.input_file
     );
 
+    parser.add_option(
+        "--output-dir", "-o",
+        "Output directory for benchmark CSV files (default: benchmarks)",
+        opts.output_dir
+    );
+
     // ------------------------------------------------------------------------
-    //     Parse
+    //     Parse args and setup
     // ------------------------------------------------------------------------
 
     try {
@@ -42,10 +53,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // ------------------------------------------------------------------------
-    //     Main
-    // ------------------------------------------------------------------------
-
     // For now, just checking that the CLI works
     if (opts.input_file.size()) {
         std::cout << "Input file: " << opts.input_file << "\n";
@@ -53,11 +60,24 @@ int main(int argc, char **argv)
         std::cout << "No input file provided\n";
     }
 
+    // Prepare output directory
+    std::filesystem::path out_dir;
+    try {
+        out_dir = ensure_output_dir(opts.output_dir);
+    } catch (std::exception const& e) {
+        std::cerr << "Output directory error: " << e.what() << "\n";
+        return 2;
+    }
+
+    // ------------------------------------------------------------------------
+    //     Main
+    // ------------------------------------------------------------------------
+
     // User output of CPU features
     print_intrinsics_support();
 
     // Run the benchmarks
-    bench_pext( "pext.csv" );
+    bench_pext( (out_dir / "pext.csv").string() );
 
     return 0;
 }
