@@ -8,6 +8,7 @@
 
 #include "arg_parser.hpp"
 #include "bench_pext.hpp"
+#include "bench_seq_enc.hpp"
 #include "fs_utils.hpp"
 #include "sequence.hpp"
 #include "sys_info.hpp"
@@ -19,6 +20,9 @@ struct Options
 
     // Input fasta file with sequence data
     std::string input_file;
+
+    // Value of k for the k-mers
+    std::string k;
 
     // Output directory for benchmark results
     std::string output_dir = "benchmarks";
@@ -47,6 +51,12 @@ int main(int argc, char **argv)
     );
 
     parser.add_option(
+        "--k", "-k",
+        "Value of k to use for the k-mers",
+        opts.k
+    );
+
+    parser.add_option(
         "--output-dir", "-o",
         "Output directory for benchmark CSV files (default: benchmarks)",
         opts.output_dir
@@ -66,7 +76,7 @@ int main(int argc, char **argv)
     }
 
     // Get the sequence to process, either random, or from fasta.
-    std::string sequence;
+    std::vector<std::string> sequences;
     if (opts.input_file.size() && opts.input_length.size()) {
         throw std::invalid_argument(
             "Options --input-length and --input-fasta are mutually exclusive."
@@ -74,18 +84,39 @@ int main(int argc, char **argv)
     }
     if (opts.input_file.size()) {
         std::cout << "Reading input file " << opts.input_file << "\n";
-        sequence = load_fasta_clean( opts.input_file );
+        sequences = load_fasta_clean( opts.input_file );
+        size_t sum = 0;
+        for( auto const& seq : sequences ) {
+            sum += seq.size();
+        }
+        std::cout << "Input file with " << sequences.size() << " sequences";
+        std::cout << "and " << sum << " total nucleotides\n";
     } else {
         size_t inp_len = 0;
         if(opts.input_length.size()) {
             inp_len = std::stoul(opts.input_length);
         } else {
-            std::cout << "No input provided\n";
-            size_t const default_len = 1000000;
+            std::cout << "No input provided, using default\n";
+            size_t const default_len = (1u << 25);
             inp_len = default_len;
         }
         std::cout << "Generating input sequence of length " << inp_len << "\n";
-        sequence = random_acgt(inp_len);
+        sequences = std::vector<std::string>{ random_acgt(inp_len) };
+    }
+
+    // Get the value for k.
+    size_t k = 0;
+    if( opts.k.size() ) {
+        k = std::stoul(opts.k);
+        std::cout << "Using k=" << k << "\n";
+    } else {
+        std::cout << "No k provided, using k=31\n";
+        k = 31;
+    }
+    if( k == 0 || k > 32 ) {
+        throw std::invalid_argument(
+            "Options -k has to be in [1, 32]."
+        );
     }
 
     // Prepare output directory
@@ -111,9 +142,13 @@ int main(int argc, char **argv)
     }
 
     // Run the benchmarks
+    // {
+    //     auto os_pext = get_ofstream(out_dir, "pext.csv" );
+    //     bench_pext( os_pext );
+    // }
     {
-        auto os_pext = get_ofstream(out_dir, "pext.csv" );
-        bench_pext( os_pext );
+        auto os_seq_enc = get_ofstream(out_dir, "seq_enc.csv" );
+        bench_seq_enc( sequences, os_seq_enc );
     }
 
     return 0;

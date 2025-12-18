@@ -7,8 +7,9 @@
 #include <stdexcept>
 #include <random>
 #include <array>
+#include <vector>
 
-inline std::string load_fasta_clean(std::string const& path)
+inline std::vector<std::string> load_fasta_clean(std::string const& path)
 {
     // Read FASTA file, remove all non-ACGT characters, and concatenate all sequences.
     // This is just for a simple test here, so we skip all the complexity of dealing
@@ -21,19 +22,19 @@ inline std::string load_fasta_clean(std::string const& path)
         throw std::runtime_error("Could not open FASTA file: " + path);
     }
 
-    // Cheap pre-alloc; will grow if needed
-    std::string result;
-    result.reserve(1'000'000);
-
     // Not the most efficient - see genesis for a way faster set of functions:
     // https://github.com/lczech/genesis/blob/master/lib/genesis/sequence/formats/fasta_reader.hpp
     // But good enough for our simple test purposes here.
+    std::vector<std::string> result;
     std::string line;
     while(std::getline(in, line)) {
         // skip headers/labels
         if(line.empty() || line[0] == '>') {
+            result.emplace_back();
             continue;
         }
+        std::string seq;
+        seq.reserve(line.size());
         for(char& c : line) {
             char uc = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
             switch(uc) {
@@ -43,13 +44,14 @@ inline std::string load_fasta_clean(std::string const& path)
                 case 'T':
                     // Only use proper nucleotides in our simple test here.
                     // We leave k-mer extraction with
-                    result.push_back(uc);
+                    seq.push_back(uc);
                     break;
                 default:
                     // drop other nucleotides
                     break;
             }
         }
+        result.back() += std::move(seq);
     }
 
     return result;
