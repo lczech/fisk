@@ -7,6 +7,7 @@
 #include <filesystem>
 
 #include "arg_parser.hpp"
+#include "bench_kmer_extract.hpp"
 #include "bench_pext.hpp"
 #include "bench_seq_enc.hpp"
 #include "fs_utils.hpp"
@@ -109,14 +110,13 @@ int main(int argc, char **argv)
     if( opts.k.size() ) {
         k = std::stoul(opts.k);
         std::cout << "Using k=" << k << "\n";
+        if( k < 1 || k > 32 ) {
+            throw std::invalid_argument(
+                "Option -k has to be in [1, 32]."
+            );
+        }
     } else {
-        std::cout << "No k provided, using k=31\n";
-        k = 31;
-    }
-    if( k == 0 || k > 32 ) {
-        throw std::invalid_argument(
-            "Options -k has to be in [1, 32]."
-        );
+        std::cout << "No k provided, testing all values\n";
     }
 
     // Prepare output directory
@@ -146,9 +146,18 @@ int main(int argc, char **argv)
     //     auto os_pext = get_ofstream(out_dir, "pext.csv" );
     //     bench_pext( os_pext );
     // }
+    // {
+    //     auto os_seq_enc = get_ofstream(out_dir, "seq_enc.csv" );
+    //     bench_seq_enc( sequences, os_seq_enc );
+    // }
     {
-        auto os_seq_enc = get_ofstream(out_dir, "seq_enc.csv" );
-        bench_seq_enc( sequences, os_seq_enc );
+        // Test either the given size of k, or the full range if no k provided.
+        auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
+        if( k == 0 ) {
+            bench_kmer_extract( sequences, os_kmer_extract );
+        } else {
+            bench_kmer_extract( sequences, k, k, os_kmer_extract );
+        }
     }
 
     return 0;
