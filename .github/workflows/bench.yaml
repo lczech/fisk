@@ -1,0 +1,86 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux: GCC
+          - os: ubuntu-latest
+            compiler: gcc
+            cc: gcc
+            cxx: g++
+          # Linux: Clang
+          - os: ubuntu-latest
+            compiler: clang
+            cc: clang
+            cxx: clang++
+          # macOS: AppleClang
+          - os: macos-latest
+            compiler: clang
+            cc: clang
+            cxx: clang++
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      BUILD_TYPE: Release
+      # Directory inside the repo where the binary will write CSVs / plots
+      OUTPUT_DIR: artifacts/${{ matrix.os }}-${{ matrix.compiler }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas matplotlib
+
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Configure CMake
+        run: |
+          export CC="${{ matrix.cc }}"
+          export CXX="${{ matrix.cxx }}"
+          cmake -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+
+      - name: Build
+        run: |
+          cmake --build build --config "${BUILD_TYPE}" -- -j 4
+
+      - name: Run benchmarks
+        run: |
+          mkdir -p "${OUTPUT_DIR}"
+          ./bin/fisk --output-dir "${OUTPUT_DIR}"
+
+      - name: Run plotting script
+        run: |
+          python plot/plot_pext.py "${OUTPUT_DIR}/pext.csv" --out "${OUTPUT_DIR}/pext.png"
+          python plot/plot_pext.py "${OUTPUT_DIR}/pext.csv" --out "${OUTPUT_DIR}/pext.svg"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-${{ matrix.os }}-${{ matrix.compiler }}
+          path: ${{ env.OUTPUT_DIR }}
