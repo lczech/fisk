@@ -59,8 +59,6 @@ inline std::vector<PextInput> make_inputs(std::size_t n, int popcnt, std::uint64
 
 inline void bench_pext(std::ostream& csv_os)
 {
-    using namespace microbench;
-
     std::size_t const n = 10;
     std::size_t const rounds = (1u << 16);
     // std::size_t const n = (1u << 20);
@@ -93,8 +91,11 @@ inline void bench_pext(std::ostream& csv_os)
             return make_inputs(n, w, seed);
         };
 
-        std::vector<Result> results;
-        results = run_suite_best_of("PEXT", make_inputs_rep, rounds, repeats,
+        Microbench<PextInput> suite("PEXT");
+        suite.rounds(rounds).repeats(repeats);
+
+        auto results = suite.run(
+            make_inputs_rep,
             #ifdef HAVE_BMI2
             bench(
                 "pext_hw_bmi2",

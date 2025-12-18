@@ -1,17 +1,21 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <functional>
+#include <iomanip>
 #include <iostream>
+#include <ostream>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
-#include <algorithm>
-#include <iomanip>
-#include <ostream>
 
-namespace microbench
-{
+// -----------------------------------------------------------------------------
+//     do_not_optimize_u64()
+// -----------------------------------------------------------------------------
 
 inline void do_not_optimize_u64(std::uint64_t v)
 {
@@ -19,9 +23,13 @@ inline void do_not_optimize_u64(std::uint64_t v)
         asm volatile("" : : "r"(v) : "memory");
     #else
         volatile std::uint64_t sink = v;
-        (void)sink;
+        (void) sink;
     #endif
 }
+
+// -----------------------------------------------------------------------------
+//     Result and Bench
+// -----------------------------------------------------------------------------
 
 struct Result
 {
@@ -65,7 +73,7 @@ inline void print(std::vector<Result> const& rs)
     // Reset stream defaults that might surprise later printing
     std::cout.unsetf(std::ios::floatfield);
     std::cout << std::setprecision(6);
-};
+}
 
 // -----------------------------------------------------------------------------
 //     write_csv_...()
@@ -116,7 +124,7 @@ inline void require_same_sinks(
 }
 
 // -----------------------------------------------------------------------------
-//     bench()
+//     bench() helper
 // -----------------------------------------------------------------------------
 
 // Inlined wrapper for the benchmarked function
@@ -127,104 +135,229 @@ inline Bench<std::decay_t<F>> bench(std::string_view name, F&& fn)
 }
 
 // -----------------------------------------------------------------------------
-//     run_one()
+//     Microbench<Input>
 // -----------------------------------------------------------------------------
 
-// Run a single benchmarked function, with no function call overhead,
-// indirection, type erasure, or other confounding factors,
-// as the compiler should be able to inline all of it.
-template <class Input, class F>
-Result run_one(
-    std::vector<Input> const& inputs,
-    int rounds,
-    Bench<F> const& b
-) {
-    std::uint64_t acc = 0;
+template <class Input>
+class Microbench
+{
+public:
+    using InputType = Input;
 
-    // warm-up
-    for (auto const& in : inputs) acc ^= static_cast<std::uint64_t>(b.fn(in));
-    do_not_optimize_u64(acc);
+    // Convenience alias to reuse the Bench type
+    template <class F>
+    using BenchT = Bench<F>;
 
-    auto t0 = std::chrono::steady_clock::now();
-    for (int r = 0; r < rounds; ++r) {
+    explicit Microbench(std::string title)
+        : title_(std::move(title))
+    {}
+
+    // ------------------------------------------------------
+    //     configuration (fluent)
+    // ------------------------------------------------------
+
+    Microbench& rounds(int r) {
+        if (r <= 0) throw std::runtime_error("rounds must be > 0");
+        rounds_ = r;
+        return *this;
+    }
+
+    Microbench& repeats(int r) {
+        if (r <= 0) throw std::runtime_error("repeats must be > 0");
+        repeats_ = r;
+        return *this;
+    }
+
+    // Default: 1 unit per input element (ns_per_op == ns per element)
+    Microbench& units_per_element(double u) {
+        if (u <= 0.0) throw std::runtime_error("units_per_element must be > 0");
+        units_per_element_ = u;
+        units_fn_ = nullptr; // disable custom units function
+        return *this;
+    }
+
+    // Custom units function, e.g. `[](auto const& in){ return in.seq.size(); }`
+    // so ns_per_op becomes ns per base.
+    Microbench& units_fn(std::function<double(Input const&)> fn) {
+        units_fn_ = std::move(fn);
+        return *this;
+    }
+
+    Microbench& check_sinks(bool b) {
+        check_sinks_ = b;
+        return *this;
+    }
+
+    Microbench& print_results(bool b) {
+        print_results_ = b;
+        return *this;
+    }
+
+    // Convenience: create a Bench for this Microbench
+    template <class F>
+    static BenchT<std::decay_t<F>> make_bench(std::string_view name, F&& fn) {
+        return bench(std::forward<std::string_view>(name), std::forward<F>(fn));
+    }
+
+    // ------------------------------------------------------
+    //     running with fixed inputs
+    // ------------------------------------------------------
+
+    template <class... Benches>
+    std::vector<Result> run(
+        std::vector<Input> const& inputs,
+        Benches const&... bs
+    ) const {
+        if (repeats_ == 1) {
+            auto rs = run_once(inputs, bs...);
+            print_if_needed(rs, /*best_of=*/false);
+            return rs;
+        }
+
+        auto best = run_once(inputs, bs...);
+        for (int k = 1; k < repeats_; ++k) {
+            auto cur = run_once(inputs, bs...);
+            if (cur.size() != best.size()) {
+                throw std::runtime_error("Microbench::run: benchmark count changed across repeats");
+            }
+            for (std::size_t i = 0; i < cur.size(); ++i) {
+                if (cur[i].ns_per_op < best[i].ns_per_op) {
+                    best[i] = cur[i];
+                }
+            }
+        }
+        print_if_needed(best, /*best_of=*/true);
+        return best;
+    }
+
+    // ------------------------------------------------------
+    //     running with generated inputs per repeat
+    // ------------------------------------------------------
+
+    template <class MakeInputs, class... Benches>
+    std::vector<Result> run(
+        MakeInputs make_inputs,
+        Benches const&... bs
+    ) const {
+        if (repeats_ <= 0) {
+            throw std::runtime_error("Microbench::run: repeats must be > 0");
+        }
+
+        // First run: generate inputs and time once.
+        auto inputs0 = make_inputs();
+        auto best    = run_once(inputs0, bs...);
+
+        // Further repeats: new inputs each time; keep best ns/op.
+        for (int k = 1; k < repeats_; ++k) {
+            auto inputs = make_inputs();
+            auto cur    = run_once(inputs, bs...);
+
+            if (cur.size() != best.size()) {
+                throw std::runtime_error("Microbench::run: benchmark count changed");
+            }
+            for (std::size_t i = 0; i < cur.size(); ++i) {
+                if (cur[i].ns_per_op < best[i].ns_per_op) {
+                    best[i] = cur[i];
+                }
+            }
+        }
+
+        print_if_needed(best, /*best_of=*/true);
+        return best;
+    }
+
+private:
+
+    // ------------------------------------------------------
+    //     Internal functions
+    // ------------------------------------------------------
+
+    // Sum of "work units" for a single pass over all inputs
+    double compute_units_per_run(std::vector<Input> const& inputs) const {
+        if (units_fn_) {
+            double total = 0.0;
+            for (auto const& in : inputs) {
+                total += units_fn_(in);
+            }
+            if (total <= 0.0) {
+                throw std::runtime_error("Microbench::compute_units_per_run: total work units must be > 0");
+            }
+            return total;
+        }
+        return units_per_element_ * static_cast<double>(inputs.size());
+    }
+
+    template <class F>
+    Result run_one(
+        std::vector<Input> const& inputs,
+        double units_per_run,
+        Bench<F> const& b
+    ) const {
+        std::uint64_t acc = 0;
+
+        // warm-up
         for (auto const& in : inputs) {
             acc ^= static_cast<std::uint64_t>(b.fn(in));
         }
-    }
-    auto t1 = std::chrono::steady_clock::now();
-    do_not_optimize_u64(acc);
+        do_not_optimize_u64(acc);
 
-    double secs = std::chrono::duration<double>(t1 - t0).count();
-    double ops  = static_cast<double>(inputs.size()) * static_cast<double>(rounds);
-    return Result{b.name, (secs * 1e9) / ops, acc};
-}
-
-// -----------------------------------------------------------------------------
-//     run_suite()
-// -----------------------------------------------------------------------------
-
-// Run a suite of functions to be benchmarked and compared to each other.
-template <class Input, class... Benches>
-std::vector<Result> run_suite(
-    std::string_view title,
-    std::vector<Input> const& inputs,
-    int rounds,
-    Benches const&... bs
-) {
-    (void) title;
-
-    std::vector<Result> rs;
-    rs.reserve(sizeof...(bs));
-
-    (rs.push_back(run_one(inputs, rounds, bs)), ...);
-
-    // std::cout << "\n=== " << title << " ===\n";
-    // print(rs);
-    require_same_sinks(rs);
-
-    return rs;
-}
-
-// -----------------------------------------------------------------------------
-//     run_suite_best_of()
-// -----------------------------------------------------------------------------
-
-// Run multiple repeats and report the best (min) ns/op per benchmark.
-template <class MakeInputs, class... Benches>
-std::vector<Result> run_suite_best_of(
-    std::string_view title,
-    MakeInputs make_inputs,
-    int rounds,
-    int repeats,
-    Benches const&... bs
-) {
-    if (repeats <= 0) {
-        throw std::runtime_error("run_suite_best_of_generated: repeats must be > 0");
-    }
-
-    // First run: generate inputs and time once.
-    auto inputs0 = make_inputs();
-    auto best = run_suite(title, inputs0, rounds, bs...);
-
-    // Further repeats: new inputs each time; keep best ns/op.
-    for (int k = 1; k < repeats; ++k) {
-        auto inputs = make_inputs();
-        auto cur = run_suite(title, inputs, rounds, bs...);
-
-        if (cur.size() != best.size()) {
-            throw std::runtime_error("run_suite_best_of_generated: benchmark count changed");
-        }
-
-        for (std::size_t i = 0; i < cur.size(); ++i) {
-            if (cur[i].ns_per_op < best[i].ns_per_op) {
-                best[i] = cur[i];
+        auto t0 = std::chrono::steady_clock::now();
+        for (int r = 0; r < rounds_; ++r) {
+            for (auto const& in : inputs) {
+                acc ^= static_cast<std::uint64_t>(b.fn(in));
             }
         }
+        auto t1 = std::chrono::steady_clock::now();
+        do_not_optimize_u64(acc);
+
+        double secs        = std::chrono::duration<double>(t1 - t0).count();
+        double total_units = units_per_run * static_cast<double>(rounds_);
+        double ns_per_unit = (secs * 1e9) / total_units;
+
+        return Result{b.name, ns_per_unit, acc};
     }
 
-    // std::cout << "\n=== " << title << " (best of " << repeats << ") ===\n";
-    // print(best);
-    return best;
-}
+    template <class... Benches>
+    std::vector<Result> run_once(
+        std::vector<Input> const& inputs,
+        Benches const&... bs
+    ) const {
+        std::vector<Result> rs;
+        rs.reserve(sizeof...(bs));
 
-} // namespace microbench
+        double units_per_run = compute_units_per_run(inputs);
+
+        (rs.push_back(run_one(inputs, units_per_run, bs)), ...);
+
+        if (check_sinks_) {
+            require_same_sinks(rs, /*fatal=*/true);
+        }
+
+        return rs;
+    }
+
+    void print_if_needed(std::vector<Result> const& rs, bool best_of) const {
+        if (!print_results_) return;
+        if (best_of) {
+            std::cout << "\n=== " << title_ << " (best of " << repeats_ << ") ===\n";
+        } else {
+            std::cout << "\n=== " << title_ << " ===\n";
+        }
+        print(rs);
+    }
+
+    // ------------------------------------------------------
+    //     Member variables
+    // ------------------------------------------------------
+
+    std::string title_;
+    int rounds_  = 10;
+    int repeats_ = 1;
+
+    // Either a constant factor per element, or a custom function:
+    double units_per_element_ = 1.0;
+    std::function<double(Input const&)> units_fn_{};
+
+    bool check_sinks_   = true;
+    bool print_results_ = false;
+};
