@@ -13,6 +13,7 @@
 #include "pext.hpp"
 #include "pext_zp7.hpp"
 #include "pext_instlatx64.hpp"
+#include "sys_info.hpp"
 
 struct PextInput
 {
@@ -94,10 +95,12 @@ inline void bench_pext(std::ostream& csv_os)
 
         std::vector<Result> results;
         results = run_suite_best_of("PEXT", make_inputs_rep, rounds, repeats,
+            #ifdef HAVE_BMI2
             bench(
                 "pext_hw_bmi2",
                 [](PextInput const& in){ return pext_hw_bmi2_u64(in.value, in.mask);
             }),
+            #endif
             bench(
                 "pext_sw_bitloop",
                 [](PextInput const& in){ return pext_sw_bitloop_u64(in.value, in.mask);
@@ -114,13 +117,15 @@ inline void bench_pext(std::ostream& csv_os)
                 "pext_sw_block_table",
                 [](PextInput const& in){ return pext_sw_block_table_u64(in.value, in.block_table);
             }),
-            bench(
-                "pext_sw_zp7",
-                [](PextInput const& in){ return zp7_pext_64(in.value, in.mask);
-            }),
+            #ifdef PLATFORM_X86_64
             bench(
                 "pext_sw_instlatx",
                 [](PextInput const& in){ return pext64_emu(in.value, in.mask);
+            }),
+            #endif
+            bench(
+                "pext_sw_zp7",
+                [](PextInput const& in){ return zp7_pext_64(in.value, in.mask);
             })
         );
 

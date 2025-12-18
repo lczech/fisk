@@ -10,7 +10,8 @@
 // The code is under MIT license (see below).
 // We mostly reproduce the code here as-is, with a few fixes for signed integer conversion.
 // These are the three instances of static_cast<> in the code below.
-// Furthermore, we add `inline` to all functions here, to allow more compiler optimizations.
+// Furthermore, we add `inline` to all functions here, to allow more compiler optimizations,
+// and use the C++20 std::popcount function instead of intrinsics or fallback.
 
 // We need to translate from our preprocessor flag to theirs. Note that we are not setting
 // `HAS_BZHI` or `HAS_POPCNT` here, as those are only needed for the implemtation of PDEP,
@@ -18,6 +19,8 @@
 #ifdef HAVE_CLMUL
     #define HAS_CLMUL 1
 #endif
+
+#include <bit>
 
 // =================================================================================================
 //     Original source
@@ -218,11 +221,12 @@ inline uint64_t zp7_pext_64(uint64_t a, uint64_t mask) {
 // PDEP
 
 inline uint64_t zp7_pdep_pre_64(uint64_t a, const zp7_masks_64_t *masks) {
-#ifdef HAS_POPCNT
-    uint64_t popcnt = _popcnt64(masks->mask);
-#else
-    uint64_t popcnt = popcnt_64(masks->mask);
-#endif
+// #ifdef HAS_POPCNT
+//     uint64_t popcnt = _popcnt64(masks->mask);
+// #else
+//     uint64_t popcnt = popcnt_64(masks->mask);
+// #endif
+    uint64_t popcnt = static_cast<uint64_t>(std::popcount(masks->mask));
 
     // Mask just the bits that will end up in the final result--the low P bits,
     // where P is the popcount of the mask. The other bits would collide.

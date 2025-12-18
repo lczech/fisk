@@ -23,6 +23,8 @@
 #include <wmmintrin.h>
 #endif
 
+#include "sys_info.hpp"
+
 // =================================================================================================
 //     Hardware PEXT
 // =================================================================================================
@@ -99,7 +101,7 @@ static inline std::uint64_t pext_sw_split32_u64(std::uint64_t x, std::uint64_t m
     std::uint32_t out_lo = pext32(x_lo, m_lo);
 
     // number of bits extracted from low half determines shift for high half
-    #if defined(__GNUC__) || defined(__clang__)
+    #ifdef SYSTEM_X86_64_GNU_CLANG
         unsigned shift = static_cast<unsigned>(__builtin_popcount(m_lo));
     #else
         unsigned shift = 0;

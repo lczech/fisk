@@ -76,9 +76,10 @@ int main(int argc, char **argv)
     // User output of system information
     {
         auto os_info = get_ofstream(out_dir, "sys_info.txt" );
+        info_print_platform(os_info);
         info_print_cpu(os_info);
-        info_print_intrinsics(os_info);
         info_print_compiler(os_info);
+        info_print_intrinsics(os_info);
     }
 
     // Run the benchmarks

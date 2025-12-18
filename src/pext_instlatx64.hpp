@@ -12,31 +12,19 @@
 // instead of their MSVC versions, which do not work on other platforms.
 // Similarly, we replace several MSCV-specific functions with portable wrappers and replacements.
 // Furthermore, we add `inline` to all functions here, to allow more compiler optimizations.
-// We also clean up a few preprocessor definitions, as well as an unfortunate `using namespace std`.
+// We also clean up a few preprocessor definitions, as well as an unfortunate `using namespace std`,
+// and replace pop count intrinsics with the C++20 std::popcount().
+
+
+// The whole functionality relies heavily on Intel intrinsics, which are not available on ARM.
+#include "sys_info.hpp"
+#ifdef PLATFORM_X86_64
 
 #include <immintrin.h>
 #include <wmmintrin.h>
 #include <cstdint>
 #include <cassert>
 #include <bit>
-
-static inline unsigned int popcount32(std::uint32_t x)
-{
-    #if defined(_MSC_VER)
-        return static_cast<unsigned int>(__popcnt(x));
-    #else
-        return static_cast<unsigned int>(__builtin_popcount(x));
-    #endif
-}
-
-static inline unsigned int popcount64(std::uint64_t x)
-{
-    #if defined(_MSC_VER)
-        return static_cast<unsigned int>(__popcnt64(x));
-    #else
-        return static_cast<unsigned int>(__builtin_popcountll(x));
-    #endif
-}
 
 constexpr std::uint32_t bextr_u32(
     std::uint32_t x,
@@ -94,7 +82,7 @@ constexpr std::uint64_t blsr_u64(std::uint64_t x) noexcept
 
 inline unsigned int pext32_emu(unsigned int v, unsigned int m)
 {
-    unsigned int ret = 0, pc = static_cast<unsigned int>(popcount32(m));
+    unsigned int ret = 0, pc = static_cast<unsigned int>(std::popcount(m));
     switch (pc) {
         case 0:
             ret = 0;
@@ -173,7 +161,7 @@ inline unsigned int pext32_emu(unsigned int v, unsigned int m)
 
 inline unsigned int pdep32_emu(unsigned int v, unsigned int m)
 {
-    unsigned int ret = 0, pc = static_cast<unsigned int>(popcount32(m));
+    unsigned int ret = 0, pc = static_cast<unsigned int>(std::popcount(m));
     switch (pc) {
         case 0:
             ret = 0;
@@ -245,7 +233,7 @@ inline unsigned int pdep32_emu(unsigned int v, unsigned int m)
 inline std::uint64_t pext64_emu(std::uint64_t v, std::uint64_t m)
 {
     std::uint64_t ret = 0;
-    unsigned int pc = static_cast<unsigned int>(popcount64(m));
+    unsigned int pc = static_cast<unsigned int>(std::popcount(m));
     switch (pc) {
         case 0:
             ret = 0;
@@ -384,7 +372,7 @@ inline std::uint64_t pext64_emu(std::uint64_t v, std::uint64_t m)
 
 inline std::uint64_t pdep64_emu(std::uint64_t v, std::uint64_t m)
 {
-    unsigned int pc = static_cast<unsigned int>(popcount64(m));
+    unsigned int pc = static_cast<unsigned int>(std::popcount(m));
     std::uint64_t ret = 0;
     switch (pc) {
         case 0:
@@ -541,3 +529,5 @@ inline void PEXT_PDEP_Emu_Test()
         assert(_pdep_u64(all_64, y) == pdep64_emu(all_64, y));
     }
 }
+
+#endif // SYSTEM_X86_64_GNU_CLANG

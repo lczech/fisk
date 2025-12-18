@@ -13,23 +13,41 @@
 #endif
 
 // =================================================================================================
-//     Compiler Info
+//     Platform Macros
 // =================================================================================================
 
-std::string info_platform();
-std::string info_compiler_family();
-std::string info_compiler_version();
-
-void info_print_compiler(std::ostream& os);
+// We have code that is specific to x86 Intel BMI2 and other intrinsics,
+// which we hence need to deactivate on Apple ARM, such as M2/M3 prcessors.
+#if defined(__x86_64__) || defined(_M_X64)
+    #define PLATFORM_X86_64 1
+    #if defined(__GNUC__) || defined(__clang__)
+        #define SYSTEM_X86_64_GNU_CLANG 1
+    #endif
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    #define PLATFORM_ARM64 1
+#else
+    #error "Unsupported architecture"
+#endif
 
 // =================================================================================================
 //     Hardware Info
 // =================================================================================================
 
+std::string info_platform_name();
+std::string info_platform_arch();
+void info_print_platform(std::ostream& os);
+
 std::string info_cpu_vendor();
 std::string info_cpu_model();
-
 void info_print_cpu(std::ostream& os);
+
+// =================================================================================================
+//     Compiler Info
+// =================================================================================================
+
+std::string info_compiler_family();
+std::string info_compiler_version();
+void info_print_compiler(std::ostream& os);
 
 // =================================================================================================
 //     CPU Intrinsics
