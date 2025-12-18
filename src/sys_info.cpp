@@ -180,8 +180,9 @@ void info_print_intrinsics(std::ostream& os)
         cpu_bmi2 = __builtin_cpu_supports("bmi2");
     #endif
 
-    os << "  BMI2    : compiled=" << (cmake_bmi2 ? "yes, " : "no,  ")
-              << "cpu=" << (cpu_bmi2 ? "yes" : "no") << "\n";
+    os << "  BMI2    : ";
+    os << "compiled=" << (cmake_bmi2 ? "yes, " : "no,  ");
+    os << "cpu=" << (cpu_bmi2 ? "yes" : "no") << "\n";
 
     // -----------------------------
     // CLMUL (PCLMUL)
@@ -199,6 +200,7 @@ void info_print_intrinsics(std::ostream& os)
         cpu_clmul = __builtin_cpu_supports("pclmul");
     #endif
 
-    os << "  CLMUL   : compiled=" << (cmake_clmul ? "yes, " : "no,  ")
-              << "cpu=" << (cpu_clmul ? "yes" : "no") << "\n";
+    os << "  CLMUL   : ";
+    os << "compiled=" << (cmake_clmul ? "yes, " : "no,  ");
+    os << "cpu=" << (cpu_clmul ? "yes" : "no") << "\n";
 }
