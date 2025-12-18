@@ -9,9 +9,14 @@
 #include "arg_parser.hpp"
 #include "bench_pext.hpp"
 #include "fs_utils.hpp"
+#include "sequence.hpp"
 #include "sys_info.hpp"
 
-struct Options {
+struct Options
+{
+    // Input sequence length to randomly generate
+    std::string input_length;
+
     // Input fasta file with sequence data
     std::string input_file;
 
@@ -30,8 +35,14 @@ int main(int argc, char **argv)
     // ------------------------------------------------------------------------
 
     parser.add_option(
+        "--input-length", "-l",
+        "Input length to randomly geneate a sequence of ACGT. Excludes --input-fasta",
+        opts.input_length
+    );
+
+    parser.add_option(
         "--input-fasta", "-i",
-        "Input fasta file with sequence data",
+        "Input fasta file with sequence data. Excludes --input-length",
         opts.input_file
     );
 
@@ -45,6 +56,7 @@ int main(int argc, char **argv)
     //     Parse args and setup
     // ------------------------------------------------------------------------
 
+    // Run our simple arg parser.
     try {
         parser.parse(argc, argv);
     } catch (std::exception const& e) {
@@ -53,12 +65,28 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // For now, just checking that the CLI works
-    // if (opts.input_file.size()) {
-    //     std::cout << "Input file: " << opts.input_file << "\n";
-    // } else {
-    //     std::cout << "No input file provided\n";
-    // }
+    // Get the sequence to process, either random, or from fasta.
+    std::string sequence;
+    if (opts.input_file.size() && opts.input_length.size()) {
+        throw std::invalid_argument(
+            "Options --input-length and --input-fasta are mutually exclusive."
+        );
+    }
+    if (opts.input_file.size()) {
+        std::cout << "Reading input file " << opts.input_file << "\n";
+        sequence = load_fasta_clean( opts.input_file );
+    } else {
+        size_t inp_len = 0;
+        if(opts.input_length.size()) {
+            inp_len = std::stoul(opts.input_length);
+        } else {
+            std::cout << "No input provided\n";
+            size_t const default_len = 1000000;
+            inp_len = default_len;
+        }
+        std::cout << "Generating input sequence of length " << inp_len << "\n";
+        sequence = random_acgt(inp_len);
+    }
 
     // Prepare output directory
     std::filesystem::path out_dir;
