@@ -86,8 +86,10 @@ inline void bench_pext(std::ostream& csv_os)
         }
 
         // Helper to generate fresh input for each repetition
-        auto make_inputs_rep = [w]() {
-            return make_inputs(n, w, 0xC0FFEEULL ^ static_cast<std::uint64_t>(w));
+        auto make_inputs_rep = [w]()
+        {
+            auto seed = static_cast<std::uint64_t>(0xC0FFEEULL) ^ static_cast<std::uint64_t>(w);
+            return make_inputs(n, w, seed);
         };
 
         std::vector<Result> results;
