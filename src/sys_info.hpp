@@ -20,7 +20,7 @@ std::string info_platform();
 std::string info_compiler_family();
 std::string info_compiler_version();
 
-void info_print_compiler();
+void info_print_compiler(std::ostream& os);
 
 // =================================================================================================
 //     Hardware Info
@@ -29,7 +29,7 @@ void info_print_compiler();
 std::string info_cpu_vendor();
 std::string info_cpu_model();
 
-void info_print_cpu();
+void info_print_cpu(std::ostream& os);
 
 // =================================================================================================
 //     CPU Intrinsics
@@ -77,4 +77,4 @@ inline bool clmul_enabled()
     return enabled;
 }
 
-void info_print_intrinsics();
+void info_print_intrinsics(std::ostream& os);

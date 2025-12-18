@@ -1,7 +1,6 @@
 #pragma once
 
 #include <bit> // std::popcount (C++20)
-#include <unistd.h>  // isatty, fileno
 #include <cstdint>
 #include <random>
 #include <vector>
@@ -9,6 +8,7 @@
 #include <fstream>
 #include <string>
 
+#include "fs_utils.hpp"
 #include "microbench.hpp"
 #include "pext.hpp"
 #include "pext_zp7.hpp"
@@ -56,35 +56,29 @@ inline std::vector<PextInput> make_inputs(std::size_t n, int popcnt, std::uint64
     return v;
 }
 
-inline void bench_pext(std::string const& csv_out)
+inline void bench_pext(std::ostream& csv_os)
 {
     using namespace microbench;
 
     std::size_t const n = 10;
-    std::size_t const rounds = (1u << 18);
+    std::size_t const rounds = (1u << 16);
     // std::size_t const n = (1u << 20);
     // std::size_t const rounds = 10;
-
-    std::size_t const repeats = 10;
-    bool const show_progress = isatty(fileno(stdout));
+    std::size_t const repeats = 32;
 
     // User output
     std::cout << "\n=== PEXT ===\n";
     std::cout << "n=" << n << ", rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     // Prepare csv output file with benchmark results
-    std::ofstream os(csv_out);
-    if (!os) {
-        throw std::runtime_error("bench_pext: cannot open output file: " + csv_out);
-    }
-    write_csv_header(os);
+    write_csv_header(csv_os);
 
     // Run a benchmark for each weight of the mask.
     // Most of our software implementations of PEXT have a runtime depending on that,
     // so we want to test the effects of different masks on the implementations.
     for (int w = 0; w <= 64; ++w) {
         std::string case_label = "popcount=" + std::to_string(w);
-        if( show_progress ) {
+        if( stdout_is_terminal() ) {
             std::cout << "\rmask popcount "
                 << std::setw(2) << w << " / 64"
                 << std::flush;
@@ -128,9 +122,9 @@ inline void bench_pext(std::string const& csv_out)
             })
         );
 
-        write_csv_rows(os, "PEXT", case_label, results);
+        write_csv_rows(csv_os, "PEXT", case_label, results);
     }
-    if( show_progress ) {
+    if( stdout_is_terminal() ) {
         std::cout << "\n";
     }
 }

@@ -85,11 +85,11 @@ std::string info_compiler_version()
     #endif
 }
 
-void info_print_compiler()
+void info_print_compiler(std::ostream& os)
 {
-    std::cout << "Compiler:\n";
-    std::cout << "  family  : " << info_compiler_family() << "\n";
-    std::cout << "  version : " << info_compiler_version() << "\n";
+    os << "Compiler:\n";
+    os << "  family  : " << info_compiler_family() << "\n";
+    os << "  version : " << info_compiler_version() << "\n";
 }
 
 // =================================================================================================
@@ -149,20 +149,20 @@ std::string info_cpu_model()
     return brand_str;
 }
 
-void info_print_cpu()
+void info_print_cpu(std::ostream& os)
 {
-    std::cout << "CPU:\n";
-    std::cout << "  vendor  : " << info_cpu_vendor() << "\n";
-    std::cout << "  model   : " << info_cpu_model() << "\n";
+    os << "CPU:\n";
+    os << "  vendor  : " << info_cpu_vendor() << "\n";
+    os << "  model   : " << info_cpu_model() << "\n";
 }
 
 // =================================================================================================
 //     CPU Intrinsics
 // =================================================================================================
 
-void info_print_intrinsics()
+void info_print_intrinsics(std::ostream& os)
 {
-    std::cout << "Instruction sets:\n";
+    os << "Instruction sets:\n";
 
     // -----------------------------
     // BMI2
@@ -180,7 +180,7 @@ void info_print_intrinsics()
         cpu_bmi2 = __builtin_cpu_supports("bmi2");
     #endif
 
-    std::cout << "  BMI2    : compiled=" << (cmake_bmi2 ? "yes, " : "no,  ")
+    os << "  BMI2    : compiled=" << (cmake_bmi2 ? "yes, " : "no,  ")
               << "cpu=" << (cpu_bmi2 ? "yes" : "no") << "\n";
 
     // -----------------------------
@@ -199,6 +199,6 @@ void info_print_intrinsics()
         cpu_clmul = __builtin_cpu_supports("pclmul");
     #endif
 
-    std::cout << "  CLMUL   : compiled=" << (cmake_clmul ? "yes, " : "no,  ")
+    os << "  CLMUL   : compiled=" << (cmake_clmul ? "yes, " : "no,  ")
               << "cpu=" << (cpu_clmul ? "yes" : "no") << "\n";
 }
