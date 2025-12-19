@@ -297,14 +297,14 @@ private:
 
         // warm-up
         for (auto const& in : inputs) {
-            acc ^= static_cast<std::uint64_t>(b.fn(in));
+            acc += static_cast<std::uint64_t>(b.fn(in));
         }
         do_not_optimize_u64(acc);
 
         auto t0 = std::chrono::steady_clock::now();
         for (int r = 0; r < rounds_; ++r) {
             for (auto const& in : inputs) {
-                acc ^= static_cast<std::uint64_t>(b.fn(in));
+                acc += static_cast<std::uint64_t>(b.fn(in));
             }
         }
         auto t1 = std::chrono::steady_clock::now();
