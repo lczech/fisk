@@ -176,10 +176,11 @@ struct PextBlockTable
     // First, a mask selecting that run at its original bit positions.
     // Second, right-shift value to move that run to its packed output position.
     // In the worst case, we have an interleaved pattern of 32 ones and zeros.
+    // We add one last entry to that, to make our loop unrolling a bit easier.
+    std::array<std::uint64_t, 33> masks{};
+    std::array<std::uint64_t, 33> shifts{};
     // std::vector<std::uint64_t> masks;
     // std::vector<std::uint64_t> shifts;
-    std::array<std::uint64_t, 32> masks{};
-    std::array<std::uint64_t, 32> shifts{};
 };
 
 inline PextBlockTable pext_sw_block_table_preprocess_u64( std::uint64_t mask )
@@ -241,10 +242,25 @@ inline PextBlockTable pext_sw_block_table_preprocess_u64( std::uint64_t mask )
 static inline std::uint64_t pext_sw_block_table_u64(std::uint64_t x, PextBlockTable const& pb)
 {
     std::uint64_t res = 0;
+    // size_t i = 0;
+    // while(pb.masks[i]) {
+    //     res |= (x & pb.masks[i]) >> pb.shifts[i];
+    //     ++i;
+    // }
+
+    // Some loop unrolling for speed. We might overshoot, but that's fine.
+    // In that case, we are masking with zeros, so nothing happens.
     size_t i = 0;
     while(pb.masks[i]) {
-        res |= (x & pb.masks[i]) >> pb.shifts[i];
-        ++i;
+        res |= (x & pb.masks[i+0]) >> pb.shifts[i+0];
+        res |= (x & pb.masks[i+1]) >> pb.shifts[i+1];
+        res |= (x & pb.masks[i+2]) >> pb.shifts[i+2];
+        res |= (x & pb.masks[i+3]) >> pb.shifts[i+3];
+        res |= (x & pb.masks[i+4]) >> pb.shifts[i+4];
+        res |= (x & pb.masks[i+5]) >> pb.shifts[i+5];
+        res |= (x & pb.masks[i+6]) >> pb.shifts[i+6];
+        res |= (x & pb.masks[i+7]) >> pb.shifts[i+7];
+        i += 8;
     }
     return res;
 }
