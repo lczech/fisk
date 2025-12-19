@@ -8,6 +8,7 @@
 
 #include "arg_parser.hpp"
 #include "bench_kmer_extract.hpp"
+#include "bench_kmer_spaced.hpp"
 #include "bench_pext.hpp"
 #include "bench_seq_enc.hpp"
 #include "fs_utils.hpp"
@@ -24,6 +25,9 @@ struct Options
 
     // Value of k for the k-mers
     std::string k;
+
+    // File with masks
+    std::string masks_file;
 
     // Output directory for benchmark results
     std::string output_dir = "benchmarks";
@@ -54,6 +58,12 @@ int main(int argc, char **argv)
     parser.add_option(
         "--k", "-k",
         "Value of k to use for the k-mers",
+        opts.k
+    );
+
+    parser.add_option(
+        "--masks-file", "-m",
+        "File path with masks, given as sequences of [01], one per line",
         opts.k
     );
 
@@ -98,7 +108,7 @@ int main(int argc, char **argv)
             inp_len = std::stoul(opts.input_length);
         } else {
             std::cout << "No input provided, using default\n";
-            size_t const default_len = (1u << 25);
+            size_t const default_len = (1u << 20);
             inp_len = default_len;
         }
         std::cout << "Generating input sequence of length " << inp_len << "\n";
@@ -118,6 +128,17 @@ int main(int argc, char **argv)
     } else {
         std::cout << "No k provided, testing all values\n";
     }
+
+    // Get the masks file
+    std::vector<std::string> masks;
+    if( opts.masks_file.size() ) {
+        masks = load_lines( opts.masks_file );
+    } else {
+        std::cout << "No masks provided, using defaults\n";
+        auto bin_path = parent_directory(argv[0]);
+        masks = load_lines( (bin_path / "../masks/default.txt").string() );
+    }
+    std::cout << "Using " << masks.size() << " masks\n";
 
     // Prepare output directory
     std::filesystem::path out_dir;
@@ -150,14 +171,18 @@ int main(int argc, char **argv)
     //     auto os_seq_enc = get_ofstream(out_dir, "seq_enc.csv" );
     //     bench_seq_enc( sequences, os_seq_enc );
     // }
+    // {
+    //     // Test either the given size of k, or the full range if no k provided.
+    //     auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
+    //     if( k == 0 ) {
+    //         bench_kmer_extract( sequences, os_kmer_extract );
+    //     } else {
+    //         bench_kmer_extract( sequences, k, k, os_kmer_extract );
+    //     }
+    // }
     {
-        // Test either the given size of k, or the full range if no k provided.
-        auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
-        if( k == 0 ) {
-            bench_kmer_extract( sequences, os_kmer_extract );
-        } else {
-            bench_kmer_extract( sequences, k, k, os_kmer_extract );
-        }
+        auto os_kmer_spaced = get_ofstream(out_dir, "kmer_spaced.csv" );
+        bench_kmer_spaced( sequences, masks, os_kmer_spaced );
     }
 
     return 0;

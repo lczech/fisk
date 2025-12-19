@@ -47,8 +47,8 @@ inline void bench_kmer_extract(
         throw std::runtime_error( "Invalid k_min > k_max" );
     }
 
-    std::size_t const rounds = 1;
-    std::size_t const repeats = 8;
+    std::size_t const rounds = 32;
+    std::size_t const repeats = 32;
 
     // User output
     std::cout << "\n=== k-mer extract ===\n";
