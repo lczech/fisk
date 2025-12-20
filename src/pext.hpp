@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -29,17 +30,14 @@
 //     Hardware PEXT
 // =================================================================================================
 
+#if defined(HAVE_BMI2)
 static inline std::uint64_t pext_hw_bmi2_u64(std::uint64_t x, std::uint64_t mask)
 {
     // For speed, not using bmi2_enabled() for check here, and instead assume
     // that hardware availablility means we are allowed to call it.
-    #if defined(HAVE_BMI2)
-        return _pext_u64(x, mask);
-    #else
-        (void)x; (void)mask;
-        return 0;
-    #endif
+    return _pext_u64(x, mask);
 }
+#endif
 
 // =================================================================================================
 //     Simple software PEXT implementations
@@ -101,12 +99,13 @@ static inline std::uint64_t pext_sw_split32_u64(std::uint64_t x, std::uint64_t m
     std::uint32_t out_lo = pext32(x_lo, m_lo);
 
     // number of bits extracted from low half determines shift for high half
-    #ifdef SYSTEM_X86_64_GNU_CLANG
-        unsigned shift = static_cast<unsigned>(__builtin_popcount(m_lo));
-    #else
-        unsigned shift = 0;
-        for (std::uint32_t t = m_lo; t; t &= (t - 1)) ++shift;
-    #endif
+    // #ifdef SYSTEM_X86_64_GNU_CLANG
+    //     unsigned shift = static_cast<unsigned>(__builtin_popcount(m_lo));
+    // #else
+    //     unsigned shift = 0;
+    //     for (std::uint32_t t = m_lo; t; t &= (t - 1)) ++shift;
+    // #endif
+    auto const shift = std::popcount(m_lo);
 
     std::uint32_t out_hi = pext32(x_hi, m_hi);
     return static_cast<std::uint64_t>(out_lo) | (static_cast<std::uint64_t>(out_hi) << shift);

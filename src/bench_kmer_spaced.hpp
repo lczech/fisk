@@ -83,6 +83,7 @@ inline void bench_kmer_spaced(
             ),
 
             // char_to_nt_switch
+            // #if defined(HAVE_BMI2)
             // bench(
             //     "pext_hw_bmi2_u64_char_to_nt_switch",
             //     [&](std::string const& seq){
@@ -91,6 +92,7 @@ inline void bench_kmer_spaced(
             //         );
             //     }
             // ),
+            // #endif
             // bench(
             //     "pext_sw_bitloop_u64_char_to_nt_switch",
             //     [&](std::string const& seq){
@@ -117,6 +119,7 @@ inline void bench_kmer_spaced(
             // ),
 
             // char_to_nt_table
+            #if defined(HAVE_BMI2)
             bench(
                 "pext_hw_bmi2_u64_char_to_nt_table",
                 [&](std::string const& seq){
@@ -125,6 +128,7 @@ inline void bench_kmer_spaced(
                     );
                 }
             ),
+            #endif
             bench(
                 "pext_sw_bitloop_u64_char_to_nt_table",
                 [&](std::string const& seq){
@@ -151,6 +155,7 @@ inline void bench_kmer_spaced(
             )
 
             // char_to_nt_ascii
+            // #if defined(HAVE_BMI2)
             // bench(
             //     "pext_hw_bmi2_u64_char_to_nt_ascii",
             //     [&](std::string const& seq){
@@ -159,6 +164,7 @@ inline void bench_kmer_spaced(
             //         );
             //     }
             // ),
+            // #endif
             // bench(
             //     "pext_sw_bitloop_u64_char_to_nt_ascii",
             //     [&](std::string const& seq){
@@ -351,6 +357,7 @@ inline void bench_kmer_spaced_clark(
             ),
 
             // char_to_nt_table
+            #if defined(HAVE_BMI2)
             bench(
                 "pext_hw_bmi2",
                 [&](std::string const& seq){
@@ -359,6 +366,7 @@ inline void bench_kmer_spaced_clark(
                     );
                 }
             ),
+            #endif
             bench(
                 "pext_sw_bitloop",
                 [&](std::string const& seq){
