@@ -164,31 +164,31 @@ int main(int argc, char **argv)
     }
 
     // Run the benchmarks
-    // {
-    //     auto os_pext = get_ofstream(out_dir, "pext.csv" );
-    //     bench_pext( os_pext );
-    // }
-    // {
-    //     auto os_seq_enc = get_ofstream(out_dir, "seq_enc.csv" );
-    //     bench_seq_enc( sequences, os_seq_enc );
-    // }
-    // {
-    //     // Test either the given size of k, or the full range if no k provided.
-    //     auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
-    //     if( k == 0 ) {
-    //         bench_kmer_extract( sequences, os_kmer_extract );
-    //     } else {
-    //         bench_kmer_extract( sequences, k, k, os_kmer_extract );
-    //     }
-    // }
-    // {
-    //     auto os_kmer_spaced = get_ofstream(out_dir, "kmer_spaced.csv" );
-    //     bench_kmer_spaced( sequences, masks, os_kmer_spaced );
-    // }
-    {
-        auto os_kmer_clark = get_ofstream(out_dir, "kmer_clark.csv" );
-        bench_kmer_clark( sequences, os_kmer_clark );
+
+    // PEXT
+    auto os_pext = get_ofstream(out_dir, "pext.csv" );
+    bench_pext( os_pext );
+
+    // Seq Encoding
+    auto os_seq_enc = get_ofstream(out_dir, "seq_enc.csv" );
+    bench_seq_enc( sequences, os_seq_enc );
+
+    // Kmer extraction basics
+    // Test either the given size of k, or the full range if no k provided.
+    auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
+    if( k == 0 ) {
+        bench_kmer_extract( sequences, os_kmer_extract );
+    } else {
+        bench_kmer_extract( sequences, k, k, os_kmer_extract );
     }
+
+    // Spaced kmers
+    auto os_kmer_spaced = get_ofstream(out_dir, "kmer_spaced.csv" );
+    bench_kmer_spaced( sequences, masks, os_kmer_spaced );
+
+    // Clark
+    auto os_kmer_clark = get_ofstream(out_dir, "kmer_clark.csv" );
+    bench_kmer_clark( sequences, os_kmer_clark );
 
     return 0;
 }

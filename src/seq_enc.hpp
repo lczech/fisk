@@ -22,6 +22,24 @@
 // We provide and benchmark different variants of this function here.
 
 // -----------------------------------------------------------------------------
+//     ifs
+// -----------------------------------------------------------------------------
+
+// Simple if statements, as used in MISSH.
+inline constexpr std::uint8_t char_to_nt_ifs(char ch)
+{
+	if(ch == 'A')
+		return 0;
+	if(ch == 'C')
+		return 1;
+	if(ch == 'G')
+		return 2;
+	if(ch == 'T')
+		return 3;
+	return 4; //ERROR CODE
+}
+
+// -----------------------------------------------------------------------------
 //     switch
 // -----------------------------------------------------------------------------
 

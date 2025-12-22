@@ -30,6 +30,10 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
     auto results = suite.run(
         sequences, // vector<std::string>
         bench(
+            "char_to_nt_ifs",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ifs);
+        }),
+        bench(
             "char_to_nt_switch",
             [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_switch);
         }),

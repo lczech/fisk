@@ -47,7 +47,7 @@ inline void bench_kmer_extract(
         throw std::runtime_error( "Invalid k_min > k_max" );
     }
 
-    std::size_t const rounds = 32;
+    std::size_t const rounds = 8;
     std::size_t const repeats = 32;
 
     // User output
@@ -76,6 +76,12 @@ inline void bench_kmer_extract(
 
         auto results = suite.run(
             sequences, // vector<std::string>
+            bench(
+                "char_to_nt_ifs",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ifs);
+                }
+            ),
             bench(
                 "char_to_nt_switch",
                 [&](std::string const& seq){
