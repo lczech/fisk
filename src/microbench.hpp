@@ -112,6 +112,10 @@ inline void require_same_sinks(
     if (rs.empty()) return;
 
     auto const expected = rs.front().sink;
+    if( expected == 0 ) {
+        std::cerr << "Sink is 0. That is technically possible, but rather unlikely, ";
+        std::cerr << "and instead points to a wrong setup, where the sink is incrrectly computed.\n";
+    }
     for (auto const& r : rs) {
         if (r.sink != expected) {
             std::cerr << "Sink mismatch!\n"
@@ -227,6 +231,7 @@ public:
             }
         }
         print_if_needed(best, /*best_of=*/true);
+        std::cout << "\nSink: " << best.front().sink << "\n";
         return best;
     }
 
@@ -263,6 +268,7 @@ public:
         }
 
         print_if_needed(best, /*best_of=*/true);
+        std::cout << "\nSink: " << best.front().sink << "\n";
         return best;
     }
 

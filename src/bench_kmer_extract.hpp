@@ -69,7 +69,7 @@ inline void bench_kmer_extract(
     }
 
     std::size_t const rounds = 8;
-    std::size_t const repeats = 16;
+    std::size_t const repeats = 8;
 
     // User output
     std::cout << "\n=== k-mer extract ===\n";

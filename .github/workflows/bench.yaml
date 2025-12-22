@@ -72,7 +72,7 @@ jobs:
       - name: Run benchmarks
         run: |
           mkdir -p "${OUTPUT_DIR}"
-          ./bin/fisk --output-dir "${OUTPUT_DIR}"
+          ./bin/fisk --output-dir "${OUTPUT_DIR}" &> ${OUTPUT_DIR}/log.txt
 
       - name: Run plotting script
         run: |
