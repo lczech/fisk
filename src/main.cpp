@@ -9,6 +9,7 @@
 #include "arg_parser.hpp"
 #include "bench_kmer_extract.hpp"
 #include "bench_kmer_spaced.hpp"
+#include "bench_kmer_clark.hpp"
 #include "bench_pext.hpp"
 #include "bench_seq_enc.hpp"
 #include "fs_utils.hpp"
@@ -185,8 +186,8 @@ int main(int argc, char **argv)
     //     bench_kmer_spaced( sequences, masks, os_kmer_spaced );
     // }
     {
-        auto os_kmer_spaced_clark = get_ofstream(out_dir, "kmer_spaced_clark.csv" );
-        bench_kmer_spaced_clark( sequences, os_kmer_spaced_clark );
+        auto os_kmer_clark = get_ofstream(out_dir, "kmer_clark.csv" );
+        bench_kmer_clark( sequences, os_kmer_clark );
     }
 
     return 0;
