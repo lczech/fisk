@@ -206,7 +206,7 @@ inline std::uint64_t clark_getObjectsDataComputeFull(
     static const std::array<int, 256> m_table = clark_get_m_table();
     auto clark_enc = [&](char c)
     {
-        return m_table[static_cast<unsigned>(c)];
+        return m_table[static_cast<size_t>(c)];
     };
 
     const std::size_t n    = seq.size();
