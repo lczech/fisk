@@ -52,3 +52,30 @@ inline void for_each_kmer_2bit(std::string_view seq, std::size_t k, Enc&& enc, F
         func(kmer);
     }
 }
+
+template<typename Enc, typename Func>
+inline void for_each_kmer_2bit_reextract(std::string_view seq, std::size_t k, Enc&& enc, Func&& func)
+{
+    // Same as above, but each kmer is extracted separately. Not efficient, and worse for larger k.
+
+    // Boundary checks
+    if (k == 0 || k > 32 ) {
+        throw std::runtime_error( "Invalid call to k-mer extraction with k not in [1, 32]" );
+    }
+    if( seq.size() < k ) {
+        return;
+    }
+
+    const std::size_t n    = seq.size();
+    const char*       data = seq.data();
+
+    // Slide the window over the sequence.
+    const std::size_t stop = n - k;
+    for (std::size_t i = 0; i <= stop; ++i) {
+        std::uint64_t kmer = 0;
+        for (std::size_t x = 0; x < k; ++x) {
+            kmer = (kmer << 2) | enc(data[i+x]);
+        }
+        func(kmer);
+    }
+}

@@ -79,6 +79,9 @@ jobs:
           python plot/plot_pext.py "${OUTPUT_DIR}/pext.csv" --out "${OUTPUT_DIR}/pext.png"
           python plot/plot_pext.py "${OUTPUT_DIR}/pext.csv" --out "${OUTPUT_DIR}/pext.svg"
 
+          python plot/plot_kmer_extract.py "${OUTPUT_DIR}/kmer_extract.csv" --out "${OUTPUT_DIR}/kmer_extract.png"
+          python plot/plot_kmer_extract.py "${OUTPUT_DIR}/kmer_extract.csv" --out "${OUTPUT_DIR}/kmer_extract.svg"
+
           python plot/plot_kmer_spaced.py "${OUTPUT_DIR}/kmer_spaced.csv" --out "${OUTPUT_DIR}/kmer_spaced.png"
           python plot/plot_kmer_spaced.py "${OUTPUT_DIR}/kmer_spaced.csv" --out "${OUTPUT_DIR}/kmer_spaced.svg"
 

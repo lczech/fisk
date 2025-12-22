@@ -33,6 +33,27 @@ inline std::uint64_t for_each_kmer_2bit_xor(std::string_view seq, std::size_t k,
     return hash;
 }
 
+template<typename Enc>
+inline std::uint64_t for_each_kmer_2bit_xor_reextract(std::string_view seq, std::size_t k, Enc&& enc)
+{
+    // Simple wrapper around the main loop function whcih also keeps track of a "hash"
+    // by xor-ing all k-mers, just as a validity check that all implementations give the same.
+    std::uint64_t hash = 0;
+
+    for_each_kmer_2bit_reextract(
+        std::string_view(seq),
+        k,
+        enc,
+        [&](std::uint64_t kmer_word) {
+            // Simple order-independent checksum.
+            // All implementations must use the same aggregation so sinks match.
+            hash ^= kmer_word;
+        }
+    );
+
+    return hash;
+}
+
 inline void bench_kmer_extract(
     std::vector<std::string> const& sequences,
     size_t k_min,
@@ -48,7 +69,7 @@ inline void bench_kmer_extract(
     }
 
     std::size_t const rounds = 8;
-    std::size_t const repeats = 32;
+    std::size_t const repeats = 16;
 
     // User output
     std::cout << "\n=== k-mer extract ===\n";
@@ -76,6 +97,34 @@ inline void bench_kmer_extract(
 
         auto results = suite.run(
             sequences, // vector<std::string>
+
+            // Full extract
+            bench(
+                "char_to_nt_ifs_re",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ifs);
+                }
+            ),
+            bench(
+                "char_to_nt_switch_re",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_switch);
+                }
+            ),
+            bench(
+                "char_to_nt_table_re",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_table);
+                }
+            ),
+            bench(
+                "char_to_nt_ascii_re",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ascii);
+                }
+            ),
+
+            // Shift
             bench(
                 "char_to_nt_ifs",
                 [&](std::string const& seq){
