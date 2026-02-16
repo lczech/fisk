@@ -118,6 +118,18 @@ inline void bench_pext(std::ostream& csv_os)
                 "pext_sw_block_table",
                 [](PextInput const& in){ return pext_sw_block_table_u64(in.value, in.block_table);
             }),
+            bench(
+                "pext_sw_block_table_unrolled2",
+                [](PextInput const& in){ return pext_sw_block_table_u64_unrolled2(in.value, in.block_table);
+            }),
+            bench(
+                "pext_sw_block_table_unrolled4",
+                [](PextInput const& in){ return pext_sw_block_table_u64_unrolled4(in.value, in.block_table);
+            }),
+            bench(
+                "pext_sw_block_table_unrolled8",
+                [](PextInput const& in){ return pext_sw_block_table_u64_unrolled8(in.value, in.block_table);
+            }),
             #ifdef PLATFORM_X86_64
             bench(
                 "pext_sw_instlatx",

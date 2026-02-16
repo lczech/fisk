@@ -2,6 +2,7 @@
 
 #include <array>
 #include <bit>
+#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -191,8 +192,12 @@ inline PextBlockTable pext_sw_block_table_preprocess_u64( std::uint64_t mask )
     // Helper: build a contiguous run mask of length len at bit position start.
     auto make_run_mask64 = [](unsigned start, unsigned len) -> std::uint64_t
     {
-        if (len == 0) return 0;
-        if (len >= 64) return ~std::uint64_t{0};
+        if (len == 0) {
+            return 0;
+        }
+        if (len >= 64) {
+            return ~std::uint64_t{0};
+        }
         return ((std::uint64_t{1} << len) - 1) << start;
     };
 
@@ -222,9 +227,7 @@ inline PextBlockTable pext_sw_block_table_preprocess_u64( std::uint64_t mask )
         unsigned shift = start - out_pos;
 
         // Sanity check. Should not be possible to have more than 32 values.
-        if( arr_idx == 32 ) {
-            throw std::runtime_error( "pext_sw_block_table_preprocess_u64 with arr_idx == 32" );
-        }
+        assert( arr_idx < 32 );
 
         // Add to the table.
         table.masks[arr_idx]  = block_mask;
@@ -238,17 +241,65 @@ inline PextBlockTable pext_sw_block_table_preprocess_u64( std::uint64_t mask )
 
 // Apply blockwise-PEXT using the preprocessing above.
 // Semantics match _pext_u64(x, mask) for the same mask.
-static inline std::uint64_t pext_sw_block_table_u64(std::uint64_t x, PextBlockTable const& pb)
-{
+static inline std::uint64_t pext_sw_block_table_u64(
+    std::uint64_t x, PextBlockTable const& pb
+) {
     std::uint64_t res = 0;
-    // size_t i = 0;
-    // while(pb.masks[i]) {
-    //     res |= (x & pb.masks[i]) >> pb.shifts[i];
-    //     ++i;
-    // }
+    size_t i = 0;
+    while(pb.masks[i]) {
+        res |= (x & pb.masks[i]) >> pb.shifts[i];
+        ++i;
+    }
+    return res;
+}
 
-    // Some loop unrolling for speed. We might overshoot, but that's fine.
-    // In that case, we are masking with zeros, so nothing happens.
+// Apply blockwise-PEXT using the preprocessing above, 2-fold unrolled.
+// Semantics match _pext_u64(x, mask) for the same mask.
+static inline std::uint64_t pext_sw_block_table_u64_unrolled2(
+    std::uint64_t x, PextBlockTable const& pb
+) {
+    // Some loop unrolling for speed - helps for intermediate mask weights.
+    // We might overshoot, but that's fine. In that case, we are masking with zeros,
+    // so nothing happens.
+    std::uint64_t res = 0;
+    size_t i = 0;
+    while(pb.masks[i]) {
+        res |= (x & pb.masks[i+0]) >> pb.shifts[i+0];
+        res |= (x & pb.masks[i+1]) >> pb.shifts[i+1];
+        i += 2;
+    }
+    return res;
+}
+
+// Apply blockwise-PEXT using the preprocessing above, 4-fold unrolled.
+// Semantics match _pext_u64(x, mask) for the same mask.
+static inline std::uint64_t pext_sw_block_table_u64_unrolled4(
+    std::uint64_t x, PextBlockTable const& pb
+) {
+    // Some loop unrolling for speed - helps for intermediate mask weights.
+    // We might overshoot, but that's fine. In that case, we are masking with zeros,
+    // so nothing happens.
+    std::uint64_t res = 0;
+    size_t i = 0;
+    while(pb.masks[i]) {
+        res |= (x & pb.masks[i+0]) >> pb.shifts[i+0];
+        res |= (x & pb.masks[i+1]) >> pb.shifts[i+1];
+        res |= (x & pb.masks[i+2]) >> pb.shifts[i+2];
+        res |= (x & pb.masks[i+3]) >> pb.shifts[i+3];
+        i += 4;
+    }
+    return res;
+}
+
+// Apply blockwise-PEXT using the preprocessing above, 8-fold unrolled.
+// Semantics match _pext_u64(x, mask) for the same mask.
+static inline std::uint64_t pext_sw_block_table_u64_unrolled8(
+    std::uint64_t x, PextBlockTable const& pb
+) {
+    // Some loop unrolling for speed - helps for intermediate mask weights.
+    // We might overshoot, but that's fine. In that case, we are masking with zeros,
+    // so nothing happens.
+    std::uint64_t res = 0;
     size_t i = 0;
     while(pb.masks[i]) {
         res |= (x & pb.masks[i+0]) >> pb.shifts[i+0];
