@@ -103,9 +103,8 @@ inline constexpr std::uint8_t char_to_nt_table(char c)
 
 inline constexpr std::uint8_t char_to_nt_ascii(char c)
 {
-    // Again deactivating error checks here - should be used in real code.
-    // The commented-out check below is the fastest in our tests;
-    // faster than using toupper() to avoid the extra checks.
+    // The check below is the fastest in our tests;
+    // faster than using toupper() to avoid the extra case checks.
     if(
         ( c != 'A' ) && ( c != 'C' ) && ( c != 'G' ) && ( c != 'T' ) &&
         ( c != 'a' ) && ( c != 'c' ) && ( c != 'g' ) && ( c != 't' )
@@ -116,6 +115,12 @@ inline constexpr std::uint8_t char_to_nt_ascii(char c)
         // return 4;
     }
 
+    auto const u = static_cast<std::uint8_t>(c);
+    return ((u >> 1) ^ (u >> 2)) & 3;
+}
+
+inline constexpr std::uint8_t char_to_nt_ascii_unchecked(char c)
+{
     auto const u = static_cast<std::uint8_t>(c);
     return ((u >> 1) ^ (u >> 2)) & 3;
 }

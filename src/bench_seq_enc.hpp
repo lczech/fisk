@@ -44,6 +44,10 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
         bench(
             "char_to_nt_ascii",
             [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii);
+        }),
+        bench(
+            "char_to_nt_ascii_unchecked",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii_unchecked);
         })
     );
 
