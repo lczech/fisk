@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "fs_utils.hpp"
+#include "utils.hpp"
 #include "kmer_extract.hpp"
 #include "seq_enc.hpp"
 #include "microbench.hpp"

@@ -8,7 +8,7 @@
 #include <vector>
 #include <utility>
 
-#include "fs_utils.hpp"
+#include "utils.hpp"
 #include "kmer_spaced.hpp"
 #include "seq_enc.hpp"
 #include "microbench.hpp"
