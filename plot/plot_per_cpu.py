@@ -43,8 +43,35 @@ def load_one(csv_path: str, platform: str | None = None) -> pd.DataFrame:
         platform = platform_from_csv_path(csv_path)
     df["platform"] = platform
     df["source"] = str(csv_path)
+
+    PLOT_BENCHMARKS = {
+        # "char_to_nt_ifs_re",
+        # "char_to_nt_switch_re",
+        # "char_to_nt_table_re",
+        # "char_to_nt_ascii_re",
+        "char_to_nt_ifs",
+        "char_to_nt_switch",
+        "char_to_nt_ascii",
+        "char_to_nt_table",
+    }
+    df = df[df["benchmark"].isin(PLOT_BENCHMARKS)]
+
     return df
 
+def color_for_platform(platform: str) -> str:
+    PLATFORM_COLORS = [
+        ("epyc",   "#08aa72"),  # green
+        ("ryzen",  "#fb6516"),  # orange
+        ("xeon",   "#0874d1"),  # blue
+        ("m1",     "#979797"),  # gray
+        ("m2",     "#979797"),  # gray
+    ]
+
+    p = platform.lower()
+    for key, color in PLATFORM_COLORS:
+        if key in p:
+            return color
+    return "grey"  # fallback
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Cross-platform grouped bar plot (mean over cases).")
@@ -120,8 +147,27 @@ def main() -> None:
     pivot = agg.pivot(index="benchmark", columns="platform", values="mean_ns_per_op")
 
     # Stable ordering
-    benchmarks = list(pivot.index)
+    PLATFORM_ORDER = [
+        "Epyc",
+        "Ryzen",
+        "Xeon",
+        "M1",
+        "M2",
+    ]
     platforms = list(pivot.columns)
+    # platforms = [p for p in PLATFORM_ORDER if p in pivot.columns]
+
+    BENCHMARK_ORDER = [
+        "char_to_nt_ifs",
+        "char_to_nt_switch",
+        "char_to_nt_ascii",
+        "char_to_nt_table",
+    ]
+    # benchmarks = list(pivot.index)
+    # benchmarks = [b for b in BENCHMARK_ORDER if b in pivot.index]
+
+    pivot = pivot.reindex(BENCHMARK_ORDER)
+    benchmarks = pivot.index.tolist()
 
     # Plot
     import numpy as np
@@ -132,24 +178,43 @@ def main() -> None:
 
     fig, ax = plt.subplots(figsize=(max(10, 0.9 * len(benchmarks) + 4), 6))
 
+    # for j, plat in enumerate(platforms):
+    #     vals = pivot[plat].values
+    #     # If some platform lacks a benchmark, vals may contain NaN. Bar will skip those.
+    #     ax.bar(x + (j - (len(platforms) - 1) / 2.0) * bar_w, vals, width=bar_w, label=str(plat))
+
     for j, plat in enumerate(platforms):
         vals = pivot[plat].values
-        # If some platform lacks a benchmark, vals may contain NaN. Bar will skip those.
-        ax.bar(x + (j - (len(platforms) - 1) / 2.0) * bar_w, vals, width=bar_w, label=str(plat))
+        ax.bar(
+            x + (j - (len(platforms) - 1) / 2.0) * bar_w,
+            vals,
+            width=bar_w,
+            label=str(plat),
+            color=color_for_platform(plat),
+        )
+
 
     title = args.title
     if title is None:
         title = f"{suite} cross-platform summary" if suite else "Cross-platform summary"
 
-    ax.set_title(title)
-    ax.set_xlabel("Benchmark")
-    ax.set_ylabel("mean ns/op across cases (lower is better)")
+    # ax.set_title(title)
+    # ax.set_xlabel("Implementation")
+    # ax.set_ylabel("Time per operation [ns] across cases")
+    ax.set_ylabel("Time per operation [ns]")
 
     ax.set_xticks(x)
     ax.set_xticklabels(benchmarks, rotation=45, ha="right")
 
-    ax.legend(title="Platform (CPU)")
     ax.grid(axis="y", linestyle="--", alpha=0.3)
+    # ax.legend(title="Platform (CPU)")
+    handles, labels = ax.get_legend_handles_labels()
+    labels = [label.replace("_", " ") for label in labels]
+    ax.legend(
+        handles,
+        labels,
+        title="Platform (CPU)",
+    )
 
     fig.tight_layout()
 

@@ -3,6 +3,15 @@
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
+from pathlib import Path
+
+
+def platform_from_csv_path(csv_path: str) -> str:
+    p = Path(csv_path)
+    # "last part of the directory path name"
+    # For ".../<CPU>/<file>.csv" this returns "<CPU>"
+    return p.parent.name
 
 
 def main():
@@ -17,7 +26,23 @@ def main():
     # -------------------------------------------------------------------------
     # Load CSV
     # -------------------------------------------------------------------------
+
     df = pd.read_csv(args.csv)
+    cpu = platform_from_csv_path(args.csv)
+
+    PLOT_BENCHMARKS = {
+        "pext_hw_bmi2",
+        "pext_sw_bitloop",
+        # "pext_sw_split32",
+        "pext_sw_table8",
+        "pext_sw_block_table",
+        "pext_sw_block_table_unrolled2",
+        "pext_sw_block_table_unrolled4",
+        "pext_sw_block_table_unrolled8",
+        # "pext_sw_instlatx",
+        # "pext_sw_zp7",
+    }
+    df = df[df["benchmark"].isin(PLOT_BENCHMARKS)]
 
     # Expect columns:
     #   suite, case, benchmark, ns_per_op
@@ -28,17 +53,61 @@ def main():
     # -------------------------------------------------------------------------
     # Plot
     # -------------------------------------------------------------------------
+
+    # Stable colors for each implementation / benchmark
+    BENCHMARK_COLORS = {
+        "pext_sw_bitloop":     "#47a1e2",
+        "pext_sw_split32":     "#ff7f0e",
+        "pext_sw_table8":      "#884ed3",
+        "pext_sw_block_table": "#1eca6c",
+        "pext_sw_block_table_unrolled2": "#1aa759",
+        "pext_sw_block_table_unrolled4": "#0e6e39",
+        "pext_sw_block_table_unrolled8": "#083f21",
+        "pext_sw_instlatx":    "#ff7f0e",
+        "pext_sw_zp7":         "#2ca02c",
+        "pext_hw_bmi2":        "#EE1313",
+    }
+    LINE_ORDER = [
+        "pext_sw_bitloop",
+        "pext_sw_split32",
+        "pext_sw_table8",
+        "pext_sw_block_table",
+        "pext_sw_block_table_unrolled2",
+        "pext_sw_block_table_unrolled4",
+        "pext_sw_block_table_unrolled8",
+        "pext_sw_instlatx",
+        "pext_sw_zp7",
+        "pext_hw_bmi2",
+    ]
+
     plt.figure(figsize=(8, 5))
 
-    for name, g in df.groupby("benchmark"):
+    # for name, g in df.groupby("benchmark"):
+    #     g = g.sort_values("weight")
+    #     plt.plot(g["weight"], g["ns_per_op"], marker="", label=name, linewidth=2)
+
+    for name in LINE_ORDER:
+        g = df[df["benchmark"] == name]
+        if g.empty:
+            continue
         g = g.sort_values("weight")
-        plt.plot(g["weight"], g["ns_per_op"], marker="o", label=name)
+        color = BENCHMARK_COLORS.get(name, "black")
+        plt.plot(
+            g["weight"],
+            g["ns_per_op"],
+            marker=".",
+            label=name,
+            color=color,
+            linewidth=2,
+        )
 
     plt.xlabel("Mask weight (popcount)")
     plt.ylabel("Time per operation [ns]")
-    plt.title(args.title)
+    plt.title(cpu.replace("_", " "))
+    # plt.title(args.title)
 
     plt.xlim(0, 64)
+    plt.ylim(0, 75)
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
     plt.legend(title="Implementation")
 
@@ -53,4 +122,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
