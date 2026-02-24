@@ -95,8 +95,9 @@ inline std::filesystem::path parent_directory(std::filesystem::path p)
     return canon.parent_path();
 }
 
-inline fs::path ensure_output_dir(std::string const& dir)
+inline std::filesystem::path ensure_output_dir(std::string const& dir)
 {
+    namespace fs = std::filesystem;
     fs::path p(dir);
 
     std::error_code ec;
