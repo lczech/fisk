@@ -57,7 +57,7 @@ inline std::vector<PextInput> make_inputs(std::size_t n, int popcnt, std::uint64
     return v;
 }
 
-inline void bench_pext(std::ostream& csv_os)
+inline void bench_pext_weights(std::ostream& csv_os)
 {
     std::size_t const n = 10;
     std::size_t const rounds = (1u << 16);

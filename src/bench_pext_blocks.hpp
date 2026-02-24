@@ -18,6 +18,7 @@
 #include "pext.hpp"
 #include "pext_zp7.hpp"
 #include "pext_instlatx64.hpp"
+#include "bench_pext_weights.hpp"
 #include "sys_info.hpp"
 
 // Already defined in `pext.hpp`
