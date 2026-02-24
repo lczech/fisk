@@ -35,6 +35,7 @@ def main():
         "pext_sw_bitloop",
         # "pext_sw_split32",
         "pext_sw_table8",
+        "pext_sw_adaptive",
         "pext_sw_block_table",
         "pext_sw_block_table_unrolled2",
         "pext_sw_block_table_unrolled4",
@@ -56,28 +57,30 @@ def main():
 
     # Stable colors for each implementation / benchmark
     BENCHMARK_COLORS = {
+        "pext_hw_bmi2":        "#5F5F5F",
         "pext_sw_bitloop":     "#47a1e2",
         "pext_sw_split32":     "#ff7f0e",
         "pext_sw_table8":      "#884ed3",
-        "pext_sw_block_table": "#1eca6c",
-        "pext_sw_block_table_unrolled2": "#1aa759",
-        "pext_sw_block_table_unrolled4": "#0e6e39",
-        "pext_sw_block_table_unrolled8": "#083f21",
-        "pext_sw_instlatx":    "#ff7f0e",
-        "pext_sw_zp7":         "#2ca02c",
-        "pext_hw_bmi2":        "#EE1313",
+        "pext_sw_adaptive":    "#D35820",
+        "pext_sw_block_table":           "#a1d99b",
+        "pext_sw_block_table_unrolled2": "#74c476",
+        "pext_sw_block_table_unrolled4": "#31a354",
+        "pext_sw_block_table_unrolled8": "#006d2c",
+        "pext_sw_instlatx":    "#000000",
+        "pext_sw_zp7":         "#000000",
     }
     LINE_ORDER = [
+        "pext_hw_bmi2",
         "pext_sw_bitloop",
         "pext_sw_split32",
         "pext_sw_table8",
+        "pext_sw_adaptive",
         "pext_sw_block_table",
         "pext_sw_block_table_unrolled2",
         "pext_sw_block_table_unrolled4",
         "pext_sw_block_table_unrolled8",
         "pext_sw_instlatx",
         "pext_sw_zp7",
-        "pext_hw_bmi2",
     ]
 
     plt.figure(figsize=(8, 5))
@@ -107,9 +110,10 @@ def main():
     # plt.title(args.title)
 
     plt.xlim(0, 64)
-    plt.ylim(0, 75)
+    # plt.ylim(0, 75)
+    plt.ylim(0, 12)
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
-    plt.legend(title="Implementation")
+    plt.legend(title="Implementation", ncol=2)
 
     plt.tight_layout()
 
