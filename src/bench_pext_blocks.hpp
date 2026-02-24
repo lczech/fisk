@@ -18,10 +18,11 @@
 #include "pext.hpp"
 #include "pext_zp7.hpp"
 #include "pext_instlatx64.hpp"
+#include "pext_adaptive.hpp"
 #include "bench_pext_weights.hpp"
 #include "sys_info.hpp"
 
-// Already defined in `pext.hpp`
+// Already defined in `bench_pext_weights.hpp`
 // struct PextInput
 // {
 //     std::uint64_t value;
@@ -205,8 +206,10 @@ inline void print_bits(std::uint64_t x, std::ostream& os)
     }
 }
 
-inline std::vector<PextInput> make_input_blocks(std::size_t n, std::size_t runs, std::uint64_t seed)
-{
+inline std::vector<PextInput> make_input_blocks(
+    std::size_t n, std::size_t runs, std::uint64_t seed,
+    std::vector<size_t>& adaptive_counts
+) {
     std::mt19937_64 rng(seed);
     std::uniform_int_distribution<std::uint64_t> dist_u64;
     std::vector<PextInput> v;
@@ -229,20 +232,23 @@ inline std::vector<PextInput> make_input_blocks(std::size_t n, std::size_t runs,
         v.push_back( PextInput{
             value,
             mask,
-            pext_sw_block_table_preprocess_u64( mask )
+            pext_sw_block_table_preprocess_u64( mask ),
+            AdaptivePext( mask )
         });
+        ++adaptive_counts[static_cast<size_t>( v.back().adaptive_pext.mode())];
+        // std::cout << v.back().adaptive_pext.mode_name() << "\n";
     }
     return v;
 }
 
 inline void bench_pext_blocks(std::ostream& csv_os)
 {
-    std::size_t const n = 10;
+    std::size_t const n = 100;
     std::size_t const rounds = (1u << 8);
     // std::size_t const n = (1u << 20);
     // std::size_t const rounds = 10;
     // std::size_t const repeats = 64;
-    std::size_t const repeats = 1024;
+    std::size_t const repeats = 16;
 
     // User output
     std::cout << "\n=== PEXT Blocks ===\n";
@@ -251,6 +257,9 @@ inline void bench_pext_blocks(std::ostream& csv_os)
     // Prepare csv output file with benchmark results
     write_csv_header(csv_os);
 
+    // Collect which adaptive mode was chosen how often.
+    auto adaptive_counts = std::vector<size_t>( 7, 0 );
+
     // Run a benchmark for each weight of the mask.
     // Most of our software implementations of PEXT have a runtime depending on that,
     // so we want to test the effects of different masks on the implementations.
@@ -258,16 +267,16 @@ inline void bench_pext_blocks(std::ostream& csv_os)
         std::string case_label = "popcount=" + std::to_string(runs);
         if( stdout_is_terminal() ) {
             std::cout << "\rmask popcount "
-                << std::setw(2) << runs << " / 64"
+                << std::setw(2) << runs << " / 32"
                 << std::flush;
             // std::cout << case_label << "\n";
         }
 
         // Helper to generate fresh input for each repetition
-        auto make_inputs_rep = [runs]()
+        auto make_inputs_rep = [runs, &adaptive_counts]()
         {
             auto seed = static_cast<std::uint64_t>(0xC0FFEEULL) ^ static_cast<std::uint64_t>(runs);
-            return make_input_blocks(n, runs, seed);
+            return make_input_blocks( n, runs, seed, adaptive_counts );
         };
 
         Microbench<PextInput> suite("PEXT_blocks");
@@ -309,6 +318,10 @@ inline void bench_pext_blocks(std::ostream& csv_os)
                 "pext_sw_block_table_unrolled8",
                 [](PextInput const& in){ return pext_sw_block_table_u64_unrolled8(in.value, in.block_table);
             }),
+            bench(
+                "pext_sw_adaptive",
+                [](PextInput const& in){ return in.adaptive_pext(in.value);
+            }),
             #ifdef PLATFORM_X86_64
             bench(
                 "pext_sw_instlatx",
@@ -326,4 +339,11 @@ inline void bench_pext_blocks(std::ostream& csv_os)
     if( stdout_is_terminal() ) {
         std::cout << "\n";
     }
+
+    // Print adative pext counts
+    std::cout << "Adaptive Pext counts:\n";
+    for( size_t i = 0; i < adaptive_counts.size(); ++i ) {
+        std::cout << "  " << adaptive_counts[i] << " <== " << AdaptivePext::mode_name(static_cast<AdaptivePext::ExtractMode>(i)) << "\n";
+    }
+    std::cout << "\n";
 }
