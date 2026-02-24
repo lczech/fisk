@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <cstdint>
@@ -98,10 +99,10 @@ inline std::uint64_t comin_compute_sequence_hash(
 //     PEXT
 // =================================================================================================
 
-inline std::uint64_t pext_prepare_mask( std::string const& mask )
+inline std::uint64_t pext_prepare_kmer_mask( std::string const& mask )
 {
     if( mask.size() == 0 || mask.size() > 32 ) {
-        throw std::invalid_argument( "Invalid mask size not in [1,32]" );
+        throw std::invalid_argument( "Invalid spaced k-mer mask size not in [1,32]" );
     }
     std::uint64_t result = 0;
     for( size_t i = 0; i < mask.size(); ++i ) {
@@ -111,10 +112,34 @@ inline std::uint64_t pext_prepare_mask( std::string const& mask )
         } else if( mask[i] == '1' ) {
             result |= 3;
         } else {
-            throw std::invalid_argument( "Invalid mask with symbols not in [0,1]" );
+            throw std::invalid_argument( "Invalid spaced k-mer mask with symbols not in [0,1]" );
         }
     }
     return result;
+}
+
+inline std::string pext_kmer_mask_to_string( std::uint64_t mask, size_t k )
+{
+    std::string str;
+    for( size_t i = 0; i < k; ++i ) {
+        if(( mask & 0x3 ) == 0x0 ) {
+            str.append("0");
+        } else if(( mask & 0x3 ) == 0x3 ) {
+            str.append("1");
+        } else {
+            throw std::invalid_argument(
+                "Invalid spaced k-mer mask with entries that are not 00 or 11."
+            );
+        }
+        mask >>= 2;
+    }
+    if( mask != 0 ) {
+        throw std::invalid_argument(
+            "Invalid spaced k-mer mask not of size k."
+        );
+    }
+    std::reverse(str.begin(), str.end());
+    return str;
 }
 
 template<typename Mask, typename Enc, typename Pext>

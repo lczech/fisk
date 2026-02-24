@@ -48,7 +48,7 @@ inline void bench_kmer_spaced(
 
         // Prepare masks for all implementations as needed
         auto const comin_mask = comin_prepare_mask(masks[m]);
-        auto const pext_mask = pext_prepare_mask(masks[m]);
+        auto const pext_mask = pext_prepare_kmer_mask(masks[m]);
         auto const pext_block_mask = pext_sw_block_table_preprocess_u64(pext_mask);
 
         // Prepare a benchmark with repititions

@@ -102,7 +102,7 @@ inline void bench_kmer_spaced_clark(
 
         // Prepare masks for all implementations as needed
         auto const comin_mask = comin_prepare_mask(clark_masks[m].second);
-        auto const pext_mask = pext_prepare_mask(clark_masks[m].second);
+        auto const pext_mask = pext_prepare_kmer_mask(clark_masks[m].second);
         auto const pext_block_mask = pext_sw_block_table_preprocess_u64(pext_mask);
 
         // Set up a fast pointer to the correct clark function,
