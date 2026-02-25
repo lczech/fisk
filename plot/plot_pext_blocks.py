@@ -3,16 +3,13 @@
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
-import os
+import os, sys
 from pathlib import Path
 
-
-def platform_from_csv_path(csv_path: str) -> str:
-    p = Path(csv_path)
-    # "last part of the directory path name"
-    # For ".../<CPU>/<file>.csv" this returns "<CPU>"
-    return p.parent.name
-
+# Such a cheat to import stuff in python...
+# See https://stackoverflow.com/a/22956038
+sys.path.insert(0, '.')
+from plot_common import *
 
 def main():
     parser = argparse.ArgumentParser(description="Plot PEXT benchmark results")
@@ -30,20 +27,8 @@ def main():
     df = pd.read_csv(args.csv)
     cpu = platform_from_csv_path(args.csv)
 
-    PLOT_BENCHMARKS = {
-        "pext_hw_bmi2",
-        "pext_sw_bitloop",
-        # "pext_sw_split32",
-        "pext_sw_table8",
-        "pext_sw_adaptive",
-        "pext_sw_block_table",
-        "pext_sw_block_table_unrolled2",
-        "pext_sw_block_table_unrolled4",
-        "pext_sw_block_table_unrolled8",
-        # "pext_sw_instlatx",
-        # "pext_sw_zp7",
-    }
-    df = df[df["benchmark"].isin(PLOT_BENCHMARKS)]
+    # Subset to the benchmarks we want to plot
+    df = df[df["benchmark"].isin(BENCHMARKS_KEEP)]
 
     # Expect columns:
     #   suite, case, benchmark, ns_per_op
@@ -55,41 +40,13 @@ def main():
     # Plot
     # -------------------------------------------------------------------------
 
-    # Stable colors for each implementation / benchmark
-    BENCHMARK_COLORS = {
-        "pext_hw_bmi2":        "#5F5F5F",
-        "pext_sw_bitloop":     "#47a1e2",
-        "pext_sw_split32":     "#ff7f0e",
-        "pext_sw_table8":      "#884ed3",
-        "pext_sw_adaptive":    "#D35820",
-        "pext_sw_block_table":           "#a1d99b",
-        "pext_sw_block_table_unrolled2": "#74c476",
-        "pext_sw_block_table_unrolled4": "#31a354",
-        "pext_sw_block_table_unrolled8": "#006d2c",
-        "pext_sw_instlatx":    "#000000",
-        "pext_sw_zp7":         "#000000",
-    }
-    LINE_ORDER = [
-        "pext_hw_bmi2",
-        "pext_sw_bitloop",
-        "pext_sw_split32",
-        "pext_sw_table8",
-        "pext_sw_adaptive",
-        "pext_sw_block_table",
-        "pext_sw_block_table_unrolled2",
-        "pext_sw_block_table_unrolled4",
-        "pext_sw_block_table_unrolled8",
-        "pext_sw_instlatx",
-        "pext_sw_zp7",
-    ]
-
     plt.figure(figsize=(8, 5))
 
     # for name, g in df.groupby("benchmark"):
     #     g = g.sort_values("weight")
     #     plt.plot(g["weight"], g["ns_per_op"], marker="", label=name, linewidth=2)
 
-    for name in LINE_ORDER:
+    for name in BENCHMARK_ORDER:
         g = df[df["benchmark"] == name]
         if g.empty:
             continue
@@ -110,14 +67,17 @@ def main():
     # plt.title(args.title)
 
     plt.xlim(0, 32)
-    plt.ylim(0, 16)
+    # plt.ylim(0, 16)
+    plt.ylim(0, 42)
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
-    plt.legend(title="Implementation", ncol=2)
+    # plt.legend(title="Implementation")
+    plt.legend(ncol=2)
+    # plt.legend()
 
     plt.tight_layout()
 
     if args.out:
-        plt.savefig(args.out, dpi=200)
+        plt.savefig(args.out, dpi=300)
         print(f"Wrote {args.out}")
     else:
         plt.show()
