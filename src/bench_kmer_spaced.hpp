@@ -124,7 +124,7 @@ inline void bench_kmer_spaced(
                 "pext_hw_bmi2_u64_char_to_nt_table",
                 [&](std::string const& seq){
                     return pext_compute_sequence_hash(
-                        k, pext_mask, seq, char_to_nt_table, pext_hw_bmi2_u64
+                        k, pext_mask, seq, char_to_nt_table_throw, pext_hw_bmi2_u64
                     );
                 }
             ),
@@ -133,7 +133,7 @@ inline void bench_kmer_spaced(
                 "pext_sw_bitloop_u64_char_to_nt_table",
                 [&](std::string const& seq){
                     return pext_compute_sequence_hash(
-                        k, pext_mask, seq, char_to_nt_table, pext_sw_bitloop_u64
+                        k, pext_mask, seq, char_to_nt_table_throw, pext_sw_bitloop_u64
                     );
                 }
             ),
@@ -141,7 +141,7 @@ inline void bench_kmer_spaced(
                 "pext_sw_table8_u64_char_to_nt_table",
                 [&](std::string const& seq){
                     return pext_compute_sequence_hash(
-                        k, pext_mask, seq, char_to_nt_table, pext_sw_table8_u64
+                        k, pext_mask, seq, char_to_nt_table_throw, pext_sw_table8_u64
                     );
                 }
             ),
@@ -149,7 +149,7 @@ inline void bench_kmer_spaced(
                 "pext_sw_block_table_u64_char_to_nt_table",
                 [&](std::string const& seq){
                     return pext_compute_sequence_hash(
-                        k, pext_block_mask, seq, char_to_nt_table, pext_sw_block_table_u64
+                        k, pext_block_mask, seq, char_to_nt_table_throw, pext_sw_block_table_u64
                     );
                 }
             )

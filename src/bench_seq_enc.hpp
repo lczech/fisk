@@ -29,25 +29,49 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
 
     auto results = suite.run(
         sequences, // vector<std::string>
+
+        // Throwing functions
         bench(
-            "char_to_nt_ifs",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ifs);
+            "char_to_nt_ifs_throw",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ifs_throw);
         }),
         bench(
-            "char_to_nt_switch",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_switch);
+            "char_to_nt_switch_throw",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_switch_throw);
         }),
         bench(
-            "char_to_nt_table",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table);
+            "char_to_nt_table_throw",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table_throw);
         }),
         bench(
-            "char_to_nt_ascii",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii);
+            "char_to_nt_table_throw",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table_throw);
         }),
         bench(
-            "char_to_nt_ascii_unchecked",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii_unchecked);
+            "char_to_nt_ascii_throw",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii_throw);
+        }),
+
+        // No except functions
+        bench(
+            "char_to_nt_ifs_nothrow",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ifs_nothrow);
+        }),
+        bench(
+            "char_to_nt_switch_nothrow",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_switch_nothrow);
+        }),
+        bench(
+            "char_to_nt_table_nothrow",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table_nothrow);
+        }),
+        bench(
+            "char_to_nt_table_nothrow",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table_throw);
+        }),
+        bench(
+            "char_to_nt_ascii_nothrow",
+            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii_nothrow);
         })
     );
 

@@ -98,55 +98,103 @@ inline void bench_kmer_extract(
         auto results = suite.run(
             sequences, // vector<std::string>
 
-            // Full extract
+            // Full re-extract
             bench(
-                "char_to_nt_ifs_re",
+                "char_to_nt_ifs_throw_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ifs);
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ifs_throw);
                 }
             ),
             bench(
-                "char_to_nt_switch_re",
+                "char_to_nt_ifs_nothrow_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_switch);
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ifs_nothrow);
                 }
             ),
             bench(
-                "char_to_nt_table_re",
+                "char_to_nt_switch_throw_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_table);
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_switch_throw);
                 }
             ),
             bench(
-                "char_to_nt_ascii_re",
+                "char_to_nt_switch_nothrow_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ascii);
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_switch_nothrow);
+                }
+            ),
+            bench(
+                "char_to_nt_table_throw_re",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_table_throw);
+                }
+            ),
+            bench(
+                "char_to_nt_table_nothrow_re",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_table_nothrow);
+                }
+            ),
+            bench(
+                "char_to_nt_ascii_throw_re",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ascii_throw);
+                }
+            ),
+            bench(
+                "char_to_nt_ascii_nothrow_re",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ascii_nothrow);
                 }
             ),
 
-            // Shift
+            // Shift bits
             bench(
-                "char_to_nt_ifs",
+                "char_to_nt_ifs_throw_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ifs);
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ifs_throw);
                 }
             ),
             bench(
-                "char_to_nt_switch",
+                "char_to_nt_ifs_nothrow_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_switch);
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ifs_nothrow);
                 }
             ),
             bench(
-                "char_to_nt_table",
+                "char_to_nt_switch_throw_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_table);
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_switch_throw);
                 }
             ),
             bench(
-                "char_to_nt_ascii",
+                "char_to_nt_switch_nothrow_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ascii);
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_switch_nothrow);
+                }
+            ),
+            bench(
+                "char_to_nt_table_throw_shift",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_table_throw);
+                }
+            ),
+            bench(
+                "char_to_nt_table_nothrow_shift",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_table_nothrow);
+                }
+            ),
+            bench(
+                "char_to_nt_ascii_throw_shift",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ascii_throw);
+                }
+            ),
+            bench(
+                "char_to_nt_ascii_nothrow_shift",
+                [&](std::string const& seq){
+                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ascii_nothrow);
                 }
             )
         );

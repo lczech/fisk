@@ -322,7 +322,7 @@ inline std::uint64_t clark_improved(
     for_each_kmer_2bit(
         std::string_view(seq),
         k,
-        char_to_nt_table,
+        char_to_nt_table_throw,
         [&](std::uint64_t kmer_word) {
             // Extract the spaced k-mers for al masks, and combine them into the hash.
             uint64_t v1, v2, v3;

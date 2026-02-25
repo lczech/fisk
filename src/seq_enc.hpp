@@ -26,7 +26,7 @@
 // -----------------------------------------------------------------------------
 
 // Simple if statements, as used in MISSH.
-inline constexpr std::uint8_t char_to_nt_ifs(char ch)
+inline constexpr std::uint8_t char_to_nt_ifs_throw(char ch)
 {
 	if(ch == 'A')
 		return 0;
@@ -36,7 +36,23 @@ inline constexpr std::uint8_t char_to_nt_ifs(char ch)
 		return 2;
 	if(ch == 'T')
 		return 3;
-	return 4; //ERROR CODE
+	throw std::runtime_error(
+        "Handling of non-ACGT characters not supported in this simple benchmark"
+    );
+}
+
+// Simple if statements, as used in MISSH.
+inline constexpr std::uint8_t char_to_nt_ifs_nothrow(char ch) noexcept
+{
+	if(ch == 'A')
+		return 0;
+	if(ch == 'C')
+		return 1;
+	if(ch == 'G')
+		return 2;
+	if(ch == 'T')
+		return 3;
+	return 4;
 }
 
 // -----------------------------------------------------------------------------
@@ -44,7 +60,7 @@ inline constexpr std::uint8_t char_to_nt_ifs(char ch)
 // -----------------------------------------------------------------------------
 
 // Simply switch statement, often used.
-inline constexpr std::uint8_t char_to_nt_switch(char c)
+inline constexpr std::uint8_t char_to_nt_switch_throw(char c)
 {
     switch (c) {
         case 'A': return 0u;
@@ -52,10 +68,22 @@ inline constexpr std::uint8_t char_to_nt_switch(char c)
         case 'G': return 2u;
         case 'T': return 3u;
         default:
-            // return 4u;
             throw std::runtime_error(
                 "Handling of non-ACGT characters not supported in this simple benchmark"
             );
+    }
+}
+
+// Simply switch statement, often used.
+inline constexpr std::uint8_t char_to_nt_switch_nothrow(char c) noexcept
+{
+    switch (c) {
+        case 'A': return 0u;
+        case 'C': return 1u;
+        case 'G': return 2u;
+        case 'T': return 3u;
+        default:
+            return 4u;
     }
 }
 
@@ -86,7 +114,7 @@ constexpr std::uint8_t seq_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
 };
 
-inline constexpr std::uint8_t char_to_nt_table(char c)
+inline constexpr std::uint8_t char_to_nt_table_throw(char c)
 {
     auto const r = seq_nt4_table[static_cast<std::uint8_t>(c)];
     if( r == 4 ) {
@@ -97,11 +125,16 @@ inline constexpr std::uint8_t char_to_nt_table(char c)
     return r;
 }
 
+inline constexpr std::uint8_t char_to_nt_table_nothrow(char c) noexcept
+{
+    return seq_nt4_table[static_cast<std::uint8_t>(c)];
+}
+
 // -----------------------------------------------------------------------------
 //     ascii
 // -----------------------------------------------------------------------------
 
-inline constexpr std::uint8_t char_to_nt_ascii(char c)
+inline constexpr std::uint8_t char_to_nt_ascii_throw(char c)
 {
     // The check below is the fastest in our tests;
     // faster than using toupper() to avoid the extra case checks.
@@ -119,7 +152,7 @@ inline constexpr std::uint8_t char_to_nt_ascii(char c)
     return ((u >> 1) ^ (u >> 2)) & 3;
 }
 
-inline constexpr std::uint8_t char_to_nt_ascii_unchecked(char c)
+inline constexpr std::uint8_t char_to_nt_ascii_nothrow(char c) noexcept
 {
     auto const u = static_cast<std::uint8_t>(c);
     return ((u >> 1) ^ (u >> 2)) & 3;

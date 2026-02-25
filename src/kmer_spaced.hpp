@@ -54,7 +54,9 @@ inline std::uint64_t comin_compute_spaced_kmer(
     std::uint64_t result = 0;
     for( size_t i = 0; i < mask.size(); ++i ) {
         // Comin et al use a switch statement for the encoding
-        auto const c = static_cast<std::uint64_t>( char_to_nt_switch( seq[start_pos + mask[i]] ));
+        auto const c = static_cast<std::uint64_t>(
+            char_to_nt_switch_throw( seq[start_pos + mask[i]] )
+        );
 
         // The original code builds the kmer backwards, with the last base at the highest bits.
         // result |= (c << (2 * i));
@@ -73,7 +75,7 @@ inline std::uint64_t comin_compute_spaced_kmer_improved(
     // Compute a single spaced kmer at the given position
     std::uint64_t result = 0;
     for( auto p : mask ) {
-        auto const c = static_cast<std::uint64_t>( char_to_nt_table( seq[start_pos + p] ));
+        auto const c = static_cast<std::uint64_t>( char_to_nt_table_throw( seq[start_pos + p] ));
         result <<= 2;
         result |= c;
     }
