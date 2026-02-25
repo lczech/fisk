@@ -56,12 +56,11 @@ def make_impl_summary_plot(
 
     # Filter benchmarks (if given)
     if benchmarks_keep is not None:
-        df = df[df["benchmark"].isin(benchmarks_keep)]
+        df_filtered = df[df["benchmark"].isin(benchmarks_keep)]
 
-    if df.empty:
-        raise ValueError(
-            f"No data found for suite={suite!r} with benchmarks_keep={benchmarks_keep!r}"
-        )
+        # If filtering removed everything, fall back to full set
+        if not df_filtered.empty:
+            df = df_filtered
 
     # Aggregate per benchmark across all cases
     grouped = (
@@ -116,7 +115,7 @@ def make_impl_summary_plot(
 
     if outpath:
         fig.savefig(outpath, dpi=200)
-        print(f"Saved: {outpath}")
+        print(f"Wrote {outpath}")
     else:
         plt.show()
 

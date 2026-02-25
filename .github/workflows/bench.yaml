@@ -76,17 +76,7 @@ jobs:
 
       - name: Run plotting script
         run: |
-          python plot/plot_pext.py "${OUTPUT_DIR}/pext.csv" --out "${OUTPUT_DIR}/pext.png"
-          python plot/plot_pext.py "${OUTPUT_DIR}/pext.csv" --out "${OUTPUT_DIR}/pext.svg"
-
-          python plot/plot_kmer_extract.py "${OUTPUT_DIR}/kmer_extract.csv" --out "${OUTPUT_DIR}/kmer_extract.png"
-          python plot/plot_kmer_extract.py "${OUTPUT_DIR}/kmer_extract.csv" --out "${OUTPUT_DIR}/kmer_extract.svg"
-
-          python plot/plot_kmer_spaced.py "${OUTPUT_DIR}/kmer_spaced.csv" --out "${OUTPUT_DIR}/kmer_spaced.png"
-          python plot/plot_kmer_spaced.py "${OUTPUT_DIR}/kmer_spaced.csv" --out "${OUTPUT_DIR}/kmer_spaced.svg"
-
-          python plot/plot_impl_summary.py "${OUTPUT_DIR}/kmer_spaced.csv" --out "${OUTPUT_DIR}/kmer_spaced_summary.png"
-          python plot/plot_impl_summary.py "${OUTPUT_DIR}/kmer_spaced.csv" --out "${OUTPUT_DIR}/kmer_spaced_summary.svg"
+          ./plot/plot_all_benchs.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

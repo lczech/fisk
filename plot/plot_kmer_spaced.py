@@ -63,7 +63,7 @@ def make_grouped_bar_plot_impl_first(df, suite, title, outpath):
 
     if outpath:
         fig.savefig(outpath, dpi=200)
-        print(f"Saved: {outpath}")
+        print(f"Wrote {outpath}")
     else:
         plt.show()
 
