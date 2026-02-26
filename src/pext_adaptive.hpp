@@ -41,7 +41,6 @@ public:
     /**
      * @brief Pext on a given value, assuming a fixed mask.
      */
-    // using PextFunction = std::uint64_t(*)(std::uint64_t);
     using PextFunction = std::uint64_t (AdaptivePext::*)(std::uint64_t) const;
 
     /**
@@ -54,17 +53,20 @@ public:
     {
         kAutomatic,
         kPext,
+        kByteTable,
         kBlockTable,
         kBlockTableUnrolled2,
         kBlockTableUnrolled4,
         kBlockTableUnrolled8,
-        kByteTable
     };
 
     // -------------------------------------------------------------------------
     //     Constructors and Rule of Five
     // -------------------------------------------------------------------------
 
+    /**
+     * @brief Default constructed instance; cannot be used.
+     */
     AdaptivePext()
     {
         // Set the functor to a dummy, so that we get a proper exception instead of
@@ -72,10 +74,12 @@ public:
         pext_func_ = &AdaptivePext::pext_dummy_;
     }
 
-    AdaptivePext( std::string const& mask, ExtractMode mode = ExtractMode::kAutomatic )
-        : AdaptivePext( pext_prepare_kmer_mask( mask ), mode )
-    {}
-
+    /**
+     * @brief Construct an instance for a given mask.
+     *
+     * This sets the mask and the mode, by default using auto-tuning to the fastest PEXT
+     * implementation, by running a small benchmark internally.
+     */
     AdaptivePext( std::uint64_t mask, ExtractMode mode = ExtractMode::kAutomatic )
         : mode_(mode)
         , mask_(mask)
@@ -110,7 +114,6 @@ public:
      */
     inline std::uint64_t operator() ( std::uint64_t value ) const
     {
-        // return pext_func_( value );
         return (this->*pext_func_)(value);
     }
 
@@ -125,6 +128,14 @@ public:
     /**
      * @brief Get the mode used by this instance as a printable string.
      */
+    std::string mode_name() const
+    {
+        return mode_name(mode_);
+    }
+
+    /**
+     * @brief Get the mode as a printable string for a given ExtractMode
+     */
     static std::string mode_name( ExtractMode mode )
     {
         switch(mode) {
@@ -133,6 +144,9 @@ public:
             }
             case ExtractMode::kPext: {
                 return "Pext";
+            }
+            case ExtractMode::kByteTable: {
+                return "ByteTable";
             }
             case ExtractMode::kBlockTable: {
                 return "BlockTable";
@@ -145,9 +159,6 @@ public:
             }
             case ExtractMode::kBlockTableUnrolled8: {
                 return "BlockTableUnrolled8";
-            }
-            case ExtractMode::kByteTable: {
-                return "ByteTable";
             }
             default: {
                 throw std::invalid_argument(
@@ -184,10 +195,15 @@ private:
         auto best_time = std::numeric_limits<double>::infinity();
         auto best_accu = static_cast<std::uint64_t>(0);
 
+        // Static assert that the enum values are as expected, to remind us
+        // about them should more algorithms be added in the future.
+        static_assert( static_cast<int>(ExtractMode::kPext) == 1 );
+        static_assert( static_cast<int>(ExtractMode::kBlockTableUnrolled8) == 6 );
+
         // Try all algorithms, benchmarking which one is the fastest.
         for(
             ExtractMode m = ExtractMode::kPext;
-            m <= ExtractMode::kByteTable;
+            m <= ExtractMode::kBlockTableUnrolled8;
             m = static_cast<ExtractMode>(static_cast<int>(m) + 1)
         ) {
             set_pext_func_( m );
@@ -225,7 +241,6 @@ private:
         set_pext_func_( best_mode );
     }
 
-
     void set_pext_func_( ExtractMode mode )
     {
         // Set the function pointer to one of the wrapper functions below, which are needed
@@ -241,6 +256,10 @@ private:
             }
             case ExtractMode::kPext: {
                 pext_func_ = &AdaptivePext::pext_hw_bmi2_u64_;
+                break;
+            }
+            case ExtractMode::kByteTable: {
+                pext_func_ = &AdaptivePext::pext_sw_byte_table_;
                 break;
             }
             case ExtractMode::kBlockTable: {
@@ -259,10 +278,6 @@ private:
                 pext_func_ = &AdaptivePext::pext_sw_block_table_u64_unrolled8_;
                 break;
             }
-            case ExtractMode::kByteTable: {
-                pext_func_ = &AdaptivePext::pext_sw_byte_table_;
-                break;
-            }
             default: {
                 // User error.
                 throw std::invalid_argument(
@@ -279,6 +294,11 @@ private:
     inline std::uint64_t pext_hw_bmi2_u64_( std::uint64_t value ) const
     {
         return pext_hw_bmi2_u64( value, mask_ );
+    }
+
+    inline std::uint64_t pext_sw_byte_table_( std::uint64_t value ) const
+    {
+        return pext_sw_table8_u64( value, mask_ );
     }
 
     inline std::uint64_t pext_sw_block_table_u64_( std::uint64_t value ) const
@@ -301,14 +321,11 @@ private:
         return pext_sw_block_table_u64_unrolled8( value, block_table_ );
     }
 
-    inline std::uint64_t pext_sw_byte_table_( std::uint64_t value ) const
-    {
-        return pext_sw_table8_u64( value, mask_ );
-    }
-
     inline std::uint64_t pext_dummy_( std::uint64_t ) const
     {
-        throw std::invalid_argument( "Calling operator() on default constructed class" );
+        throw std::invalid_argument(
+            "Invalid call to operator() on default-constructed AdaptivePext instance"
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -317,9 +334,11 @@ private:
 
 private:
 
+    // Extraction mode and function pointer
     ExtractMode mode_;
     PextFunction pext_func_ = nullptr;
 
+    // PEXT mask and block table for the block algorithm
     std::uint64_t mask_;
     PextBlockTable block_table_;
 };
