@@ -222,7 +222,7 @@ def main() -> None:
         out = args.out
         os.makedirs(str(Path(out).parent), exist_ok=True) if str(Path(out).parent) not in ("", ".") else None
         fig.savefig(out, dpi=args.dpi)
-        print(f"Saved: {out}")
+        print(f"Wrote {out}")
     else:
         plt.show()
 
