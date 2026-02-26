@@ -1,10 +1,14 @@
 #pragma once
 
-#include <string>
-#include <string_view>
-#include <cstdint>
+#include <array>
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <iomanip>
 #include <stdexcept>
+#include <string_view>
+#include <string>
 #include <vector>
 
 #include "kmer_extract.hpp"
@@ -12,7 +16,7 @@
 #include "seq_enc.hpp"
 
 // =================================================================================================
-//     CLARK
+//     CLARK Original
 // =================================================================================================
 
 // The code in this section is adapted from https://github.com/rouni001/CLARK,
@@ -100,7 +104,7 @@ inline void clark_getSpacedSeed(
 
     if (_setting == "T295"){
         return clark_getSpacedSeedOPTSS95s2(_kmerR, _skmerR);
-        }
+    }
     if (_setting == "T38570"){
         return clark_getSpacedSeedT38570(_kmerR, _skmerR);
     }
@@ -113,7 +117,7 @@ inline void clark_getSpacedSeed(
 
 template<typename Enc>
 inline std::uint64_t clark_isFwdValid(
-    std::string_view seq, std::size_t i, Enc&& enc
+    std::string_view seq, std::size_t i, std::array<bool, 32> const& m_mask, Enc&& enc
 ) {
     // A slower version of the kmer extract, where each kmer is extracted fully from scratch.
     // Also, adding some conditions that clark uses, and repeated calls to enc.
@@ -128,17 +132,17 @@ inline std::uint64_t clark_isFwdValid(
             // done with the kmer
             break;
         }
-        // if( ic == stop && c < k ) {
-        //     // reached end of data. won't happen, as the outer loop with not run
-        //     // in that case. but added here for clark completeness
-        //     break;
-        // }
+        if( ic == seq.size() && c < k ) {
+            // reached end of data. won't happen, as the outer loop with not run
+            // in that case. but added here for clark completeness
+            break;
+        }
         if( enc(seq[ic]) == -10 ) {
-            // special condition, never happening here with our input
+            // special condition for new lines, never happening here with our input
             break;
         }
         if( enc(seq[ic]) < 0 ) {
-            // special condition, never happening here with our input
+            // special condition for other invalids, never happening here with our input
             break;
         }
         if( enc(seq[ic]) != 4 ) {
@@ -149,17 +153,28 @@ inline std::uint64_t clark_isFwdValid(
             c++;
             continue;
         }
-        // There is another mask check here, but we leave that one out for simplicity.
-        // It only seems to be triggered for ambiguous bases anyway.
+        if( !m_mask[c] ) {
+            // the weird case: the position is already left out here, before spacing
+            // not really needed, but this is what clark does
+            kmer <<= 2;
+            kmer ^= 0;
+            c++;
+            ic++;
+            continue;
+        }
     }
     return kmer;
 }
 
 template<typename Enc>
 inline std::uint64_t clark_querySpacedElement(
-    std::string_view seq, std::size_t i, std::string const& mask, Enc&& enc
+    std::string_view seq,
+    std::size_t i,
+    std::string const& mask,
+    std::array<bool, 32> const& m_mask,
+    Enc&& enc
 ) {
-    auto const kmer = clark_isFwdValid(seq, i, enc);
+    auto const kmer = clark_isFwdValid(seq, i, m_mask, enc);
     std::uint64_t spaced;
     clark_getSpacedSeed(mask, kmer, spaced);
     return spaced;
@@ -177,6 +192,49 @@ inline std::array<int, 256> clark_get_m_table()
     m_table['m']  = 4; m_table['r'] = 4; m_table['w'] = 4; m_table['v'] = 4; m_table['d'] = 4;
     m_table['k']  = 4; m_table['y'] = 4; m_table['s'] = 4; m_table['h'] = 4; m_table['b'] = 4;
     return m_table;
+}
+
+inline std::array<bool, 32> clark_get_m_mask( std::string const& _name )
+{
+    std::array<bool, 32> m_mask{};
+
+    // Get the correct mask string for the given name.
+    std::string _mask;
+    if (_name =="T295") {
+        _mask="1111*111*111**1*111**1*11*11111";
+    }
+    if (_name =="T38570") {
+        _mask="11111*1*111**1*11*111**11*11111";
+    }
+    if (_name =="T58570") {
+        _mask="11111*1**111*1*11*11**111*11111";
+    }
+    if( _mask.empty() ) {
+        throw std::runtime_error( "Invalid mask name: " + _name );
+    }
+
+    // Build the bool array for the mask
+    for(size_t t = 0; t < _mask.size(); t++) {
+        if( _mask[t] == '0' || _mask[t] == '*' ) {
+            m_mask[t] = false;
+        } else if( _mask[t] == '1' ) {
+            m_mask[t] = true;
+        } else {
+            throw std::invalid_argument( "Invalid mask symbol" );
+        }
+    }
+
+    return m_mask;
+}
+
+inline std::vector<std::array<bool, 32>> clark_get_m_masks(
+    std::vector<std::string> const& masks
+) {
+    std::vector<std::array<bool, 32>> m_masks;
+    for( auto const& mask : masks ) {
+        m_masks.push_back( clark_get_m_mask(mask) );
+    }
+    return m_masks;
 }
 
 inline std::uint64_t clark_getObjectsDataComputeFull(
@@ -209,13 +267,19 @@ inline std::uint64_t clark_getObjectsDataComputeFull(
         return m_table[static_cast<size_t>(c)];
     };
 
-    const std::size_t n    = seq.size();
-    const std::size_t stop = n - k;
+    // Prepare the m_masks, in which masked positions in the spaced k-mer are already left out
+    // when building the original k-mer. Not sure why, because those are spaced out anyway.
+    // Static, so that they are not recomputed on every call - but thus fixed for the masks.
+    // This is thus only for our benchmarking, where we always use the same masks.
+    // In Clark, these are stored within the spacedKmer class, achieving more flexibility.
+    static const auto m_masks = clark_get_m_masks( masks );
 
     // Slide the kmer window over the sequence, getting all kmers.
-    for (std::size_t i = 0; i <= stop; ++i) {
-        for( auto const& mask : masks ) {
-            hash ^= clark_querySpacedElement(seq, i, mask, clark_enc);
+    const std::size_t n    = seq.size();
+    const std::size_t stop = n - k;
+    for( std::size_t i = 0; i <= stop; ++i) {
+        for( size_t m = 0; m < masks.size(); ++m ) {
+            hash ^= clark_querySpacedElement( seq, i, masks[m], m_masks[m], clark_enc );
         }
     }
     return hash;
