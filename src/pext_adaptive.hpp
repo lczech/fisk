@@ -198,12 +198,21 @@ private:
         // Static assert that the enum values are as expected, to remind us
         // about them should more algorithms be added in the future.
         static_assert( static_cast<int>(ExtractMode::kPext) == 1 );
+        static_assert( static_cast<int>(ExtractMode::kByteTable) == 2 );
         static_assert( static_cast<int>(ExtractMode::kBlockTableUnrolled8) == 6 );
+
+        // Depending on hardware, we might not want to test hardware pext, if not available.
+        #if defined(HAVE_BMI2)
+            auto const first_mode = ExtractMode::kPext;
+        #else
+            auto const first_mode = ExtractMode::kByteTable;
+        #endif
+        auto const last_mode = ExtractMode::kBlockTableUnrolled8;
 
         // Try all algorithms, benchmarking which one is the fastest.
         for(
-            ExtractMode m = ExtractMode::kPext;
-            m <= ExtractMode::kBlockTableUnrolled8;
+            ExtractMode m = first_mode;
+            m <= last_mode;
             m = static_cast<ExtractMode>(static_cast<int>(m) + 1)
         ) {
             set_pext_func_( m );
@@ -293,7 +302,16 @@ private:
 
     inline std::uint64_t pext_hw_bmi2_u64_( std::uint64_t value ) const
     {
-        return pext_hw_bmi2_u64( value, mask_ );
+        #if defined(HAVE_BMI2)
+            return pext_hw_bmi2_u64( value, mask_ );
+        #else
+            // This function will be called if ExtractMode::kPext is set at construction,
+            // which is invalid if not available on the given hardware.
+            // In automatic mode, it will not be tested or set.
+            throw std::runtime_error(
+                "Invalid use of hardware PEXT mode on architecture without BMI2 instructions"
+            );
+        #endif
     }
 
     inline std::uint64_t pext_sw_byte_table_( std::uint64_t value ) const
