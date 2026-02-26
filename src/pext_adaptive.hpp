@@ -308,8 +308,10 @@ private:
             // This function will be called if ExtractMode::kPext is set at construction,
             // which is invalid if not available on the given hardware.
             // In automatic mode, it will not be tested or set.
+            (void) value;
             throw std::runtime_error(
-                "Invalid use of hardware PEXT mode on architecture without BMI2 instructions"
+                "Invalid use of hardware PEXT mode on architecture without BMI2 instructions. "
+                "Cannot use AdaptivePext::ExtractMode::kPext on given hardware."
             );
         #endif
     }
