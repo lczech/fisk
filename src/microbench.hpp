@@ -113,8 +113,8 @@ inline void require_same_sinks(
 
     auto const expected = rs.front().sink;
     if( expected == 0 ) {
-        std::cerr << "Sink is 0. That is technically possible, but rather unlikely, ";
-        std::cerr << "and instead points to a wrong setup, where the sink is incrrectly computed.\n";
+        std::cerr << "Accumulation sink is 0. That is possible for empty masks etc, ";
+        std::cerr << "or points to a wrong setup, where the sink is incorrectly computed.\n";
     }
     for (auto const& r : rs) {
         if (r.sink != expected) {
