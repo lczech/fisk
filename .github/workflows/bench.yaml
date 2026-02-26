@@ -76,7 +76,7 @@ jobs:
 
       - name: Run plotting script
         run: |
-          ./plot/plot_all_benchs.sh
+          ./plot/plot_all_benchs.sh ${OUTPUT_DIR}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
