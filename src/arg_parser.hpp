@@ -13,6 +13,9 @@
 //     Tiny generic command line parser
 // ============================================================================
 
+/**
+ * @brief Helper to parse command line arguments.
+ */
 class ArgParser {
 public:
     explicit ArgParser(std::string program_name)

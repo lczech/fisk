@@ -12,10 +12,18 @@
 #include "microbench.hpp"
 #include "sys_info.hpp"
 
+/**
+ * @brief Simple "hashing" of k-mers by computing the xor of all their two bit encodings.
+ *
+ * This is just for benchmarking, to ensure that the values are actually used (and thus the
+ * compuation cannot be omitted by the compiler), as well as to ensure consistent results
+ * between different implementations.
+ */
 template<typename Enc>
-inline std::uint64_t for_each_kmer_2bit_xor(std::string_view seq, std::size_t k, Enc&& enc)
-{
-    // Simple wrapper around the main loop function whcih also keeps track of a "hash"
+inline std::uint64_t for_each_kmer_2bit_xor(
+    std::string_view seq, std::size_t k, Enc&& enc
+) {
+    // Simple wrapper around the main loop function which also keeps track of a "hash"
     // by xor-ing all k-mers, just as a validity check that all implementations give the same.
     std::uint64_t hash = 0;
 
@@ -33,9 +41,16 @@ inline std::uint64_t for_each_kmer_2bit_xor(std::string_view seq, std::size_t k,
     return hash;
 }
 
+/**
+ * @brief Simple "hashing" of k-mers by computing the xor of all their two bit encodings.
+ *
+ * This is similar to for_each_kmer_2bit_xor(), but re-extracts the whole k-mer in each step.
+ * This is computationally wasteful compred to bit shifts, thus only used for benchmarking.
+ */
 template<typename Enc>
-inline std::uint64_t for_each_kmer_2bit_xor_reextract(std::string_view seq, std::size_t k, Enc&& enc)
-{
+inline std::uint64_t for_each_kmer_2bit_xor_reextract(
+    std::string_view seq, std::size_t k, Enc&& enc
+) {
     // Simple wrapper around the main loop function whcih also keeps track of a "hash"
     // by xor-ing all k-mers, just as a validity check that all implementations give the same.
     std::uint64_t hash = 0;
@@ -54,6 +69,15 @@ inline std::uint64_t for_each_kmer_2bit_xor_reextract(std::string_view seq, std:
     return hash;
 }
 
+/**
+ * @brief Benchmark different implementations to extract and iterate all k-mers in a sequence.
+ *
+ * The main differences between functions are how the characters are encoded into two bit encoding
+ * (ifs, switch, ascii mangling, lookup table). Furthermore, we test both checked and uncheckd
+ * variants (are the characters in `ACGT` - throw an exception if not), as the check adds runtime,
+ * and exception handling might also cause the compiler to emit different inlinining. Lastly, we
+ * benchmark full re-extraction of each k-mer (slow) vs shifting between iterations.
+ */
 inline void bench_kmer_extract(
     std::vector<std::string> const& sequences,
     size_t k_min,

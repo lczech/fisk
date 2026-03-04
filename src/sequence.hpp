@@ -9,6 +9,9 @@
 #include <array>
 #include <vector>
 
+/**
+ * @brief Read FASTA file, remove all non-ACGT characters, and concatenate all sequences.
+ */
 inline std::vector<std::string> load_fasta_clean(std::string const& path)
 {
     // Read FASTA file, remove all non-ACGT characters, and concatenate all sequences.
@@ -57,6 +60,9 @@ inline std::vector<std::string> load_fasta_clean(std::string const& path)
     return result;
 }
 
+/**
+ * @brief Generate a string of random `ACGT` letters of a given length @p n.
+ */
 inline std::string random_acgt(std::size_t n)
 {
     static thread_local std::mt19937_64 rng{std::random_device{}()};

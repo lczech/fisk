@@ -101,6 +101,11 @@ inline std::uint64_t comin_compute_sequence_hash(
 //     PEXT
 // =================================================================================================
 
+/**
+ * @brief Take a k-mer spaced mask string and turn it into a 2bit bit extraction mask.
+ *
+ * For instance, mask `1011` becomes an uint `0b11001111`.
+ */
 inline std::uint64_t pext_prepare_kmer_mask( std::string const& mask )
 {
     if( mask.size() == 0 || mask.size() > 32 ) {
@@ -109,7 +114,7 @@ inline std::uint64_t pext_prepare_kmer_mask( std::string const& mask )
     std::uint64_t result = 0;
     for( size_t i = 0; i < mask.size(); ++i ) {
         result <<= 2;
-        if( mask[i] == '0' ) {
+        if( mask[i] == '0' || mask[i] == '*' ) {
             continue;
         } else if( mask[i] == '1' ) {
             result |= 3;
@@ -120,6 +125,9 @@ inline std::uint64_t pext_prepare_kmer_mask( std::string const& mask )
     return result;
 }
 
+/**
+ * @brief Get the bit extract mask as a string of 0s and 1s, for printing.
+ */
 inline std::string pext_kmer_mask_to_string( std::uint64_t mask, size_t k )
 {
     std::string str;
@@ -144,6 +152,13 @@ inline std::string pext_kmer_mask_to_string( std::uint64_t mask, size_t k )
     return str;
 }
 
+/**
+ * @brief Compute a simple "hash" of a sequence by xoring all spaced k-mers in the sequence.
+ *
+ * This is just for benchmarking, to ensure that the values are actually used (and thus the
+ * compuation cannot be omitted by the compiler), as well as to ensure consistent results
+ * between different implementations.
+ */
 template<typename Mask, typename Enc, typename Pext>
 inline std::uint64_t pext_compute_sequence_hash(
     size_t k, Mask const& mask, std::string const& seq, Enc&& enc, Pext&& pext

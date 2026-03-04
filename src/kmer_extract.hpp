@@ -12,9 +12,17 @@
 //     K-mer Extraction
 // =================================================================================================
 
+/**
+ * @brief Iterate a sequence, extract all k-mers from it (using bit shifts),
+ * and call a callback function on each k-mer.
+ *
+ * @tparam Enc  Encoding function to turn characters into two bit encoding.
+ * @tparam Func Callback function to be called for each k-mer in the iteration.
+ */
 template<typename Enc, typename Func>
-inline void for_each_kmer_2bit(std::string_view seq, std::size_t k, Enc&& enc, Func&& func)
-{
+inline void for_each_kmer_2bit(
+    std::string_view seq, std::size_t k, Enc&& enc, Func&& func
+) {
     // Iterate all k-mers of a sequence, encoded as 2-bit packed uint64_t.
     // For a sequence of length n and k <= 32, this function visits
     // (n - k + 1) overlapping k-mers. Each k-mer is encoded into the
@@ -53,9 +61,18 @@ inline void for_each_kmer_2bit(std::string_view seq, std::size_t k, Enc&& enc, F
     }
 }
 
+/**
+ * @brief Iterate a sequence, extract all k-mers from it (using re-extraction each time),
+ * and call a callback function on each k-mer.
+ *
+ * This is the same as for_each_kmer_2bit(), but re-extract the k-mer each time from the input
+ * characters. This is of course slower, but apparently used in practice. We hence implement
+ * it here for benchmarking.
+ */
 template<typename Enc, typename Func>
-inline void for_each_kmer_2bit_reextract(std::string_view seq, std::size_t k, Enc&& enc, Func&& func)
-{
+inline void for_each_kmer_2bit_reextract(
+    std::string_view seq, std::size_t k, Enc&& enc, Func&& func
+) {
     // Same as above, but each kmer is extracted separately. Not efficient, and worse for larger k.
 
     // Boundary checks
@@ -78,4 +95,23 @@ inline void for_each_kmer_2bit_reextract(std::string_view seq, std::size_t k, En
         }
         func(kmer);
     }
+}
+
+/**
+ * @brief Get the string representation of a k-mer, as a sequence of `ACGT` characters.
+ */
+inline std::string decode_kmer_2bit( std::uint64_t kmer, std::size_t k )
+{
+    static const char lut[4] = {'A','C','G','T'};
+
+    std::string s;
+    s.resize(k);
+
+    for (std::size_t i = 0; i < k; ++i) {
+        std::size_t shift = 2 * (k - 1 - i);
+        std::uint64_t code = (kmer >> shift) & 0x3ULL;
+        s[i] = lut[code];
+    }
+
+    return s;
 }

@@ -9,6 +9,17 @@
 #include "seq_enc.hpp"
 #include "microbench.hpp"
 
+/**
+ * @brief Benchmark different implementations for encoding ASCII chars into the two bit encoding.
+ *
+ * This tests both variants of the implementations, those that check that the character is valid
+ * in `ACGT`, and those that assume it is. The former will usually be more important in practice
+ * on input data, while the latter might be used internally after parsing has already been done.
+ *
+ * The idea to test both is that the extra check as well as the exception thrown might cause the
+ * compiler to emit different code, and in particular not be able to inline those functions.
+ * Hence, we benchmark them all here, to see the effects of this.
+ */
 inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostream& csv_os)
 {
     std::size_t const rounds = 8;

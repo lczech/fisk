@@ -14,6 +14,9 @@
 #include "microbench.hpp"
 #include "sys_info.hpp"
 
+/**
+ * @brief Benchmark spaced k-mer extract with single masks.
+ */
 inline void bench_kmer_spaced(
     std::vector<std::string> const& sequences,
     std::vector<std::string> const& masks,

@@ -15,6 +15,9 @@
 #include "microbench.hpp"
 #include "sys_info.hpp"
 
+/**
+ * @brief Benchmark the original CLARK implementation vs our improved one.
+ */
 inline void bench_kmer_clark(
     std::vector<std::string> const& sequences,
     std::ostream& csv_os

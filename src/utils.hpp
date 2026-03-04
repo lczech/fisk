@@ -80,6 +80,9 @@ private:
 //     Path handling
 // ------------------------------------------------------------------------
 
+/**
+ * @brief Get the parent directory of a given path @p p.
+ */
 inline std::filesystem::path parent_directory(std::filesystem::path p)
 {
     namespace fs = std::filesystem;
@@ -95,6 +98,12 @@ inline std::filesystem::path parent_directory(std::filesystem::path p)
     return canon.parent_path();
 }
 
+/**
+ * @brief Ensure that a given @p dir is a directory.
+ *
+ * If the path already exists, it checks that it is actually a directory, and throws otherwise.
+ * If the path does not exist, the directory and its parents are created.
+ */
 inline std::filesystem::path ensure_output_dir(std::string const& dir)
 {
     namespace fs = std::filesystem;
@@ -122,6 +131,9 @@ inline std::filesystem::path ensure_output_dir(std::string const& dir)
 //     File handling
 // ------------------------------------------------------------------------
 
+/**
+ * @brief Load the lines in a file into a vector of strings.
+ */
 inline std::vector<std::string> load_lines(std::string const& path)
 {
     std::ifstream in(path);
@@ -139,6 +151,9 @@ inline std::vector<std::string> load_lines(std::string const& path)
     return lines;
 }
 
+/**
+ * @brief Get the ofstream object to write to a given file path.
+ */
 inline std::ofstream get_ofstream( std::filesystem::path path, std::string filename )
 {
     auto const target = path / filename;
@@ -149,6 +164,9 @@ inline std::ofstream get_ofstream( std::filesystem::path path, std::string filen
     return os;
 }
 
+/**
+ * @brief Check if `stdout` is a terminal.
+ */
 inline bool stdout_is_terminal()
 {
     return isatty(fileno(stdout));

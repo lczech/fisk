@@ -16,6 +16,12 @@
 #include "bit_extract_adaptive.hpp"
 #include "sys_info.hpp"
 
+/**
+ * @brief Helper to store a value and a mask (plus its software helpers) for testing.
+ *
+ * This is simply an entry in our test data, which is then used to benchmark how fast
+ * the implementions are in extracting the bits from the value using the mask.
+ */
 struct PextInput
 {
     std::uint64_t value;
@@ -29,6 +35,9 @@ struct PextInput
     AdaptiveBitExtract adaptive_pext;
 };
 
+/**
+ * @brief Generate a random bit extract mask with a given amount of set bits.
+ */
 inline std::uint64_t random_mask_with_popcount(std::mt19937_64& rng, int popcnt)
 {
     if (popcnt <= 0) return 0ull;
@@ -42,7 +51,10 @@ inline std::uint64_t random_mask_with_popcount(std::mt19937_64& rng, int popcnt)
     return mask;
 }
 
-inline std::vector<PextInput> make_inputs(
+/**
+ * @brief Generate input for the benchmark here, with @p n entries of @p popcnt weight.
+ */
+static inline std::vector<PextInput> make_inputs(
     std::size_t n, int popcnt, std::uint64_t seed,
     std::vector<size_t>& adaptive_counts
 ) {
@@ -67,6 +79,10 @@ inline std::vector<PextInput> make_inputs(
     return v;
 }
 
+/**
+ * @brief Benchmark different bit extract implementations using randomly generated values and masks,
+ * for a range of mask weights (number of bits set) from 0 to 64.
+ */
 inline void bench_pext_weights(std::ostream& csv_os)
 {
     std::size_t const n = 16;
@@ -83,6 +99,7 @@ inline void bench_pext_weights(std::ostream& csv_os)
     write_csv_header(csv_os);
 
     // Collect which adaptive mode was chosen how often.
+    // This is not really important, but we are curious to see this.
     auto adaptive_counts = std::vector<size_t>( 7, 0 );
 
     // Run a benchmark for each weight of the mask.

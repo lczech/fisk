@@ -187,6 +187,11 @@ std::uint64_t random_mask_with_runs(std::size_t runs, URBG& rng)
     return mask;
 }
 
+/**
+ * @brief Count the number of runs of consecutive 1s in a mask.
+ *
+ * This is mostly used interally to check that we got the right amount.
+ */
 inline std::size_t count_runs(std::uint64_t x)
 {
     // Bits that start a run of 1s (as seen from the direction of the LSB):
@@ -196,6 +201,9 @@ inline std::size_t count_runs(std::uint64_t x)
     return static_cast<std::size_t>( std::popcount( run_starts ));
 }
 
+/**
+ * @brief Print a mask as a bit string.
+ */
 inline void print_bits(std::uint64_t x, std::ostream& os)
 {
     for (int i = 63; i >= 0; --i) {
@@ -206,6 +214,13 @@ inline void print_bits(std::uint64_t x, std::ostream& os)
     }
 }
 
+/**
+ * @brief Generate @p n random masks with @p runs runs of consecutive 1s each.
+ *
+ * The function also creates the bit extract helper masks for our software implemetations,
+ * and keeps track of how often each implementation is chosen by the adaptive bit extract.
+ * Doing all of this here is not good software design, but good enough for our simple benchmark.
+ */
 inline std::vector<PextInput> make_input_blocks(
     std::size_t n, std::size_t runs, std::uint64_t seed,
     std::vector<size_t>& adaptive_counts
@@ -241,6 +256,13 @@ inline std::vector<PextInput> make_input_blocks(
     return v;
 }
 
+/**
+ * @brief Benchmark bit extract implementations for masks with different numbers of runs of
+ * consecutive 1s.
+ *
+ * The runs of consecutive 1s are in the range 1 to 32. The latter is the maximum we can get
+ * in a 64 bit word, by alternating 0s and 1s.
+ */
 inline void bench_pext_blocks(std::ostream& csv_os)
 {
     std::size_t const n = 100;

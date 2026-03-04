@@ -32,18 +32,26 @@
 // =================================================================================================
 
 #if defined(HAVE_BMI2)
+
+/**
+ * @brief Bit extract via hardware PEXT from them BMI2 instruction set.
+ */
 static inline std::uint64_t pext_hw_bmi2_u64(std::uint64_t x, std::uint64_t mask)
 {
     // For speed, not using bmi2_enabled() for check here, and instead assume
     // that hardware availablility means we are allowed to call it.
     return _pext_u64(x, mask);
 }
+
 #endif
 
 // =================================================================================================
 //     Simple portable bit-loop implementation
 // =================================================================================================
 
+/**
+ * @brief Bit extract via a simple bit loop over all bits set in the mask.
+ */
 static inline std::uint64_t pext_sw_bitloop_u64(std::uint64_t x, std::uint64_t mask)
 {
     // This is the classic "extract selected bits and pack them densely" loop.
@@ -67,6 +75,12 @@ static inline std::uint64_t pext_sw_bitloop_u64(std::uint64_t x, std::uint64_t m
 //     Split into two 32-bit halves
 // =================================================================================================
 
+/**
+ * @brief Bit extract by splitting the 64-bit word into two 32-bit parts, and running
+ * the bit loop extraction separately.
+ *
+ * This might be a bit faster, but mostly just used out of curiosity. Not really that useful.
+ */
 static inline std::uint64_t pext_sw_split32_u64(std::uint64_t x, std::uint64_t mask)
 {
     // Same as above, but split into two 32-bit halves.
@@ -112,6 +126,11 @@ static inline std::uint64_t pext_sw_split32_u64(std::uint64_t x, std::uint64_t m
 //     Byte-wise table implementation (8-bit chunks)
 // =================================================================================================
 
+/**
+ * @brief Lookup tables for bit extraction via the Byte Table implementation.
+ *
+ * This table is generic for all masks, and only needs to be computed once.
+ */
 struct PextTable8
 {
     // Precomputes, for each 8-bit mask m and 8-bit value x, the packed result.
@@ -144,6 +163,13 @@ struct PextTable8
     }
 };
 
+/**
+ * @brief Bit extract via Byte Table lookup.
+ *
+ * This implementation uses a precomputed table of each compbination of input byte and mask byte,
+ * and loops over all bytes to extract them individually, then shifts them to the correct position
+ * using a second, smaller, lookup table for each byte.
+ */
 static inline std::uint64_t pext_sw_table8_u64(std::uint64_t x, std::uint64_t mask)
 {
     // Use the precomputed bytes to implement a fast pext.
@@ -166,19 +192,31 @@ static inline std::uint64_t pext_sw_table8_u64(std::uint64_t x, std::uint64_t ma
 //     Preprocessing with blocks
 // =================================================================================================
 
+/**
+ * @brief Lookup tables for bit extraction via the Block Shift implementation.
+ *
+ * These tables are specific for a given mask. If only few masks are used, as in our case here,
+ * this is a reasonably fast implementation. With arbitrary masks in each bit extraction call,
+ * such as in chess computing, this is not the right choice.
+ */
 struct PextBlockTable
 {
     // One entry per run of consecutive 1-bits in the original mask.
     // First, a mask selecting that run at its original bit positions.
     // Second, right-shift value to move that run to its packed output position.
     // In the worst case, we have an interleaved pattern of 32 ones and zeros.
-    // We add one last entry to that, to make our loop unrolling a bit easier.
+    // We add one last entry to that, to make our loop unrolling a bit easier,
+    // as we can then simply overshoot without invalid memory access.
+    // The last entry needed for an actual mask (likely, with fewer blocks)
+    // is indicated by the first mask that is 0. This way, we do not have to
+    // add another variable here to keep track of the number of blocks.
     std::array<std::uint64_t, 33> masks{};
     std::array<std::uint64_t, 33> shifts{};
-    // std::vector<std::uint64_t> masks;
-    // std::vector<std::uint64_t> shifts;
 };
 
+/**
+ * @brief Compute the Block Shift lookup tables for a given mask.
+ */
 inline PextBlockTable pext_sw_block_table_preprocess_u64( std::uint64_t mask )
 {
     PextBlockTable table;
@@ -235,11 +273,17 @@ inline PextBlockTable pext_sw_block_table_preprocess_u64( std::uint64_t mask )
     return table;
 }
 
-// Apply blockwise-PEXT using the preprocessing above.
-// Semantics match _pext_u64(x, mask) for the same mask.
+/**
+ * @brief Bit extract via Block Shift table.
+ *
+ * This implementation uses a PextBlockTable that is precomputed for the mask, and runs as many
+ * iterations as there are blocks of consecutive 1s in the mask.
+ */
 static inline std::uint64_t pext_sw_block_table_u64(
     std::uint64_t x, PextBlockTable const& pb
 ) {
+    // Apply blockwise-PEXT using the preprocessing above.
+    // Semantics match _pext_u64(x, mask) for the same mask.
     std::uint64_t res = 0;
     size_t i = 0;
     while(pb.masks[i]) {
@@ -249,14 +293,15 @@ static inline std::uint64_t pext_sw_block_table_u64(
     return res;
 }
 
-// Apply blockwise-PEXT using the preprocessing above, 2-fold unrolled.
-// Semantics match _pext_u64(x, mask) for the same mask.
+/**
+ * @brief Bit extract via Block Shift table, 2-fold unrolled.
+ */
 static inline std::uint64_t pext_sw_block_table_u64_unrolled2(
     std::uint64_t x, PextBlockTable const& pb
 ) {
-    // Some loop unrolling for speed - helps for intermediate mask weights.
-    // We might overshoot, but that's fine. In that case, we are masking with zeros,
-    // so nothing happens.
+    // Same as above, but 2-fold unrolled. We might overshoot, if the number of blocks of
+    // consecutive 1s is not divisible by the unrolling size, but that is fine.
+    // In that case, we are masking with zeros in those masks, so nothing happens.
     std::uint64_t res = 0;
     size_t i = 0;
     while(pb.masks[i]) {
@@ -267,14 +312,13 @@ static inline std::uint64_t pext_sw_block_table_u64_unrolled2(
     return res;
 }
 
-// Apply blockwise-PEXT using the preprocessing above, 4-fold unrolled.
-// Semantics match _pext_u64(x, mask) for the same mask.
+/**
+ * @brief Bit extract via Block Shift table, 4-fold unrolled.
+ */
 static inline std::uint64_t pext_sw_block_table_u64_unrolled4(
     std::uint64_t x, PextBlockTable const& pb
 ) {
-    // Some loop unrolling for speed - helps for intermediate mask weights.
-    // We might overshoot, but that's fine. In that case, we are masking with zeros,
-    // so nothing happens.
+    // Same as above, but 4-fold unrolled.
     std::uint64_t res = 0;
     size_t i = 0;
     while(pb.masks[i]) {
@@ -287,14 +331,13 @@ static inline std::uint64_t pext_sw_block_table_u64_unrolled4(
     return res;
 }
 
-// Apply blockwise-PEXT using the preprocessing above, 8-fold unrolled.
-// Semantics match _pext_u64(x, mask) for the same mask.
+/**
+ * @brief Bit extract via Block Shift table, 8-fold unrolled.
+ */
 static inline std::uint64_t pext_sw_block_table_u64_unrolled8(
     std::uint64_t x, PextBlockTable const& pb
 ) {
-    // Some loop unrolling for speed - helps for intermediate mask weights.
-    // We might overshoot, but that's fine. In that case, we are masking with zeros,
-    // so nothing happens.
+    // Same as above, but 8-fold unrolled.
     std::uint64_t res = 0;
     size_t i = 0;
     while(pb.masks[i]) {
