@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "pext.hpp"
+#include "bit_extract.hpp"
 #include "utils.hpp"
 
 // =================================================================================================
@@ -86,7 +86,7 @@ public:
     {
         // Prepare the masks. We do not need block tables if we hard-set pext mode.
         if( mode_ != ExtractMode::kPext ) {
-            block_table_ = pext_sw_block_table_preprocess_u64(mask_);
+            block_table_ = bit_extract_block_table_preprocess(mask_);
         }
 
         // Find the fastest mode if requested, or hard-set the extractor function.
@@ -313,7 +313,7 @@ private:
     inline std::uint64_t bit_extract_pext_( std::uint64_t value ) const
     {
         #if defined(HAVE_BMI2)
-            return pext_hw_bmi2_u64( value, mask_ );
+            return bit_extract_pext( value, mask_ );
         #else
             // This function will be called if ExtractMode::kPext is set at construction,
             // which is invalid if not available on the given hardware.
@@ -328,27 +328,27 @@ private:
 
     inline std::uint64_t bit_extract_byte_table_( std::uint64_t value ) const
     {
-        return pext_sw_table8_u64( value, mask_ );
+        return bit_extract_byte_table( value, mask_ );
     }
 
     inline std::uint64_t bit_extract_block_table_( std::uint64_t value ) const
     {
-        return pext_sw_block_table_u64( value, block_table_ );
+        return bit_extract_block_table( value, block_table_ );
     }
 
     inline std::uint64_t bit_extract_block_table_unrolled2_( std::uint64_t value ) const
     {
-        return pext_sw_block_table_u64_unrolled2( value, block_table_ );
+        return bit_extract_block_table_unrolled2( value, block_table_ );
     }
 
     inline std::uint64_t bit_extract_block_table_unrolled4_( std::uint64_t value ) const
     {
-        return pext_sw_block_table_u64_unrolled4( value, block_table_ );
+        return bit_extract_block_table_unrolled4( value, block_table_ );
     }
 
     inline std::uint64_t bit_extract_block_table_unrolled8_( std::uint64_t value ) const
     {
-        return pext_sw_block_table_u64_unrolled8( value, block_table_ );
+        return bit_extract_block_table_unrolled8( value, block_table_ );
     }
 
     inline std::uint64_t bit_extract_dummy_( std::uint64_t ) const
@@ -370,5 +370,5 @@ private:
 
     // Bit extract mask and block table for the block algorithm
     std::uint64_t mask_;
-    PextBlockTable block_table_;
+    BitExtractBlockTable block_table_;
 };

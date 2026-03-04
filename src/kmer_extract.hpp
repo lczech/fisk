@@ -97,6 +97,71 @@ inline void for_each_kmer_2bit_reextract(
     }
 }
 
+// =================================================================================================
+//     XOR Hashing
+// =================================================================================================
+
+/**
+ * @brief Simple "hashing" of k-mers by computing the xor of all their two bit encodings.
+ *
+ * This is just for benchmarking, to ensure that the values are actually used (and thus the
+ * compuation cannot be omitted by the compiler), as well as to ensure consistent results
+ * between different implementations.
+ */
+template<typename Enc>
+inline std::uint64_t compute_kmer_hash(
+    std::string_view seq, std::size_t k, Enc&& enc
+) {
+    // Simple wrapper around the main loop function which also keeps track of a "hash"
+    // by xor-ing all k-mers, just as a validity check that all implementations give the same.
+    std::uint64_t hash = 0;
+
+    for_each_kmer_2bit(
+        std::string_view(seq),
+        k,
+        enc,
+        [&](std::uint64_t kmer_word) {
+            // Simple order-independent checksum.
+            // All implementations must use the same aggregation so sinks match.
+            hash ^= kmer_word;
+        }
+    );
+
+    return hash;
+}
+
+/**
+ * @brief Simple "hashing" of k-mers by computing the xor of all their two bit encodings.
+ *
+ * This is similar to compute_kmer_hash(), but re-extracts the whole k-mer in each step.
+ * This is computationally wasteful compred to bit shifts, thus only used for benchmarking.
+ */
+template<typename Enc>
+inline std::uint64_t compute_kmer_hash_reextract(
+    std::string_view seq, std::size_t k, Enc&& enc
+) {
+    // Simple wrapper around the main loop function whcih also keeps track of a "hash"
+    // by xor-ing all k-mers, just as a validity check that all implementations give the same.
+    std::uint64_t hash = 0;
+
+    for_each_kmer_2bit_reextract(
+        std::string_view(seq),
+        k,
+        enc,
+        [&](std::uint64_t kmer_word) {
+            // Simple order-independent checksum.
+            // All implementations must use the same aggregation so sinks match.
+            hash ^= kmer_word;
+        }
+    );
+
+    return hash;
+}
+
+// =================================================================================================
+//     k-mer to string
+// =================================================================================================
+
 /**
  * @brief Get the string representation of a k-mer, as a sequence of `ACGT` characters.
  */

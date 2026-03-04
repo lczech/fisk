@@ -10,8 +10,8 @@
 #include "bench_kmer_extract.hpp"
 #include "bench_kmer_spaced.hpp"
 #include "bench_kmer_clark.hpp"
-#include "bench_pext_blocks.hpp"
-#include "bench_pext_weights.hpp"
+#include "bench_bit_extract_blocks.hpp"
+#include "bench_bit_extract_weights.hpp"
 #include "bench_seq_enc.hpp"
 #include "utils.hpp"
 #include "sequence.hpp"
@@ -166,16 +166,16 @@ int main(int argc, char **argv)
 
     // Run the benchmarks
 
-    // PEXT Weights
+    // Bit Extract Weights
     {
-        auto os_pext = get_ofstream(out_dir, "pext_weights.csv" );
-        bench_pext_weights( os_pext );
+        auto os_bit_extract_weights = get_ofstream(out_dir, "bit_extract_weights.csv" );
+        bench_bit_extract_weights( os_bit_extract_weights );
     }
 
-    // PEXT Blocks
+    // Bit Extract Blocks
     {
-        auto os_pext_blocks = get_ofstream(out_dir, "pext_blocks.csv" );
-        bench_pext_blocks( os_pext_blocks );
+        auto os_bit_extract_blocks = get_ofstream(out_dir, "bit_extract_blocks.csv" );
+        bench_bit_extract_blocks( os_bit_extract_blocks );
     }
 
     // Seq Encoding

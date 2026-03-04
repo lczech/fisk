@@ -15,21 +15,21 @@
 
 #include "utils.hpp"
 #include "microbench.hpp"
-#include "pext.hpp"
-#include "pext_zp7.hpp"
-#include "pext_instlatx64.hpp"
+#include "bit_extract.hpp"
+#include "bit_extract_zp7.hpp"
+#include "bit_extract_instlatx64.hpp"
 #include "bit_extract_adaptive.hpp"
-#include "bench_pext_weights.hpp"
+#include "bench_bit_extract_weights.hpp"
 #include "sys_info.hpp"
 
-// Already defined in `bench_pext_weights.hpp`
-// struct PextInput
+// Already defined in `bench_bit_extract_weights.hpp`
+// struct BitExtractInput
 // {
 //     std::uint64_t value;
 //     std::uint64_t mask;
 
 //     // For the preprocessed implementation, we also pre-compute the block tables
-//     PextBlockTable block_table;
+//     BitExtractBlockTable block_table;
 // };
 
 /**
@@ -221,13 +221,13 @@ inline void print_bits(std::uint64_t x, std::ostream& os)
  * and keeps track of how often each implementation is chosen by the adaptive bit extract.
  * Doing all of this here is not good software design, but good enough for our simple benchmark.
  */
-inline std::vector<PextInput> make_input_blocks(
+inline std::vector<BitExtractInput> make_input_blocks(
     std::size_t n, std::size_t runs, std::uint64_t seed,
     std::vector<size_t>& adaptive_counts
 ) {
     std::mt19937_64 rng(seed);
     std::uniform_int_distribution<std::uint64_t> dist_u64;
-    std::vector<PextInput> v;
+    std::vector<BitExtractInput> v;
     v.reserve(n);
 
     for (std::size_t i = 0; i < n; ++i) {
@@ -244,14 +244,14 @@ inline std::vector<PextInput> make_input_blocks(
         // std::cout << " runs=" << runs << "\n";
 
         // add to the list of inputs
-        v.push_back( PextInput{
+        v.push_back( BitExtractInput{
             value,
             mask,
-            pext_sw_block_table_preprocess_u64( mask ),
+            bit_extract_block_table_preprocess( mask ),
             AdaptiveBitExtract( mask )
         });
-        ++adaptive_counts[static_cast<size_t>( v.back().adaptive_pext.mode())];
-        // std::cout << v.back().adaptive_pext.mode_name() << "\n";
+        ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
+        // std::cout << v.back().adaptive_bit_extract.mode_name() << "\n";
     }
     return v;
 }
@@ -263,7 +263,7 @@ inline std::vector<PextInput> make_input_blocks(
  * The runs of consecutive 1s are in the range 1 to 32. The latter is the maximum we can get
  * in a 64 bit word, by alternating 0s and 1s.
  */
-inline void bench_pext_blocks(std::ostream& csv_os)
+inline void bench_bit_extract_blocks(std::ostream& csv_os)
 {
     std::size_t const n = 100;
     std::size_t const rounds = (1u << 8);
@@ -273,7 +273,7 @@ inline void bench_pext_blocks(std::ostream& csv_os)
     std::size_t const repeats = 16;
 
     // User output
-    std::cout << "\n=== PEXT Blocks ===\n";
+    std::cout << "\n=== bit extract blocks ===\n";
     std::cout << "n=" << n << ", rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     // Prepare csv output file with benchmark results
@@ -283,7 +283,7 @@ inline void bench_pext_blocks(std::ostream& csv_os)
     auto adaptive_counts = std::vector<size_t>( 7, 0 );
 
     // Run a benchmark for each weight of the mask.
-    // Most of our software implementations of PEXT have a runtime depending on that,
+    // Most of our bit extract software implementations have a runtime depending on that,
     // so we want to test the effects of different masks on the implementations.
     for( size_t runs = 0; runs <= 32; ++runs ) {
         std::string case_label = "popcount=" + std::to_string(runs);
@@ -301,69 +301,69 @@ inline void bench_pext_blocks(std::ostream& csv_os)
             return make_input_blocks( n, runs, seed, adaptive_counts );
         };
 
-        Microbench<PextInput> suite("PEXT_blocks");
+        Microbench<BitExtractInput> suite("bit_extract_blocks");
         suite.rounds(rounds).repeats(repeats);
 
         auto results = suite.run(
             make_inputs_rep,
             #ifdef HAVE_BMI2
             bench(
-                "pext_hw_bmi2",
-                [](PextInput const& in){ return pext_hw_bmi2_u64(in.value, in.mask);
+                "bit_extract_pext",
+                [](BitExtractInput const& in){ return bit_extract_pext(in.value, in.mask);
             }),
             #endif
             bench(
-                "pext_sw_bitloop",
-                [](PextInput const& in){ return pext_sw_bitloop_u64(in.value, in.mask);
+                "bit_extract_bitloop",
+                [](BitExtractInput const& in){ return bit_extract_bitloop(in.value, in.mask);
             }),
             bench(
-                "pext_sw_split32",
-                [](PextInput const& in){ return pext_sw_split32_u64(in.value, in.mask);
+                "bit_extract_split32",
+                [](BitExtractInput const& in){ return bit_extract_split32(in.value, in.mask);
             }),
             bench(
-                "pext_sw_table8",
-                [](PextInput const& in){ return pext_sw_table8_u64(in.value, in.mask);
+                "bit_extract_byte_table",
+                [](BitExtractInput const& in){ return bit_extract_byte_table(in.value, in.mask);
             }),
             bench(
-                "pext_sw_block_table",
-                [](PextInput const& in){ return pext_sw_block_table_u64(in.value, in.block_table);
+                "bit_extract_block_table",
+                [](BitExtractInput const& in){ return bit_extract_block_table(in.value, in.block_table);
             }),
             bench(
-                "pext_sw_block_table_unrolled2",
-                [](PextInput const& in){ return pext_sw_block_table_u64_unrolled2(in.value, in.block_table);
+                "bit_extract_block_table_unrolled2",
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled2(in.value, in.block_table);
             }),
             bench(
-                "pext_sw_block_table_unrolled4",
-                [](PextInput const& in){ return pext_sw_block_table_u64_unrolled4(in.value, in.block_table);
+                "bit_extract_block_table_unrolled4",
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled4(in.value, in.block_table);
             }),
             bench(
-                "pext_sw_block_table_unrolled8",
-                [](PextInput const& in){ return pext_sw_block_table_u64_unrolled8(in.value, in.block_table);
+                "bit_extract_block_table_unrolled8",
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled8(in.value, in.block_table);
             }),
             bench(
-                "pext_sw_adaptive",
-                [](PextInput const& in){ return in.adaptive_pext(in.value);
+                "bit_extract_adaptive",
+                [](BitExtractInput const& in){ return in.adaptive_bit_extract(in.value);
             }),
             #ifdef PLATFORM_X86_64
             bench(
-                "pext_sw_instlatx",
-                [](PextInput const& in){ return pext64_emu(in.value, in.mask);
+                "bit_extract_instlatx",
+                [](BitExtractInput const& in){ return pext64_emu(in.value, in.mask);
             }),
             #endif
             bench(
-                "pext_sw_zp7",
-                [](PextInput const& in){ return zp7_pext_64(in.value, in.mask);
+                "bit_extract_zp7",
+                [](BitExtractInput const& in){ return zp7_pext_64(in.value, in.mask);
             })
         );
 
-        write_csv_rows(csv_os, "PEXT_blocks", case_label, results);
+        write_csv_rows(csv_os, "bit_extract_blocks", case_label, results);
     }
     if( stdout_is_terminal() ) {
         std::cout << "\n";
     }
 
-    // Print adative pext counts
-    std::cout << "Adaptive Pext counts:\n";
+    // Print adative bit extract counts
+    std::cout << "adaptive bit extract counts:\n";
     for( size_t i = 0; i < adaptive_counts.size(); ++i ) {
         std::cout << "  " << adaptive_counts[i] << " <== " << AdaptiveBitExtract::mode_name(static_cast<AdaptiveBitExtract::ExtractMode>(i)) << "\n";
     }

@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "kmer_extract.hpp"
-#include "pext.hpp"
+#include "bit_extract.hpp"
 #include "seq_enc.hpp"
 
 // =================================================================================================
@@ -83,7 +83,7 @@ inline std::uint64_t comin_compute_spaced_kmer_improved(
 }
 
 template<typename Mask, typename Comp>
-inline std::uint64_t comin_compute_sequence_hash(
+inline std::uint64_t compute_spaced_kmer_hash_comin(
     size_t k, Mask const& mask, std::string const& seq, Comp&& comp
 ) {
     // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
@@ -98,7 +98,7 @@ inline std::uint64_t comin_compute_sequence_hash(
 }
 
 // =================================================================================================
-//     PEXT
+//     Bit Extraction
 // =================================================================================================
 
 /**
@@ -106,7 +106,7 @@ inline std::uint64_t comin_compute_sequence_hash(
  *
  * For instance, mask `1011` becomes an uint `0b11001111`.
  */
-inline std::uint64_t pext_prepare_kmer_mask( std::string const& mask )
+inline std::uint64_t prepare_spaced_kmer_bit_extract_mask( std::string const& mask )
 {
     if( mask.size() == 0 || mask.size() > 32 ) {
         throw std::invalid_argument( "Invalid spaced k-mer mask size not in [1,32]" );
@@ -128,7 +128,7 @@ inline std::uint64_t pext_prepare_kmer_mask( std::string const& mask )
 /**
  * @brief Get the bit extract mask as a string of 0s and 1s, for printing.
  */
-inline std::string pext_kmer_mask_to_string( std::uint64_t mask, size_t k )
+inline std::string bit_extract_mask_to_spaced_kmer_mask_string( std::uint64_t mask, size_t k )
 {
     std::string str;
     for( size_t i = 0; i < k; ++i ) {
@@ -159,9 +159,9 @@ inline std::string pext_kmer_mask_to_string( std::uint64_t mask, size_t k )
  * compuation cannot be omitted by the compiler), as well as to ensure consistent results
  * between different implementations.
  */
-template<typename Mask, typename Enc, typename Pext>
-inline std::uint64_t pext_compute_sequence_hash(
-    size_t k, Mask const& mask, std::string const& seq, Enc&& enc, Pext&& pext
+template<typename Mask, typename Enc, typename BitExtract>
+inline std::uint64_t compute_spaced_kmer_hash(
+    size_t k, Mask const& mask, std::string const& seq, Enc&& enc, BitExtract&& bit_ext
 ) {
     // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
     std::uint64_t hash = 0;
@@ -172,7 +172,7 @@ inline std::uint64_t pext_compute_sequence_hash(
         enc,
         [&](std::uint64_t kmer_word) {
             // Extract the spaced k-mer, and combine it into the hash.
-            hash ^= pext( kmer_word, mask );
+            hash ^= bit_ext( kmer_word, mask );
         }
     );
     return hash;

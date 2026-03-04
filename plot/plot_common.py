@@ -18,18 +18,18 @@ def platform_from_csv_path(csv_path: str) -> str:
 # This list is across all types of benchmarks we run;
 # not all are thus present in all tables.
 BENCHMARKS_KEEP = {
-    # PEXT implementations
-    "pext_hw_bmi2",
-    "pext_sw_bitloop",
-    # "pext_sw_split32",
-    "pext_sw_table8",
-    "pext_sw_adaptive",
-    "pext_sw_block_table",
-    "pext_sw_block_table_unrolled2",
-    "pext_sw_block_table_unrolled4",
-    "pext_sw_block_table_unrolled8",
-    # "pext_sw_instlatx",
-    # "pext_sw_zp7",
+    # Bit extract implementations
+    "bit_extract_pext",
+    "bit_extract_bitloop",
+    # "bit_extract_split32",
+    "bit_extract_byte_table",
+    "bit_extract_adaptive",
+    "bit_extract_block_table",
+    "bit_extract_block_table_unrolled2",
+    "bit_extract_block_table_unrolled4",
+    "bit_extract_block_table_unrolled8",
+    # "bit_extract_instlatx",
+    # "bit_extract_zp7",
 
     # Extract / seq enc
     # "char_to_nt_ascii_nothrow_re",
@@ -72,18 +72,18 @@ BENCHMARK_RENAMES = {
 
 # Stable colors for each implementation / benchmark
 BENCHMARK_COLORS = {
-    # PEXT implementations
-    "pext_hw_bmi2":        "#5F5F5F",
-    "pext_sw_bitloop":     "#47a1e2",
-    "pext_sw_split32":     "#ff7f0e",
-    "pext_sw_table8":      "#884ed3",
-    "pext_sw_adaptive":    "#D35820",
-    "pext_sw_block_table":           "#a1d99b",
-    "pext_sw_block_table_unrolled2": "#74c476",
-    "pext_sw_block_table_unrolled4": "#31a354",
-    "pext_sw_block_table_unrolled8": "#006d2c",
-    "pext_sw_instlatx":    "#000000",
-    "pext_sw_zp7":         "#000000",
+    # Bit extract implementations
+    "bit_extract_pext":        "#5F5F5F",
+    "bit_extract_bitloop":     "#47a1e2",
+    "bit_extract_split32":     "#ff7f0e",
+    "bit_extract_byte_table":      "#884ed3",
+    "bit_extract_adaptive":    "#D35820",
+    "bit_extract_block_table":           "#a1d99b",
+    "bit_extract_block_table_unrolled2": "#74c476",
+    "bit_extract_block_table_unrolled4": "#31a354",
+    "bit_extract_block_table_unrolled8": "#006d2c",
+    "bit_extract_instlatx":    "#000000",
+    "bit_extract_zp7":         "#000000",
 
     "char_to_nt_switch_throw_re"        : "#C00000",
     "char_to_nt_switch_nothrow_re"      : "#C00000",
@@ -125,18 +125,18 @@ BENCHMARK_LINESTYLES = {
 
 # Stable line order for plot consistency
 BENCHMARK_ORDER = [
-    # PEXT implementations
-    "pext_hw_bmi2",
-    "pext_sw_bitloop",
-    "pext_sw_split32",
-    "pext_sw_table8",
-    "pext_sw_adaptive",
-    "pext_sw_block_table",
-    "pext_sw_block_table_unrolled2",
-    "pext_sw_block_table_unrolled4",
-    "pext_sw_block_table_unrolled8",
-    "pext_sw_instlatx",
-    "pext_sw_zp7",
+    # Bit extract implementations
+    "bit_extract_pext",
+    "bit_extract_bitloop",
+    "bit_extract_split32",
+    "bit_extract_byte_table",
+    "bit_extract_adaptive",
+    "bit_extract_block_table",
+    "bit_extract_block_table_unrolled2",
+    "bit_extract_block_table_unrolled4",
+    "bit_extract_block_table_unrolled8",
+    "bit_extract_instlatx",
+    "bit_extract_zp7",
 
     # Extract / seq enc
     "char_to_nt_switch_throw_re",

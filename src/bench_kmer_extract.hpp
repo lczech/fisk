@@ -13,63 +13,6 @@
 #include "sys_info.hpp"
 
 /**
- * @brief Simple "hashing" of k-mers by computing the xor of all their two bit encodings.
- *
- * This is just for benchmarking, to ensure that the values are actually used (and thus the
- * compuation cannot be omitted by the compiler), as well as to ensure consistent results
- * between different implementations.
- */
-template<typename Enc>
-inline std::uint64_t for_each_kmer_2bit_xor(
-    std::string_view seq, std::size_t k, Enc&& enc
-) {
-    // Simple wrapper around the main loop function which also keeps track of a "hash"
-    // by xor-ing all k-mers, just as a validity check that all implementations give the same.
-    std::uint64_t hash = 0;
-
-    for_each_kmer_2bit(
-        std::string_view(seq),
-        k,
-        enc,
-        [&](std::uint64_t kmer_word) {
-            // Simple order-independent checksum.
-            // All implementations must use the same aggregation so sinks match.
-            hash ^= kmer_word;
-        }
-    );
-
-    return hash;
-}
-
-/**
- * @brief Simple "hashing" of k-mers by computing the xor of all their two bit encodings.
- *
- * This is similar to for_each_kmer_2bit_xor(), but re-extracts the whole k-mer in each step.
- * This is computationally wasteful compred to bit shifts, thus only used for benchmarking.
- */
-template<typename Enc>
-inline std::uint64_t for_each_kmer_2bit_xor_reextract(
-    std::string_view seq, std::size_t k, Enc&& enc
-) {
-    // Simple wrapper around the main loop function whcih also keeps track of a "hash"
-    // by xor-ing all k-mers, just as a validity check that all implementations give the same.
-    std::uint64_t hash = 0;
-
-    for_each_kmer_2bit_reextract(
-        std::string_view(seq),
-        k,
-        enc,
-        [&](std::uint64_t kmer_word) {
-            // Simple order-independent checksum.
-            // All implementations must use the same aggregation so sinks match.
-            hash ^= kmer_word;
-        }
-    );
-
-    return hash;
-}
-
-/**
  * @brief Benchmark different implementations to extract and iterate all k-mers in a sequence.
  *
  * The main differences between functions are how the characters are encoded into two bit encoding
@@ -105,9 +48,7 @@ inline void bench_kmer_extract(
     // Run a benchmark for each valid k.
     for( size_t k = k_min; k <= k_max; ++k) {
         if( stdout_is_terminal() ) {
-            std::cout << "\rk "
-                << std::setw(2) << k << " / " << (k_max - k_min)
-                << std::flush;
+            std::cout << "\rk " << std::setw(2) << k << std::flush;
         }
 
         Microbench<std::string> suite("kmer_extract");
@@ -126,49 +67,49 @@ inline void bench_kmer_extract(
             bench(
                 "char_to_nt_ifs_throw_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ifs_throw);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ifs_throw);
                 }
             ),
             bench(
                 "char_to_nt_ifs_nothrow_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ifs_nothrow);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ifs_nothrow);
                 }
             ),
             bench(
                 "char_to_nt_switch_throw_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_switch_throw);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_switch_throw);
                 }
             ),
             bench(
                 "char_to_nt_switch_nothrow_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_switch_nothrow);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_switch_nothrow);
                 }
             ),
             bench(
                 "char_to_nt_table_throw_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_table_throw);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_table_throw);
                 }
             ),
             bench(
                 "char_to_nt_table_nothrow_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_table_nothrow);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_table_nothrow);
                 }
             ),
             bench(
                 "char_to_nt_ascii_throw_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ascii_throw);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ascii_throw);
                 }
             ),
             bench(
                 "char_to_nt_ascii_nothrow_re",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor_reextract(seq, k, char_to_nt_ascii_nothrow);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ascii_nothrow);
                 }
             ),
 
@@ -176,49 +117,49 @@ inline void bench_kmer_extract(
             bench(
                 "char_to_nt_ifs_throw_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ifs_throw);
+                    return compute_kmer_hash(seq, k, char_to_nt_ifs_throw);
                 }
             ),
             bench(
                 "char_to_nt_ifs_nothrow_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ifs_nothrow);
+                    return compute_kmer_hash(seq, k, char_to_nt_ifs_nothrow);
                 }
             ),
             bench(
                 "char_to_nt_switch_throw_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_switch_throw);
+                    return compute_kmer_hash(seq, k, char_to_nt_switch_throw);
                 }
             ),
             bench(
                 "char_to_nt_switch_nothrow_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_switch_nothrow);
+                    return compute_kmer_hash(seq, k, char_to_nt_switch_nothrow);
                 }
             ),
             bench(
                 "char_to_nt_table_throw_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_table_throw);
+                    return compute_kmer_hash(seq, k, char_to_nt_table_throw);
                 }
             ),
             bench(
                 "char_to_nt_table_nothrow_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_table_nothrow);
+                    return compute_kmer_hash(seq, k, char_to_nt_table_nothrow);
                 }
             ),
             bench(
                 "char_to_nt_ascii_throw_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ascii_throw);
+                    return compute_kmer_hash(seq, k, char_to_nt_ascii_throw);
                 }
             ),
             bench(
                 "char_to_nt_ascii_nothrow_shift",
                 [&](std::string const& seq){
-                    return for_each_kmer_2bit_xor(seq, k, char_to_nt_ascii_nothrow);
+                    return compute_kmer_hash(seq, k, char_to_nt_ascii_nothrow);
                 }
             )
         );

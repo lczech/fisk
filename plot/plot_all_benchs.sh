@@ -58,14 +58,14 @@ for EXT in png svg ; do
     --out ${DIR}/kmer_spaced_bars.${EXT}
 
 
-  # PEXT Implementations
+  # Bit Extract Implementations
 
-  python ./plot/plot_pext_blocks.py \
-    ${DIR}/pext_blocks.csv\
-    --out ${DIR}/pext_blocks.${EXT}
+  python ./plot/plot_bit_extract_blocks.py \
+    ${DIR}/bit_extract_blocks.csv\
+    --out ${DIR}/bit_extract_blocks.${EXT}
 
-  python ./plot/plot_pext_weights.py \
-    ${DIR}/pext_weights.csv\
-    --out ${DIR}/pext_weights.${EXT}
+  python ./plot/plot_bit_extract_weights.py \
+    ${DIR}/bit_extract_weights.csv\
+    --out ${DIR}/bit_extract_weights.${EXT}
 
 done

@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "kmer_extract.hpp"
-#include "pext.hpp"
+#include "bit_extract.hpp"
 #include "seq_enc.hpp"
 
 // =================================================================================================
