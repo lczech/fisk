@@ -248,6 +248,7 @@ inline std::vector<BitExtractInput> make_input_blocks(
             value,
             mask,
             bit_extract_block_table_preprocess( mask ),
+            bit_extract_network_table_preprocess( mask ),
             AdaptiveBitExtract( mask )
         });
         ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
@@ -280,7 +281,7 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
     write_csv_header(csv_os);
 
     // Collect which adaptive mode was chosen how often.
-    auto adaptive_counts = std::vector<size_t>( 7, 0 );
+    auto adaptive_counts = std::vector<size_t>( AdaptiveBitExtract::mode_count(), 0 );
 
     // Run a benchmark for each weight of the mask.
     // Most of our bit extract software implementations have a runtime depending on that,
@@ -339,6 +340,10 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
             bench(
                 "bit_extract_block_table_unrolled8",
                 [](BitExtractInput const& in){ return bit_extract_block_table_unrolled8(in.value, in.block_table);
+            }),
+            bench(
+                "bit_extract_network_table",
+                [](BitExtractInput const& in){ return bit_extract_network_table(in.value, in.network_table);
             }),
             bench(
                 "bit_extract_adaptive",

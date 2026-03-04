@@ -27,8 +27,9 @@ struct BitExtractInput
     std::uint64_t value;
     std::uint64_t mask;
 
-    // For the preprocessed implementation, we also pre-compute the block tables
+    // For the preprocessed implementations, we also pre-compute their tables
     BitExtractBlockTable block_table;
+    BitExtractNetworkTable network_table;
 
     // We also need to store an instance of the adaptive bit extract here, which evaluates
     // the fastest algorithm to use for the given mask - which is mask-dependent.
@@ -71,6 +72,7 @@ static inline std::vector<BitExtractInput> make_inputs(
             value,
             mask,
             bit_extract_block_table_preprocess( mask ),
+            bit_extract_network_table_preprocess( mask ),
             AdaptiveBitExtract( mask )
         });
         ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
@@ -100,7 +102,7 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
 
     // Collect which adaptive mode was chosen how often.
     // This is not really important, but we are curious to see this.
-    auto adaptive_counts = std::vector<size_t>( 7, 0 );
+    auto adaptive_counts = std::vector<size_t>( AdaptiveBitExtract::mode_count(), 0 );
 
     // Run a benchmark for each weight of the mask.
     // Most of our bit extract software implementations have a runtime depending on that,
@@ -159,6 +161,10 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
             bench(
                 "bit_extract_block_table_unrolled8",
                 [](BitExtractInput const& in){ return bit_extract_block_table_unrolled8(in.value, in.block_table);
+            }),
+            bench(
+                "bit_extract_network_table",
+                [](BitExtractInput const& in){ return bit_extract_network_table(in.value, in.network_table);
             }),
             bench(
                 "bit_extract_adaptive",

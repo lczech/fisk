@@ -353,3 +353,71 @@ inline std::uint64_t bit_extract_block_table_unrolled8(
     }
     return res;
 }
+
+// =================================================================================================
+//     Bit extract with extraction network
+// =================================================================================================
+
+/**
+ * @brief Table and values for the bit extraction via extraction network.
+ *
+ * The network works by shifting each position by increasing powers of two, such that each bit
+ * has the chance to be moved to wherever it is needed in the final result.
+ * The table here contains the sets of which bits need to be shifted in each step.
+ */
+struct BitExtractNetworkTable
+{
+    // The original mask, as well as subsets for each power of two.
+    std::uint64_t mask;
+    std::array<std::uint64_t, 6> power_masks{};
+};
+
+/**
+ * @brief Compute the `mv` table for a given @p mask for bit extraction via extraction network.
+ */
+inline BitExtractNetworkTable bit_extract_network_table_preprocess( std::uint64_t mask )
+{
+    BitExtractNetworkTable out{};
+    out.mask = mask;
+    std::uint64_t m = mask;
+    std::uint64_t mk = ~m << 1;
+
+    for( size_t i = 0; i < 6; ++i ) {
+        std::uint64_t mp = mk ^ (mk << 1);
+        mp ^= (mp << 2);
+        mp ^= (mp << 4);
+        mp ^= (mp << 8);
+        mp ^= (mp << 16);
+        mp ^= (mp << 32);
+
+        std::uint64_t mv = mp & m;
+        out.power_masks[i] = mv;
+
+        const int s = (1 << i);
+        m  = (m ^ mv) | (mv >> s);
+        mk = mk & ~mp;
+    }
+    return out;
+}
+
+/**
+ * @brief Bit extract via extraction network.
+ */
+inline std::uint64_t bit_extract_network_table(
+    std::uint64_t x,
+    BitExtractNetworkTable const& nt
+) noexcept {
+    x &= nt.mask;
+    auto step = [&]( std::size_t s, std::uint64_t mv_i )
+    {
+        std::uint64_t t = x & mv_i;
+        x = (x ^ t) | (t >> s);
+    };
+    step(  1, nt.power_masks[0] );
+    step(  2, nt.power_masks[1] );
+    step(  4, nt.power_masks[2] );
+    step(  8, nt.power_masks[3] );
+    step( 16, nt.power_masks[4] );
+    step( 32, nt.power_masks[5] );
+    return x;
+}
