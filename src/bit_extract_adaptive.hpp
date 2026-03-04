@@ -13,15 +13,15 @@
 #include "utils.hpp"
 
 // =================================================================================================
-//     Adaptive Pext Helper
+//     Adaptive Bit Extract Helper
 // =================================================================================================
 
 /**
- * @brief Helper to adaptively select the fastest PEXT implementation for a given fixed mask.
+ * @brief Helper to adaptively select the fastest bit extract implementation for a given fixed mask.
  *
- * Upon construction, a benchmark is run that tests hardware and several flavors of software PEXT
- * implementations, and selects the most performant one for the given mask. Then, use `operator()`
- * to apply this mask to a value.
+ * Upon construction, a benchmark is run that tests hardware PEXT and several flavors of software
+ * bit extract implementations, and selects the most performant one for the given mask. Then, use
+ * `operator()` to apply this mask to a value.
  *
  * This helper is intended for usage with a single fixed mask (or few masks, in separate
  * instanciations of this class). When the mask is not fixed, this strategy is not beneficial,
@@ -30,7 +30,7 @@
  * There is a slight overhead for the calling here, but minizmied via direct pointer dereference
  * on the function.
  */
-class AdaptivePext
+class AdaptiveBitExtract
 {
 public:
 
@@ -39,9 +39,9 @@ public:
     // -------------------------------------------------------------------------
 
     /**
-     * @brief Pext on a given value, assuming a fixed mask.
+     * @brief Bit extract on a given value, assuming a fixed mask.
      */
-    using PextFunction = std::uint64_t (AdaptivePext::*)(std::uint64_t) const;
+    using BitExtractFunction = std::uint64_t (AdaptiveBitExtract::*)(std::uint64_t) const;
 
     /**
      * @brief Mode, either hardware or our fastest software implementation using a block table.
@@ -67,20 +67,20 @@ public:
     /**
      * @brief Default constructed instance; cannot be used.
      */
-    AdaptivePext()
+    AdaptiveBitExtract()
     {
         // Set the functor to a dummy, so that we get a proper exception instead of
         // a nullptr dereference, if operator() is called on a default constructed instance.
-        pext_func_ = &AdaptivePext::pext_dummy_;
+        bit_extr_func_ = &AdaptiveBitExtract::bit_extract_dummy_;
     }
 
     /**
      * @brief Construct an instance for a given mask.
      *
-     * This sets the mask and the mode, by default using auto-tuning to the fastest PEXT
+     * This sets the mask and the mode, by default using auto-tuning to the fastest bit extract
      * implementation, by running a small benchmark internally.
      */
-    AdaptivePext( std::uint64_t mask, ExtractMode mode = ExtractMode::kAutomatic )
+    AdaptiveBitExtract( std::uint64_t mask, ExtractMode mode = ExtractMode::kAutomatic )
         : mode_(mode)
         , mask_(mask)
     {
@@ -93,28 +93,38 @@ public:
         if( mode_ == ExtractMode::kAutomatic ) {
             tune_to_fastest_mode_();
         } else {
-            set_pext_func_( mode_ );
+            set_bit_extr_func_( mode_ );
         }
     }
 
-    ~AdaptivePext() = default;
+    ~AdaptiveBitExtract() = default;
 
-    AdaptivePext( AdaptivePext const& ) = default;
-    AdaptivePext( AdaptivePext&& )      = default;
+    AdaptiveBitExtract( AdaptiveBitExtract const& ) = default;
+    AdaptiveBitExtract( AdaptiveBitExtract&& )      = default;
 
-    AdaptivePext& operator= ( AdaptivePext const& ) = default;
-    AdaptivePext& operator= ( AdaptivePext&& )      = default;
+    AdaptiveBitExtract& operator= ( AdaptiveBitExtract const& ) = default;
+    AdaptiveBitExtract& operator= ( AdaptiveBitExtract&& )      = default;
 
     // -------------------------------------------------------------------------
     //     Getters and Operators
     // -------------------------------------------------------------------------
 
     /**
-     * @brief Compute PEXT on a given @p value, by applying the mask through the given mode.
+     * @brief Bit extract a given @p value, by applying the mask through the given mode.
      */
     inline std::uint64_t operator() ( std::uint64_t value ) const
     {
-        return (this->*pext_func_)(value);
+        return (this->*bit_extr_func_)(value);
+    }
+
+    /**
+     * @brief Obtain the currently set bit extract function.
+     *
+     * This might be useful to apply it externally. See `operator()` though to apply it to a value.
+     */
+    inline BitExtractFunction bit_extract_function() const
+    {
+        return bit_extr_func_;
     }
 
     /**
@@ -162,7 +172,7 @@ public:
             }
             default: {
                 throw std::invalid_argument(
-                    "Invalid ExtractMode in AdaptivePext: " +
+                    "Invalid ExtractMode in AdaptiveBitExtract: " +
                     std::to_string(static_cast<int>(mode))
                 );
             }
@@ -215,7 +225,7 @@ private:
             m <= last_mode;
             m = static_cast<ExtractMode>(static_cast<int>(m) + 1)
         ) {
-            set_pext_func_( m );
+            set_bit_extr_func_( m );
 
             // Run the mode for all test data, summing up the masked values.
             std::uint64_t accu = 0;
@@ -233,7 +243,7 @@ private:
             if( best_accu != accu ) {
                 // This only happens if our implementation is wrong, and should never trigger.
                 throw std::runtime_error(
-                    "PEXT benchmarking with inconsistent results for different methods."
+                    "Bit extract benchmarking with inconsistent results for different methods."
                 );
             }
 
@@ -247,10 +257,10 @@ private:
 
         // Finally, set the fastest algorithm.
         mode_ = best_mode;
-        set_pext_func_( best_mode );
+        set_bit_extr_func_( best_mode );
     }
 
-    void set_pext_func_( ExtractMode mode )
+    void set_bit_extr_func_( ExtractMode mode )
     {
         // Set the function pointer to one of the wrapper functions below, which are needed
         // to capture the mask and block table, and forward them to the actual call.
@@ -260,37 +270,37 @@ private:
                 // This function here is hence only ever called for actual algorithms,
                 // such that this exception here should never trigger.
                 throw std::invalid_argument(
-                    "Cannot set adaptive pext function to automatic."
+                    "Cannot set adaptive bit extract function to automatic."
                 );
             }
             case ExtractMode::kPext: {
-                pext_func_ = &AdaptivePext::pext_hw_bmi2_u64_;
+                bit_extr_func_ = &AdaptiveBitExtract::bit_extract_pext_;
                 break;
             }
             case ExtractMode::kByteTable: {
-                pext_func_ = &AdaptivePext::pext_sw_byte_table_;
+                bit_extr_func_ = &AdaptiveBitExtract::bit_extract_byte_table_;
                 break;
             }
             case ExtractMode::kBlockTable: {
-                pext_func_ = &AdaptivePext::pext_sw_block_table_u64_;
+                bit_extr_func_ = &AdaptiveBitExtract::bit_extract_block_table_;
                 break;
             }
             case ExtractMode::kBlockTableUnrolled2: {
-                pext_func_ = &AdaptivePext::pext_sw_block_table_u64_unrolled2_;
+                bit_extr_func_ = &AdaptiveBitExtract::bit_extract_block_table_unrolled2_;
                 break;
             }
             case ExtractMode::kBlockTableUnrolled4: {
-                pext_func_ = &AdaptivePext::pext_sw_block_table_u64_unrolled4_;
+                bit_extr_func_ = &AdaptiveBitExtract::bit_extract_block_table_unrolled4_;
                 break;
             }
             case ExtractMode::kBlockTableUnrolled8: {
-                pext_func_ = &AdaptivePext::pext_sw_block_table_u64_unrolled8_;
+                bit_extr_func_ = &AdaptiveBitExtract::bit_extract_block_table_unrolled8_;
                 break;
             }
             default: {
                 // User error.
                 throw std::invalid_argument(
-                    "Invalid ExtractMode in AdaptivePext: " + std::to_string(static_cast<int>(mode))
+                    "Invalid ExtractMode in AdaptiveBitExtract: " + std::to_string(static_cast<int>(mode))
                 );
             }
         }
@@ -300,7 +310,7 @@ private:
     //     Wrappers
     // -------------------------------------------------------------------------
 
-    inline std::uint64_t pext_hw_bmi2_u64_( std::uint64_t value ) const
+    inline std::uint64_t bit_extract_pext_( std::uint64_t value ) const
     {
         #if defined(HAVE_BMI2)
             return pext_hw_bmi2_u64( value, mask_ );
@@ -311,40 +321,40 @@ private:
             (void) value;
             throw std::runtime_error(
                 "Invalid use of hardware PEXT mode on architecture without BMI2 instructions. "
-                "Cannot use AdaptivePext::ExtractMode::kPext on given hardware."
+                "Cannot use AdaptiveBitExtract::ExtractMode::kPext on given hardware."
             );
         #endif
     }
 
-    inline std::uint64_t pext_sw_byte_table_( std::uint64_t value ) const
+    inline std::uint64_t bit_extract_byte_table_( std::uint64_t value ) const
     {
         return pext_sw_table8_u64( value, mask_ );
     }
 
-    inline std::uint64_t pext_sw_block_table_u64_( std::uint64_t value ) const
+    inline std::uint64_t bit_extract_block_table_( std::uint64_t value ) const
     {
         return pext_sw_block_table_u64( value, block_table_ );
     }
 
-    inline std::uint64_t pext_sw_block_table_u64_unrolled2_( std::uint64_t value ) const
+    inline std::uint64_t bit_extract_block_table_unrolled2_( std::uint64_t value ) const
     {
         return pext_sw_block_table_u64_unrolled2( value, block_table_ );
     }
 
-    inline std::uint64_t pext_sw_block_table_u64_unrolled4_( std::uint64_t value ) const
+    inline std::uint64_t bit_extract_block_table_unrolled4_( std::uint64_t value ) const
     {
         return pext_sw_block_table_u64_unrolled4( value, block_table_ );
     }
 
-    inline std::uint64_t pext_sw_block_table_u64_unrolled8_( std::uint64_t value ) const
+    inline std::uint64_t bit_extract_block_table_unrolled8_( std::uint64_t value ) const
     {
         return pext_sw_block_table_u64_unrolled8( value, block_table_ );
     }
 
-    inline std::uint64_t pext_dummy_( std::uint64_t ) const
+    inline std::uint64_t bit_extract_dummy_( std::uint64_t ) const
     {
         throw std::invalid_argument(
-            "Invalid call to operator() on default-constructed AdaptivePext instance"
+            "Invalid call to operator() on default-constructed AdaptiveBitExtract instance"
         );
     }
 
@@ -356,9 +366,9 @@ private:
 
     // Extraction mode and function pointer
     ExtractMode mode_;
-    PextFunction pext_func_ = nullptr;
+    BitExtractFunction bit_extr_func_ = nullptr;
 
-    // PEXT mask and block table for the block algorithm
+    // Bit extract mask and block table for the block algorithm
     std::uint64_t mask_;
     PextBlockTable block_table_;
 };

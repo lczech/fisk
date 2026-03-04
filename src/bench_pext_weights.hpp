@@ -13,7 +13,7 @@
 #include "pext.hpp"
 #include "pext_zp7.hpp"
 #include "pext_instlatx64.hpp"
-#include "pext_adaptive.hpp"
+#include "bit_extract_adaptive.hpp"
 #include "sys_info.hpp"
 
 struct PextInput
@@ -26,7 +26,7 @@ struct PextInput
 
     // We also need to store an instance of the adaptive pext here, which evaluates
     // the fastest algorithm to use for the given mask - which is mask-dependent.
-    AdaptivePext adaptive_pext;
+    AdaptiveBitExtract adaptive_pext;
 };
 
 inline std::uint64_t random_mask_with_popcount(std::mt19937_64& rng, int popcnt)
@@ -59,7 +59,7 @@ inline std::vector<PextInput> make_inputs(
             value,
             mask,
             pext_sw_block_table_preprocess_u64( mask ),
-            AdaptivePext( mask )
+            AdaptiveBitExtract( mask )
         });
         ++adaptive_counts[static_cast<size_t>( v.back().adaptive_pext.mode())];
         // std::cout << v.back().adaptive_pext.mode_name() << "\n";
@@ -168,7 +168,7 @@ inline void bench_pext_weights(std::ostream& csv_os)
     // Print adative pext counts
     std::cout << "Adaptive Pext counts:\n";
     for( size_t i = 0; i < adaptive_counts.size(); ++i ) {
-        std::cout << "  " << adaptive_counts[i] << " <== " << AdaptivePext::mode_name(static_cast<AdaptivePext::ExtractMode>(i)) << "\n";
+        std::cout << "  " << adaptive_counts[i] << " <== " << AdaptiveBitExtract::mode_name(static_cast<AdaptiveBitExtract::ExtractMode>(i)) << "\n";
     }
     std::cout << "\n";
 }
