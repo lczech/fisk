@@ -10,6 +10,7 @@
 
 #include "utils.hpp"
 #include "kmer_spaced.hpp"
+#include "kmer_spaced_simd.hpp"
 #include "seq_enc.hpp"
 #include "microbench.hpp"
 #include "sys_info.hpp"
@@ -54,6 +55,11 @@ inline void bench_kmer_spaced(
         auto const bit_ext_mask = prepare_spaced_kmer_bit_extract_mask(masks[m]);
         auto const bit_ext_block_mask = bit_extract_block_table_preprocess(bit_ext_mask);
         auto const bit_ext_network_table = bit_extract_network_table_preprocess(bit_ext_mask);
+
+        // simd kernels
+        BitExtractKernelScalar simd_scalar_kernel(bit_ext_mask);
+        BitExtractKernelSSE2   simd_sse2_kernel(bit_ext_mask);
+        BitExtractKernelAVX2   simd_avx2_kernel(bit_ext_mask);
 
         // Prepare a benchmark with repititions
         Microbench<std::string> suite("kmer_spaced");
@@ -162,6 +168,32 @@ inline void bench_kmer_spaced(
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
                         seq, k, bit_ext_network_table, char_to_nt_table_throw, bit_extract_network_table
+                    );
+                }
+            ),
+
+            // simd network table
+            bench(
+                "compute_spaced_kmer_hash_scalar_kernel_simd",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_scalar_kernel
+                    );
+                }
+            ),
+            bench(
+                "compute_spaced_kmer_hash_sse2_kernel_simd",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_sse2_kernel
+                    );
+                }
+            ),
+            bench(
+                "compute_spaced_kmer_hash_avx2_kernel_simd",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_avx2_kernel
                     );
                 }
             )
