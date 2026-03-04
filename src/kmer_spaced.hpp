@@ -48,7 +48,7 @@ inline std::vector<std::vector<size_t>> comin_prepare_masks( std::vector<std::st
 }
 
 inline std::uint64_t comin_compute_spaced_kmer(
-    std::vector<size_t> const& mask, std::string_view seq, size_t start_pos
+    std::string_view seq, std::vector<size_t> const& mask, size_t start_pos
 ) {
     // Compute a single spaced kmer at the given position
     std::uint64_t result = 0;
@@ -70,7 +70,7 @@ inline std::uint64_t comin_compute_spaced_kmer(
 }
 
 inline std::uint64_t comin_compute_spaced_kmer_improved(
-    std::vector<size_t> const& mask, std::string_view seq, size_t start_pos
+    std::string_view seq, std::vector<size_t> const& mask, size_t start_pos
 ) {
     // Compute a single spaced kmer at the given position
     std::uint64_t result = 0;
@@ -84,7 +84,7 @@ inline std::uint64_t comin_compute_spaced_kmer_improved(
 
 template<typename Mask, typename Comp>
 inline std::uint64_t compute_spaced_kmer_hash_comin(
-    size_t k, Mask const& mask, std::string const& seq, Comp&& comp
+    std::string const& seq, size_t k, Mask const& mask, Comp&& comp
 ) {
     // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
     std::uint64_t hash = 0;
@@ -92,7 +92,7 @@ inline std::uint64_t compute_spaced_kmer_hash_comin(
     // Slide the window over the sequence.
     const std::size_t stop = seq.size() - k;
     for (std::size_t i = 0; i <= stop; ++i) {
-        hash ^= comp( mask, std::string_view(seq), i );
+        hash ^= comp( std::string_view(seq), mask, i );
     }
     return hash;
 }
@@ -161,7 +161,7 @@ inline std::string bit_extract_mask_to_spaced_kmer_mask_string( std::uint64_t ma
  */
 template<typename Mask, typename Enc, typename BitExtract>
 inline std::uint64_t compute_spaced_kmer_hash(
-    size_t k, Mask const& mask, std::string const& seq, Enc&& enc, BitExtract&& bit_ext
+    std::string const& seq, size_t const k, Mask const& mask, Enc&& enc, BitExtract&& bit_ext
 ) {
     // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
     std::uint64_t hash = 0;

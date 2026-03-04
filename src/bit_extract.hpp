@@ -368,8 +368,8 @@ inline std::uint64_t bit_extract_block_table_unrolled8(
 struct BitExtractNetworkTable
 {
     // The original mask, as well as subsets for each power of two.
-    std::uint64_t mask;
-    std::array<std::uint64_t, 6> power_masks{};
+    std::uint64_t mask = 0;
+    std::array<std::uint64_t, 6> sieves{};
 };
 
 /**
@@ -391,7 +391,7 @@ inline BitExtractNetworkTable bit_extract_network_table_preprocess( std::uint64_
         mp ^= (mp << 32);
 
         std::uint64_t mv = mp & m;
-        out.power_masks[i] = mv;
+        out.sieves[i] = mv;
 
         const int s = (1 << i);
         m  = (m ^ mv) | (mv >> s);
@@ -413,11 +413,11 @@ inline std::uint64_t bit_extract_network_table(
         std::uint64_t t = x & mv_i;
         x = (x ^ t) | (t >> s);
     };
-    step(  1, nt.power_masks[0] );
-    step(  2, nt.power_masks[1] );
-    step(  4, nt.power_masks[2] );
-    step(  8, nt.power_masks[3] );
-    step( 16, nt.power_masks[4] );
-    step( 32, nt.power_masks[5] );
+    step(  1, nt.sieves[0] );
+    step(  2, nt.sieves[1] );
+    step(  4, nt.sieves[2] );
+    step(  8, nt.sieves[3] );
+    step( 16, nt.sieves[4] );
+    step( 32, nt.sieves[5] );
     return x;
 }

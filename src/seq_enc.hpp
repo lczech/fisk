@@ -150,6 +150,13 @@ inline constexpr std::uint8_t char_to_nt_ascii_throw(char c)
 
 // Another typical implementation: ascii char lookup table.
 // The table is hardcoded here, to allow static constexpr inlining.
+
+/**
+ * @brief Lookup table for ASCII to two bit encoding of nucleotides.
+ *
+ * See SEQ_NT4_INVALID for the magic constant holding the "invalid" value for all ASCII chars
+ * that are not `ACGT` or `acgt`.
+ */
 constexpr std::uint8_t seq_nt4_table[256] = {
 	0, 1, 2, 3,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
@@ -170,12 +177,17 @@ constexpr std::uint8_t seq_nt4_table[256] = {
 };
 
 /**
+ * @brief Magic value for the positions in seq_nt4_table that are not `ACGT` or `acgt`.
+ */
+constexpr std::uint8_t SEQ_NT4_INVALID = 4;
+
+/**
  * @brief Get the two-bit encoding of a char, using a lookup table, non-throwing.
  */
 inline constexpr std::uint8_t char_to_nt_table_throw(char c)
 {
     auto const r = seq_nt4_table[static_cast<std::uint8_t>(c)];
-    if( r > 3 ) {
+    if( r == SEQ_NT4_INVALID ) {
         throw std::runtime_error(
             "Handling of non-ACGT characters not supported in this simple benchmark"
         );
@@ -206,7 +218,7 @@ inline std::array<std::uint8_t,256> const& get_seq_nt4_table()
         std::array<std::uint8_t,256> t{};
         for (auto& x: t) {
             // x = 0xFF;
-            x = 4;
+            x = SEQ_NT4_INVALID;
         }
         t[static_cast<unsigned char>('A')] = 0;
         t[static_cast<unsigned char>('C')] = 1;
