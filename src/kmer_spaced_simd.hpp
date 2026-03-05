@@ -130,7 +130,7 @@ inline void for_each_spaced_kmer_simd(
         if (valid_run < k) {
             continue;
         }
-        std::uint64_t const y = bit_extract_network_table( kmer, kernel.network_table );
+        std::uint64_t const y = kernel.bit_extract( kmer );
         cb(i - (k - 1), y);
     }
 }

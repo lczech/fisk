@@ -57,9 +57,24 @@ inline void bench_kmer_spaced(
         auto const bit_ext_network_table = bit_extract_network_table_preprocess(bit_ext_mask);
 
         // simd kernels
-        BitExtractKernelScalar simd_scalar_kernel(bit_ext_mask);
-        BitExtractKernelSSE2   simd_sse2_kernel(bit_ext_mask);
-        BitExtractKernelAVX2   simd_avx2_kernel(bit_ext_mask);
+        BitExtractNetworkKernelScalar simd_nt_scalar_kernel(bit_ext_mask);
+        BitExtractBlockKernelScalar   simd_bt_scalar_kernel(bit_ext_mask);
+        #if defined(HAVE_SSE2)
+        BitExtractNetworkKernelSSE2   simd_nt_sse2_kernel(bit_ext_mask);
+        BitExtractBlockKernelSSE2     simd_bt_sse2_kernel(bit_ext_mask);
+        #endif
+        #if defined(HAVE_AVX2)
+        BitExtractNetworkKernelAVX2   simd_nt_avx2_kernel(bit_ext_mask);
+        BitExtractBlockKernelAVX2     simd_bt_avx2_kernel(bit_ext_mask);
+        #endif
+        #if defined(HAVE_AVX512)
+        BitExtractNetworkKernelAVX512 simd_nt_avx512_kernel(bit_ext_mask);
+        BitExtractBlockKernelAVX512   simd_bt_avx512_kernel(bit_ext_mask);
+        #endif
+        #if defined(HAVE_NEON)
+        BitExtractNetworkKernelNEON   simd_nt_neon_kernel(bit_ext_mask);
+        BitExtractBlockKernelNEON     simd_bt_neon_kernel(bit_ext_mask);
+        #endif
 
         // Prepare a benchmark with repititions
         Microbench<std::string> suite("kmer_spaced");
@@ -172,28 +187,92 @@ inline void bench_kmer_spaced(
                 }
             ),
 
-            // simd network table
+            // simd kernels
+            #if defined(HAVE_SSE2)
             bench(
-                "compute_spaced_kmer_hash_scalar_kernel_simd",
+                "compute_spaced_kmer_hash_simd_nt_sse2",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash_simd(
-                        seq, k, simd_scalar_kernel
+                        seq, k, simd_nt_sse2_kernel
                     );
                 }
             ),
             bench(
-                "compute_spaced_kmer_hash_sse2_kernel_simd",
+                "compute_spaced_kmer_hash_simd_bt_sse2",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash_simd(
-                        seq, k, simd_sse2_kernel
+                        seq, k, simd_bt_sse2_kernel
+                    );
+                }
+            ),
+            #endif
+            #if defined(HAVE_AVX2)
+            bench(
+                "compute_spaced_kmer_hash_simd_nt_avx2",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_nt_avx2_kernel
                     );
                 }
             ),
             bench(
-                "compute_spaced_kmer_hash_avx2_kernel_simd",
+                "compute_spaced_kmer_hash_simd_bt_avx2",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash_simd(
-                        seq, k, simd_avx2_kernel
+                        seq, k, simd_bt_avx2_kernel
+                    );
+                }
+            ),
+            #endif
+            #if defined(HAVE_AVX512)
+            bench(
+                "compute_spaced_kmer_hash_simd_nt_avx512",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_nt_avx512_kernel
+                    );
+                }
+            ),
+            bench(
+                "compute_spaced_kmer_hash_simd_bt_avx512",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_bt_avx512_kernel
+                    );
+                }
+            ),
+            #endif
+            #if defined(HAVE_NEON)
+            bench(
+                "compute_spaced_kmer_hash_simd_nt_neon",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_nt_neon_kernel
+                    );
+                }
+            ),
+            bench(
+                "compute_spaced_kmer_hash_simd_bt_neon",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_bt_neon_kernel
+                    );
+                }
+            ),
+            #endif
+            bench(
+                "compute_spaced_kmer_hash_simd_nt_scalar",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_nt_scalar_kernel
+                    );
+                }
+            ),
+            bench(
+                "compute_spaced_kmer_hash_simd_bt_scalar",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_bt_scalar_kernel
                     );
                 }
             )

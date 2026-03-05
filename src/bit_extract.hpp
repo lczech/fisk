@@ -284,6 +284,7 @@ inline std::uint64_t bit_extract_block_table(
 ) noexcept {
     // Apply blockwise bit extraction using the preprocessing above.
     // Semantics match _pext_u64(x, mask) for the same mask.
+    assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
     std::uint64_t res = 0;
     size_t i = 0;
     while(bt.blocks[i]) {
@@ -302,6 +303,7 @@ inline std::uint64_t bit_extract_block_table_unrolled2(
     // Same as above, but 2-fold unrolled. We might overshoot, if the number of blocks of
     // consecutive 1s is not divisible by the unrolling size, but that is fine.
     // In that case, we are masking with zeros in those masks, so nothing happens.
+    assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
     std::uint64_t res = 0;
     size_t i = 0;
     while(bt.blocks[i]) {
@@ -319,6 +321,7 @@ inline std::uint64_t bit_extract_block_table_unrolled4(
     std::uint64_t x, BitExtractBlockTable const& bt
 ) noexcept {
     // Same as above, but 4-fold unrolled.
+    assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
     std::uint64_t res = 0;
     size_t i = 0;
     while(bt.blocks[i]) {
@@ -338,6 +341,7 @@ inline std::uint64_t bit_extract_block_table_unrolled8(
     std::uint64_t x, BitExtractBlockTable const& bt
 ) noexcept {
     // Same as above, but 8-fold unrolled.
+    assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
     std::uint64_t res = 0;
     size_t i = 0;
     while(bt.blocks[i]) {
