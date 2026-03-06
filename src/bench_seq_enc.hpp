@@ -56,10 +56,6 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
             [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table_throw);
         }),
         bench(
-            "char_to_nt_table_throw",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table_throw);
-        }),
-        bench(
             "char_to_nt_ascii_throw",
             [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii_throw);
         }),
@@ -76,10 +72,6 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
         bench(
             "char_to_nt_table_nothrow",
             [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table_nothrow);
-        }),
-        bench(
-            "char_to_nt_table_nothrow",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table_throw);
         }),
         bench(
             "char_to_nt_ascii_nothrow",

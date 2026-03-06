@@ -31,11 +31,24 @@
  */
 inline constexpr std::uint8_t char_to_nt_ifs_nothrow(char ch) noexcept
 {
-    if(ch == 'A' || ch == 'a') return 0u;
-    if(ch == 'C' || ch == 'c') return 1u;
-    if(ch == 'G' || ch == 'g') return 2u;
-    if(ch == 'T' || ch == 't') return 3u;
+    // Make char lower case. The std implementation is locale dependend,
+    // and very slow; we hence assume ASCII and simply set the lower case bit.
+    // ch = static_cast<char>(std::tolower(ch));
+    ch = (ch | 0x20);
+
+    // Return the correct two-bit code
+    if(ch == 'a') return 0u;
+    if(ch == 'c') return 1u;
+    if(ch == 'g') return 2u;
+    if(ch == 't') return 3u;
     return 4;
+
+    // Longer variant without lower case but more checks.
+    // Same speed in our tests.
+    // if(ch == 'A' || ch == 'a') return 0u;
+    // if(ch == 'C' || ch == 'c') return 1u;
+    // if(ch == 'G' || ch == 'g') return 2u;
+    // if(ch == 'T' || ch == 't') return 3u;
 }
 
 /**
@@ -44,10 +57,12 @@ inline constexpr std::uint8_t char_to_nt_ifs_nothrow(char ch) noexcept
  */
 inline constexpr std::uint8_t char_to_nt_ifs_throw(char ch)
 {
-    if(ch == 'A' || ch == 'a') return 0u;
-    if(ch == 'C' || ch == 'c') return 1u;
-    if(ch == 'G' || ch == 'g') return 2u;
-    if(ch == 'T' || ch == 't') return 3u;
+    // Same as above
+    ch = (ch | 0x20);
+    if(ch == 'a') return 0u;
+    if(ch == 'c') return 1u;
+    if(ch == 'g') return 2u;
+    if(ch == 't') return 3u;
 	throw std::runtime_error(
         "Handling of non-ACGT characters not supported in this simple benchmark"
     );
@@ -60,9 +75,9 @@ inline constexpr std::uint8_t char_to_nt_ifs_throw(char ch)
 /**
  * @brief Get the two-bit encoding of a char, using switch statement, non-throwing.
  */
-inline constexpr std::uint8_t char_to_nt_switch_nothrow(char c) noexcept
+inline constexpr std::uint8_t char_to_nt_switch_nothrow(char ch) noexcept
 {
-    switch (c) {
+    switch( ch ) {
         case 'A': case 'a': return 0u;
         case 'C': case 'c': return 1u;
         case 'G': case 'g': return 2u;
@@ -76,9 +91,9 @@ inline constexpr std::uint8_t char_to_nt_switch_nothrow(char c) noexcept
  * @brief Get the two-bit encoding of a char, using switch statement,
  * throwing an exception if the char is not in `ACGT`.
  */
-inline constexpr std::uint8_t char_to_nt_switch_throw(char c)
+inline constexpr std::uint8_t char_to_nt_switch_throw(char ch)
 {
-    switch (c) {
+    switch( ch ) {
         case 'A': case 'a': return 0u;
         case 'C': case 'c': return 1u;
         case 'G': case 'g': return 2u;
@@ -119,7 +134,7 @@ inline constexpr std::uint8_t char_to_nt_ascii_nothrow(char c) noexcept
     // which are ignored here anyway.
 
     auto const u = static_cast<std::uint8_t>(c);
-    return ((u >> 1) ^ (u >> 2)) & 3;
+    return ((u >> 1) ^ (u >> 2)) & 0x03u;
 }
 
 /**
@@ -128,20 +143,53 @@ inline constexpr std::uint8_t char_to_nt_ascii_nothrow(char c) noexcept
  */
 inline constexpr std::uint8_t char_to_nt_ascii_throw(char c)
 {
-    // The check below is the fastest in our tests;
-    // faster than using toupper() to avoid the extra case checks.
-    if(
-        ( c != 'A' ) && ( c != 'C' ) && ( c != 'G' ) && ( c != 'T' ) &&
-        ( c != 'a' ) && ( c != 'c' ) && ( c != 'g' ) && ( c != 't' )
-    ) {
-        throw std::runtime_error(
-            "Handling of non-ACGT characters not supported in this simple benchmark"
-        );
-        // return 4;
-    }
+    // // The check below is the fastest in our tests;
+    // // faster than using toupper() to avoid the extra case checks.
+    // if(
+    //     ( c != 'A' ) && ( c != 'C' ) && ( c != 'G' ) && ( c != 'T' ) &&
+    //     ( c != 'a' ) && ( c != 'c' ) && ( c != 'g' ) && ( c != 't' )
+    // ) {
+    //     throw std::runtime_error(
+    //         "Handling of non-ACGT characters not supported in this simple benchmark"
+    //     );
+    //     // return 4;
+    // }
 
-    auto const u = static_cast<std::uint8_t>(c);
-    return ((u >> 1) ^ (u >> 2)) & 3;
+    // auto const u = static_cast<std::uint8_t>(c);
+    // return ((u >> 1) ^ (u >> 2)) & 3;
+
+
+    // We need ASCII for the following to work. Probably fine, but doesn't hurt to check.
+    static_assert( static_cast<int>('A') == 0x41, "Non-ASCII char set" );
+    static_assert( static_cast<int>('C') == 0x43, "Non-ASCII char set" );
+    static_assert( static_cast<int>('G') == 0x47, "Non-ASCII char set" );
+    static_assert( static_cast<int>('T') == 0x54, "Non-ASCII char set" );
+    static_assert( static_cast<int>('a') == 0x61, "Non-ASCII char set" );
+    static_assert( static_cast<int>('c') == 0x63, "Non-ASCII char set" );
+    static_assert( static_cast<int>('g') == 0x67, "Non-ASCII char set" );
+    static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
+
+    // Fold to lowercase: 'A'..'Z' -> 'a'..'z', ASCII only.
+    std::uint8_t const u = static_cast<std::uint8_t>(c) | 0x20u;
+
+    // Extract the relevant bits to get two-bit code.
+    std::uint8_t const e = ((u >> 1) ^ (u >> 2)) & 0x03u;
+
+    // Use a bitset validator to check for correct char;
+    // should be faster than actual character comparisons.
+    // a & 31 = 1
+    // c & 31 = 3
+    // g & 31 = 7
+    // t & 31 = 20
+    constexpr std::uint32_t valid_mask = (1u << 1) | (1u << 3) | (1u << 7) | (1u << 20);
+    std::uint32_t const is_valid = (valid_mask >> (u & 31u)) & 1u;
+    // return is_valid ? e : 4;
+    return is_valid
+        ? e
+        : throw std::runtime_error(
+            "Handling of non-ACGT characters not supported in this simple benchmark"
+        )
+    ;
 }
 
 // -----------------------------------------------------------------------------
@@ -152,7 +200,7 @@ inline constexpr std::uint8_t char_to_nt_ascii_throw(char c)
 // The table is hardcoded here, to allow static constexpr inlining.
 
 /**
- * @brief Lookup table for ASCII to two bit encoding of nucleotides.
+ * @brief Lookup table for ASCII to two-bit encoding of nucleotides.
  *
  * See SEQ_NT4_INVALID for the magic constant holding the "invalid" value for all ASCII chars
  * that are not `ACGT` or `acgt`.
@@ -205,7 +253,7 @@ inline constexpr std::uint8_t char_to_nt_table_nothrow(char c) noexcept
 }
 
 /**
- * @brief Generate the lookup table for two bit encoding.
+ * @brief Generate the lookup table for two-bit encoding.
  *
  * Helper function to generate the table, instead of hardcoding it.
  * However, static constexpr variables are C++23, which means our simple hard coded table
@@ -233,6 +281,48 @@ inline std::array<std::uint8_t,256> const& get_seq_nt4_table()
     return seq_nt4_table_;
 }
 
+/**
+ * @brief Get the two-bit encoding of a char, using a lookup table, non-throwing.
+ *
+ * This helper struct encapsulates the lookup table and provides a simple interface
+ * for encoding nucleotide characters. The encoding returns 0..3 for A,C,G,T (and their lower case
+ * equivalents); returns `INVALID_NT = 4` for all other characters.
+ */
+struct NucleotideEncoder
+{
+    // Constants. The table is initialized in the translation unit `seq_enc.cpp`
+    static constexpr std::uint8_t INVALID_NT = 4;
+    static const std::array<std::uint8_t, 256> table;
+
+    /**
+     * @brief Generate lookup table for typical nucleotide two-bit encoding.
+     */
+    static constexpr std::array<std::uint8_t, 256> make_table()
+    {
+        std::array<std::uint8_t, 256> t{};
+        for( auto& x : t ) {
+            x = INVALID_NT;
+        }
+        t[static_cast<unsigned char>('A')] = 0;
+        t[static_cast<unsigned char>('C')] = 1;
+        t[static_cast<unsigned char>('G')] = 2;
+        t[static_cast<unsigned char>('T')] = 3;
+        t[static_cast<unsigned char>('a')] = 0;
+        t[static_cast<unsigned char>('c')] = 1;
+        t[static_cast<unsigned char>('g')] = 2;
+        t[static_cast<unsigned char>('t')] = 3;
+        return t;
+    }
+
+    /**
+     * @brief Get the two-bit encoding for a char.
+     */
+    static inline constexpr std::uint8_t encode(char c) noexcept
+    {
+        return table[static_cast<std::uint8_t>(c)];
+    }
+};
+
 // =================================================================================================
 //     Sequence Encoding
 // =================================================================================================
@@ -240,7 +330,7 @@ inline std::array<std::uint8_t,256> const& get_seq_nt4_table()
 /**
  * @brief Scan a sequence and encode each character, combining them to get a final "hash".
  *
- * The hash obtained here is not a good one, as it is simply the sum of all two bit encodings
+ * The hash obtained here is not a good one, as it is simply the sum of all two-bit encodings
  * of the characters. But it is enough to check that all the above functions give the same result,
  * and sufficient to force the compiler to actually run the encoding.
  */

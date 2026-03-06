@@ -191,17 +191,17 @@ int main(int argc, char **argv)
 
     // Run the benchmarks
 
-    // Bit Extract Weights
-    {
-        auto os_bit_extract_weights = get_ofstream(out_dir, "bit_extract_weights.csv" );
-        bench_bit_extract_weights( os_bit_extract_weights );
-    }
+    // // Bit Extract Weights
+    // {
+    //     auto os_bit_extract_weights = get_ofstream(out_dir, "bit_extract_weights.csv" );
+    //     bench_bit_extract_weights( os_bit_extract_weights );
+    // }
 
-    // Bit Extract Blocks
-    {
-        auto os_bit_extract_blocks = get_ofstream(out_dir, "bit_extract_blocks.csv" );
-        bench_bit_extract_blocks( os_bit_extract_blocks );
-    }
+    // // Bit Extract Blocks
+    // {
+    //     auto os_bit_extract_blocks = get_ofstream(out_dir, "bit_extract_blocks.csv" );
+    //     bench_bit_extract_blocks( os_bit_extract_blocks );
+    // }
 
     // Seq Encoding
     {
@@ -209,34 +209,34 @@ int main(int argc, char **argv)
         bench_seq_enc( sequences, os_seq_enc );
     }
 
-    // Kmer extract
-    // Test either the given size of k, or the full range if no k provided.
-    {
-        auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
-        if( k == 0 ) {
-            bench_kmer_extract( sequences, os_kmer_extract );
-        } else {
-            bench_kmer_extract( sequences, k, k, os_kmer_extract );
-        }
-    }
+    // // Kmer extract
+    // // Test either the given size of k, or the full range if no k provided.
+    // {
+    //     auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
+    //     if( k == 0 ) {
+    //         bench_kmer_extract( sequences, os_kmer_extract );
+    //     } else {
+    //         bench_kmer_extract( sequences, k, k, os_kmer_extract );
+    //     }
+    // }
 
-    // Spaced kmers, single mask
-    {
-        auto os_kmer_spaced_single = get_ofstream(out_dir, "kmer_spaced_single.csv" );
-        bench_kmer_spaced_single( sequences, single_masks, os_kmer_spaced_single );
-    }
+    // // Spaced kmers, single mask
+    // {
+    //     auto os_kmer_spaced_single = get_ofstream(out_dir, "kmer_spaced_single.csv" );
+    //     bench_kmer_spaced_single( sequences, single_masks, os_kmer_spaced_single );
+    // }
 
-    // Spaced kmers, multi masks
-    {
-        auto os_kmer_spaced_multi = get_ofstream(out_dir, "kmer_spaced_multi.csv" );
-        bench_kmer_spaced_multi( sequences, multi_masks, os_kmer_spaced_multi );
-    }
+    // // Spaced kmers, multi masks
+    // {
+    //     auto os_kmer_spaced_multi = get_ofstream(out_dir, "kmer_spaced_multi.csv" );
+    //     bench_kmer_spaced_multi( sequences, multi_masks, os_kmer_spaced_multi );
+    // }
 
-    // Clark
-    {
-        auto os_kmer_clark = get_ofstream(out_dir, "kmer_clark.csv" );
-        bench_kmer_clark( sequences, os_kmer_clark );
-    }
+    // // Clark
+    // {
+    //     auto os_kmer_clark = get_ofstream(out_dir, "kmer_clark.csv" );
+    //     bench_kmer_clark( sequences, os_kmer_clark );
+    // }
 
     return 0;
 }
