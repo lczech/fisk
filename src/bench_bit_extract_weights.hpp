@@ -29,7 +29,7 @@ struct BitExtractInput
 
     // For the preprocessed implementations, we also pre-compute their tables
     BitExtractBlockTable block_table;
-    BitExtractNetworkTable network_table;
+    BitExtractButterflyTable butterfly_table;
 
     // We also need to store an instance of the adaptive bit extract here, which evaluates
     // the fastest algorithm to use for the given mask - which is mask-dependent.
@@ -72,7 +72,7 @@ static inline std::vector<BitExtractInput> make_inputs(
             value,
             mask,
             bit_extract_block_table_preprocess( mask ),
-            bit_extract_network_table_preprocess( mask ),
+            bit_extract_butterfly_table_preprocess( mask ),
             AdaptiveBitExtract( mask )
         });
         ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
@@ -131,7 +131,7 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
             make_inputs_rep,
             #ifdef HAVE_BMI2
             bench(
-                "pext_hw_bmi2",
+                "bit_extract_pext",
                 [](BitExtractInput const& in){ return bit_extract_pext(in.value, in.mask);
             }),
             #endif
@@ -168,8 +168,8 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
                 [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<8>(in.value, in.block_table);
             }),
             bench(
-                "bit_extract_network_table",
-                [](BitExtractInput const& in){ return bit_extract_network_table(in.value, in.network_table);
+                "bit_extract_butterfly_table",
+                [](BitExtractInput const& in){ return bit_extract_butterfly_table(in.value, in.butterfly_table);
             }),
             bench(
                 "bit_extract_adaptive",

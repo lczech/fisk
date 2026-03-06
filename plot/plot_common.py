@@ -28,7 +28,7 @@ BENCHMARKS_KEEP = {
     "bit_extract_block_table_unrolled2",
     "bit_extract_block_table_unrolled4",
     "bit_extract_block_table_unrolled8",
-    "bit_extract_network_table",
+    "bit_extract_butterfly_table",
     # "bit_extract_instlatx",
     # "bit_extract_zp7",
 
@@ -91,7 +91,7 @@ BENCHMARK_COLORS = {
     "bit_extract_block_table_unrolled2": "#74c476",
     "bit_extract_block_table_unrolled4": "#31a354",
     "bit_extract_block_table_unrolled8": "#006d2c",
-    "bit_extract_network_table":"#B8008A",
+    "bit_extract_butterfly_table":"#B8008A",
     "bit_extract_instlatx":     "#000000",
     "bit_extract_zp7":          "#000000",
 
@@ -140,7 +140,7 @@ BENCHMARK_ORDER = [
     "bit_extract_bitloop",
     "bit_extract_split32",
     "bit_extract_byte_table",
-    "bit_extract_network_table",
+    "bit_extract_butterfly_table",
     "bit_extract_adaptive",
     "bit_extract_block_table",
     "bit_extract_block_table_unrolled2",

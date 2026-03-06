@@ -39,7 +39,7 @@
 //
 //   simd_vector     Type of the SIMD vector
 //   lanes           Number of SIMD lanes
-//   network_table   Masks for the algorithm
+//   ..._table       Masks for the algorithm
 //
 //   load()          Load data from external variables into the lanes
 //   store()         Store data from lanes into external variables
@@ -57,12 +57,12 @@
 // across SIMD architectures. We hence focus here on the case with a single mask.
 
 // =================================================================================================
-//     SIMD Kernels for Bit Extract Network Table Implementation
+//     SIMD Kernels for Bit Extract Butterfly Table Implementation
 // =================================================================================================
 
-// These kernels implement the network table algorithm for bit extraction.
+// These kernels implement the butterfly table algorithm for bit extraction.
 //
-// The kernels simply copy the entries of the network table for a given mask into simd registers,
+// The kernels simply copy the entries of the butterfly table for a given mask into simd registers,
 // such that the bit extraction can be applied in parallel across simd lanes.
 
 // -------------------------------------------------------------------------------------------------
@@ -70,19 +70,19 @@
 // -------------------------------------------------------------------------------------------------
 
 /**
- * @brief Kernel for bit extract using a simple scalar implementation of the network table.
+ * @brief Kernel for bit extract using a simple scalar implementation of the butterfly table.
  */
-struct BitExtractNetworkKernelScalar
+struct BitExtractButterflyKernelScalar
 {
-    // Regular scalar values for the network table
+    // Regular scalar values for the butterfly table
     using simd_vector = std::uint64_t;
     static constexpr int lanes = 1;
-    BitExtractNetworkTable network_table;
+    BitExtractButterflyTable butterfly_table;
 
-    BitExtractNetworkKernelScalar() = default;
+    BitExtractButterflyKernelScalar() = default;
 
-    explicit BitExtractNetworkKernelScalar( std::uint64_t const mask )
-        : network_table( bit_extract_network_table_preprocess( mask ))
+    explicit BitExtractButterflyKernelScalar( std::uint64_t const mask )
+        : butterfly_table( bit_extract_butterfly_table_preprocess( mask ))
     {}
 
     static simd_vector load( std::uint64_t const* a ) noexcept
@@ -97,7 +97,7 @@ struct BitExtractNetworkKernelScalar
 
     simd_vector bit_extract( simd_vector x ) const noexcept
     {
-        return bit_extract_network_table( x, network_table );
+        return bit_extract_butterfly_table( x, butterfly_table );
     }
 };
 
@@ -108,27 +108,27 @@ struct BitExtractNetworkKernelScalar
 #if defined(HAVE_SSE2)
 
 /**
- * @brief Kernel for bit extract using an SSE2 implementation of the network table.
+ * @brief Kernel for bit extract using an SSE2 implementation of the butterfly table.
  */
-struct BitExtractNetworkKernelSSE2
+struct BitExtractButterflyKernelSSE2
 {
-    // Regular network table values, and simd copies across lanes
+    // Regular butterfly table values, and simd copies across lanes
     using simd_vector = __m128i;
     static constexpr int lanes = 2;
-    BitExtractNetworkTable network_table;
+    BitExtractButterflyTable butterfly_table;
     __m128i mask_simd{};
     __m128i sieves_simd[6]{};
 
-    BitExtractNetworkKernelSSE2() = default;
+    BitExtractButterflyKernelSSE2() = default;
 
-    explicit BitExtractNetworkKernelSSE2( std::uint64_t const mask )
-        : network_table( bit_extract_network_table_preprocess( mask ))
+    explicit BitExtractButterflyKernelSSE2( std::uint64_t const mask )
+        : butterfly_table( bit_extract_butterfly_table_preprocess( mask ))
     {
         // Copy the scalar mask and table over to the simd vectors.
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
-        mask_simd = _mm_set1_epi64x( static_cast<long long>( network_table.mask ));
+        mask_simd = _mm_set1_epi64x( static_cast<long long>( butterfly_table.mask ));
         for( size_t i = 0; i < 6; ++i ) {
-            sieves_simd[i] = _mm_set1_epi64x( static_cast<long long>( network_table.sieves[i] ));
+            sieves_simd[i] = _mm_set1_epi64x( static_cast<long long>( butterfly_table.sieves[i] ));
         }
     }
 
@@ -163,7 +163,7 @@ struct BitExtractNetworkKernelSSE2
 
     std::uint64_t bit_extract( std::uint64_t x ) const noexcept
     {
-        return bit_extract_network_table( x, network_table );
+        return bit_extract_butterfly_table( x, butterfly_table );
     }
 };
 
@@ -176,25 +176,25 @@ struct BitExtractNetworkKernelSSE2
 #if defined(HAVE_AVX2)
 
 /**
- * @brief Kernel for bit extract using an AVX2 implementation of the network table.
+ * @brief Kernel for bit extract using an AVX2 implementation of the butterfly table.
  */
-struct BitExtractNetworkKernelAVX2
+struct BitExtractButterflyKernelAVX2
 {
     using simd_vector = __m256i;
     static constexpr int lanes = 4;
-    BitExtractNetworkTable network_table;
+    BitExtractButterflyTable butterfly_table;
     __m256i mask_simd{};
     __m256i sieves_simd[6]{};
 
-    BitExtractNetworkKernelAVX2() = default;
+    BitExtractButterflyKernelAVX2() = default;
 
-    explicit BitExtractNetworkKernelAVX2( std::uint64_t const mask )
-        : network_table( bit_extract_network_table_preprocess( mask ))
+    explicit BitExtractButterflyKernelAVX2( std::uint64_t const mask )
+        : butterfly_table( bit_extract_butterfly_table_preprocess( mask ))
     {
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
-        mask_simd = _mm256_set1_epi64x( static_cast<long long>( network_table.mask ));
+        mask_simd = _mm256_set1_epi64x( static_cast<long long>( butterfly_table.mask ));
         for( size_t i = 0; i < 6; ++i ) {
-            sieves_simd[i] = _mm256_set1_epi64x( static_cast<long long>( network_table.sieves[i] ));
+            sieves_simd[i] = _mm256_set1_epi64x( static_cast<long long>( butterfly_table.sieves[i] ));
         }
     }
 
@@ -229,7 +229,7 @@ struct BitExtractNetworkKernelAVX2
 
     std::uint64_t bit_extract( std::uint64_t x ) const noexcept
     {
-        return bit_extract_network_table( x, network_table );
+        return bit_extract_butterfly_table( x, butterfly_table );
     }
 };
 
@@ -242,25 +242,25 @@ struct BitExtractNetworkKernelAVX2
 #if defined(HAVE_AVX512F)
 
 /**
- * @brief Kernel for bit extract using an AVX512 implementation of the network table.
+ * @brief Kernel for bit extract using an AVX512 implementation of the butterfly table.
  */
-struct BitExtractNetworkKernelAVX512
+struct BitExtractButterflyKernelAVX512
 {
     using simd_vector = __m512i;
     static constexpr int lanes = 8;
-    BitExtractNetworkTable network_table;
+    BitExtractButterflyTable butterfly_table;
     __m512i mask_simd{};
     __m512i sieves_simd[6]{};
 
-    BitExtractNetworkKernelAVX512() = default;
+    BitExtractButterflyKernelAVX512() = default;
 
-    explicit BitExtractNetworkKernelAVX512( std::uint64_t const mask )
-        : network_table( bit_extract_network_table_preprocess( mask ))
+    explicit BitExtractButterflyKernelAVX512( std::uint64_t const mask )
+        : butterfly_table( bit_extract_butterfly_table_preprocess( mask ))
     {
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
-        mask_simd = _mm512_set1_epi64( static_cast<long long>( network_table.mask ));
+        mask_simd = _mm512_set1_epi64( static_cast<long long>( butterfly_table.mask ));
         for( size_t i = 0; i < 6; ++i ) {
-            sieves_simd[i] = _mm512_set1_epi64( static_cast<long long>( network_table.sieves[i] ));
+            sieves_simd[i] = _mm512_set1_epi64( static_cast<long long>( butterfly_table.sieves[i] ));
         }
     }
 
@@ -295,7 +295,7 @@ struct BitExtractNetworkKernelAVX512
 
     std::uint64_t bit_extract( std::uint64_t x ) const noexcept
     {
-        return bit_extract_network_table( x, network_table );
+        return bit_extract_butterfly_table( x, butterfly_table );
     }
 };
 
@@ -308,23 +308,23 @@ struct BitExtractNetworkKernelAVX512
 #if defined(HAVE_NEON)
 
 /**
- * @brief Kernel for bit extract using an ARM NEON implementation of the network table.
+ * @brief Kernel for bit extract using an ARM NEON implementation of the butterfly table.
  */
-struct BitExtractNetworkKernelNEON
+struct BitExtractButterflyKernelNEON
 {
     using simd_vector = uint64x2_t;
     static constexpr int lanes = 2;
     uint64x2_t mask_simd{};
     uint64x2_t sieves_simd[6]{};
 
-    BitExtractNetworkKernelNEON() = default;
+    BitExtractButterflyKernelNEON() = default;
 
-    explicit BitExtractNetworkKernelNEON( std::uint64_t const mask )
-        : network_table( bit_extract_network_table_preprocess( mask ))
+    explicit BitExtractButterflyKernelNEON( std::uint64_t const mask )
+        : butterfly_table( bit_extract_butterfly_table_preprocess( mask ))
     {
-        mask_simd = vdupq_n_u64( network_table.mask );
+        mask_simd = vdupq_n_u64( butterfly_table.mask );
         for( size_t i = 0; i < 6; ++i) {
-            sieves_simd[i] = vdupq_n_u64( network_table.sieves[i] );
+            sieves_simd[i] = vdupq_n_u64( butterfly_table.sieves[i] );
         }
     }
 
@@ -357,7 +357,7 @@ struct BitExtractNetworkKernelNEON
 
     std::uint64_t bit_extract( std::uint64_t x ) const noexcept
     {
-        return bit_extract_network_table( x, network_table );
+        return bit_extract_butterfly_table( x, butterfly_table );
     }
 };
 

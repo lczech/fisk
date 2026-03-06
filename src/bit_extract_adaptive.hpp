@@ -58,7 +58,7 @@ public:
         kBlockTableUnrolled2,
         kBlockTableUnrolled4,
         kBlockTableUnrolled8,
-        kNetworkTable,
+        kButterflyTable,
     };
 
     // -------------------------------------------------------------------------
@@ -88,7 +88,7 @@ public:
         // Prepare the masks. We do not need block tables if we hard-set pext mode.
         if( mode_ != ExtractMode::kPext ) {
             block_table_ = bit_extract_block_table_preprocess(mask_);
-            network_table_ = bit_extract_network_table_preprocess(mask_);
+            butterfly_table_ = bit_extract_butterfly_table_preprocess(mask_);
         }
 
         // Find the fastest mode if requested, or hard-set the extractor function.
@@ -172,8 +172,8 @@ public:
             case ExtractMode::kBlockTableUnrolled8: {
                 return "BlockTableUnrolled8";
             }
-            case ExtractMode::kNetworkTable: {
-                return "NetworkTable";
+            case ExtractMode::kButterflyTable: {
+                return "ButterflyTable";
             }
             default: {
                 throw std::invalid_argument(
@@ -191,7 +191,7 @@ public:
     {
         // Ensure that this is set up correctly. Still some room for error, but less likely.
         static const size_t num = 8;
-        static_assert( static_cast<int>(ExtractMode::kNetworkTable) == num - 1 );
+        static_assert( static_cast<int>(ExtractMode::kButterflyTable) == num - 1 );
         return num;
     }
 
@@ -225,7 +225,7 @@ private:
         // about them should more algorithms be added in the future.
         static_assert( static_cast<int>(ExtractMode::kPext) == 1 );
         static_assert( static_cast<int>(ExtractMode::kByteTable) == 2 );
-        static_assert( static_cast<int>(ExtractMode::kNetworkTable) == 7 );
+        static_assert( static_cast<int>(ExtractMode::kButterflyTable) == 7 );
 
         // Depending on hardware, we might not want to test hardware pext, if not available.
         #if defined(HAVE_BMI2)
@@ -233,7 +233,7 @@ private:
         #else
             auto const first_mode = ExtractMode::kByteTable;
         #endif
-        auto const last_mode = ExtractMode::kNetworkTable;
+        auto const last_mode = ExtractMode::kButterflyTable;
 
         // Try all algorithms, benchmarking which one is the fastest.
         for(
@@ -313,8 +313,8 @@ private:
                 bit_extr_func_ = &AdaptiveBitExtract::bit_extract_block_table_unrolled8_;
                 break;
             }
-            case ExtractMode::kNetworkTable: {
-                bit_extr_func_ = &AdaptiveBitExtract::bit_extract_network_table_;
+            case ExtractMode::kButterflyTable: {
+                bit_extr_func_ = &AdaptiveBitExtract::bit_extract_butterfly_table_;
                 break;
             }
             default: {
@@ -374,9 +374,9 @@ private:
         return bit_extract_block_table_unrolled<8>( value, block_table_ );
     }
 
-    inline std::uint64_t bit_extract_network_table_( std::uint64_t value ) const
+    inline std::uint64_t bit_extract_butterfly_table_( std::uint64_t value ) const
     {
-        return bit_extract_network_table( value, network_table_ );
+        return bit_extract_butterfly_table( value, butterfly_table_ );
     }
 
     inline std::uint64_t bit_extract_dummy_( std::uint64_t ) const
@@ -399,5 +399,5 @@ private:
     // Bit extract mask and block table for the block algorithm
     std::uint64_t mask_;
     BitExtractBlockTable block_table_;
-    BitExtractNetworkTable network_table_;
+    BitExtractButterflyTable butterfly_table_;
 };

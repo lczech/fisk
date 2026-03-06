@@ -248,7 +248,7 @@ inline std::vector<BitExtractInput> make_input_blocks(
             value,
             mask,
             bit_extract_block_table_preprocess( mask ),
-            bit_extract_network_table_preprocess( mask ),
+            bit_extract_butterfly_table_preprocess( mask ),
             AdaptiveBitExtract( mask )
         });
         ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
@@ -347,8 +347,8 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
                 [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<8>(in.value, in.block_table);
             }),
             bench(
-                "bit_extract_network_table",
-                [](BitExtractInput const& in){ return bit_extract_network_table(in.value, in.network_table);
+                "bit_extract_butterfly_table",
+                [](BitExtractInput const& in){ return bit_extract_butterfly_table(in.value, in.butterfly_table);
             }),
             bench(
                 "bit_extract_adaptive",

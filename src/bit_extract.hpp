@@ -339,17 +339,20 @@ inline std::uint64_t bit_extract_block_table_unrolled(
 }
 
 // =================================================================================================
-//     Bit extract with extraction network
+//     Bit extract with extraction butterfly permutation network
 // =================================================================================================
 
 /**
- * @brief Table and values for the bit extraction via extraction network.
+ * @brief Table and values for the bit extraction via extraction butterfly permutation network.
  *
- * The network works by shifting each position by increasing powers of two, such that each bit
- * has the chance to be moved to wherever it is needed in the final result.
+ * The butterfly network works by shifting each position by increasing powers of two, such that
+ * each bit has the chance to be moved to wherever it is needed in the final result.
  * The table here contains the sets of which bits need to be shifted in each step.
+ *
+ * See https://stackoverflow.com/a/16752267 and https://stackoverflow.com/a/28283007 for the
+ * inspiration for this implementation.
  */
-struct BitExtractNetworkTable
+struct BitExtractButterflyTable
 {
     // The original mask, as well as subsets for each power of two.
     std::uint64_t mask = 0;
@@ -357,11 +360,11 @@ struct BitExtractNetworkTable
 };
 
 /**
- * @brief Compute the `mv` table for a given @p mask for bit extraction via extraction network.
+ * @brief Compute the `mv` table for a given @p mask for bit extraction via butterfly network.
  */
-inline BitExtractNetworkTable bit_extract_network_table_preprocess( std::uint64_t mask )
+inline BitExtractButterflyTable bit_extract_butterfly_table_preprocess( std::uint64_t mask )
 {
-    BitExtractNetworkTable out{};
+    BitExtractButterflyTable out{};
     out.mask = mask;
     std::uint64_t m = mask;
     std::uint64_t mk = ~m << 1;
@@ -385,11 +388,11 @@ inline BitExtractNetworkTable bit_extract_network_table_preprocess( std::uint64_
 }
 
 /**
- * @brief Bit extract via extraction network.
+ * @brief Bit extract via extraction butterfly network.
  */
-inline std::uint64_t bit_extract_network_table(
+inline std::uint64_t bit_extract_butterfly_table(
     std::uint64_t x,
-    BitExtractNetworkTable const& nt
+    BitExtractButterflyTable const& nt
 ) noexcept {
     x &= nt.mask;
     auto step = [&]( std::size_t s, std::uint64_t mv_i )
