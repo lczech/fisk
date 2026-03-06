@@ -1,12 +1,13 @@
 #pragma once
 
 #include <array>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
-#include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
+#include <vector>
 
 // Preprocessor checks for intrinsics support. We use our CMake definitions here as a base check,
 // but also allow to compile with support for intrinsics if the compiler provides it, even if not
@@ -78,7 +79,9 @@ struct BitExtractNetworkKernelScalar
     static constexpr int lanes = 1;
     BitExtractNetworkTable network_table;
 
-    BitExtractNetworkKernelScalar( std::uint64_t const mask )
+    BitExtractNetworkKernelScalar() = default;
+
+    explicit BitExtractNetworkKernelScalar( std::uint64_t const mask )
         : network_table( bit_extract_network_table_preprocess( mask ))
     {}
 
@@ -87,7 +90,7 @@ struct BitExtractNetworkKernelScalar
         return a[0];
     }
 
-    static void store( simd_vector const v, std::uint64_t* out ) noexcept
+    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
     {
         out[0] = v;
     }
@@ -116,7 +119,9 @@ struct BitExtractNetworkKernelSSE2
     __m128i mask_simd{};
     __m128i sieves_simd[6]{};
 
-    BitExtractNetworkKernelSSE2( std::uint64_t const mask )
+    BitExtractNetworkKernelSSE2() = default;
+
+    explicit BitExtractNetworkKernelSSE2( std::uint64_t const mask )
         : network_table( bit_extract_network_table_preprocess( mask ))
     {
         // Copy the scalar mask and table over to the simd vectors.
@@ -133,7 +138,7 @@ struct BitExtractNetworkKernelSSE2
         // return _mm_loadu_si128(reinterpret_cast<__m128i const*>(a));
     }
 
-    static void store( simd_vector const v, std::uint64_t* out ) noexcept
+    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
     {
         _mm_store_si128( reinterpret_cast<__m128i*>(out), v );
         // _mm_storeu_si128( reinterpret_cast<__m128i*>(out), v );
@@ -181,7 +186,9 @@ struct BitExtractNetworkKernelAVX2
     __m256i mask_simd{};
     __m256i sieves_simd[6]{};
 
-    BitExtractNetworkKernelAVX2( std::uint64_t const mask )
+    BitExtractNetworkKernelAVX2() = default;
+
+    explicit BitExtractNetworkKernelAVX2( std::uint64_t const mask )
         : network_table( bit_extract_network_table_preprocess( mask ))
     {
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
@@ -197,7 +204,7 @@ struct BitExtractNetworkKernelAVX2
         // return _mm256_loadu_si256( reinterpret_cast<__m256i const*>( a ));
     }
 
-    static void store( simd_vector const v, std::uint64_t* out ) noexcept
+    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
     {
         _mm256_store_si256( reinterpret_cast<__m256i*>(out), v );
         // _mm256_storeu_si256( reinterpret_cast<__m256i*>(out), v );
@@ -245,7 +252,9 @@ struct BitExtractNetworkKernelAVX512
     __m512i mask_simd{};
     __m512i sieves_simd[6]{};
 
-    BitExtractNetworkKernelAVX512( std::uint64_t const mask )
+    BitExtractNetworkKernelAVX512() = default;
+
+    explicit BitExtractNetworkKernelAVX512( std::uint64_t const mask )
         : network_table( bit_extract_network_table_preprocess( mask ))
     {
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
@@ -261,7 +270,7 @@ struct BitExtractNetworkKernelAVX512
         // return _mm512_loadu_si512( reinterpret_cast<__m512i const*>( a ));
     }
 
-    static void store( simd_vector const v, std::uint64_t* out ) noexcept
+    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
     {
         _mm512_store_si512( reinterpret_cast<__m512i*>(out), v );
         // _mm512_storeu_si512( reinterpret_cast<__m512i*>(out), v );
@@ -308,7 +317,9 @@ struct BitExtractNetworkKernelNEON
     uint64x2_t mask_simd{};
     uint64x2_t sieves_simd[6]{};
 
-    BitExtractNetworkKernelNEON( std::uint64_t const mask )
+    BitExtractNetworkKernelNEON() = default;
+
+    explicit BitExtractNetworkKernelNEON( std::uint64_t const mask )
         : network_table( bit_extract_network_table_preprocess( mask ))
     {
         mask_simd = vdupq_n_u64( network_table.mask );
@@ -322,7 +333,7 @@ struct BitExtractNetworkKernelNEON
         return vld1q_u64(a);
     }
 
-    static void store( simd_vector const v, std::uint64_t* out ) noexcept
+    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
     {
         vst1q_u64(out, v);
     }
@@ -372,30 +383,36 @@ struct BitExtractNetworkKernelNEON
 /**
  * @brief Kernel for bit extract using a simple scalar implementation of the block table.
  */
+template<std::size_t UF = 8>
 struct BitExtractBlockKernelScalar
 {
-    // Regular scalar values for the block table
+    static_assert(
+        UF == 1 || UF == 2 || UF == 4 || UF == 8 || UF == 16 || UF == 32,
+        "Supported unroll factors are 1, 2, 4, 8, 16, 32."
+    );
     using simd_vector = std::uint64_t;
     static constexpr int lanes = 1;
-    BitExtractBlockTable block_table;
+    BitExtractBlockTable block_table{};
 
-    BitExtractBlockKernelScalar( std::uint64_t const mask )
-        : block_table( bit_extract_block_table_preprocess( mask ))
+    BitExtractBlockKernelScalar() = default;
+
+    explicit BitExtractBlockKernelScalar(std::uint64_t mask)
+        : block_table(bit_extract_block_table_preprocess(mask))
     {}
 
-    static simd_vector load( std::uint64_t const* a ) noexcept
+    static simd_vector load(std::uint64_t const* a) noexcept
     {
         return a[0];
     }
 
-    static void store( simd_vector const v, std::uint64_t* out ) noexcept
+    static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
         out[0] = v;
     }
 
-    simd_vector bit_extract( simd_vector x ) const noexcept
+    simd_vector bit_extract(simd_vector x) const noexcept
     {
-        return bit_extract_block_table( x, block_table );
+        return bit_extract_block_table_unrolled<UF>(x, block_table);
     }
 };
 
@@ -424,6 +441,8 @@ struct BitExtractBlockKernelSSE2
     __m128i blocks_simd[33]{};
     __m128i shifts_simd[33]{};
 
+    BitExtractBlockKernelSSE2() = default;
+
     explicit BitExtractBlockKernelSSE2(std::uint64_t const mask)
         : block_table(bit_extract_block_table_preprocess(mask))
     {
@@ -444,7 +463,7 @@ struct BitExtractBlockKernelSSE2
         // return _mm_loadu_si128(reinterpret_cast<__m128i const*>(a));
     }
 
-    static void store(simd_vector const v, std::uint64_t* out) noexcept
+    static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
         _mm_store_si128(reinterpret_cast<__m128i*>(out), v);
         // _mm_storeu_si128(reinterpret_cast<__m128i*>(out), v);
@@ -520,6 +539,8 @@ struct BitExtractBlockKernelAVX2
     __m256i blocks_simd[33]{};
     __m128i shifts_simd[33]{};
 
+    BitExtractBlockKernelAVX2() = default;
+
     explicit BitExtractBlockKernelAVX2(std::uint64_t const mask)
         : block_table(bit_extract_block_table_preprocess(mask))
     {
@@ -537,7 +558,7 @@ struct BitExtractBlockKernelAVX2
         // return _mm256_loadu_si256(reinterpret_cast<__m256i const*>(a));
     }
 
-    static void store(simd_vector const v, std::uint64_t* out) noexcept
+    static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
         _mm256_store_si256(reinterpret_cast<__m256i*>(out), v);
         // _mm256_storeu_si256(reinterpret_cast<__m256i*>(out), v);
@@ -615,6 +636,8 @@ struct BitExtractBlockKernelAVX512
     __m512i blocks_simd[33]{};
     __m128i shifts_simd[33]{};
 
+    BitExtractBlockKernelAVX512() = default;
+
     explicit BitExtractBlockKernelAVX512(std::uint64_t const mask)
         : block_table(bit_extract_block_table_preprocess(mask))
     {
@@ -632,7 +655,7 @@ struct BitExtractBlockKernelAVX512
         // return _mm512_loadu_si512( reinterpret_cast<__m512i const*>( a ));
     }
 
-    static void store(simd_vector const v, std::uint64_t* out) noexcept
+    static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
         _mm512_store_si512( reinterpret_cast<__m512i*>(out), v );
         // _mm512_storeu_si512( reinterpret_cast<__m512i*>(out), v );
@@ -708,6 +731,8 @@ struct BitExtractBlockKernelNEON
     uint64x2_t blocks_simd[33]{};
     int64x2_t  shifts_simd[33]{};  // signed: negative = shift right
 
+    BitExtractBlockKernelNEON() = default;
+
     explicit BitExtractBlockKernelNEON(std::uint64_t const mask)
         : block_table(bit_extract_block_table_preprocess(mask))
     {
@@ -725,7 +750,7 @@ struct BitExtractBlockKernelNEON
         return vld1q_u64(a);
     }
 
-    static void store(simd_vector const v, std::uint64_t* out) noexcept
+    static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
         vst1q_u64(out, v);
     }
@@ -775,3 +800,209 @@ private:
 };
 
 #endif
+
+// =================================================================================================
+//     SIMD Kernel Dispatcher
+// =================================================================================================
+
+/**
+ * @brief Runtime-configurable dispatcher for applying multiple bit-extraction kernels with
+ * compile-time mask count.
+ *
+ * This class bridges the gap between a runtime list of bit-extraction masks (e.g., provided as
+ * `std::vector<uint64_t>`) and performance-critical code that benefits from knowing the number
+ * of masks at compile time. Internally, the dispatcher converts the runtime vector into one of
+ * several `std::array<Kernel, N>` alternatives (for `N` in `[1..16]`) stored inside a
+ * `std::variant`. The arrays allow downstream algorithms to unroll loops over masks and
+ * generate optimal code, for up to 16 masks.
+ *
+ * Typical usage:
+ *
+ * ```
+ * std::vector<uint64_t> masks = {...};
+ * BitExtractKernelDispatcher<MyKernel> dispatcher(masks);
+ *
+ * dispatcher.run([&](auto const& kernels) {
+ *     for_each_spaced_kmer_simd(seq, span_k, kernels,
+ *         [&](size_t mask_idx, size_t pos, uint64_t value) {
+ *             // consume spaced k-mer
+ *         }
+ *     );
+ * });
+ * ```
+ *
+ * This class hence is merely an optimization to obtain performance through compile time knowledge.
+ * It is instead perfectly possible to just store the masks directly in a `std::vector` or such,
+ * and use them without any additional abstraction.
+ *
+ * @tparam Kernel Bit-extraction kernel type constructed from a mask.
+ */
+template <class Kernel>
+class BitExtractKernelDispatcher
+{
+public:
+
+    // --------------------------------------------------------------------
+    //     Constructors
+    // --------------------------------------------------------------------
+
+    /**
+     * @brief Construct from pre-built kernels.
+     */
+    explicit BitExtractKernelDispatcher(std::vector<Kernel> const& kernels)
+    {
+        kernels_ = build_storage_from_kernels_(kernels);
+    }
+
+    /**
+     * @brief Construct from raw masks of type `std::uint64_t`.
+     */
+    explicit BitExtractKernelDispatcher(std::vector<std::uint64_t> const& masks)
+    {
+        kernels_ = build_storage_from_masks_(masks);
+    }
+
+    // --------------------------------------------------------------------
+    //     Public members
+    // --------------------------------------------------------------------
+
+    /**
+     * @brief Call a user-provided function with the internally stored fixed-size kernel array.
+     *
+     * This dispatcher stores the kernels in a std::variant of std::array<Kernel, N>
+     * for N in [1..16]. This run() function selects the active alternative and invokes `f`
+     * exactly once with a const reference to the active kernel array
+     * (`std::array<Kernel, N> const&`).
+     *
+     * `F` must be invocable with a single argument of type `std::array<Kernel, N> const&`
+     * for all N in [1..16], because std::visit requires the visitor to be valid for every
+     * alternative. The return type of @p f is forwarded back to the caller.
+     */
+    template <class F>
+    decltype(auto) run(F&& f) const
+    {
+        return std::visit([&](auto const& arr) -> decltype(auto) {
+            return std::forward<F>(f)(arr);
+        }, kernels_);
+    }
+
+    /**
+     * @brief Get the number of kernels (masks) stored.
+     */
+    std::size_t size() const noexcept
+    {
+        // Visit the array that is actually stored in the variant, and get its size.
+        return std::visit([](auto const& arr) { return arr.size(); }, kernels_);
+    }
+
+    // --------------------------------------------------------------------
+    //     Internal members
+    // --------------------------------------------------------------------
+
+private:
+
+    template <std::size_t N>
+    using KernelArray = std::array<Kernel, N>;
+
+    // Storage for 1..16 (default). If another max value is needed, extend this list accordingly.
+    using Storage = std::variant<
+        KernelArray<1>,  KernelArray<2>,  KernelArray<3>,  KernelArray<4>,
+        KernelArray<5>,  KernelArray<6>,  KernelArray<7>,  KernelArray<8>,
+        KernelArray<9>,  KernelArray<10>, KernelArray<11>, KernelArray<12>,
+        KernelArray<13>, KernelArray<14>, KernelArray<15>, KernelArray<16>
+    >;
+
+    // -------------------------------------------
+    //     Build from kernels
+    // -------------------------------------------
+
+    template <std::size_t N>
+    static KernelArray<N> to_array_from_kernels_(const std::vector<Kernel>& vk)
+    {
+        // Copy over the kernels to the fixed size array.
+        KernelArray<N> a{};
+        for (std::size_t i = 0; i < N; ++i) {
+            a[i] = vk[i];
+        }
+        return a;
+    }
+
+    static Storage build_storage_from_kernels_(std::vector<Kernel> const& kernels)
+    {
+        std::size_t const n = kernels.size();
+        if (n == 0 || n > 16) {
+            throw std::invalid_argument("Need 1..16 masks");
+        }
+
+        switch (n) {
+            case 1:  return Storage{ to_array_from_kernels_<1>(  kernels )};
+            case 2:  return Storage{ to_array_from_kernels_<2>(  kernels )};
+            case 3:  return Storage{ to_array_from_kernels_<3>(  kernels )};
+            case 4:  return Storage{ to_array_from_kernels_<4>(  kernels )};
+            case 5:  return Storage{ to_array_from_kernels_<5>(  kernels )};
+            case 6:  return Storage{ to_array_from_kernels_<6>(  kernels )};
+            case 7:  return Storage{ to_array_from_kernels_<7>(  kernels )};
+            case 8:  return Storage{ to_array_from_kernels_<8>(  kernels )};
+            case 9:  return Storage{ to_array_from_kernels_<9>(  kernels )};
+            case 10: return Storage{ to_array_from_kernels_<10>( kernels )};
+            case 11: return Storage{ to_array_from_kernels_<11>( kernels )};
+            case 12: return Storage{ to_array_from_kernels_<12>( kernels )};
+            case 13: return Storage{ to_array_from_kernels_<13>( kernels )};
+            case 14: return Storage{ to_array_from_kernels_<14>( kernels )};
+            case 15: return Storage{ to_array_from_kernels_<15>( kernels )};
+            case 16: return Storage{ to_array_from_kernels_<16>( kernels )};
+            default: throw std::logic_error("unreachable");
+        }
+    }
+
+    // -------------------------------------------
+    //     Build from masks
+    // -------------------------------------------
+
+    template <std::size_t N>
+    static KernelArray<N> to_array_from_masks_(const std::vector<std::uint64_t>& masks)
+    {
+        // Directly construct the kernel from the mask.
+        // All our kernels take uint64 as constructor argument.
+        KernelArray<N> a{};
+        for (std::size_t i = 0; i < N; ++i) {
+            a[i] = Kernel{masks[i]};
+        }
+        return a;
+    }
+
+    static Storage build_storage_from_masks_(std::vector<std::uint64_t> const& masks)
+    {
+        std::size_t const n = masks.size();
+        if (n == 0 || n > 16) {
+            throw std::invalid_argument("Need 1..16 masks");
+        }
+
+        switch (n) {
+            case 1:  return Storage{ to_array_from_masks_<1>(  masks )};
+            case 2:  return Storage{ to_array_from_masks_<2>(  masks )};
+            case 3:  return Storage{ to_array_from_masks_<3>(  masks )};
+            case 4:  return Storage{ to_array_from_masks_<4>(  masks )};
+            case 5:  return Storage{ to_array_from_masks_<5>(  masks )};
+            case 6:  return Storage{ to_array_from_masks_<6>(  masks )};
+            case 7:  return Storage{ to_array_from_masks_<7>(  masks )};
+            case 8:  return Storage{ to_array_from_masks_<8>(  masks )};
+            case 9:  return Storage{ to_array_from_masks_<9>(  masks )};
+            case 10: return Storage{ to_array_from_masks_<10>( masks )};
+            case 11: return Storage{ to_array_from_masks_<11>( masks )};
+            case 12: return Storage{ to_array_from_masks_<12>( masks )};
+            case 13: return Storage{ to_array_from_masks_<13>( masks )};
+            case 14: return Storage{ to_array_from_masks_<14>( masks )};
+            case 15: return Storage{ to_array_from_masks_<15>( masks )};
+            case 16: return Storage{ to_array_from_masks_<16>( masks )};
+            default: throw std::logic_error("unreachable");
+        }
+    }
+
+    // --------------------------------------------------------------------
+    //     Data members
+    // --------------------------------------------------------------------
+
+    Storage kernels_;
+
+};

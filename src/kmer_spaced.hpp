@@ -177,3 +177,33 @@ inline std::uint64_t compute_spaced_kmer_hash(
     );
     return hash;
 }
+
+/**
+ * @brief Compute a simple "hash" of a sequence by xoring all spaced k-mers in the sequence,
+ * across a set of masks.
+ *
+ * This is just for benchmarking, to ensure that the values are actually used (and thus the
+ * compuation cannot be omitted by the compiler), as well as to ensure consistent results
+ * between different implementations.
+ */
+template<typename Mask, typename Enc, typename BitExtract>
+inline std::uint64_t compute_spaced_kmer_hash(
+    std::string const& seq, size_t const k, std::vector<Mask> const& masks,
+    Enc&& enc, BitExtract&& bit_ext
+) {
+    // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
+    std::uint64_t hash = 0;
+
+    for_each_kmer_2bit(
+        std::string_view(seq),
+        k,
+        enc,
+        [&](std::uint64_t kmer_word) {
+            // Extract the spaced k-mer, and combine it into the hash.
+            for( auto const& mask : masks ) {
+                hash ^= bit_ext( kmer_word, mask );
+            }
+        }
+    );
+    return hash;
+}

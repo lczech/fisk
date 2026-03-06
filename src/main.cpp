@@ -8,7 +8,8 @@
 
 #include "arg_parser.hpp"
 #include "bench_kmer_extract.hpp"
-#include "bench_kmer_spaced.hpp"
+#include "bench_kmer_spaced_single.hpp"
+#include "bench_kmer_spaced_multi.hpp"
 #include "bench_kmer_clark.hpp"
 #include "bench_bit_extract_blocks.hpp"
 #include "bench_bit_extract_weights.hpp"
@@ -66,7 +67,7 @@ int main(int argc, char **argv)
     parser.add_option(
         "--masks-file", "-m",
         "File path with masks, given as sequences of [01], one per line",
-        opts.k
+        opts.masks_file
     );
 
     parser.add_option(
@@ -132,15 +133,39 @@ int main(int argc, char **argv)
     }
 
     // Get the masks file
-    std::vector<std::string> masks;
+    std::vector<std::string> single_masks;
+    std::vector<std::vector<std::string>> multi_masks;
     if( opts.masks_file.size() ) {
-        masks = load_lines( opts.masks_file );
+        // Use the same set of masks in both cases
+        single_masks = load_lines( opts.masks_file );
+        multi_masks.push_back(single_masks);
     } else {
+        // Masks to use by default.
+        // The default.txt mask is identical to W22L31.txt
+        std::string const single_mask_file = "default.txt";
+        std::vector<std::string> multi_mask_files = {
+            "W10L15.txt",
+            "W14L31.txt",
+            "W18L31.txt",
+            "W22L31.txt",
+            "W26L31.txt"
+        };
+
+        // By default, we test single masks with the `default`,
+        // and multi across all masks with k<=32.
         std::cout << "No masks provided, using defaults\n";
-        auto bin_path = parent_directory(argv[0]);
-        masks = load_lines( (bin_path / "../masks/default.txt").string() );
+        auto bin_path = parent_directory(argv[0]) / "../masks/";
+        single_masks = load_lines( (bin_path / single_mask_file).string() );
+        for( auto const& mmf : multi_mask_files ) {
+            multi_masks.push_back(load_lines( (bin_path / mmf).string() ));
+        }
     }
-    std::cout << "Using " << masks.size() << " masks\n";
+    std::cout << "Using " << single_masks.size() << " single masks\n";
+    std::cout << "Using " << multi_masks.size() << " multi mask sets with";
+    for( auto const& masks : multi_masks ) {
+        std::cout << " " << masks.size();
+    }
+    std::cout << " masks\n";
 
     // Prepare output directory
     std::filesystem::path out_dir;
@@ -195,10 +220,16 @@ int main(int argc, char **argv)
         }
     }
 
-    // Spaced kmers
+    // Spaced kmers, single mask
     {
-        auto os_kmer_spaced = get_ofstream(out_dir, "kmer_spaced.csv" );
-        bench_kmer_spaced( sequences, masks, os_kmer_spaced );
+        auto os_kmer_spaced_single = get_ofstream(out_dir, "kmer_spaced_single.csv" );
+        bench_kmer_spaced_single( sequences, single_masks, os_kmer_spaced_single );
+    }
+
+    // Spaced kmers, multi masks
+    {
+        auto os_kmer_spaced_multi = get_ofstream(out_dir, "kmer_spaced_multi.csv" );
+        bench_kmer_spaced_multi( sequences, multi_masks, os_kmer_spaced_multi );
     }
 
     // Clark

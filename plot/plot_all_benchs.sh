@@ -47,15 +47,26 @@ for EXT in png svg ; do
     --out ${DIR}/kmer_extract_bars.${EXT}
 
 
-  # Kmer Spaced
+  # Kmer Spaced Single
 
   python ./plot/plot_kmer_spaced.py \
-    ${DIR}/kmer_spaced.csv\
-    --out ${DIR}/kmer_spaced.${EXT}
+    ${DIR}/kmer_spaced_single.csv\
+    --out ${DIR}/kmer_spaced_single.${EXT}
 
   python ./plot/plot_impl_summary.py \
-    ${DIR}/kmer_spaced.csv\
-    --out ${DIR}/kmer_spaced_bars.${EXT}
+    ${DIR}/kmer_spaced_single.csv\
+    --out ${DIR}/kmer_spaced_single_bars.${EXT}
+
+
+  # Kmer Spaced Multi
+
+  python ./plot/plot_kmer_spaced.py \
+    ${DIR}/kmer_spaced_multi.csv\
+    --out ${DIR}/kmer_spaced_multi.${EXT}
+
+  python ./plot/plot_impl_summary.py \
+    ${DIR}/kmer_spaced_multi.csv\
+    --out ${DIR}/kmer_spaced_multi_bars.${EXT}
 
 
   # Bit Extract Implementations

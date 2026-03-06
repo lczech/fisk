@@ -32,6 +32,14 @@ BENCHMARKS_KEEP = {
     # "bit_extract_instlatx",
     # "bit_extract_zp7",
 
+    # simd implementations
+    "compute_spaced_kmer_hash_simd_nt_sse2",
+    "compute_spaced_kmer_hash_simd_bt_sse2",
+    "compute_spaced_kmer_hash_simd_nt_avx2",
+    "compute_spaced_kmer_hash_simd_bt_avx2",
+    "compute_spaced_kmer_hash_simd_nt_scalar",
+    "compute_spaced_kmer_hash_simd_bt_scalar",
+
     # Extract / seq enc
     # "char_to_nt_ascii_nothrow_re",
     # "char_to_nt_ascii_nothrow_shift",

@@ -18,7 +18,7 @@
 /**
  * @brief Benchmark spaced k-mer extract with single masks.
  */
-inline void bench_kmer_spaced(
+inline void bench_kmer_spaced_single(
     std::vector<std::string> const& sequences,
     std::vector<std::string> const& masks,
     std::ostream& csv_os
@@ -35,7 +35,8 @@ inline void bench_kmer_spaced(
     std::size_t const repeats = 8;
 
     // User output
-    std::cout << "\n=== spaced k-mer extract ===\n";
+    std::string const suite_title = "kmer_spaced_single";
+    std::cout << "\n=== spaced k-mer extract single mask ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     // Prepare csv output file with benchmark results
@@ -77,7 +78,7 @@ inline void bench_kmer_spaced(
         #endif
 
         // Prepare a benchmark with repititions
-        Microbench<std::string> suite("kmer_spaced");
+        Microbench<std::string> suite(suite_title);
         suite
             .rounds(rounds)
             .repeats(repeats)
@@ -107,46 +108,10 @@ inline void bench_kmer_spaced(
                 }
             ),
 
-            // char_to_nt_switch
-            // #if defined(HAVE_BMI2)
-            // bench(
-            //     "bit_extract_pext_char_to_nt_switch",
-            //     [&](std::string const& seq){
-            //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_switch, bit_extract_pext
-            //         );
-            //     }
-            // ),
-            // #endif
-            // bench(
-            //     "bit_extract_bitloop_char_to_nt_switch",
-            //     [&](std::string const& seq){
-            //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_switch, bit_extract_bitloop
-            //         );
-            //     }
-            // ),
-            // bench(
-            //     "bit_extract_byte_table_char_to_nt_switch",
-            //     [&](std::string const& seq){
-            //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_switch, bit_extract_byte_table
-            //         );
-            //     }
-            // ),
-            // bench(
-            //     "bit_extract_block_table_char_to_nt_switch",
-            //     [&](std::string const& seq){
-            //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_block_mask, char_to_nt_switch, bit_extract_block_table
-            //         );
-            //     }
-            // ),
-
             // char_to_nt_table
             #if defined(HAVE_BMI2)
             bench(
-                "bit_extract_pext_char_to_nt_table",
+                "bit_extract_pext",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
                         seq, k, bit_ext_mask, char_to_nt_table_throw, bit_extract_pext
@@ -155,7 +120,7 @@ inline void bench_kmer_spaced(
             ),
             #endif
             bench(
-                "bit_extract_bitloop_char_to_nt_table",
+                "bit_extract_bitloop",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
                         seq, k, bit_ext_mask, char_to_nt_table_throw, bit_extract_bitloop
@@ -163,7 +128,7 @@ inline void bench_kmer_spaced(
                 }
             ),
             bench(
-                "bit_extract_byte_table_char_to_nt_table",
+                "bit_extract_byte_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
                         seq, k, bit_ext_mask, char_to_nt_table_throw, bit_extract_byte_table
@@ -171,7 +136,7 @@ inline void bench_kmer_spaced(
                 }
             ),
             bench(
-                "bit_extract_block_table_char_to_nt_table",
+                "bit_extract_block_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
                         seq, k, bit_ext_block_mask, char_to_nt_table_throw, bit_extract_block_table
@@ -179,7 +144,31 @@ inline void bench_kmer_spaced(
                 }
             ),
             bench(
-                "bit_extract_network_table_char_to_nt_table",
+                "bit_extract_block_table_unrolled2",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash(
+                        seq, k, bit_ext_block_mask, char_to_nt_table_throw, bit_extract_block_table_unrolled<2>
+                    );
+                }
+            ),
+            bench(
+                "bit_extract_block_table_unrolled4",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash(
+                        seq, k, bit_ext_block_mask, char_to_nt_table_throw, bit_extract_block_table_unrolled<4>
+                    );
+                }
+            ),
+            bench(
+                "bit_extract_block_table_unrolled8",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash(
+                        seq, k, bit_ext_block_mask, char_to_nt_table_throw, bit_extract_block_table_unrolled<8>
+                    );
+                }
+            ),
+            bench(
+                "bit_extract_network_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
                         seq, k, bit_ext_network_table, char_to_nt_table_throw, bit_extract_network_table
@@ -277,6 +266,42 @@ inline void bench_kmer_spaced(
                 }
             )
 
+            // char_to_nt_switch
+            // #if defined(HAVE_BMI2)
+            // bench(
+            //     "bit_extract_pext_char_to_nt_switch",
+            //     [&](std::string const& seq){
+            //         return compute_spaced_kmer_hash(
+            //             seq, k, bit_ext_mask, char_to_nt_switch, bit_extract_pext
+            //         );
+            //     }
+            // ),
+            // #endif
+            // bench(
+            //     "bit_extract_bitloop_char_to_nt_switch",
+            //     [&](std::string const& seq){
+            //         return compute_spaced_kmer_hash(
+            //             seq, k, bit_ext_mask, char_to_nt_switch, bit_extract_bitloop
+            //         );
+            //     }
+            // ),
+            // bench(
+            //     "bit_extract_byte_table_char_to_nt_switch",
+            //     [&](std::string const& seq){
+            //         return compute_spaced_kmer_hash(
+            //             seq, k, bit_ext_mask, char_to_nt_switch, bit_extract_byte_table
+            //         );
+            //     }
+            // ),
+            // bench(
+            //     "bit_extract_block_table_char_to_nt_switch",
+            //     [&](std::string const& seq){
+            //         return compute_spaced_kmer_hash(
+            //             seq, k, bit_ext_block_mask, char_to_nt_switch, bit_extract_block_table
+            //         );
+            //     }
+            // ),
+
             // char_to_nt_ascii
             // #if defined(HAVE_BMI2)
             // bench(
@@ -316,7 +341,7 @@ inline void bench_kmer_spaced(
         );
 
         std::string case_label = "mask=" + std::to_string(m);
-        write_csv_rows(csv_os, "kmer_spaced", case_label, results);
+        write_csv_rows(csv_os, suite_title, case_label, results);
     }
     if( stdout_is_terminal() ) {
         std::cout << "\n";
