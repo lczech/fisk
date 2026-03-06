@@ -27,6 +27,7 @@ inline void bench_kmer_clark(
     size_t const k = 31;
 
     // User output
+    std::string const suite_title = "kmer_clark";
     std::cout << "\n=== spaced k-mer clark ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
@@ -38,7 +39,7 @@ inline void bench_kmer_clark(
     std::vector<std::string> masks = {{ "T295", "T38570", "T58570" }};
 
     // Prepare a benchmark with repititions
-    Microbench<std::string> suite("kmer_clark");
+    Microbench<std::string> suite(suite_title);
     suite
         .rounds(rounds)
         .repeats(repeats)
@@ -67,5 +68,5 @@ inline void bench_kmer_clark(
     );
 
     std::string case_label = "n/a";
-    write_csv_rows(csv_os, "kmer_clark", case_label, results);
+    write_csv_rows(csv_os, suite_title, case_label, results);
 }

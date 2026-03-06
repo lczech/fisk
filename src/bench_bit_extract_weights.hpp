@@ -94,6 +94,7 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
     std::size_t const repeats = 32;
 
     // User output
+    std::string const suite_title = "bit_extract_weights";
     std::cout << "\n=== bit extract weights ===\n";
     std::cout << "n=" << n << ", rounds=" << rounds << ", repeats=" << repeats << "\n";
 
@@ -123,7 +124,7 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
             return make_inputs( n, w, seed, adaptive_counts );
         };
 
-        Microbench<BitExtractInput> suite("bit_extract_weights");
+        Microbench<BitExtractInput> suite(suite_title);
         suite.rounds(rounds).repeats(repeats);
 
         auto results = suite.run(
@@ -186,7 +187,7 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
             })
         );
 
-        write_csv_rows(csv_os, "bit_extract_weights", case_label, results);
+        write_csv_rows(csv_os, suite_title, case_label, results);
     }
     if( stdout_is_terminal() ) {
         std::cout << "\n";

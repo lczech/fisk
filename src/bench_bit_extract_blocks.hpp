@@ -274,6 +274,7 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
     std::size_t const repeats = 16;
 
     // User output
+    std::string const suite_title = "bit_extract_blocks";
     std::cout << "\n=== bit extract blocks ===\n";
     std::cout << "n=" << n << ", rounds=" << rounds << ", repeats=" << repeats << "\n";
 
@@ -302,7 +303,7 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
             return make_input_blocks( n, runs, seed, adaptive_counts );
         };
 
-        Microbench<BitExtractInput> suite("bit_extract_blocks");
+        Microbench<BitExtractInput> suite(suite_title);
         suite.rounds(rounds).repeats(repeats);
 
         auto results = suite.run(
@@ -365,7 +366,7 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
             })
         );
 
-        write_csv_rows(csv_os, "bit_extract_blocks", case_label, results);
+        write_csv_rows(csv_os, suite_title, case_label, results);
     }
     if( stdout_is_terminal() ) {
         std::cout << "\n";

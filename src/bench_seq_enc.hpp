@@ -26,10 +26,11 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
     std::size_t const repeats = 16;
 
     // User output
+    std::string const suite_title = "seq_encode";
     std::cout << "\n=== sequence encode ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
-    Microbench<std::string> suite("encode_2bit");
+    Microbench<std::string> suite(suite_title);
     suite
         .rounds(rounds)
         .repeats(repeats)
@@ -88,5 +89,5 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
 
     std::string const case_label = "n/a";
     write_csv_header(csv_os);
-    write_csv_rows(csv_os, "seq_encode", case_label, results);
+    write_csv_rows(csv_os, suite_title, case_label, results);
 }

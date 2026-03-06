@@ -39,6 +39,7 @@ inline void bench_kmer_extract(
     std::size_t const repeats = 8;
 
     // User output
+    std::string const suite_title = "kmer_extract";
     std::cout << "\n=== k-mer extract ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
@@ -51,7 +52,7 @@ inline void bench_kmer_extract(
             std::cout << "\rk " << std::setw(2) << k << std::flush;
         }
 
-        Microbench<std::string> suite("kmer_extract");
+        Microbench<std::string> suite(suite_title);
         suite
             .rounds(rounds)
             .repeats(repeats)
@@ -165,7 +166,7 @@ inline void bench_kmer_extract(
         );
 
         std::string case_label = "k=" + std::to_string(k);
-        write_csv_rows(csv_os, "kmer_extract", case_label, results);
+        write_csv_rows(csv_os, suite_title, case_label, results);
     }
     if( stdout_is_terminal() ) {
         std::cout << "\n";
