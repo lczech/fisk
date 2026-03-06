@@ -13,11 +13,17 @@
 // =================================================================================================
 
 /**
- * @brief Iterate a sequence, extract all k-mers from it (using bit shifts),
+ * @brief Iterate a sequence, extract all valid k-mers from it (using bit shifts),
  * and call a callback function on each k-mer.
  *
- * @tparam Enc  Encoding function to turn characters into two bit encoding.
- * @tparam Func Callback function to be called for each k-mer in the iteration.
+ * The encoder `enc` must return:
+ *   - 0,1,2,3 for valid A/C/G/T-like symbols
+ *   - any value >= 4 for invalid symbols
+ *
+ * Any k-mer overlapping an invalid symbol is skipped.
+ *
+ * @tparam Enc  Encoding function to turn characters into two-bit encoding.
+ * @tparam Func Callback function to be called for each valid k-mer.
  */
 template<typename Enc, typename Func>
 inline void for_each_kmer_2bit(
@@ -29,35 +35,41 @@ inline void for_each_kmer_2bit(
     // lowest 2*k bits of a uint64_t, using the two-bit encoding provided by `enc`.
 
     // Boundary checks
-    if (k == 0 || k > 32 ) {
-        throw std::runtime_error( "Invalid call to k-mer extraction with k not in [1, 32]" );
+    if (k == 0 || k > 32) {
+        throw std::runtime_error(
+            "Invalid call to k-mer extraction with k not in [1, 32]"
+        );
     }
-    if( seq.size() < k ) {
+    if (seq.size() < k) {
         return;
     }
 
-    const std::size_t n    = seq.size();
-    const char*       data = seq.data();
+    // Shorthands for data access
+    std::size_t const seq_len = seq.size();
+    char const*       data    = seq.data();
 
     // Mask to keep only the lowest 2*k bits.
     // This works for all k in [1, 32].
-    const std::uint64_t mask = (k == 32)
-        ? ~std::uint64_t{0}                         // all 64 bits
-        : ((std::uint64_t{1} << (2 * k)) - 1u);     // lower 2*k bits set
+    std::uint64_t const mask = (k == 32)
+        ? ~std::uint64_t{0}
+        : ((std::uint64_t{1} << (2 * k)) - 1u);
 
-    // Build the first k-mer.
     std::uint64_t kmer = 0;
-    for (std::size_t i = 0; i < k; ++i) {
-        kmer = (kmer << 2) | enc(data[i]);
-    }
-    func(kmer);
+    std::size_t valid = 0;
+    for( std::size_t i = 0; i < seq_len; ++i ) {
+        std::uint8_t const code = enc(data[i]);
 
-    // Slide the window over the sequence.
-    const std::size_t stop = n - k;
-    for (std::size_t i = 1; i <= stop; ++i) {
-        // Drop the highest 2 bits by masking, then append the new base.
-        kmer = ((kmer << 2) & mask) | enc(data[i + k - 1]);
-        func(kmer);
+        // Always shift in the low 2 bits. For invalid symbols this value is ignored,
+        // because all overlapping k-mers will be skipped until the bad position
+        // has slid out of the window.
+        kmer = ((kmer << 2) & mask) | (code & 0x03u);
+        valid = (code < 4) ? (valid + 1) : 0;
+
+        // We can emit once we have seen at least k characters, and the current
+        // k-mer window does not overlap the most recent invalid character.
+        if( valid >= k ) {
+            func(kmer);
+        }
     }
 }
 
@@ -73,27 +85,38 @@ template<typename Enc, typename Func>
 inline void for_each_kmer_2bit_reextract(
     std::string_view seq, std::size_t k, Enc&& enc, Func&& func
 ) {
-    // Same as above, but each kmer is extracted separately. Not efficient, and worse for larger k.
+    // Same as above, but each k-mer is extracted separately.
+    // Not efficient, and worse for larger k. Meant only for benchmarking.
 
     // Boundary checks
-    if (k == 0 || k > 32 ) {
-        throw std::runtime_error( "Invalid call to k-mer extraction with k not in [1, 32]" );
+    if (k == 0 || k > 32) {
+        throw std::runtime_error(
+            "Invalid call to k-mer extraction with k not in [1, 32]"
+        );
     }
-    if( seq.size() < k ) {
+    if (seq.size() < k) {
         return;
     }
 
-    const std::size_t n    = seq.size();
-    const char*       data = seq.data();
+    // Shorthands for data access
+    std::size_t const seq_len = seq.size();
+    char const*       data    = seq.data();
 
     // Slide the window over the sequence.
-    const std::size_t stop = n - k;
+    std::size_t const stop = seq_len - k;
     for (std::size_t i = 0; i <= stop; ++i) {
         std::uint64_t kmer = 0;
+        bool valid = true;
+
         for (std::size_t x = 0; x < k; ++x) {
-            kmer = (kmer << 2) | enc(data[i+x]);
+            std::uint8_t const code = static_cast<std::uint8_t>(enc(data[i + x]));
+            valid &= (code < 4);
+            kmer = (kmer << 2) | (code & 0x3u);
         }
-        func(kmer);
+
+        if (valid) {
+            func(kmer);
+        }
     }
 }
 

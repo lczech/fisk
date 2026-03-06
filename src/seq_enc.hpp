@@ -29,7 +29,7 @@
 /**
  * @brief Get the two-bit encoding of a char, using a series of `if` statements, non-throwing.
  */
-inline constexpr std::uint8_t char_to_nt_ifs_nothrow(char ch) noexcept
+inline constexpr std::uint8_t char_to_nt_ifs(char ch) noexcept
 {
     // Make char lower case. The std implementation is locale dependend,
     // and very slow; we hence assume ASCII and simply set the lower case bit.
@@ -51,23 +51,6 @@ inline constexpr std::uint8_t char_to_nt_ifs_nothrow(char ch) noexcept
     // if(ch == 'T' || ch == 't') return 3u;
 }
 
-/**
- * @brief Get the two-bit encoding of a char, using a series of `if` statements,
- * throwing an exception if the char is not in `ACGT`.
- */
-inline constexpr std::uint8_t char_to_nt_ifs_throw(char ch)
-{
-    // Same as above
-    ch = (ch | 0x20);
-    if(ch == 'a') return 0u;
-    if(ch == 'c') return 1u;
-    if(ch == 'g') return 2u;
-    if(ch == 't') return 3u;
-	throw std::runtime_error(
-        "Handling of non-ACGT characters not supported in this simple benchmark"
-    );
-}
-
 // -----------------------------------------------------------------------------
 //     switch
 // -----------------------------------------------------------------------------
@@ -75,7 +58,7 @@ inline constexpr std::uint8_t char_to_nt_ifs_throw(char ch)
 /**
  * @brief Get the two-bit encoding of a char, using switch statement, non-throwing.
  */
-inline constexpr std::uint8_t char_to_nt_switch_nothrow(char ch) noexcept
+inline constexpr std::uint8_t char_to_nt_switch(char ch) noexcept
 {
     switch( ch ) {
         case 'A': case 'a': return 0u;
@@ -87,33 +70,15 @@ inline constexpr std::uint8_t char_to_nt_switch_nothrow(char ch) noexcept
     }
 }
 
-/**
- * @brief Get the two-bit encoding of a char, using switch statement,
- * throwing an exception if the char is not in `ACGT`.
- */
-inline constexpr std::uint8_t char_to_nt_switch_throw(char ch)
-{
-    switch( ch ) {
-        case 'A': case 'a': return 0u;
-        case 'C': case 'c': return 1u;
-        case 'G': case 'g': return 2u;
-        case 'T': case 't': return 3u;
-        default:
-            throw std::runtime_error(
-                "Handling of non-ACGT characters not supported in this simple benchmark"
-            );
-    }
-}
-
 // -----------------------------------------------------------------------------
 //     ascii
 // -----------------------------------------------------------------------------
 
 /**
  * @brief Get the two-bit encoding of a char, using bit twiddling to utilize a coincidence
- * in ASCII code, non-throwing.
+ * in ASCII code, returning invalid code `4` if the char is not in `ACGT`.
  */
-inline constexpr std::uint8_t char_to_nt_ascii_nothrow(char c) noexcept
+inline constexpr std::uint8_t char_to_nt_ascii(char c) noexcept
 {
     // We here exploit the ASCII code of the characters.
     //
@@ -132,32 +97,6 @@ inline constexpr std::uint8_t char_to_nt_ascii_nothrow(char c) noexcept
     // we want. Luckily, the fourth bit is always zero here, so that it does not mess this up.
     // This works for upper and lower case, as the case bit is in the higher four bits,
     // which are ignored here anyway.
-
-    auto const u = static_cast<std::uint8_t>(c);
-    return ((u >> 1) ^ (u >> 2)) & 0x03u;
-}
-
-/**
- * @brief Get the two-bit encoding of a char, using bit twiddling to utilize a coincidence
- * in ASCII code, throwing an exception if the char is not in `ACGT`.
- */
-inline constexpr std::uint8_t char_to_nt_ascii_throw(char c)
-{
-    // // The check below is the fastest in our tests;
-    // // faster than using toupper() to avoid the extra case checks.
-    // if(
-    //     ( c != 'A' ) && ( c != 'C' ) && ( c != 'G' ) && ( c != 'T' ) &&
-    //     ( c != 'a' ) && ( c != 'c' ) && ( c != 'g' ) && ( c != 't' )
-    // ) {
-    //     throw std::runtime_error(
-    //         "Handling of non-ACGT characters not supported in this simple benchmark"
-    //     );
-    //     // return 4;
-    // }
-
-    // auto const u = static_cast<std::uint8_t>(c);
-    // return ((u >> 1) ^ (u >> 2)) & 3;
-
 
     // We need ASCII for the following to work. Probably fine, but doesn't hurt to check.
     static_assert( static_cast<int>('A') == 0x41, "Non-ASCII char set" );
@@ -183,13 +122,30 @@ inline constexpr std::uint8_t char_to_nt_ascii_throw(char c)
     // t & 31 = 20
     constexpr std::uint32_t valid_mask = (1u << 1) | (1u << 3) | (1u << 7) | (1u << 20);
     std::uint32_t const is_valid = (valid_mask >> (u & 31u)) & 1u;
-    // return is_valid ? e : 4;
-    return is_valid
-        ? e
-        : throw std::runtime_error(
-            "Handling of non-ACGT characters not supported in this simple benchmark"
-        )
-    ;
+    return is_valid ? e : 4;
+
+    // Alternative implementation with simple checks. Somewhat slower due to all the comparisons.
+    // if(
+    //     ( c != 'A' ) && ( c != 'C' ) && ( c != 'G' ) && ( c != 'T' ) &&
+    //     ( c != 'a' ) && ( c != 'c' ) && ( c != 'g' ) && ( c != 't' )
+    // ) {
+    //     return 4;
+    // }
+
+    // auto const u = static_cast<std::uint8_t>(c);
+    // return ((u >> 1) ^ (u >> 2)) & 3;
+}
+
+/**
+ * @brief Get the two-bit encoding of a char, using bit twiddling to utilize a coincidence
+ * in ASCII code, without char validity check. Only use when it is clear that the input is
+ * in `ACGT`.
+ */
+inline constexpr std::uint8_t char_to_nt_ascii_unchecked(char c) noexcept
+{
+    // Same logic as above.
+    auto const u = static_cast<std::uint8_t>(c);
+    return ((u >> 1) ^ (u >> 2)) & 0x03u;
 }
 
 // -----------------------------------------------------------------------------
@@ -198,6 +154,11 @@ inline constexpr std::uint8_t char_to_nt_ascii_throw(char c)
 
 // Another typical implementation: ascii char lookup table.
 // The table is hardcoded here, to allow static constexpr inlining.
+
+/**
+ * @brief Magic value for the positions in seq_nt4_table that are not `ACGT` or `acgt`.
+ */
+constexpr std::uint8_t SEQ_NT4_INVALID = 4;
 
 /**
  * @brief Lookup table for ASCII to two-bit encoding of nucleotides.
@@ -225,29 +186,10 @@ constexpr std::uint8_t seq_nt4_table[256] = {
 };
 
 /**
- * @brief Magic value for the positions in seq_nt4_table that are not `ACGT` or `acgt`.
- */
-constexpr std::uint8_t SEQ_NT4_INVALID = 4;
-
-/**
- * @brief Get the two-bit encoding of a char, using a lookup table, non-throwing.
- */
-inline constexpr std::uint8_t char_to_nt_table_throw(char c)
-{
-    auto const r = seq_nt4_table[static_cast<std::uint8_t>(c)];
-    if( r == SEQ_NT4_INVALID ) {
-        throw std::runtime_error(
-            "Handling of non-ACGT characters not supported in this simple benchmark"
-        );
-    }
-    return r;
-}
-
-/**
  * @brief Get the two-bit encoding of a char, using a lookup table,
  * throwing an exception if the char is not in `ACGT`.
  */
-inline constexpr std::uint8_t char_to_nt_table_nothrow(char c) noexcept
+inline constexpr std::uint8_t char_to_nt_table(char c) noexcept
 {
     return seq_nt4_table[static_cast<std::uint8_t>(c)];
 }

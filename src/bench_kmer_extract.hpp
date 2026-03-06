@@ -66,101 +66,53 @@ inline void bench_kmer_extract(
 
             // Full re-extract
             bench(
-                "char_to_nt_ifs_throw_re",
+                "char_to_nt_ifs_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ifs_throw);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ifs);
                 }
             ),
             bench(
-                "char_to_nt_ifs_nothrow_re",
+                "char_to_nt_switch_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ifs_nothrow);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_switch);
                 }
             ),
             bench(
-                "char_to_nt_switch_throw_re",
+                "char_to_nt_table_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_switch_throw);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_table);
                 }
             ),
             bench(
-                "char_to_nt_switch_nothrow_re",
+                "char_to_nt_ascii_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_switch_nothrow);
-                }
-            ),
-            bench(
-                "char_to_nt_table_throw_re",
-                [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_table_throw);
-                }
-            ),
-            bench(
-                "char_to_nt_table_nothrow_re",
-                [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_table_nothrow);
-                }
-            ),
-            bench(
-                "char_to_nt_ascii_throw_re",
-                [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ascii_throw);
-                }
-            ),
-            bench(
-                "char_to_nt_ascii_nothrow_re",
-                [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ascii_nothrow);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ascii);
                 }
             ),
 
             // Shift bits
             bench(
-                "char_to_nt_ifs_throw_shift",
+                "char_to_nt_ifs_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_ifs_throw);
+                    return compute_kmer_hash(seq, k, char_to_nt_ifs);
                 }
             ),
             bench(
-                "char_to_nt_ifs_nothrow_shift",
+                "char_to_nt_switch_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_ifs_nothrow);
+                    return compute_kmer_hash(seq, k, char_to_nt_switch);
                 }
             ),
             bench(
-                "char_to_nt_switch_throw_shift",
+                "char_to_nt_table_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_switch_throw);
+                    return compute_kmer_hash(seq, k, char_to_nt_table);
                 }
             ),
             bench(
-                "char_to_nt_switch_nothrow_shift",
+                "char_to_nt_ascii_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_switch_nothrow);
-                }
-            ),
-            bench(
-                "char_to_nt_table_throw_shift",
-                [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_table_throw);
-                }
-            ),
-            bench(
-                "char_to_nt_table_nothrow_shift",
-                [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_table_nothrow);
-                }
-            ),
-            bench(
-                "char_to_nt_ascii_throw_shift",
-                [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_ascii_throw);
-                }
-            ),
-            bench(
-                "char_to_nt_ascii_nothrow_shift",
-                [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_ascii_nothrow);
+                    return compute_kmer_hash(seq, k, char_to_nt_ascii);
                 }
             )
         );

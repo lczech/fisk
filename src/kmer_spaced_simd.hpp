@@ -84,7 +84,7 @@ inline void for_each_spaced_kmer_simd(
         // Inner loop to fill all SIMD lanes with consecutive kmers.
         #pragma unroll
         for( std::size_t lane = 0; lane < L; ++lane ) {
-            std::uint8_t const code = char_to_nt_table_nothrow(seq[i + lane]);
+            std::uint8_t const code = char_to_nt_table(seq[i + lane]);
 
             // Check for input char validity, and reset the kmer if not.
             if( code == SEQ_NT4_INVALID ) {
@@ -119,7 +119,7 @@ inline void for_each_spaced_kmer_simd(
     // Tail, same as above, but scalar
     for(; i < seq.size(); ++i) {
         // Process the next input char
-        std::uint8_t const code = char_to_nt_table_nothrow(seq[i]);
+        std::uint8_t const code = char_to_nt_table(seq[i]);
         if( code == SEQ_NT4_INVALID ) {
             kmer = 0;
             valid_run = 0;
@@ -199,7 +199,7 @@ inline void for_each_spaced_kmer_simd(
         // Inner loop to fill all SIMD lanes with consecutive kmers.
         #pragma unroll
         for( std::size_t lane = 0; lane < L; ++lane ) {
-            std::uint8_t const code = char_to_nt_table_nothrow(seq[i + lane]);
+            std::uint8_t const code = char_to_nt_table(seq[i + lane]);
 
             // Check for input char validity, and reset the kmer if not.
             if( code == SEQ_NT4_INVALID ) {
@@ -242,7 +242,7 @@ inline void for_each_spaced_kmer_simd(
     // Tail, same as above, but scalar
     for (; i < seq.size(); ++i) {
         // Process the next input char
-        std::uint8_t const code = char_to_nt_table_nothrow(seq[i]);
+        std::uint8_t const code = char_to_nt_table(seq[i]);
         if( code == SEQ_NT4_INVALID ) {
             kmer = 0;
             valid_run = 0;

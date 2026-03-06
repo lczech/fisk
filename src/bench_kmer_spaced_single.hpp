@@ -114,7 +114,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_pext",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_mask, char_to_nt_table_throw, bit_extract_pext
+                        seq, k, bit_ext_mask, char_to_nt_table, bit_extract_pext
                     );
                 }
             ),
@@ -123,7 +123,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_bitloop",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_mask, char_to_nt_table_throw, bit_extract_bitloop
+                        seq, k, bit_ext_mask, char_to_nt_table, bit_extract_bitloop
                     );
                 }
             ),
@@ -131,7 +131,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_byte_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_mask, char_to_nt_table_throw, bit_extract_byte_table
+                        seq, k, bit_ext_mask, char_to_nt_table, bit_extract_byte_table
                     );
                 }
             ),
@@ -139,7 +139,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_block_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_mask, char_to_nt_table_throw, bit_extract_block_table
+                        seq, k, bit_ext_block_mask, char_to_nt_table, bit_extract_block_table
                     );
                 }
             ),
@@ -147,7 +147,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_block_table_unrolled2",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_mask, char_to_nt_table_throw, bit_extract_block_table_unrolled<2>
+                        seq, k, bit_ext_block_mask, char_to_nt_table, bit_extract_block_table_unrolled<2>
                     );
                 }
             ),
@@ -155,7 +155,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_block_table_unrolled4",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_mask, char_to_nt_table_throw, bit_extract_block_table_unrolled<4>
+                        seq, k, bit_ext_block_mask, char_to_nt_table, bit_extract_block_table_unrolled<4>
                     );
                 }
             ),
@@ -163,7 +163,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_block_table_unrolled8",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_mask, char_to_nt_table_throw, bit_extract_block_table_unrolled<8>
+                        seq, k, bit_ext_block_mask, char_to_nt_table, bit_extract_block_table_unrolled<8>
                     );
                 }
             ),
@@ -171,7 +171,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_network_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_network_table, char_to_nt_table_throw, bit_extract_network_table
+                        seq, k, bit_ext_network_table, char_to_nt_table, bit_extract_network_table
                     );
                 }
             ),
