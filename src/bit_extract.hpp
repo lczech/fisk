@@ -211,7 +211,7 @@ struct BitExtractBlockTable
     // is indicated by the first mask that is 0. This way, we do not have to
     // add another variable here to keep track of the number of blocks.
     std::array<std::uint64_t, 33> blocks{};
-    std::array<std::uint64_t, 33> shifts{};
+    std::array<std::uint8_t,  33> shifts{};
 };
 
 /**
@@ -220,8 +220,6 @@ struct BitExtractBlockTable
 inline BitExtractBlockTable bit_extract_block_table_preprocess( std::uint64_t mask )
 {
     BitExtractBlockTable table;
-    // table.masks.resize( 32, 0 );
-    // table.shifts.resize( 32, 0 );
 
     // Helper: build a contiguous run mask of length len at bit position start.
     auto make_run_mask64 = [](unsigned start, unsigned len) -> std::uint64_t
@@ -262,10 +260,11 @@ inline BitExtractBlockTable bit_extract_block_table_preprocess( std::uint64_t ma
 
         // Sanity check. Should not be possible to have more than 32 values.
         assert( arr_idx < 32 );
+        assert( shift < 64 );
 
         // Add to the table.
         table.blocks[arr_idx] = block_mask;
-        table.shifts[arr_idx] = shift;
+        table.shifts[arr_idx] = static_cast<std::uint8_t>(shift);
         ++arr_idx;
         out_pos += len;
     }
@@ -295,66 +294,47 @@ inline std::uint64_t bit_extract_block_table(
 }
 
 /**
- * @brief Bit extract via Block Shift table, 2-fold unrolled.
+ * @brief Helper for bit_extract_block_table_unrolled() to run the unrolled block table for one chunk.
  */
-inline std::uint64_t bit_extract_block_table_unrolled2(
-    std::uint64_t x, BitExtractBlockTable const& bt
-) noexcept {
-    // Same as above, but 2-fold unrolled. We might overshoot, if the number of blocks of
-    // consecutive 1s is not divisible by the unrolling size, but that is fine.
-    // In that case, we are masking with zeros in those masks, so nothing happens.
-    assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
+template<std::size_t... Is>
+inline std::uint64_t bit_extract_block_table_chunk_(
+    std::uint64_t x,
+    BitExtractBlockTable const& bt,
+    std::size_t i,
+    std::index_sequence<Is...>
+) noexcept
+{
     std::uint64_t res = 0;
-    size_t i = 0;
-    while(bt.blocks[i]) {
-        res |= (x & bt.blocks[i+0]) >> bt.shifts[i+0];
-        res |= (x & bt.blocks[i+1]) >> bt.shifts[i+1];
-        i += 2;
-    }
+    ((res |= (x & bt.blocks[i + Is]) >> bt.shifts[i + Is]), ...);
     return res;
 }
 
 /**
- * @brief Bit extract via Block Shift table, 4-fold unrolled.
+ * @brief Bit extract via Block Shift table, with compile-time loop unrolling
+ * according to a given unrolling factor `UF`.
  */
-inline std::uint64_t bit_extract_block_table_unrolled4(
-    std::uint64_t x, BitExtractBlockTable const& bt
-) noexcept {
-    // Same as above, but 4-fold unrolled.
-    assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
-    std::uint64_t res = 0;
-    size_t i = 0;
-    while(bt.blocks[i]) {
-        res |= (x & bt.blocks[i+0]) >> bt.shifts[i+0];
-        res |= (x & bt.blocks[i+1]) >> bt.shifts[i+1];
-        res |= (x & bt.blocks[i+2]) >> bt.shifts[i+2];
-        res |= (x & bt.blocks[i+3]) >> bt.shifts[i+3];
-        i += 4;
-    }
-    return res;
-}
+template<std::size_t UF = 1>
+inline std::uint64_t bit_extract_block_table_unrolled(
+    std::uint64_t x,
+    BitExtractBlockTable const& bt
+) noexcept
+{
+    static_assert(
+        UF == 1 || UF == 2 || UF == 4 || UF == 8 || UF == 16 || UF == 32,
+        "Supported unroll factors are 1, 2, 4, 8, 16, 32."
+    );
+    assert(bt.blocks[32] == 0 && bt.shifts[32] == 0);
 
-/**
- * @brief Bit extract via Block Shift table, 8-fold unrolled.
- */
-inline std::uint64_t bit_extract_block_table_unrolled8(
-    std::uint64_t x, BitExtractBlockTable const& bt
-) noexcept {
-    // Same as above, but 8-fold unrolled.
-    assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
+    // Loop over chunks of the size of the unrolling factor,
+    // until we reach the block sential (the first block that is 0).
+    constexpr auto idx = std::make_index_sequence<UF>{};
     std::uint64_t res = 0;
-    size_t i = 0;
-    while(bt.blocks[i]) {
-        res |= (x & bt.blocks[i+0]) >> bt.shifts[i+0];
-        res |= (x & bt.blocks[i+1]) >> bt.shifts[i+1];
-        res |= (x & bt.blocks[i+2]) >> bt.shifts[i+2];
-        res |= (x & bt.blocks[i+3]) >> bt.shifts[i+3];
-        res |= (x & bt.blocks[i+4]) >> bt.shifts[i+4];
-        res |= (x & bt.blocks[i+5]) >> bt.shifts[i+5];
-        res |= (x & bt.blocks[i+6]) >> bt.shifts[i+6];
-        res |= (x & bt.blocks[i+7]) >> bt.shifts[i+7];
-        i += 8;
+    std::size_t i = 0;
+    while( bt.blocks[i] ) {
+        res |= bit_extract_block_table_chunk_(x, bt, i, idx);
+        i += UF;
     }
+
     return res;
 }
 

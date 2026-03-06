@@ -287,9 +287,9 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
     // Most of our bit extract software implementations have a runtime depending on that,
     // so we want to test the effects of different masks on the implementations.
     for( size_t runs = 0; runs <= 32; ++runs ) {
-        std::string case_label = "popcount=" + std::to_string(runs);
+        std::string case_label = "runs=" + std::to_string(runs);
         if( stdout_is_terminal() ) {
-            std::cout << "\rmask popcount "
+            std::cout << "\rmask runs "
                 << std::setw(2) << runs << " / 32"
                 << std::flush;
             // std::cout << case_label << "\n";
@@ -330,16 +330,20 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
                 [](BitExtractInput const& in){ return bit_extract_block_table(in.value, in.block_table);
             }),
             bench(
+                "bit_extract_block_table_unrolled1",
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<1>(in.value, in.block_table);
+            }),
+            bench(
                 "bit_extract_block_table_unrolled2",
-                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled2(in.value, in.block_table);
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<2>(in.value, in.block_table);
             }),
             bench(
                 "bit_extract_block_table_unrolled4",
-                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled4(in.value, in.block_table);
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<4>(in.value, in.block_table);
             }),
             bench(
                 "bit_extract_block_table_unrolled8",
-                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled8(in.value, in.block_table);
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<8>(in.value, in.block_table);
             }),
             bench(
                 "bit_extract_network_table",

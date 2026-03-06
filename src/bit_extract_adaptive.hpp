@@ -361,17 +361,17 @@ private:
 
     inline std::uint64_t bit_extract_block_table_unrolled2_( std::uint64_t value ) const
     {
-        return bit_extract_block_table_unrolled2( value, block_table_ );
+        return bit_extract_block_table_unrolled<2>( value, block_table_ );
     }
 
     inline std::uint64_t bit_extract_block_table_unrolled4_( std::uint64_t value ) const
     {
-        return bit_extract_block_table_unrolled4( value, block_table_ );
+        return bit_extract_block_table_unrolled<4>( value, block_table_ );
     }
 
     inline std::uint64_t bit_extract_block_table_unrolled8_( std::uint64_t value ) const
     {
-        return bit_extract_block_table_unrolled8( value, block_table_ );
+        return bit_extract_block_table_unrolled<8>( value, block_table_ );
     }
 
     inline std::uint64_t bit_extract_network_table_( std::uint64_t value ) const

@@ -151,16 +151,20 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
                 [](BitExtractInput const& in){ return bit_extract_block_table(in.value, in.block_table);
             }),
             bench(
+                "bit_extract_block_table_unrolled1",
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<1>(in.value, in.block_table);
+            }),
+            bench(
                 "bit_extract_block_table_unrolled2",
-                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled2(in.value, in.block_table);
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<2>(in.value, in.block_table);
             }),
             bench(
                 "bit_extract_block_table_unrolled4",
-                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled4(in.value, in.block_table);
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<4>(in.value, in.block_table);
             }),
             bench(
                 "bit_extract_block_table_unrolled8",
-                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled8(in.value, in.block_table);
+                [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<8>(in.value, in.block_table);
             }),
             bench(
                 "bit_extract_network_table",
