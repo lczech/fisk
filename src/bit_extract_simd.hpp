@@ -440,7 +440,7 @@ struct BitExtractKernelButterflyNEON
 private:
 
     template <int Shift>
-    inline void step_(simd_vector& x, uint64x2_t mvv) noexcept
+    inline void step_(simd_vector& x, uint64x2_t mvv) const noexcept
     {
         uint64x2_t t = vandq_u64(x, mvv);
         x = vorrq_u64(veorq_u64(x, t), vshrq_n_u64(t, Shift));

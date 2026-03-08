@@ -99,7 +99,9 @@ inline void bench_kmer_spaced_multi(
         BitExtractKernelDispatcher<BitExtractKernelButterflyNEON>   simd_bf_neon_kernel(raw_masks);
         BitExtractKernelDispatcher<BitExtractKernelBlockNEON<>>     simd_bt_neon_kernel(raw_masks);
         #endif
+        #if defined(HAVE_BMI2)
         BitExtractKernelDispatcher<BitExtractKernelPEXT<>>          simd_pext_kernel(raw_masks);
+        #endif
 
         // Prepare a benchmark with repititions
         Microbench<std::string> suite(suite_title);

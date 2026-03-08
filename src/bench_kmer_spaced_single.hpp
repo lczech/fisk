@@ -76,7 +76,9 @@ inline void bench_kmer_spaced_single(
         BitExtractKernelButterflyNEON   simd_bf_neon_kernel(bit_ext_mask);
         BitExtractKernelBlockNEON       simd_bt_neon_kernel(bit_ext_mask);
         #endif
+        #if defined(HAVE_BMI2)
         BitExtractKernelPEXT            simd_pext_kernel(bit_ext_mask);
+        #endif
 
         // Prepare a benchmark with repititions
         Microbench<std::string> suite(suite_title);
