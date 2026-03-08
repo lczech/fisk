@@ -25,21 +25,21 @@
  */
 template<std::size_t L, typename Callback>
 inline void emit_simd_lanes_spaced_kmers(
-    std::uint64_t const* out,
-    std::uint64_t const* valid_words,
+    std::uint64_t const* kmers,
+    std::uint64_t const* valid_pos,
     std::uint64_t mask,
     std::size_t start_pos,
     Callback&& cb
 ) {
     // Compile-time reduction of unused lanes when L < 8 (e.g., for SSE2).
-    if constexpr (L >= 1) { if ((valid_words[0] & mask) == mask) { cb(start_pos + 0, out[0]); }}
-    if constexpr (L >= 2) { if ((valid_words[1] & mask) == mask) { cb(start_pos + 1, out[1]); }}
-    if constexpr (L >= 3) { if ((valid_words[2] & mask) == mask) { cb(start_pos + 2, out[2]); }}
-    if constexpr (L >= 4) { if ((valid_words[3] & mask) == mask) { cb(start_pos + 3, out[3]); }}
-    if constexpr (L >= 5) { if ((valid_words[4] & mask) == mask) { cb(start_pos + 4, out[4]); }}
-    if constexpr (L >= 6) { if ((valid_words[5] & mask) == mask) { cb(start_pos + 5, out[5]); }}
-    if constexpr (L >= 7) { if ((valid_words[6] & mask) == mask) { cb(start_pos + 6, out[6]); }}
-    if constexpr (L >= 8) { if ((valid_words[7] & mask) == mask) { cb(start_pos + 7, out[7]); }}
+    if constexpr (L >= 1) { if ((valid_pos[0] & mask) == mask) { cb(start_pos + 0, kmers[0]); }}
+    if constexpr (L >= 2) { if ((valid_pos[1] & mask) == mask) { cb(start_pos + 1, kmers[1]); }}
+    if constexpr (L >= 3) { if ((valid_pos[2] & mask) == mask) { cb(start_pos + 2, kmers[2]); }}
+    if constexpr (L >= 4) { if ((valid_pos[3] & mask) == mask) { cb(start_pos + 3, kmers[3]); }}
+    if constexpr (L >= 5) { if ((valid_pos[4] & mask) == mask) { cb(start_pos + 4, kmers[4]); }}
+    if constexpr (L >= 6) { if ((valid_pos[5] & mask) == mask) { cb(start_pos + 5, kmers[5]); }}
+    if constexpr (L >= 7) { if ((valid_pos[6] & mask) == mask) { cb(start_pos + 6, kmers[6]); }}
+    if constexpr (L >= 8) { if ((valid_pos[7] & mask) == mask) { cb(start_pos + 7, kmers[7]); }}
 }
 
 // =================================================================================================
@@ -103,13 +103,12 @@ inline void for_each_spaced_kmer_simd(
 
     // Set up input and output buffers to transfer to and from the simd kernel.
     constexpr std::size_t L = Kernel::lanes;
-    alignas(64) std::uint64_t in_words[L];
-    alignas(64) std::uint64_t out_words[L];
-    alignas(64) std::uint64_t valid_words[L];
+    alignas(64) std::uint64_t simd_buffer[L];
+    alignas(64) std::uint64_t simd_valids[L];
 
     // Sliding window kmer along the sequence, and current number of valid input chars
-    std::uint64_t kmer_bits  = 0;
-    std::uint64_t valid_bits = 0;
+    std::uint64_t rolling_kmer      = 0;
+    std::uint64_t rolling_valid_pos = 0;
 
     // Iterate the sequence. Each kmer is only constructed once. Per iteration of
     // this outer loop, the inner loop does L many increments along the sequence,
@@ -119,54 +118,54 @@ inline void for_each_spaced_kmer_simd(
 
         // Some preprocessor shenanigans to encourage loop unrolling
         #if defined(__clang__)
-            #define PRAGMA_UNROLL_16 _Pragma("unroll 16")
+            #define FISK_PRAGMA_UNROLL_16 _Pragma("unroll 16")
         #elif defined(__GNUC__)
-            #define PRAGMA_UNROLL_16 _Pragma("GCC unroll 16")
+            #define FISK_PRAGMA_UNROLL_16 _Pragma("GCC unroll 16")
         #else
-            #define PRAGMA_UNROLL_16
+            #define FISK_PRAGMA_UNROLL_16
         #endif
 
         // Build one rolling kmer per lane, from consecutive sequence positions.
-        // That is, `kmer_bits` is our rolling k-mer, and in each iteration here
+        // That is, `rolling_kmer` is our rolling k-mer, and in each iteration here
         // its current state (corresponding to one k-mer along the input sequence)
         // gets copied into one of the lanes, until all lanes are filled.
-        PRAGMA_UNROLL_16
+        FISK_PRAGMA_UNROLL_16
         for (std::size_t lane = 0; lane < L; ++lane) {
             std::uint8_t const code = static_cast<std::uint8_t>(enc(data[i + lane]));
 
             // Shift in the next base. For invalid bases, the low 2 bits are irrelevant,
             // because validity is checked separately before emission.
-            kmer_bits = ((kmer_bits << 2) & span_mask) | (code & 0x03u);
+            rolling_kmer = ((rolling_kmer << 2) & span_mask) | (code & 0x03u);
 
             // Shift in 11 for valid, 00 for invalid. This ensures that spaced k-mers which
             // contain an invalid base in them (which was not masked out) will be skipped.
-            valid_bits
-                = ((valid_bits << 2) & span_mask)
+            rolling_valid_pos
+                = ((rolling_valid_pos << 2) & span_mask)
                 | (static_cast<std::uint64_t>(code < 4) * 0x03u)
             ;
 
             // Store the kmer and its valid bits in the current lane.
-            in_words[lane]    = kmer_bits;
-            valid_words[lane] = valid_bits;
+            simd_buffer[lane] = rolling_kmer;
+            simd_valids[lane] = rolling_valid_pos;
         }
 
         // Load vector lanes once from all stored kmers.
-        simd_vector const x = Kernel::load(in_words);
+        simd_vector const x = Kernel::load(simd_buffer);
         std::size_t const start_pos = i - (span_k - 1);
 
         // Process all masks/kernels. This loop is compile-time unrolled for speed.
         // We apply each mask to all k-mers stored in the lanes, and emit the valid ones
         // to the callback function.
-        PRAGMA_UNROLL_16
+        FISK_PRAGMA_UNROLL_16
         for (std::size_t m = 0; m < NMasks; ++m) {
             Kernel const& kernel = kernels[m];
 
             // Extract the bits across all lanes, and emit the valid ones.
             simd_vector const y = kernel.bit_extract(x);
-            Kernel::store(y, out_words);
+            Kernel::store(y, simd_buffer);
             emit_simd_lanes_spaced_kmers<L>(
-                out_words,
-                valid_words,
+                simd_buffer,
+                simd_valids,
                 kernel.mask.mask,
                 start_pos,
                 [&](std::size_t pos, std::uint64_t value) {
@@ -175,7 +174,7 @@ inline void for_each_spaced_kmer_simd(
             );
         }
 
-        #undef PRAGMA_UNROLL_16
+        #undef FISK_PRAGMA_UNROLL_16
     }
 
     // Tail loop for the final scalar remainder.
@@ -183,17 +182,17 @@ inline void for_each_spaced_kmer_simd(
         std::uint8_t const code = static_cast<std::uint8_t>(enc(data[i]));
 
         // Shift in the new character, as before.
-        kmer_bits = ((kmer_bits << 2) & span_mask) | (code & 0x03u);
-        valid_bits
-            = ((valid_bits << 2) & span_mask)
+        rolling_kmer = ((rolling_kmer << 2) & span_mask) | (code & 0x03u);
+        rolling_valid_pos
+            = ((rolling_valid_pos << 2) & span_mask)
             | (static_cast<std::uint64_t>(code < 4) * 0x03u)
         ;
 
         // Apply the callback for all masks that are satisfied at this position.
         for (std::size_t m = 0; m < NMasks; ++m) {
             Kernel const& kernel = kernels[m];
-            if ((valid_bits & kernel.mask.mask) == kernel.mask.mask) {
-                callback(m, i + 1 - span_k, kernel.bit_extract(kmer_bits));
+            if ((rolling_valid_pos & kernel.mask.mask) == kernel.mask.mask) {
+                callback(m, i + 1 - span_k, kernel.bit_extract(rolling_kmer));
             }
         }
     }
