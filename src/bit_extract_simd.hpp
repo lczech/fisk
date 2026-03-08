@@ -57,6 +57,85 @@
 // across SIMD architectures. We hence focus here on the case with a single mask.
 
 // =================================================================================================
+//     Pseudo-SIMD Kernels for PEXT
+// =================================================================================================
+
+#if defined(HAVE_BMI2)
+
+/**
+ * @brief Kernel for bit extract using hardware BMI2 PEXT, evaluated independently across lanes.
+ *
+ * This is not true SIMD: each lane is processed by a separate `_pext_u64()` call.
+ * However, grouping several independent extractions together can still improve throughput
+ * by exposing instruction-level parallelism and helping to hide PEXT latency.
+ *
+ * Valid lane counts are 1, 2, 4, and 8, i.e., how many PEXT are being run.
+ */
+template <int Lanes = 8>
+struct BitExtractKernelPEXT
+{
+    static_assert(
+        Lanes == 1 || Lanes == 2 || Lanes == 4 || Lanes == 8,
+        "BitExtractKernelPEXT only supports 1, 2, 4, or 8 lanes."
+    );
+
+    using simd_vector = std::array<std::uint64_t, Lanes>;
+    static constexpr int lanes = Lanes;
+    BitExtractMask mask{};
+
+    BitExtractKernelPEXT() = default;
+
+    explicit BitExtractKernelPEXT(std::uint64_t const mask_value) noexcept
+        : mask( BitExtractMask( mask_value ))
+    {}
+
+    static simd_vector load(std::uint64_t const* a) noexcept
+    {
+        simd_vector v{};
+        for (std::size_t i = 0; i < Lanes; ++i) {
+            v[i] = a[i];
+        }
+        return v;
+    }
+
+    static void store(simd_vector const& v, std::uint64_t* out) noexcept
+    {
+        for (std::size_t i = 0; i < Lanes; ++i) {
+            out[i] = v[i];
+        }
+    }
+
+    simd_vector bit_extract(simd_vector const& x) const noexcept
+    {
+        simd_vector out{};
+        if constexpr (Lanes >= 1) {
+            out[0] = bit_extract_pext(x[0], mask);
+        }
+        if constexpr (Lanes >= 2) {
+            out[1] = bit_extract_pext(x[1], mask);
+        }
+        if constexpr (Lanes >= 4) {
+            out[2] = bit_extract_pext(x[2], mask);
+            out[3] = bit_extract_pext(x[3], mask);
+        }
+        if constexpr (Lanes >= 8) {
+            out[4] = bit_extract_pext(x[4], mask);
+            out[5] = bit_extract_pext(x[5], mask);
+            out[6] = bit_extract_pext(x[6], mask);
+            out[7] = bit_extract_pext(x[7], mask);
+        }
+        return out;
+    }
+
+    std::uint64_t bit_extract(std::uint64_t x) const noexcept
+    {
+        return bit_extract_pext(x, mask);
+    }
+};
+
+#endif
+
+// =================================================================================================
 //     SIMD Kernels for Bit Extract Butterfly Table Implementation
 // =================================================================================================
 
