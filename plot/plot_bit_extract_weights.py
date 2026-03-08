@@ -70,7 +70,8 @@ def main():
     # plt.ylim(0, 75)
     plt.ylim(0, 12)
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
-    plt.legend(title="Implementation", ncol=2)
+    # plt.legend(title="Implementation", ncol=2)
+    plt.legend(ncol=2)
 
     plt.tight_layout()
 

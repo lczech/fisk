@@ -55,7 +55,9 @@ def main():
     # -------------------------------------------------------------------------
     # Load CSV
     # -------------------------------------------------------------------------
+
     df = pd.read_csv(args.csv)
+    cpu = platform_from_csv_path(args.csv)
 
     # Expect columns:
     #   suite, case, benchmark, ns_per_op
@@ -68,11 +70,15 @@ def main():
         df = df[df["benchmark"].isin(BENCHMARKS_KEEP)]
 
     if df.empty:
-        raise ValueError(f"No rows left after filtering with BENCHMARKS_KEEP={BENCHMARKS_KEEP!r}")
+        raise ValueError(
+            f"No rows left after filtering with BENCHMARKS_KEEP={BENCHMARKS_KEEP!r} "
+            f"in CSV file {args.csv!r}"
+        )
 
     # -------------------------------------------------------------------------
     # Plot
     # -------------------------------------------------------------------------
+
     plt.figure(figsize=(8, 5))
 
     # Determine plotting order for lines/legend
@@ -94,8 +100,9 @@ def main():
         linestyle = _linestyle_for_benchmark(name, BENCHMARK_LINESTYLES)
 
         plot_kwargs = {
-            "marker": "o",
-            # "label": name,
+            "marker": ".",
+            # "markersize": 4,
+            "linewidth": 2,
             "label": _label_for_benchmark(name, BENCHMARK_RENAMES),
         }
 
@@ -106,18 +113,20 @@ def main():
 
         plt.plot(g["k"], g["ns_per_op"], **plot_kwargs)
 
-    plt.xlabel("k")
+    plt.xlabel("k-mer size (k)")
     plt.ylabel("Time per operation [ns]")
-    plt.title(args.title)
+    plt.title(cpu.replace("_", " "))
+    # plt.title(args.title)
 
     plt.xlim(1, 32)
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
-    plt.legend(title="Implementation")
+    # plt.legend(title="Implementation")
+    plt.legend()
 
     plt.tight_layout()
 
     if args.out:
-        plt.savefig(args.out, dpi=200)
+        plt.savefig(args.out, dpi=300)
         print(f"Wrote {args.out}")
     else:
         plt.show()

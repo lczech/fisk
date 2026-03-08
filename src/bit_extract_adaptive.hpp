@@ -27,8 +27,13 @@
  * instanciations of this class). When the mask is not fixed, this strategy is not beneficial,
  * as precomputing lookup tables specific for the mask does not make sense then.
  *
- * There is a slight overhead for the calling here, but minizmied via direct pointer dereference
- * on the function.
+ * There is an overhead for the calling here, as we are using a function pointer to dispatch.
+ * In the very hot loop of k-mer extraction, this can be a bit too slow; we hence to not use
+ * this class in performance-critical code. It could be adapted to just benchmark the algorithm,
+ * and return the best mode. Then, the better solution for high performance is to build the full
+ * k-mer extraction loop templated, and use a `switch` to instanciate it for each case of algorithm
+ * present here. Left as future work, as this is mostly relevant for actual applications, but not
+ * our benchmark here.
  */
 class AdaptiveBitExtract
 {

@@ -310,58 +310,58 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
             make_inputs_rep,
             #ifdef HAVE_BMI2
             bench(
-                "bit_extract_pext",
+                "pext",
                 [](BitExtractInput const& in){ return bit_extract_pext(in.value, in.mask);
             }),
             #endif
             bench(
-                "bit_extract_bitloop",
+                "bitloop",
                 [](BitExtractInput const& in){ return bit_extract_bitloop(in.value, in.mask);
             }),
             bench(
-                "bit_extract_split32",
+                "split32",
                 [](BitExtractInput const& in){ return bit_extract_split32(in.value, in.mask);
             }),
             bench(
-                "bit_extract_byte_table",
+                "byte_table",
                 [](BitExtractInput const& in){ return bit_extract_byte_table(in.value, in.mask);
             }),
             bench(
-                "bit_extract_block_table",
+                "block_table",
                 [](BitExtractInput const& in){ return bit_extract_block_table(in.value, in.block_table);
             }),
             bench(
-                "bit_extract_block_table_unrolled1",
+                "block_table_unrolled1",
                 [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<1>(in.value, in.block_table);
             }),
             bench(
-                "bit_extract_block_table_unrolled2",
+                "block_table_unrolled2",
                 [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<2>(in.value, in.block_table);
             }),
             bench(
-                "bit_extract_block_table_unrolled4",
+                "block_table_unrolled4",
                 [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<4>(in.value, in.block_table);
             }),
             bench(
-                "bit_extract_block_table_unrolled8",
+                "block_table_unrolled8",
                 [](BitExtractInput const& in){ return bit_extract_block_table_unrolled<8>(in.value, in.block_table);
             }),
             bench(
-                "bit_extract_butterfly_table",
+                "butterfly_table",
                 [](BitExtractInput const& in){ return bit_extract_butterfly_table(in.value, in.butterfly_table);
             }),
             bench(
-                "bit_extract_adaptive",
+                "adaptive",
                 [](BitExtractInput const& in){ return in.adaptive_bit_extract(in.value);
             }),
             #ifdef PLATFORM_X86_64
             bench(
-                "bit_extract_instlatx",
+                "instlatx",
                 [](BitExtractInput const& in){ return pext64_emu(in.value, in.mask.mask);
             }),
             #endif
             bench(
-                "bit_extract_zp7",
+                "zp7",
                 [](BitExtractInput const& in){ return zp7_pext_64(in.value, in.mask.mask);
             })
         );

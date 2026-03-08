@@ -90,7 +90,7 @@ def make_impl_summary_plot(
     cmap = benchmark_colors or {}
     bar_colors = _colors_for_benchmarks(impls, cmap)
 
-    ax.bar(x, means, width=width, label="mean ns/op", color=bar_colors)
+    ax.bar(x, means, width=width, label="mean", color=bar_colors)
 
     ax.errorbar(
         x,
@@ -103,9 +103,29 @@ def make_impl_summary_plot(
         label="min/max",
     )
 
+    # Add slanted mean labels, shifted right to avoid whiskers
+    ymax = float(max(maxs)) if len(maxs) else 0.0
+    x_offset = width * 0.18
+    y_offset = ymax * 0.01 if ymax > 0 else 0.0
+
+    for xi, yi in zip(x, means):
+        ax.text(
+            xi + x_offset,
+            yi + y_offset,
+            f"{yi:.2f}",
+            ha="left",
+            va="bottom",
+            rotation=45,     # slight clockwise tilt
+            fontsize=8,
+        )
+
+    # Extend y-axis slightly so labels stay inside the plot
+    if ymax > 0:
+        ax.set_ylim(top=ymax * 1.1)
+
     ax.set_title(title)
-    ax.set_xlabel("Implementation")
-    ax.set_ylabel("ns/op (lower is better)")
+    # ax.set_xlabel("Implementation")
+    ax.set_ylabel("Time per operation [ns]")
     ax.set_xticks(x)
     ax.set_xticklabels(impls, rotation=45, ha="right")
 
@@ -144,8 +164,9 @@ def main():
 
     df = pd.read_csv(args.csv)
 
+    cpu = platform_from_csv_path(args.csv).replace("_", " ")
     suite = args.suite
-    title = args.title or (suite if suite else "Implementation summary")
+    title = args.title or (suite if suite else cpu)
 
     make_impl_summary_plot(
         df=df,

@@ -36,15 +36,26 @@ mkdir -p "$OUTDIR"
 
 for EXT in png svg ; do
 
+  # Bit Extract Implementations
+
+  python ./plot/plot_bit_extract_weights.py \
+    ${DIR}/bit_extract_weights.csv\
+    --out ${DIR}/bit_extract_weights.${EXT}
+
+  python ./plot/plot_bit_extract_blocks.py \
+    ${DIR}/bit_extract_blocks.csv\
+    --out ${DIR}/bit_extract_blocks.${EXT}
+
+
   # Kmer Extract
 
   python ./plot/plot_kmer_extract.py \
     ${DIR}/kmer_extract.csv\
     --out ${DIR}/kmer_extract.${EXT}
 
-  python ./plot/plot_impl_summary.py \
-    ${DIR}/kmer_extract.csv\
-    --out ${DIR}/kmer_extract_bars.${EXT}
+  # python ./plot/plot_case_summary.py \
+  #   ${DIR}/kmer_extract.csv\
+  #   --out ${DIR}/kmer_extract_bars.${EXT}
 
 
   # Kmer Spaced Single
@@ -53,7 +64,7 @@ for EXT in png svg ; do
     ${DIR}/kmer_spaced_single.csv\
     --out ${DIR}/kmer_spaced_single.${EXT}
 
-  python ./plot/plot_impl_summary.py \
+  python ./plot/plot_case_summary.py \
     ${DIR}/kmer_spaced_single.csv\
     --out ${DIR}/kmer_spaced_single_bars.${EXT}
 
@@ -64,19 +75,8 @@ for EXT in png svg ; do
     ${DIR}/kmer_spaced_multi.csv\
     --out ${DIR}/kmer_spaced_multi.${EXT}
 
-  python ./plot/plot_impl_summary.py \
+  python ./plot/plot_case_summary.py \
     ${DIR}/kmer_spaced_multi.csv\
     --out ${DIR}/kmer_spaced_multi_bars.${EXT}
-
-
-  # Bit Extract Implementations
-
-  python ./plot/plot_bit_extract_blocks.py \
-    ${DIR}/bit_extract_blocks.csv\
-    --out ${DIR}/bit_extract_blocks.${EXT}
-
-  python ./plot/plot_bit_extract_weights.py \
-    ${DIR}/bit_extract_weights.csv\
-    --out ${DIR}/bit_extract_weights.${EXT}
 
 done

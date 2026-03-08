@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 import argparse
+import sys
+
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+
+# Such a cheat to import stuff in python...
+# See https://stackoverflow.com/a/22956038
+sys.path.insert(0, '.')
+from plot_common import *
 
 
 def make_grouped_bar_plot_impl_first(df, suite, title, outpath):
@@ -12,6 +20,12 @@ def make_grouped_bar_plot_impl_first(df, suite, title, outpath):
     if df.empty:
         raise ValueError(f"No data found for suite: {suite}")
 
+    # Keep only selected benchmarks
+    df = df[df["benchmark"].isin(BENCHMARKS_KEEP)]
+
+    if df.empty:
+        raise ValueError("No data left after filtering with BENCHMARKS_KEEP")
+
     # Pivot so index = implementation (benchmark), columns = case
     # Each row will be one implementation; columns are the cases
     pivot = df.pivot_table(
@@ -21,13 +35,27 @@ def make_grouped_bar_plot_impl_first(df, suite, title, outpath):
         aggfunc="mean",  # in case there are duplicates
     )
 
+    # Apply benchmark order, keeping only those actually present
+    ordered_impls = [b for b in BENCHMARK_ORDER if b in pivot.index]
+    if not ordered_impls:
+        raise ValueError("None of the BENCHMARK_ORDER entries are present in the data")
+
+    pivot = pivot.reindex(ordered_impls)
+
     impls = list(pivot.index)    # implementations on x-axis
     cases = list(pivot.columns)  # one bar per case within each impl group
 
     num_impls = len(impls)
     num_cases = len(cases)
 
-    import numpy as np
+    # Use viridis but trim extreme ends and reverse
+    cmap = plt.colormaps["viridis_r"]
+    lo = 0.1   # avoid very dark end
+    hi = 0.9   # avoid very bright end
+    case_colors = [
+        cmap(lo + (hi - lo) * (i / max(1, num_cases - 1)))
+        for i in range(num_cases)
+]
 
     # X positions: one group per implementation
     x = np.arange(num_impls)
@@ -37,26 +65,41 @@ def make_grouped_bar_plot_impl_first(df, suite, title, outpath):
     bar_width = group_width / max(1, num_cases)
 
     # Center the bars within each group
-    # For case j, offset is (j - (num_cases - 1)/2) * bar_width
     offsets = [
         (j - (num_cases - 1) / 2.0) * bar_width
         for j in range(num_cases)
     ]
 
     fig, ax = plt.subplots(figsize=(12, 6))
+    ymax = float(pivot.max().max())
 
-    # One color series per case
     for j, case in enumerate(cases):
         vals = pivot[case].values
-        ax.bar(x + offsets[j], vals, width=bar_width, label=str(case))
+        xs = x + offsets[j]
+
+        # colors = [BENCHMARK_COLORS[bench] for bench in impls]
+        # bars = ax.bar(xs, vals, width=bar_width, label=str(case), color=colors)
+        bars = ax.bar(xs, vals, width=bar_width, label=str(case), color=case_colors[j])
+
+        # Add value labels above each bar
+        for bar, val in zip(bars, vals):
+            if pd.notna(val):
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2.0,
+                    bar.get_height() + ymax * 0.01,
+                    f"{val:.2f}",
+                    ha="center",
+                    va="bottom",
+                    rotation=90,
+                    fontsize=8,
+                )
 
     ax.set_title(title)
-    ax.set_xlabel("Implementation")
-    ax.set_ylabel("ns/op (lower is better)")
+    ax.set_ylabel("Time per operation [ns]")
     ax.set_xticks(x)
     ax.set_xticklabels(impls, rotation=45, ha="right")
 
-    ax.legend(title="Case")
+    ax.legend()
     ax.grid(axis="y", linestyle="--", alpha=0.3)
 
     fig.tight_layout()
@@ -92,8 +135,9 @@ def main():
 
     df = pd.read_csv(args.csv)
 
+    cpu = platform_from_csv_path(args.csv).replace("_", " ")
     suite = args.suite
-    title = args.title or (suite if suite else "Grouped Benchmarks (impl-first)")
+    title = args.title or (suite if suite else cpu)
 
     make_grouped_bar_plot_impl_first(df, suite, title, args.out)
 
