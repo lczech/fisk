@@ -52,29 +52,29 @@ inline void bench_kmer_spaced_single(
         auto const k = masks[m].size();
 
         // Prepare masks for all implementations as needed
-        auto const comin_mask = prepare_naive_mask(masks[m]);
+        auto const naive_mask = prepare_naive_mask(masks[m]);
         auto const bit_ext_mask = prepare_spaced_kmer_bit_extract_mask(masks[m]);
         auto const bit_ext_block_mask = bit_extract_block_table_preprocess(bit_ext_mask);
         auto const bit_ext_butterfly_table = bit_extract_butterfly_table_preprocess(bit_ext_mask);
 
         // simd kernels
-        BitExtractButterflyKernelScalar simd_bf_scalar_kernel(bit_ext_mask);
-        BitExtractBlockKernelScalar     simd_bt_scalar_kernel(bit_ext_mask);
+        BitExtractKernelButterflyScalar simd_bf_scalar_kernel(bit_ext_mask);
+        BitExtractKernelBlockScalar     simd_bt_scalar_kernel(bit_ext_mask);
         #if defined(HAVE_SSE2)
-        BitExtractButterflyKernelSSE2   simd_bf_sse2_kernel(bit_ext_mask);
-        BitExtractBlockKernelSSE2       simd_bt_sse2_kernel(bit_ext_mask);
+        BitExtractKernelButterflySSE2   simd_bf_sse2_kernel(bit_ext_mask);
+        BitExtractKernelBlockSSE2       simd_bt_sse2_kernel(bit_ext_mask);
         #endif
         #if defined(HAVE_AVX2)
-        BitExtractButterflyKernelAVX2   simd_bf_avx2_kernel(bit_ext_mask);
-        BitExtractBlockKernelAVX2       simd_bt_avx2_kernel(bit_ext_mask);
+        BitExtractKernelButterflyAVX2   simd_bf_avx2_kernel(bit_ext_mask);
+        BitExtractKernelBlockAVX2       simd_bt_avx2_kernel(bit_ext_mask);
         #endif
         #if defined(HAVE_AVX512)
-        BitExtractButterflyKernelAVX512 simd_bf_avx512_kernel(bit_ext_mask);
-        BitExtractBlockKernelAVX512     simd_bt_avx512_kernel(bit_ext_mask);
+        BitExtractKernelButterflyAVX512 simd_bf_avx512_kernel(bit_ext_mask);
+        BitExtractKernelBlockAVX512     simd_bt_avx512_kernel(bit_ext_mask);
         #endif
         #if defined(HAVE_NEON)
-        BitExtractButterflyKernelNEON   simd_bf_neon_kernel(bit_ext_mask);
-        BitExtractBlockKernelNEON       simd_bt_neon_kernel(bit_ext_mask);
+        BitExtractKernelButterflyNEON   simd_bf_neon_kernel(bit_ext_mask);
+        BitExtractKernelBlockNEON       simd_bt_neon_kernel(bit_ext_mask);
         #endif
 
         // Prepare a benchmark with repititions
@@ -90,12 +90,13 @@ inline void bench_kmer_spaced_single(
         // Run the benchmark for all algorithms
         auto results = suite.run(
             sequences, // vector<std::string>
+
             // naive, as baseline and validity check
             bench(
                 "missh",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash_naive(
-                        seq, k, comin_mask, compute_spaced_kmer_missh
+                        seq, k, naive_mask, compute_spaced_kmer_missh
                     );
                 }
             ),
@@ -103,7 +104,7 @@ inline void bench_kmer_spaced_single(
                 "naive",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash_naive(
-                        seq, k, comin_mask, compute_spaced_kmer_naive
+                        seq, k, naive_mask, compute_spaced_kmer_naive
                     );
                 }
             ),

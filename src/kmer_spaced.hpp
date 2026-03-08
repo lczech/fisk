@@ -13,7 +13,7 @@
 #include "seq_enc.hpp"
 
 // =================================================================================================
-//     Native and MISSH implementations
+//     Naive and MISSH implementations
 // =================================================================================================
 
 // The below is a re-implementation of parts of https://github.com/CominLab/MISSH

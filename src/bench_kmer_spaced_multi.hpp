@@ -81,23 +81,23 @@ inline void bench_kmer_spaced_multi(
         }
 
         // simd kernels
-        BitExtractKernelDispatcher<BitExtractButterflyKernelScalar> simd_bf_scalar_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelScalar<>>   simd_bt_scalar_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflyScalar> simd_bf_scalar_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockScalar<>>   simd_bt_scalar_kernel(raw_masks);
         #if defined(HAVE_SSE2)
-        BitExtractKernelDispatcher<BitExtractButterflyKernelSSE2>   simd_bf_sse2_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelSSE2<>>     simd_bt_sse2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflySSE2>   simd_bf_sse2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockSSE2<>>     simd_bt_sse2_kernel(raw_masks);
         #endif
         #if defined(HAVE_AVX2)
-        BitExtractKernelDispatcher<BitExtractButterflyKernelAVX2>   simd_bf_avx2_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelAVX2<>>     simd_bt_avx2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflyAVX2>   simd_bf_avx2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockAVX2<>>     simd_bt_avx2_kernel(raw_masks);
         #endif
         #if defined(HAVE_AVX512)
-        BitExtractKernelDispatcher<BitExtractButterflyKernelAVX512> simd_bf_avx512_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelAVX512<>>   simd_bt_avx512_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflyAVX512> simd_bf_avx512_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockAVX512<>>   simd_bt_avx512_kernel(raw_masks);
         #endif
         #if defined(HAVE_NEON)
-        BitExtractKernelDispatcher<BitExtractButterflyKernelNEON>   simd_bf_neon_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelNEON<>>     simd_bt_neon_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflyNEON>   simd_bf_neon_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockNEON<>>     simd_bt_neon_kernel(raw_masks);
         #endif
 
         // Prepare a benchmark with repititions

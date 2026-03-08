@@ -72,16 +72,16 @@
 /**
  * @brief Kernel for bit extract using a simple scalar implementation of the butterfly table.
  */
-struct BitExtractButterflyKernelScalar
+struct BitExtractKernelButterflyScalar
 {
     // Regular scalar values for the butterfly table
     using simd_vector = std::uint64_t;
     static constexpr int lanes = 1;
     BitExtractButterflyTable mask{};
 
-    BitExtractButterflyKernelScalar() = default;
+    BitExtractKernelButterflyScalar() = default;
 
-    explicit BitExtractButterflyKernelScalar( std::uint64_t const mask_value )
+    explicit BitExtractKernelButterflyScalar( std::uint64_t const mask_value )
         : mask( bit_extract_butterfly_table_preprocess( mask_value ))
     {}
 
@@ -110,7 +110,7 @@ struct BitExtractButterflyKernelScalar
 /**
  * @brief Kernel for bit extract using an SSE2 implementation of the butterfly table.
  */
-struct BitExtractButterflyKernelSSE2
+struct BitExtractKernelButterflySSE2
 {
     // Regular butterfly table values, and simd copies across lanes
     using simd_vector = __m128i;
@@ -119,9 +119,9 @@ struct BitExtractButterflyKernelSSE2
     __m128i mask_simd{};
     __m128i sieves_simd[6]{};
 
-    BitExtractButterflyKernelSSE2() = default;
+    BitExtractKernelButterflySSE2() = default;
 
-    explicit BitExtractButterflyKernelSSE2( std::uint64_t const mask_value )
+    explicit BitExtractKernelButterflySSE2( std::uint64_t const mask_value )
         : mask( bit_extract_butterfly_table_preprocess( mask_value ))
     {
         // Copy the scalar mask and table over to the simd vectors.
@@ -178,7 +178,7 @@ struct BitExtractButterflyKernelSSE2
 /**
  * @brief Kernel for bit extract using an AVX2 implementation of the butterfly table.
  */
-struct BitExtractButterflyKernelAVX2
+struct BitExtractKernelButterflyAVX2
 {
     using simd_vector = __m256i;
     static constexpr int lanes = 4;
@@ -186,9 +186,9 @@ struct BitExtractButterflyKernelAVX2
     __m256i mask_simd{};
     __m256i sieves_simd[6]{};
 
-    BitExtractButterflyKernelAVX2() = default;
+    BitExtractKernelButterflyAVX2() = default;
 
-    explicit BitExtractButterflyKernelAVX2( std::uint64_t const mask_value )
+    explicit BitExtractKernelButterflyAVX2( std::uint64_t const mask_value )
         : mask( bit_extract_butterfly_table_preprocess( mask_value ))
     {
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
@@ -244,7 +244,7 @@ struct BitExtractButterflyKernelAVX2
 /**
  * @brief Kernel for bit extract using an AVX512 implementation of the butterfly table.
  */
-struct BitExtractButterflyKernelAVX512
+struct BitExtractKernelButterflyAVX512
 {
     using simd_vector = __m512i;
     static constexpr int lanes = 8;
@@ -252,9 +252,9 @@ struct BitExtractButterflyKernelAVX512
     __m512i mask_simd{};
     __m512i sieves_simd[6]{};
 
-    BitExtractButterflyKernelAVX512() = default;
+    BitExtractKernelButterflyAVX512() = default;
 
-    explicit BitExtractButterflyKernelAVX512( std::uint64_t const mask_value )
+    explicit BitExtractKernelButterflyAVX512( std::uint64_t const mask_value )
         : mask( bit_extract_butterfly_table_preprocess( mask_value ))
     {
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
@@ -310,7 +310,7 @@ struct BitExtractButterflyKernelAVX512
 /**
  * @brief Kernel for bit extract using an ARM NEON implementation of the butterfly table.
  */
-struct BitExtractButterflyKernelNEON
+struct BitExtractKernelButterflyNEON
 {
     using simd_vector = uint64x2_t;
     static constexpr int lanes = 2;
@@ -318,9 +318,9 @@ struct BitExtractButterflyKernelNEON
     uint64x2_t mask_simd{};
     uint64x2_t sieves_simd[6]{};
 
-    BitExtractButterflyKernelNEON() = default;
+    BitExtractKernelButterflyNEON() = default;
 
-    explicit BitExtractButterflyKernelNEON( std::uint64_t const mask_value )
+    explicit BitExtractKernelButterflyNEON( std::uint64_t const mask_value )
         : mask( bit_extract_butterfly_table_preprocess( mask_value ))
     {
         mask_simd = vdupq_n_u64( mask.mask );
@@ -385,7 +385,7 @@ struct BitExtractButterflyKernelNEON
  * @brief Kernel for bit extract using a simple scalar implementation of the block table.
  */
 template<std::size_t UF = 8>
-struct BitExtractBlockKernelScalar
+struct BitExtractKernelBlockScalar
 {
     static_assert(
         UF == 1 || UF == 2 || UF == 4 || UF == 8 || UF == 16 || UF == 32,
@@ -395,9 +395,9 @@ struct BitExtractBlockKernelScalar
     static constexpr int lanes = 1;
     BitExtractBlockTable mask{};
 
-    BitExtractBlockKernelScalar() = default;
+    BitExtractKernelBlockScalar() = default;
 
-    explicit BitExtractBlockKernelScalar(std::uint64_t mask_value)
+    explicit BitExtractKernelBlockScalar(std::uint64_t mask_value)
         : mask(bit_extract_block_table_preprocess(mask_value))
     {}
 
@@ -429,7 +429,7 @@ struct BitExtractBlockKernelScalar
  * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
  */
 template<std::size_t UF = 8>
-struct BitExtractBlockKernelSSE2
+struct BitExtractKernelBlockSSE2
 {
     static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
     static_assert(UF <= 32, "UF must be <= 32");
@@ -442,9 +442,9 @@ struct BitExtractBlockKernelSSE2
     __m128i blocks_simd[33]{};
     __m128i shifts_simd[33]{};
 
-    BitExtractBlockKernelSSE2() = default;
+    BitExtractKernelBlockSSE2() = default;
 
-    explicit BitExtractBlockKernelSSE2(std::uint64_t const mask_value)
+    explicit BitExtractKernelBlockSSE2(std::uint64_t const mask_value)
         : mask(bit_extract_block_table_preprocess(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
@@ -527,7 +527,7 @@ private:
  * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
  */
 template<std::size_t UF = 8>
-struct BitExtractBlockKernelAVX2
+struct BitExtractKernelBlockAVX2
 {
     static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
     static_assert(UF <= 32, "UF must be <= 32");
@@ -540,9 +540,9 @@ struct BitExtractBlockKernelAVX2
     __m256i blocks_simd[33]{};
     __m128i shifts_simd[33]{};
 
-    BitExtractBlockKernelAVX2() = default;
+    BitExtractKernelBlockAVX2() = default;
 
-    explicit BitExtractBlockKernelAVX2(std::uint64_t const mask_value)
+    explicit BitExtractKernelBlockAVX2(std::uint64_t const mask_value)
         : mask(bit_extract_block_table_preprocess(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
@@ -624,7 +624,7 @@ private:
  * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
  */
 template<std::size_t UF = 8>
-struct BitExtractBlockKernelAVX512
+struct BitExtractKernelBlockAVX512
 {
     static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
     static_assert(UF <= 32, "UF must be <= 32");
@@ -637,9 +637,9 @@ struct BitExtractBlockKernelAVX512
     __m512i blocks_simd[33]{};
     __m128i shifts_simd[33]{};
 
-    BitExtractBlockKernelAVX512() = default;
+    BitExtractKernelBlockAVX512() = default;
 
-    explicit BitExtractBlockKernelAVX512(std::uint64_t const mask_value)
+    explicit BitExtractKernelBlockAVX512(std::uint64_t const mask_value)
         : mask(bit_extract_block_table_preprocess(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
@@ -719,7 +719,7 @@ private:
  * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
  */
 template<std::size_t UF = 8>
-struct BitExtractBlockKernelNEON
+struct BitExtractKernelBlockNEON
 {
     static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
     static_assert(UF <= 32, "UF must be <= 32");
@@ -732,9 +732,9 @@ struct BitExtractBlockKernelNEON
     uint64x2_t blocks_simd[33]{};
     int64x2_t  shifts_simd[33]{};  // signed: negative = shift right
 
-    BitExtractBlockKernelNEON() = default;
+    BitExtractKernelBlockNEON() = default;
 
-    explicit BitExtractBlockKernelNEON(std::uint64_t const mask_value)
+    explicit BitExtractKernelBlockNEON(std::uint64_t const mask_value)
         : mask(bit_extract_block_table_preprocess(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
