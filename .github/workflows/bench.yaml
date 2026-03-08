@@ -74,11 +74,12 @@ jobs:
           mkdir -p "${OUTPUT_DIR}"
           ./bin/fisk --output-dir "${OUTPUT_DIR}" &> ${OUTPUT_DIR}/log.txt
 
-      - name: Run plotting script
-        run: |
-          ./plot/plot_all_benchs.sh ${OUTPUT_DIR}
+      # - name: Run plotting script
+      #   run: |
+      #     ./plot/plot_all_benchs.sh ${OUTPUT_DIR}
 
       - name: Upload artifacts
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: benchmarks-${{ matrix.os }}-${{ matrix.compiler }}
