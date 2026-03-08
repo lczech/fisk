@@ -5,13 +5,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <iomanip>
 #include <stdexcept>
 #include <string_view>
 #include <string>
 #include <vector>
 
 #include "kmer_extract.hpp"
+#include "kmer_spaced.hpp"
 #include "bit_extract.hpp"
 #include "seq_enc.hpp"
 
@@ -154,12 +154,15 @@ inline std::uint64_t clark_isFwdValid(
             continue;
         }
         if( !m_mask[c] ) {
-            // the weird case: the position is already left out here, before spacing
-            // not really needed, but this is what clark does
+            // This is a weird case: It triggers for positions that are 0 in the mask,
+            // which will be filtered out when extracting the spaced k-mer later anyway.
+            // So it seems it might not be needed. But for `N` bases for instance, it should
+            // still move the k-mer forward by left shifting, so that the base is not forgotten.
+            // Not sure what is going on here, and it seems to work, so let's keep it.
             kmer <<= 2;
             kmer ^= 0;
-            c++;
             ic++;
+            c++;
             continue;
         }
     }
@@ -183,14 +186,25 @@ inline std::uint64_t clark_querySpacedElement(
 inline std::array<int, 256> clark_get_m_table()
 {
     std::array<int, 256> m_table{-1};
-    m_table['A']  = 3; m_table['C'] = 2; m_table['G'] = 1; m_table['T'] = 0; m_table['U'] = 0;
-    m_table['a']  = 3; m_table['c'] = 2; m_table['g'] = 1; m_table['t'] = 0; m_table['u'] = 0;
+
+    // Clark uses the inverse of our encoding; change it to fit.
+    m_table['A']  = 0; m_table['C'] = 1; m_table['G'] = 2; m_table['T'] = 3; m_table['U'] = 3;
+    m_table['a']  = 0; m_table['c'] = 1; m_table['g'] = 2; m_table['t'] = 3; m_table['u'] = 3;
     m_table['\n'] = -10;
     m_table['n']  = 4; m_table['N'] = 4;
     m_table['M']  = 4; m_table['R'] = 4; m_table['W'] = 4; m_table['V'] = 4; m_table['D'] = 4;
     m_table['K']  = 4; m_table['Y'] = 4; m_table['S'] = 4; m_table['H'] = 4; m_table['B'] = 4;
     m_table['m']  = 4; m_table['r'] = 4; m_table['w'] = 4; m_table['v'] = 4; m_table['d'] = 4;
     m_table['k']  = 4; m_table['y'] = 4; m_table['s'] = 4; m_table['h'] = 4; m_table['b'] = 4;
+
+    // m_table['A']  = 3; m_table['C'] = 2; m_table['G'] = 1; m_table['T'] = 0; m_table['U'] = 0;
+    // m_table['a']  = 3; m_table['c'] = 2; m_table['g'] = 1; m_table['t'] = 0; m_table['u'] = 0;
+    // m_table['\n'] = -10;
+    // m_table['n']  = 4; m_table['N'] = 4;
+    // m_table['M']  = 4; m_table['R'] = 4; m_table['W'] = 4; m_table['V'] = 4; m_table['D'] = 4;
+    // m_table['K']  = 4; m_table['Y'] = 4; m_table['S'] = 4; m_table['H'] = 4; m_table['B'] = 4;
+    // m_table['m']  = 4; m_table['r'] = 4; m_table['w'] = 4; m_table['v'] = 4; m_table['d'] = 4;
+    // m_table['k']  = 4; m_table['y'] = 4; m_table['s'] = 4; m_table['h'] = 4; m_table['b'] = 4;
     return m_table;
 }
 
@@ -375,24 +389,40 @@ inline void clark_getSpacedSeed_improved(
 // ------------------------------------------------------------------------
 
 inline std::uint64_t clark_improved(
-    std::string const& seq
+    std::string const& seq,
+    std::vector<BitExtractMask> const& masks
 ) {
     // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
     std::uint64_t hash = 0;
     size_t const k = 31;
+    if (seq.size() < k) {
+        return 0;
+    }
 
-    // We compute the kmer in a rolling fashion here, only once, and compute all three spaced
-    // kmers from it in a row, to avoid all the checks and branching.
-    for_each_kmer_2bit(
-        std::string_view(seq),
-        k,
-        char_to_nt_table,
-        [&](std::uint64_t kmer_word) {
-            // Extract the spaced k-mers for al masks, and combine them into the hash.
-            uint64_t v1, v2, v3;
-            clark_getSpacedSeed_improved( kmer_word, v1, v2, v3 );
-            hash ^= v1 ^ v2 ^ v3;
+    // Helpful constants
+    std::uint64_t const span_mask = ((std::uint64_t{1} << (2 * k)) - 1u);
+    std::size_t const seq_len = seq.size();
+    char const* data = seq.data();
+    (void) masks;
+
+    // Iterate all k-mers.
+    // Clark seems to ignore invalid bases during the extraction, and just pretent they are A.
+    // So that's what we are doing here as well. Our table gives value 4 = 0x100, which gets
+    // reduced to 0x00.
+    std::uint64_t kmer_word  = 0;
+    for( std::size_t i = 0; i < seq_len; ++i ) {
+        std::uint8_t const code = static_cast<std::uint8_t>(char_to_nt_table(data[i]));
+
+        // Shift in the base. For invalid bases, the low 2 bits are irrelevant,
+        // because validity is tested separately before emission.
+        kmer_word = ((kmer_word << 2) & span_mask) | (code & 0x03u);
+
+        if( i < 31 - 1 ) {
+            continue;
         }
-    );
+        uint64_t v1, v2, v3;
+        clark_getSpacedSeed_improved( kmer_word, v1, v2, v3 );
+        hash ^= v1 ^ v2 ^ v3;
+    }
     return hash;
 }

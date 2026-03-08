@@ -57,39 +57,47 @@ inline void bench_kmer_spaced_multi(
         auto const k = multi_masks[m][0].size();
 
         // Prepare masks for all implementations as needed
-        std::vector<std::uint64_t> bit_ext_masks;
+        std::vector<std::uint64_t> raw_masks;
+        std::vector<std::vector<size_t>> naive_masks;
+        std::vector<BitExtractMask> bit_ext_masks;
         std::vector<BitExtractBlockTable> bit_ext_block_masks;
         std::vector<BitExtractButterflyTable> bit_ext_butterfly_tables;
         for( auto const& mask : multi_masks[m] ) {
-            bit_ext_masks.push_back(
+            raw_masks.push_back(
                 prepare_spaced_kmer_bit_extract_mask(mask)
             );
+            naive_masks.push_back(
+                prepare_naive_mask(mask)
+            );
+            bit_ext_masks.push_back(
+                BitExtractMask(raw_masks.back())
+            );
             bit_ext_block_masks.push_back(
-                bit_extract_block_table_preprocess(bit_ext_masks.back())
+                bit_extract_block_table_preprocess(raw_masks.back())
             );
             bit_ext_butterfly_tables.push_back(
-                bit_extract_butterfly_table_preprocess(bit_ext_masks.back())
+                bit_extract_butterfly_table_preprocess(raw_masks.back())
             );
         }
 
         // simd kernels
-        BitExtractKernelDispatcher<BitExtractButterflyKernelScalar> simd_bf_scalar_kernel(bit_ext_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelScalar<>>   simd_bt_scalar_kernel(bit_ext_masks);
+        BitExtractKernelDispatcher<BitExtractButterflyKernelScalar> simd_bf_scalar_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractBlockKernelScalar<>>   simd_bt_scalar_kernel(raw_masks);
         #if defined(HAVE_SSE2)
-        BitExtractKernelDispatcher<BitExtractButterflyKernelSSE2>   simd_bf_sse2_kernel(bit_ext_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelSSE2<>>     simd_bt_sse2_kernel(bit_ext_masks);
+        BitExtractKernelDispatcher<BitExtractButterflyKernelSSE2>   simd_bf_sse2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractBlockKernelSSE2<>>     simd_bt_sse2_kernel(raw_masks);
         #endif
         #if defined(HAVE_AVX2)
-        BitExtractKernelDispatcher<BitExtractButterflyKernelAVX2>   simd_bf_avx2_kernel(bit_ext_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelAVX2<>>     simd_bt_avx2_kernel(bit_ext_masks);
+        BitExtractKernelDispatcher<BitExtractButterflyKernelAVX2>   simd_bf_avx2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractBlockKernelAVX2<>>     simd_bt_avx2_kernel(raw_masks);
         #endif
         #if defined(HAVE_AVX512)
-        BitExtractKernelDispatcher<BitExtractButterflyKernelAVX512> simd_bf_avx512_kernel(bit_ext_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelAVX512<>>   simd_bt_avx512_kernel(bit_ext_masks);
+        BitExtractKernelDispatcher<BitExtractButterflyKernelAVX512> simd_bf_avx512_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractBlockKernelAVX512<>>   simd_bt_avx512_kernel(raw_masks);
         #endif
         #if defined(HAVE_NEON)
-        BitExtractKernelDispatcher<BitExtractButterflyKernelNEON>   simd_bf_neon_kernel(bit_ext_masks);
-        BitExtractKernelDispatcher<BitExtractBlockKernelNEON<>>     simd_bt_neon_kernel(bit_ext_masks);
+        BitExtractKernelDispatcher<BitExtractButterflyKernelNEON>   simd_bf_neon_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractBlockKernelNEON<>>     simd_bt_neon_kernel(raw_masks);
         #endif
 
         // Prepare a benchmark with repititions
@@ -107,6 +115,16 @@ inline void bench_kmer_spaced_multi(
         // Run the benchmark for all algorithms
         auto results = suite.run(
             sequences, // vector<std::string>
+
+            // naive, as baseline and validity check
+            bench(
+                "naive",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_naive(
+                        seq, k, naive_masks, compute_spaced_kmer_naive
+                    );
+                }
+            ),
 
             // char_to_nt_table
             #if defined(HAVE_BMI2)

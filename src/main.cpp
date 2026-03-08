@@ -20,11 +20,14 @@
 
 struct Options
 {
+    // Input fasta file with sequence data
+    std::string input_file;
+
     // Input sequence length to randomly generate
     std::string input_length;
 
-    // Input fasta file with sequence data
-    std::string input_file;
+    // Probability to randomly generate an N base instead of ACGT
+    std::string n_prob = "0.001";
 
     // Value of k for the k-mers
     std::string k;
@@ -47,15 +50,21 @@ int main(int argc, char **argv)
     // ------------------------------------------------------------------------
 
     parser.add_option(
+        "--input-fasta", "-i",
+        "Input fasta file with sequence data. Excludes --input-length",
+        opts.input_file
+    );
+
+    parser.add_option(
         "--input-length", "-l",
         "Input length to randomly geneate a sequence of ACGT. Excludes --input-fasta",
         opts.input_length
     );
 
     parser.add_option(
-        "--input-fasta", "-i",
-        "Input fasta file with sequence data. Excludes --input-length",
-        opts.input_file
+        "--n-prob", "-p",
+        "Probability to randomly generate an N base instead of ACGT",
+        opts.n_prob
     );
 
     parser.add_option(
@@ -114,8 +123,10 @@ int main(int argc, char **argv)
             size_t const default_len = (1u << 20);
             inp_len = default_len;
         }
-        std::cout << "Generating input sequence of length " << inp_len << "\n";
-        sequences = std::vector<std::string>{ random_acgt(inp_len) };
+        auto const n_prob = std::stod(opts.n_prob);
+        std::cout << "Generating input sequence of length " << inp_len;
+        std::cout << " with N probability " << n_prob << "\n";
+        sequences = std::vector<std::string>{ random_acgt( inp_len, n_prob )};
     }
 
     // Get the value for k.
@@ -161,11 +172,11 @@ int main(int argc, char **argv)
         }
     }
     std::cout << "Using " << single_masks.size() << " single masks\n";
-    std::cout << "Using " << multi_masks.size() << " multi mask sets with";
+    std::cout << "Using " << multi_masks.size() << " multi mask sets with {";
     for( auto const& masks : multi_masks ) {
         std::cout << " " << masks.size();
     }
-    std::cout << " masks\n";
+    std::cout << " } masks\n";
 
     // Prepare output directory
     std::filesystem::path out_dir;
@@ -191,17 +202,17 @@ int main(int argc, char **argv)
 
     // Run the benchmarks
 
-    // // Bit Extract Weights
-    // {
-    //     auto os_bit_extract_weights = get_ofstream(out_dir, "bit_extract_weights.csv" );
-    //     bench_bit_extract_weights( os_bit_extract_weights );
-    // }
+    // Bit Extract Weights
+    {
+        auto os_bit_extract_weights = get_ofstream(out_dir, "bit_extract_weights.csv" );
+        bench_bit_extract_weights( os_bit_extract_weights );
+    }
 
-    // // Bit Extract Blocks
-    // {
-    //     auto os_bit_extract_blocks = get_ofstream(out_dir, "bit_extract_blocks.csv" );
-    //     bench_bit_extract_blocks( os_bit_extract_blocks );
-    // }
+    // Bit Extract Blocks
+    {
+        auto os_bit_extract_blocks = get_ofstream(out_dir, "bit_extract_blocks.csv" );
+        bench_bit_extract_blocks( os_bit_extract_blocks );
+    }
 
     // Seq Encoding
     {
@@ -209,34 +220,34 @@ int main(int argc, char **argv)
         bench_seq_enc( sequences, os_seq_enc );
     }
 
-    // // Kmer extract
-    // // Test either the given size of k, or the full range if no k provided.
-    // {
-    //     auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
-    //     if( k == 0 ) {
-    //         bench_kmer_extract( sequences, os_kmer_extract );
-    //     } else {
-    //         bench_kmer_extract( sequences, k, k, os_kmer_extract );
-    //     }
-    // }
+    // Kmer extract
+    // Test either the given size of k, or the full range if no k provided.
+    {
+        auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
+        if( k == 0 ) {
+            bench_kmer_extract( sequences, os_kmer_extract );
+        } else {
+            bench_kmer_extract( sequences, k, k, os_kmer_extract );
+        }
+    }
 
-    // // Spaced kmers, single mask
-    // {
-    //     auto os_kmer_spaced_single = get_ofstream(out_dir, "kmer_spaced_single.csv" );
-    //     bench_kmer_spaced_single( sequences, single_masks, os_kmer_spaced_single );
-    // }
+    // Spaced kmers, single mask
+    {
+        auto os_kmer_spaced_single = get_ofstream(out_dir, "kmer_spaced_single.csv" );
+        bench_kmer_spaced_single( sequences, single_masks, os_kmer_spaced_single );
+    }
 
-    // // Spaced kmers, multi masks
-    // {
-    //     auto os_kmer_spaced_multi = get_ofstream(out_dir, "kmer_spaced_multi.csv" );
-    //     bench_kmer_spaced_multi( sequences, multi_masks, os_kmer_spaced_multi );
-    // }
+    // Spaced kmers, multi masks
+    {
+        auto os_kmer_spaced_multi = get_ofstream(out_dir, "kmer_spaced_multi.csv" );
+        bench_kmer_spaced_multi( sequences, multi_masks, os_kmer_spaced_multi );
+    }
 
-    // // Clark
-    // {
-    //     auto os_kmer_clark = get_ofstream(out_dir, "kmer_clark.csv" );
-    //     bench_kmer_clark( sequences, os_kmer_clark );
-    // }
+    // Clark
+    {
+        auto os_kmer_clark = get_ofstream(out_dir, "kmer_clark.csv" );
+        bench_kmer_clark( sequences, os_kmer_clark );
+    }
 
     return 0;
 }

@@ -246,7 +246,7 @@ inline std::vector<BitExtractInput> make_input_blocks(
         // add to the list of inputs
         v.push_back( BitExtractInput{
             value,
-            mask,
+            BitExtractMask(mask),
             bit_extract_block_table_preprocess( mask ),
             bit_extract_butterfly_table_preprocess( mask ),
             AdaptiveBitExtract( mask )
@@ -357,12 +357,12 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
             #ifdef PLATFORM_X86_64
             bench(
                 "bit_extract_instlatx",
-                [](BitExtractInput const& in){ return pext64_emu(in.value, in.mask);
+                [](BitExtractInput const& in){ return pext64_emu(in.value, in.mask.mask);
             }),
             #endif
             bench(
                 "bit_extract_zp7",
-                [](BitExtractInput const& in){ return zp7_pext_64(in.value, in.mask);
+                [](BitExtractInput const& in){ return zp7_pext_64(in.value, in.mask.mask);
             })
         );
 

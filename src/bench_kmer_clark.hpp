@@ -36,7 +36,16 @@ inline void bench_kmer_clark(
 
     // We store the masks here, in a simplified form with just the names.
     // The actual masks are hard-coded in clark.
-    std::vector<std::string> masks = {{ "T295", "T38570", "T58570" }};
+    std::vector<std::string> mask_names = {{ "T295", "T38570", "T58570" }};
+    std::vector<std::string> mask_strings = {{
+        "1111011101110010111001011011111",
+        "1111101011100101101110011011111",
+        "1111101001110101101100111011111"
+    }};
+    std::vector<BitExtractMask> masks;
+    for (auto const& mask : mask_strings) {
+        masks.push_back( BitExtractMask( prepare_spaced_kmer_bit_extract_mask( mask )));
+    }
 
     // Prepare a benchmark with repititions
     Microbench<std::string> suite(suite_title);
@@ -56,13 +65,13 @@ inline void bench_kmer_clark(
         bench(
             "clark_original",
             [&](std::string const& seq){
-                return clark_getObjectsDataComputeFull( seq, masks );
+                return clark_getObjectsDataComputeFull( seq, mask_names );
             }
         ),
         bench(
             "clark_improved",
             [&](std::string const& seq){
-                return clark_improved( seq );
+                return clark_improved( seq, masks );
             }
         )
     );

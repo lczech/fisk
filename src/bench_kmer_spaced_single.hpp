@@ -52,7 +52,7 @@ inline void bench_kmer_spaced_single(
         auto const k = masks[m].size();
 
         // Prepare masks for all implementations as needed
-        auto const comin_mask = comin_prepare_mask(masks[m]);
+        auto const comin_mask = prepare_naive_mask(masks[m]);
         auto const bit_ext_mask = prepare_spaced_kmer_bit_extract_mask(masks[m]);
         auto const bit_ext_block_mask = bit_extract_block_table_preprocess(bit_ext_mask);
         auto const bit_ext_butterfly_table = bit_extract_butterfly_table_preprocess(bit_ext_mask);
@@ -90,20 +90,20 @@ inline void bench_kmer_spaced_single(
         // Run the benchmark for all algorithms
         auto results = suite.run(
             sequences, // vector<std::string>
-            // comin
+            // naive, as baseline and validity check
             bench(
-                "comin",
+                "missh",
                 [&](std::string const& seq){
-                    return compute_spaced_kmer_hash_comin(
-                        seq, k, comin_mask, comin_compute_spaced_kmer
+                    return compute_spaced_kmer_hash_naive(
+                        seq, k, comin_mask, compute_spaced_kmer_missh
                     );
                 }
             ),
             bench(
-                "comin_improved",
+                "naive",
                 [&](std::string const& seq){
-                    return compute_spaced_kmer_hash_comin(
-                        seq, k, comin_mask, comin_compute_spaced_kmer_improved
+                    return compute_spaced_kmer_hash_naive(
+                        seq, k, comin_mask, compute_spaced_kmer_naive
                     );
                 }
             ),
@@ -114,7 +114,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_pext",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_mask, char_to_nt_table, bit_extract_pext
+                        seq, k, BitExtractMask(bit_ext_mask), char_to_nt_table, bit_extract_pext
                     );
                 }
             ),
@@ -123,7 +123,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_bitloop",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_mask, char_to_nt_table, bit_extract_bitloop
+                        seq, k, BitExtractMask(bit_ext_mask), char_to_nt_table, bit_extract_bitloop
                     );
                 }
             ),
@@ -131,7 +131,7 @@ inline void bench_kmer_spaced_single(
                 "bit_extract_byte_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_mask, char_to_nt_table, bit_extract_byte_table
+                        seq, k, BitExtractMask(bit_ext_mask), char_to_nt_table, bit_extract_byte_table
                     );
                 }
             ),

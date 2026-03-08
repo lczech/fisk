@@ -26,7 +26,7 @@
  * @tparam Func Callback function to be called for each valid k-mer.
  */
 template<typename Enc, typename Func>
-inline void for_each_kmer_2bit(
+inline void for_each_kmer(
     std::string_view seq, std::size_t k, Enc&& enc, Func&& func
 ) {
     // Iterate all k-mers of a sequence, encoded as 2-bit packed uint64_t.
@@ -77,12 +77,12 @@ inline void for_each_kmer_2bit(
  * @brief Iterate a sequence, extract all k-mers from it (using re-extraction each time),
  * and call a callback function on each k-mer.
  *
- * This is the same as for_each_kmer_2bit(), but re-extract the k-mer each time from the input
+ * This is the same as for_each_kmer(), but re-extract the k-mer each time from the input
  * characters. This is of course slower, but apparently used in practice. We hence implement
  * it here for benchmarking.
  */
 template<typename Enc, typename Func>
-inline void for_each_kmer_2bit_reextract(
+inline void for_each_kmer_reextract(
     std::string_view seq, std::size_t k, Enc&& enc, Func&& func
 ) {
     // Same as above, but each k-mer is extracted separately.
@@ -139,7 +139,7 @@ inline std::uint64_t compute_kmer_hash(
     // by xor-ing all k-mers, just as a validity check that all implementations give the same.
     std::uint64_t hash = 0;
 
-    for_each_kmer_2bit(
+    for_each_kmer(
         std::string_view(seq),
         k,
         enc,
@@ -167,7 +167,7 @@ inline std::uint64_t compute_kmer_hash_reextract(
     // by xor-ing all k-mers, just as a validity check that all implementations give the same.
     std::uint64_t hash = 0;
 
-    for_each_kmer_2bit_reextract(
+    for_each_kmer_reextract(
         std::string_view(seq),
         k,
         enc,

@@ -61,18 +61,31 @@ inline std::vector<std::string> load_fasta_clean(std::string const& path)
 }
 
 /**
- * @brief Generate a string of random `ACGT` letters of a given length @p n.
+ * @brief Generate a string of random `ACGT` letters of a given length @p len,
+ * and a probability @p n_prob in [0.0, 1.0] of generating invalid `N` bases.
  */
-inline std::string random_acgt(std::size_t n)
+inline std::string random_acgt(std::size_t len, double n_prob = 0.0)
 {
+    // Draw from ACGT
     static thread_local std::mt19937_64 rng{std::random_device{}()};
     static constexpr std::array<char, 4> bases{'A','C','G','T'};
-    std::uniform_int_distribution<size_t> dist(0, 3);
+    std::uniform_int_distribution<size_t> base_dist(0, 3);
 
+    // Add random invalid N characters
+    if( !std::isfinite(n_prob) || n_prob < 0.0 || n_prob > 1.0 ) {
+        throw std::invalid_argument("Invalid probability not in [0.0, 1.0]");
+    }
+    std::bernoulli_distribution n_dist(n_prob);
+
+    // Fill the result string
     std::string s;
-    s.resize(n);
-    for(std::size_t i = 0; i < n; ++i) {
-        s[i] = bases[dist(rng)];
+    s.resize(len);
+    for(std::size_t i = 0; i < len; ++i) {
+        if( n_dist(rng) ) {
+            s[i] = 'N';
+        } else {
+            s[i] = bases[base_dist(rng)];
+        }
     }
     return s;
 }

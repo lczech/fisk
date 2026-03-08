@@ -4,12 +4,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 #include <type_traits>
 
 #include "bit_extract.hpp"
 #include "bit_extract_simd.hpp"
+#include "kmer_spaced.hpp"
 #include "seq_enc.hpp"
 
 // =================================================================================================
@@ -17,125 +17,216 @@
 // =================================================================================================
 
 /**
- * @brief Helper function for for_each_spaced_kmer_simd() to emit all k-mers
- * in the lanes during one step of the iteration.
+ * @brief Emit all valid SIMD lanes in order.
+ *
+ * The function only emit lanes up to `L`, which is the number of lanes for the SIMD architecture.
+ * For each lane, we check if the positions that are kept in the mask are valid, meaning that the
+ * spaced k-mer only contains valid characters, and only then emits it to the callback.
  */
-template <int L, class Callback>
-inline void emit_spaced_kmer_lanes(
+template<int L, typename Callback>
+inline void emit_simd_lanes_spaced_kmers(
     std::uint64_t const* out,
-    unsigned valid_bits,
+    std::uint64_t const* valid_words,
+    std::uint64_t mask,
     std::size_t start_pos,
-    Callback&& callback
+    Callback&& cb
 ) {
-    // The template param L dictates how many lanes the SIMD architecture has.
-    // We use constexpr statements here to unroll the relevant emissions at compile time.
-    if constexpr (L >= 1) { if (valid_bits & 0x01u) { callback(start_pos + 0, out[0]); }}
-    if constexpr (L >= 2) { if (valid_bits & 0x02u) { callback(start_pos + 1, out[1]); }}
-    if constexpr (L >= 3) { if (valid_bits & 0x04u) { callback(start_pos + 2, out[2]); }}
-    if constexpr (L >= 4) { if (valid_bits & 0x08u) { callback(start_pos + 3, out[3]); }}
-    if constexpr (L >= 5) { if (valid_bits & 0x10u) { callback(start_pos + 4, out[4]); }}
-    if constexpr (L >= 6) { if (valid_bits & 0x20u) { callback(start_pos + 5, out[5]); }}
-    if constexpr (L >= 7) { if (valid_bits & 0x40u) { callback(start_pos + 6, out[6]); }}
-    if constexpr (L >= 8) { if (valid_bits & 0x80u) { callback(start_pos + 7, out[7]); }}
+    // Compile-time reduction of unused lanes when L < 8 (e.g., for SSE2).
+    if constexpr (L >= 1) { if ((valid_words[0] & mask) == mask) { cb(start_pos + 0, out[0]); }}
+    if constexpr (L >= 2) { if ((valid_words[1] & mask) == mask) { cb(start_pos + 1, out[1]); }}
+    if constexpr (L >= 3) { if ((valid_words[2] & mask) == mask) { cb(start_pos + 2, out[2]); }}
+    if constexpr (L >= 4) { if ((valid_words[3] & mask) == mask) { cb(start_pos + 3, out[3]); }}
+    if constexpr (L >= 5) { if ((valid_words[4] & mask) == mask) { cb(start_pos + 4, out[4]); }}
+    if constexpr (L >= 6) { if ((valid_words[5] & mask) == mask) { cb(start_pos + 5, out[5]); }}
+    if constexpr (L >= 7) { if ((valid_words[6] & mask) == mask) { cb(start_pos + 6, out[6]); }}
+    if constexpr (L >= 8) { if ((valid_words[7] & mask) == mask) { cb(start_pos + 7, out[7]); }}
 }
 
 // =================================================================================================
-//     Spaced k-mer Iteration Single Mask
+//     SIMD Spaced k-mer Extraction
 // =================================================================================================
 
-// Shared streaming body (skip invalid), per-kmer callback (ordered)
-template<class Kernel, class Callback>
+/**
+ * @brief Iterate a sequence and extract spaced k-mers using SIMD bit extraction,
+ * for an array of kernels.
+ *
+ * This is the implementation used for arrays and single kernels. The single-kernel overload
+ * simply forwards into this by wrapping the kernel into a std::array<Kernel,1>. That has a slight
+ * overhead for some int copies, but should be negligible. If needed, do this copy only once outside.
+ *
+ * @tparam Kernel    SIMD/scalar kernel type.
+ * @tparam NMasks    Number of kernels in the array.
+ * @tparam Enc       Encoder functor, returns 0..3 for valid bases, >=4 for invalid.
+ * @tparam Callback  Callback functor, called as callback(mask_idx, pos, spaced_kmer).
+ */
+template<typename Kernel, std::size_t NMasks, typename Enc, typename Callback>
 inline void for_each_spaced_kmer_simd(
     std::string_view seq,
-    size_t const span_k,
-    Kernel const& kernel,
+    std::size_t const span_k,
+    std::array<Kernel, NMasks> const& kernels,
+    Enc&& enc,
     Callback&& callback
 ) {
-    // Assertions and checks
+    static_assert(NMasks > 0, "Need at least one kernel.");
     static_assert(
-        std::is_invocable_v<Callback, std::size_t, std::uint64_t>,
-        "Callback must be callable as callback(start_pos, value)."
+        std::is_invocable_v<Callback, std::size_t, std::size_t, std::uint64_t>,
+        "Callback must be callable as callback(mask_idx, pos, spaced_kmer)."
     );
-    if( span_k < 1 || span_k > 32 ) {
-        throw std::invalid_argument("k must be in [1,32]");
+
+    // Input boundary checks
+    if (span_k == 0 || span_k > 32) {
+        throw std::runtime_error(
+            "Invalid call to SIMD spaced k-mer extraction with k not in [1, 32]"
+        );
     }
+    if (seq.size() < span_k) {
+        return;
+    }
+
+    // Optional sanity checks on the masks. Left out here for benchmarking speed.
+    // for (auto const& kernel : kernels) {
+    //     if( !is_valid_spaced_kmer_mask(kernel.mask) ) {
+    //         throw std::runtime_error("Invalid spaced k-mer mask");
+    //     }
+    // }
 
     // Mask to keep only the lowest 2*k bits, works for all k in [1, 32]
     std::uint64_t const span_mask = (span_k == 32)
-        ?  ~std::uint64_t{0}                    // all 64 bits
-        : ((std::uint64_t{1} << (2 * span_k)) - 1u)  // lower 2*k bits set
+        ? ~std::uint64_t{0}
+        : ((std::uint64_t{1} << (2 * span_k)) - 1u)
     ;
 
+    // Shorthands
+    using simd_vector = typename Kernel::simd_vector;
+    char const*       data    = seq.data();
+    std::size_t const seq_len = seq.size();
+
     // Set up input and output buffers to transfer to and from the simd kernel.
-    constexpr std::size_t L = Kernel::lanes;
-    alignas(64) std::uint64_t in[L];
-    alignas(64) std::uint64_t out[L];
+    constexpr int L = Kernel::lanes;
+    alignas(64) std::uint64_t in_words[L];
+    alignas(64) std::uint64_t out_words[L];
+    alignas(64) std::uint64_t valid_words[L];
 
     // Sliding window kmer along the sequence, and current number of valid input chars
-    std::uint64_t kmer = 0;
-    std::size_t valid_run = 0;
+    std::uint64_t kmer_bits  = 0;
+    std::uint64_t valid_bits = 0;
 
     // Iterate the sequence. Each kmer is only constructed once. Per iteration of
-    // this outer loop, the inner loop does L many increments along the sequence.
+    // this outer loop, the inner loop does L many increments along the sequence,
+    // and calls all mask kernels to produce the spaced k-mers.
     std::size_t i = 0;
-    for (; i + L <= seq.size(); i += L ) {
-        unsigned valid_bits = 0;
+    for (; i + std::size_t(L) <= seq_len; i += std::size_t(L)) {
 
-        // Inner loop to fill all SIMD lanes with consecutive kmers.
+        // Build one rolling kmer per lane, from consecutive sequence positions.
+        // That is, `kmer_bits` is our rolling k-mer, and in each iteration here
+        // its current state (corresponding to one k-mer along the input sequence)
+        // gets copied into one of the lanes, until all lanes are filled.
         #pragma unroll
-        for( std::size_t lane = 0; lane < L; ++lane ) {
-            std::uint8_t const code = char_to_nt_table(seq[i + lane]);
+        for (std::size_t lane = 0; lane < std::size_t(L); ++lane) {
+            std::uint8_t const code = static_cast<std::uint8_t>(enc(data[i + lane]));
 
-            // Check for input char validity, and reset the kmer if not.
-            if( code == SEQ_NT4_INVALID ) {
-                kmer = 0;
-                valid_run = 0;
-                in[lane] = 0;
-                continue;
-            }
-            ++valid_run;
+            // Shift in the next base. For invalid bases, the low 2 bits are irrelevant,
+            // because validity is checked separately before emission.
+            kmer_bits = ((kmer_bits << 2) & span_mask) | (code & 0x03u);
 
-            // Update kmer and input lane buffer, and set the valid bit for the lane.
-            kmer = ((kmer << 2) | std::uint64_t(code & 0x03u)) & span_mask;
-            in[lane] = kmer;
-            valid_bits |= (unsigned(valid_run >= span_k) << lane);
+            // Shift in 11 for valid, 00 for invalid. This ensures that spaced k-mers which
+            // contain an invalid base in them (which was not masked out) will be skipped.
+            valid_bits
+                = ((valid_bits << 2) & span_mask)
+                | (static_cast<std::uint64_t>(code < 4) * 0x03u)
+            ;
+
+            // Store the kmer and its valid bits in the current lane.
+            in_words[lane]    = kmer_bits;
+            valid_words[lane] = valid_bits;
         }
 
-        // Shortcut if no lane was valid. No need to run the simd kernel.
-        if( !valid_bits) {
-            continue;
-        }
-
-        // Run bit extraction in parallel across the simd lanes.
-        typename Kernel::simd_vector X = kernel.load(in);
-        typename Kernel::simd_vector Y = kernel.bit_extract(X);
-        kernel.store( Y, out );
-
-        // Emit all lanes in order as spaced kmers to the callback function.
+        // Load vector lanes once from all stored kmers.
+        simd_vector const x = Kernel::load(in_words);
         std::size_t const start_pos = i - (span_k - 1);
-        emit_spaced_kmer_lanes<L>( out, valid_bits, start_pos, std::forward<Callback>( callback ));
+
+        // Process all masks/kernels. This loop is compile-time unrolled for speed.
+        // We apply each mask to all k-mers stored in the lanes, and emit the valid ones
+        // to the callback function.
+        #pragma unroll
+        for (std::size_t m = 0; m < NMasks; ++m) {
+            Kernel const& kernel = kernels[m];
+
+            // Extract the bits across all lanes, and emit the valid ones.
+            simd_vector const y = kernel.bit_extract(x);
+            Kernel::store(y, out_words);
+            emit_simd_lanes_spaced_kmers<L>(
+                out_words,
+                valid_words,
+                kernel.mask.mask,
+                start_pos,
+                [&](std::size_t pos, std::uint64_t value) {
+                    callback(m, pos, value);
+                }
+            );
+        }
     }
 
-    // Tail, same as above, but scalar
-    for(; i < seq.size(); ++i) {
-        // Process the next input char
-        std::uint8_t const code = char_to_nt_table(seq[i]);
-        if( code == SEQ_NT4_INVALID ) {
-            kmer = 0;
-            valid_run = 0;
-            continue;
-        }
-        ++valid_run;
+    // Tail loop for the final scalar remainder.
+    for (; i < seq_len; ++i) {
+        std::uint8_t const code = static_cast<std::uint8_t>(enc(data[i]));
 
-        // Update the k-mer and emit the callback
-        kmer = ((kmer << 2) | std::uint64_t(code & 0x03u)) & span_mask;
-        if (valid_run < span_k) {
-            continue;
+        // Shift in the new character, as before.
+        kmer_bits = ((kmer_bits << 2) & span_mask) | (code & 0x03u);
+        valid_bits
+            = ((valid_bits << 2) & span_mask)
+            | (static_cast<std::uint64_t>(code < 4) * 0x03u)
+        ;
+
+        // Apply the callback for all masks that are satisfied at this position.
+        for (std::size_t m = 0; m < NMasks; ++m) {
+            Kernel const& kernel = kernels[m];
+            if ((valid_bits & kernel.mask.mask) == kernel.mask.mask) {
+                callback(m, i + 1 - span_k, kernel.bit_extract(kmer_bits));
+            }
         }
-        std::uint64_t const y = kernel.bit_extract( kmer );
-        callback(i - (span_k - 1), y);
     }
 }
+
+/**
+ * @brief Iterate a sequence and extract spaced k-mers using SIMD bit extraction,
+ * for a single kernel.
+ *
+ * This is just a thin wrapper that copies the kernel into std::array<Kernel,1>
+ * and forwards to the array implementation above.
+ *
+ * @tparam Kernel    SIMD/scalar kernel type.
+ * @tparam Enc       Encoder functor, returns 0..3 for valid bases, >=4 for invalid.
+ * @tparam Callback  Callback functor, called as callback(pos, value).
+ */
+template<typename Kernel, typename Enc, typename Callback>
+inline void for_each_spaced_kmer_simd(
+    std::string_view seq,
+    std::size_t const span_k,
+    Kernel const& kernel,
+    Enc&& enc,
+    Callback&& callback
+) {
+    static_assert(
+        std::is_invocable_v<Callback, std::size_t, std::uint64_t>,
+        "Callback must be callable as callback(pos, value)."
+    );
+
+    std::array<Kernel, 1> kernels{{kernel}};
+    for_each_spaced_kmer_simd(
+        seq,
+        span_k,
+        kernels,
+        std::forward<Enc>(enc),
+        [&](std::size_t /*mask_idx*/, std::size_t pos, std::uint64_t value) {
+            callback(pos, value);
+        }
+    );
+}
+
+// =================================================================================================
+//     XOR Hashing
+// =================================================================================================
 
 template<class Kernel>
 inline std::uint64_t compute_spaced_kmer_hash_simd(
@@ -147,123 +238,12 @@ inline std::uint64_t compute_spaced_kmer_hash_simd(
         std::string_view(seq),
         k,
         kernel,
+        char_to_nt_table,
         [&](std::size_t /* start_pos */, std::uint64_t wmer) {
             hash ^= wmer;
         }
     );
     return hash;
-}
-
-// =================================================================================================
-//     Spaced k-mer Iteration Multi Masks
-// =================================================================================================
-
-template <class Kernel, std::size_t NMasks, class Callback>
-inline void for_each_spaced_kmer_simd(
-    std::string_view seq,
-    size_t const span_k,
-    std::array<Kernel, NMasks> const& kernels,
-    Callback&& callback
-) {
-    static_assert(NMasks > 0, "Need at least one mask/kernel.");
-    static_assert(
-        std::is_invocable_v<Callback, std::size_t, std::size_t, std::uint64_t>,
-        "Callback must be callable as callback(mask_idx, start_pos, value)."
-    );
-    if( span_k < 1 || span_k > 32 ) {
-        throw std::invalid_argument("k must be in [1,32]");
-    }
-
-    // Mask to keep only the lowest 2*k bits, works for all k in [1, 32]
-    std::uint64_t const span_mask = (span_k == 32)
-        ?  ~std::uint64_t{0}                    // all 64 bits
-        : ((std::uint64_t{1} << (2 * span_k)) - 1u)  // lower 2*k bits set
-    ;
-
-    // Set up input and output buffers to transfer to and from the simd kernel.
-    constexpr int L = Kernel::lanes;
-    alignas(64) std::uint64_t in[L];
-    alignas(64) std::uint64_t out[L];
-
-    // Sliding window kmer along the sequence, and current number of valid input chars
-    std::uint64_t kmer = 0;
-    std::size_t valid_run = 0;
-
-    // Iterate the sequence. Each kmer is only constructed once. Per iteration of
-    // this outer loop, the inner loop does L many increments along the sequence,
-    // and calls all mask kernels to produce the spaced k-mers.
-    std::size_t i = 0;
-    for (; i + (std::size_t)L <= seq.size(); i += (std::size_t)L) {
-        unsigned valid_bits = 0;
-
-        // Inner loop to fill all SIMD lanes with consecutive kmers.
-        #pragma unroll
-        for( std::size_t lane = 0; lane < L; ++lane ) {
-            std::uint8_t const code = char_to_nt_table(seq[i + lane]);
-
-            // Check for input char validity, and reset the kmer if not.
-            if( code == SEQ_NT4_INVALID ) {
-                kmer = 0;
-                valid_run = 0;
-                in[lane] = 0;
-                continue;
-            }
-            ++valid_run;
-
-            // Update kmer and input lane buffer, and set the valid bit for the lane.
-            kmer = ((kmer << 2) | std::uint64_t(code & 0x03u)) & span_mask;
-            in[lane] = kmer;
-            valid_bits |= (unsigned(valid_run >= span_k) << lane);
-        }
-
-        // Shortcut if no lane was valid. No need to run the simd kernel.
-        if( !valid_bits) {
-            continue;
-        }
-
-        // Load windows vector once
-        typename Kernel::simd_vector X = kernels[0].load(in);
-        std::size_t const start_pos = i - (span_k - 1);
-
-        // Loop over masks (kernels)
-        #pragma unroll
-        for (std::size_t mid = 0; mid < NMasks; ++mid) {
-            typename Kernel::simd_vector Y = kernels[mid].bit_extract(X);
-            kernels[mid].store( Y, out );
-
-            emit_spaced_kmer_lanes<L>( out, valid_bits, start_pos,
-                [&]( std::size_t pos, std::uint64_t val ) {
-                    callback( mid, pos, val );
-                }
-            );
-        }
-    }
-
-    // Tail, same as above, but scalar
-    for (; i < seq.size(); ++i) {
-        // Process the next input char
-        std::uint8_t const code = char_to_nt_table(seq[i]);
-        if( code == SEQ_NT4_INVALID ) {
-            kmer = 0;
-            valid_run = 0;
-            continue;
-        }
-        ++valid_run;
-
-        // Update the k-mer
-        kmer = ((kmer << 2) | std::uint64_t(code & 0x03u)) & span_mask;
-        if (valid_run < span_k) {
-            continue;
-        }
-
-        // Emit the callback for every mask
-        std::size_t const pos = i - (span_k - 1);
-        #pragma unroll
-        for (std::size_t mid = 0; mid < NMasks; ++mid) {
-            std::uint64_t const y = kernels[mid].bit_extract( kmer );
-            callback(mid, pos, y);
-        }
-    }
 }
 
 template<class Kernel>
@@ -282,6 +262,7 @@ inline std::uint64_t compute_spaced_kmer_hash_simd(
             std::string_view(seq),
             span_k,
             kernels_arr,
+            char_to_nt_table,
             [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t val) {
                 hash ^= val;
             }

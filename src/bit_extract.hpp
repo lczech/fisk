@@ -28,19 +28,42 @@
 #include "sys_info.hpp"
 
 // =================================================================================================
+//     Bit extract mask
+// =================================================================================================
+
+/**
+ * @brief Strongly typed bit extract mask.
+ *
+ * This is to ensure we have a uniform interface for all bit extraction algorithms,
+ * and to avoid ambiguity in their usage, as bit extract otherwise takes two uints.
+ */
+struct BitExtractMask
+{
+    // Mask, accessible as a public member.
+    std::uint64_t mask;
+
+    // Constructors, default and taking the mask value.
+    BitExtractMask() = default;
+    constexpr explicit BitExtractMask( std::uint64_t m ) noexcept : mask{m} {}
+
+    // Operator conversion
+    constexpr operator std::uint64_t() const noexcept { return mask; }
+};
+
+// =================================================================================================
 //     Bit extract via hardware PEXT
 // =================================================================================================
 
 #if defined(HAVE_BMI2)
 
 /**
- * @brief Bit extract via hardware PEXT from them BMI2 instruction set.
+ * @brief Bit extract via hardware PEXT from the BMI2 instruction set.
  */
-inline std::uint64_t bit_extract_pext(std::uint64_t x, std::uint64_t mask)
+inline std::uint64_t bit_extract_pext(std::uint64_t x, BitExtractMask mask)
 {
     // For speed, not using bmi2_enabled() for check here, and instead assume
     // that hardware availablility means we are allowed to call it.
-    return _pext_u64(x, mask);
+    return _pext_u64(x, mask.mask);
 }
 
 #endif
@@ -52,21 +75,20 @@ inline std::uint64_t bit_extract_pext(std::uint64_t x, std::uint64_t mask)
 /**
  * @brief Bit extract via a simple bit loop over all bits set in the mask.
  */
-inline std::uint64_t bit_extract_bitloop(std::uint64_t x, std::uint64_t mask) noexcept
+inline std::uint64_t bit_extract_bitloop(std::uint64_t x, BitExtractMask mask) noexcept
 {
     // This is the classic "extract selected bits and pack them densely" loop.
     // Complexity ~64 iterations, but cheap operations.
 
     std::uint64_t out = 0;
-    std::uint64_t out_bit = 1;
-    std::uint64_t zero = 0;
-    std::uint64_t one  = 1;
+    std::uint64_t bit = 1;
+    std::uint64_t msk = mask.mask;
 
-    while (mask) {
-        std::uint64_t lsb = mask & (~mask + 1); // mask & -mask, but unsigned-safe
-        out |= (x & lsb) ? out_bit : zero;
-        mask ^= lsb;
-        out_bit <<= one;
+    while (msk) {
+        std::uint64_t lsb = msk & (~msk + 1); // mask & -mask, but unsigned-safe
+        out |= (x & lsb) ? bit : 0;
+        msk ^= lsb;
+        bit <<= 1;
     }
     return out;
 }
@@ -81,7 +103,7 @@ inline std::uint64_t bit_extract_bitloop(std::uint64_t x, std::uint64_t mask) no
  *
  * This might be a bit faster, but mostly just used out of curiosity. Not really that useful.
  */
-inline std::uint64_t bit_extract_split32(std::uint64_t x, std::uint64_t mask) noexcept
+inline std::uint64_t bit_extract_split32(std::uint64_t x, BitExtractMask mask) noexcept
 {
     // Same as above, but split into two 32-bit halves.
     // Sometimes generates slightly better code depending on compiler/flags.
@@ -104,8 +126,8 @@ inline std::uint64_t bit_extract_split32(std::uint64_t x, std::uint64_t mask) no
 
     std::uint32_t x_lo = static_cast<std::uint32_t>(x);
     std::uint32_t x_hi = static_cast<std::uint32_t>(x >> 32);
-    std::uint32_t m_lo = static_cast<std::uint32_t>(mask);
-    std::uint32_t m_hi = static_cast<std::uint32_t>(mask >> 32);
+    std::uint32_t m_lo = static_cast<std::uint32_t>(mask.mask);
+    std::uint32_t m_hi = static_cast<std::uint32_t>(mask.mask >> 32);
 
     std::uint32_t out_lo = bit_extract_bitloop32_(x_lo, m_lo);
 
@@ -170,7 +192,7 @@ struct BitExtractByteTable
  * and loops over all bytes to extract them individually, then shifts them to the correct position
  * using a second, smaller, lookup table for each byte.
  */
-inline std::uint64_t bit_extract_byte_table(std::uint64_t x, std::uint64_t mask) noexcept
+inline std::uint64_t bit_extract_byte_table(std::uint64_t x, BitExtractMask mask) noexcept
 {
     // Use the precomputed bytes to implement a fast pext.
     static const BitExtractByteTable byte_table;
@@ -179,7 +201,7 @@ inline std::uint64_t bit_extract_byte_table(std::uint64_t x, std::uint64_t mask)
     unsigned shift = 0;
 
     for (int i = 0; i < 8; ++i) {
-        std::uint8_t mm = static_cast<std::uint8_t>(mask >> (8 * i));
+        std::uint8_t mm = static_cast<std::uint8_t>(mask.mask >> (8 * i));
         std::uint8_t xx = static_cast<std::uint8_t>(x >> (8 * i));
         std::uint64_t part = static_cast<std::uint64_t>(byte_table.table[mm][xx]);
         out |= (part << shift);
@@ -201,6 +223,9 @@ inline std::uint64_t bit_extract_byte_table(std::uint64_t x, std::uint64_t mask)
  */
 struct BitExtractBlockTable
 {
+    // The original underlying bit mask.
+    std::uint64_t mask{};
+
     // One entry per run of consecutive 1-bits in the original mask.
     // First, a mask selecting that run at its original bit positions.
     // Second, right-shift value to move that run to its packed output position.
@@ -219,7 +244,8 @@ struct BitExtractBlockTable
  */
 inline BitExtractBlockTable bit_extract_block_table_preprocess( std::uint64_t mask )
 {
-    BitExtractBlockTable table;
+    BitExtractBlockTable table{};
+    table.mask = mask;
 
     // Helper: build a contiguous run mask of length len at bit position start.
     auto make_run_mask64 = [](unsigned start, unsigned len) -> std::uint64_t
@@ -392,19 +418,19 @@ inline BitExtractButterflyTable bit_extract_butterfly_table_preprocess( std::uin
  */
 inline std::uint64_t bit_extract_butterfly_table(
     std::uint64_t x,
-    BitExtractButterflyTable const& nt
+    BitExtractButterflyTable const& bf
 ) noexcept {
-    x &= nt.mask;
+    x &= bf.mask;
     auto step = [&]( std::size_t s, std::uint64_t mv_i )
     {
         std::uint64_t t = x & mv_i;
         x = (x ^ t) | (t >> s);
     };
-    step(  1, nt.sieves[0] );
-    step(  2, nt.sieves[1] );
-    step(  4, nt.sieves[2] );
-    step(  8, nt.sieves[3] );
-    step( 16, nt.sieves[4] );
-    step( 32, nt.sieves[5] );
+    step(  1, bf.sieves[0] );
+    step(  2, bf.sieves[1] );
+    step(  4, bf.sieves[2] );
+    step(  8, bf.sieves[3] );
+    step( 16, bf.sieves[4] );
+    step( 32, bf.sieves[5] );
     return x;
 }

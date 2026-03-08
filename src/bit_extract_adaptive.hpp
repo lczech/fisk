@@ -87,8 +87,8 @@ public:
     {
         // Prepare the masks. We do not need block tables if we hard-set pext mode.
         if( mode_ != ExtractMode::kPext ) {
-            block_table_ = bit_extract_block_table_preprocess(mask_);
-            butterfly_table_ = bit_extract_butterfly_table_preprocess(mask_);
+            block_table_ = bit_extract_block_table_preprocess(mask);
+            butterfly_table_ = bit_extract_butterfly_table_preprocess(mask);
         }
 
         // Find the fastest mode if requested, or hard-set the extractor function.
@@ -397,7 +397,7 @@ private:
     BitExtractFunction bit_extr_func_ = nullptr;
 
     // Bit extract mask and block table for the block algorithm
-    std::uint64_t mask_;
+    BitExtractMask mask_;
     BitExtractBlockTable block_table_;
     BitExtractButterflyTable butterfly_table_;
 };
