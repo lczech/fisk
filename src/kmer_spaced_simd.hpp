@@ -23,7 +23,7 @@
  * For each lane, we check if the positions that are kept in the mask are valid, meaning that the
  * spaced k-mer only contains valid characters, and only then emits it to the callback.
  */
-template<int L, typename Callback>
+template<std::size_t L, typename Callback>
 inline void emit_simd_lanes_spaced_kmers(
     std::uint64_t const* out,
     std::uint64_t const* valid_words,
@@ -102,7 +102,7 @@ inline void for_each_spaced_kmer_simd(
     std::size_t const seq_len = seq.size();
 
     // Set up input and output buffers to transfer to and from the simd kernel.
-    constexpr int L = Kernel::lanes;
+    constexpr std::size_t L = Kernel::lanes;
     alignas(64) std::uint64_t in_words[L];
     alignas(64) std::uint64_t out_words[L];
     alignas(64) std::uint64_t valid_words[L];
@@ -115,14 +115,23 @@ inline void for_each_spaced_kmer_simd(
     // this outer loop, the inner loop does L many increments along the sequence,
     // and calls all mask kernels to produce the spaced k-mers.
     std::size_t i = 0;
-    for (; i + std::size_t(L) <= seq_len; i += std::size_t(L)) {
+    for (; i + L <= seq_len; i += L ) {
+
+        // Some preprocessor shenanigans to encourage loop unrolling
+        #if defined(__clang__)
+            #define PRAGMA_UNROLL_16 _Pragma("unroll 16")
+        #elif defined(__GNUC__)
+            #define PRAGMA_UNROLL_16 _Pragma("GCC unroll 16")
+        #else
+            #define PRAGMA_UNROLL_16
+        #endif
 
         // Build one rolling kmer per lane, from consecutive sequence positions.
         // That is, `kmer_bits` is our rolling k-mer, and in each iteration here
         // its current state (corresponding to one k-mer along the input sequence)
         // gets copied into one of the lanes, until all lanes are filled.
-        #pragma unroll
-        for (std::size_t lane = 0; lane < std::size_t(L); ++lane) {
+        PRAGMA_UNROLL_16
+        for (std::size_t lane = 0; lane < L; ++lane) {
             std::uint8_t const code = static_cast<std::uint8_t>(enc(data[i + lane]));
 
             // Shift in the next base. For invalid bases, the low 2 bits are irrelevant,
@@ -148,7 +157,7 @@ inline void for_each_spaced_kmer_simd(
         // Process all masks/kernels. This loop is compile-time unrolled for speed.
         // We apply each mask to all k-mers stored in the lanes, and emit the valid ones
         // to the callback function.
-        #pragma unroll
+        PRAGMA_UNROLL_16
         for (std::size_t m = 0; m < NMasks; ++m) {
             Kernel const& kernel = kernels[m];
 
@@ -165,6 +174,8 @@ inline void for_each_spaced_kmer_simd(
                 }
             );
         }
+
+        #undef PRAGMA_UNROLL_16
     }
 
     // Tail loop for the final scalar remainder.

@@ -179,22 +179,6 @@ inline void bench_kmer_spaced_single(
             ),
 
             // simd kernels
-            bench(
-                "simd_butterfly_table_scalar",
-                [&](std::string const& seq){
-                    return compute_spaced_kmer_hash_simd(
-                        seq, k, simd_bf_scalar_kernel
-                    );
-                }
-            ),
-            bench(
-                "simd_block_table_scalar",
-                [&](std::string const& seq){
-                    return compute_spaced_kmer_hash_simd(
-                        seq, k, simd_bt_scalar_kernel
-                    );
-                }
-            ),
             #if defined(HAVE_SSE2)
             bench(
                 "simd_butterfly_table_sse2",
@@ -267,11 +251,29 @@ inline void bench_kmer_spaced_single(
                 }
             ),
             #endif
+            #if defined(HAVE_BMI2)
             bench(
                 "simd_pext",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash_simd(
                         seq, k, simd_pext_kernel
+                    );
+                }
+            ),
+            #endif
+            bench(
+                "simd_butterfly_table_scalar",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_bf_scalar_kernel
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_scalar",
+                [&](std::string const& seq){
+                    return compute_spaced_kmer_hash_simd(
+                        seq, k, simd_bt_scalar_kernel
                     );
                 }
             )

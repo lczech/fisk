@@ -71,7 +71,7 @@
  *
  * Valid lane counts are 1, 2, 4, and 8, i.e., how many PEXT are being run.
  */
-template <int Lanes = 8>
+template <std::size_t Lanes = 8>
 struct BitExtractKernelPEXT
 {
     static_assert(
@@ -80,7 +80,7 @@ struct BitExtractKernelPEXT
     );
 
     using simd_vector = std::array<std::uint64_t, Lanes>;
-    static constexpr int lanes = Lanes;
+    static constexpr std::size_t lanes = Lanes;
     BitExtractMask mask{};
 
     BitExtractKernelPEXT() = default;
@@ -155,7 +155,7 @@ struct BitExtractKernelButterflyScalar
 {
     // Regular scalar values for the butterfly table
     using simd_vector = std::uint64_t;
-    static constexpr int lanes = 1;
+    static constexpr std::size_t lanes = 1;
     BitExtractButterflyTable mask{};
 
     BitExtractKernelButterflyScalar() = default;
@@ -193,7 +193,7 @@ struct BitExtractKernelButterflySSE2
 {
     // Regular butterfly table values, and simd copies across lanes
     using simd_vector = __m128i;
-    static constexpr int lanes = 2;
+    static constexpr std::size_t lanes = 2;
     BitExtractButterflyTable mask{};
     __m128i mask_simd{};
     __m128i sieves_simd[6]{};
@@ -260,7 +260,7 @@ struct BitExtractKernelButterflySSE2
 struct BitExtractKernelButterflyAVX2
 {
     using simd_vector = __m256i;
-    static constexpr int lanes = 4;
+    static constexpr std::size_t lanes = 4;
     BitExtractButterflyTable mask{};
     __m256i mask_simd{};
     __m256i sieves_simd[6]{};
@@ -326,7 +326,7 @@ struct BitExtractKernelButterflyAVX2
 struct BitExtractKernelButterflyAVX512
 {
     using simd_vector = __m512i;
-    static constexpr int lanes = 8;
+    static constexpr std::size_t lanes = 8;
     BitExtractButterflyTable mask{};
     __m512i mask_simd{};
     __m512i sieves_simd[6]{};
@@ -392,7 +392,7 @@ struct BitExtractKernelButterflyAVX512
 struct BitExtractKernelButterflyNEON
 {
     using simd_vector = uint64x2_t;
-    static constexpr int lanes = 2;
+    static constexpr std::size_t lanes = 2;
     BitExtractButterflyTable mask{};
     uint64x2_t mask_simd{};
     uint64x2_t sieves_simd[6]{};
@@ -420,18 +420,15 @@ struct BitExtractKernelButterflyNEON
 
     simd_vector bit_extract( simd_vector x ) const noexcept
     {
+        // vshrq_n_u64() needs a compile time constant shift value,
+        // which we provide here via template paramater
         x = vandq_u64(x, mask_simd);
-        auto step_ = [&](int s, uint64x2_t mvv)
-        {
-            uint64x2_t t = vandq_u64(x, mvv);
-            x = vorrq_u64(veorq_u64(x, t), vshrq_n_u64(t, s));
-        };
-        step_(  1, sieves_simd[0] );
-        step_(  2, sieves_simd[1] );
-        step_(  4, sieves_simd[2] );
-        step_(  8, sieves_simd[3] );
-        step_( 16, sieves_simd[4] );
-        step_( 32, sieves_simd[5] );
+        step_< 1>(x, sieves_simd[0]);
+        step_< 2>(x, sieves_simd[1]);
+        step_< 4>(x, sieves_simd[2]);
+        step_< 8>(x, sieves_simd[3]);
+        step_<16>(x, sieves_simd[4]);
+        step_<32>(x, sieves_simd[5]);
         return x;
     }
 
@@ -439,6 +436,16 @@ struct BitExtractKernelButterflyNEON
     {
         return bit_extract_butterfly_table( x, mask );
     }
+
+private:
+
+    template <int Shift>
+    inline void step_(simd_vector& x, uint64x2_t mvv) noexcept
+    {
+        uint64x2_t t = vandq_u64(x, mvv);
+        x = vorrq_u64(veorq_u64(x, t), vshrq_n_u64(t, Shift));
+    }
+
 };
 
 #endif
@@ -471,7 +478,7 @@ struct BitExtractKernelBlockScalar
         "Supported unroll factors are 1, 2, 4, 8, 16, 32."
     );
     using simd_vector = std::uint64_t;
-    static constexpr int lanes = 1;
+    static constexpr std::size_t lanes = 1;
     BitExtractBlockTable mask{};
 
     BitExtractKernelBlockScalar() = default;
@@ -515,7 +522,7 @@ struct BitExtractKernelBlockSSE2
     static_assert((32 % UF) == 0, "UF must divide 32");
 
     using simd_vector = __m128i;
-    static constexpr int lanes = 2;
+    static constexpr std::size_t lanes = 2;
 
     BitExtractBlockTable mask{};
     __m128i blocks_simd[33]{};
@@ -613,7 +620,7 @@ struct BitExtractKernelBlockAVX2
     static_assert((32 % UF) == 0, "UF must divide 32");
 
     using simd_vector = __m256i;
-    static constexpr int lanes = 4;
+    static constexpr std::size_t lanes = 4;
 
     BitExtractBlockTable mask{};
     __m256i blocks_simd[33]{};
@@ -710,7 +717,7 @@ struct BitExtractKernelBlockAVX512
     static_assert((32 % UF) == 0, "UF must divide 32");
 
     using simd_vector = __m512i;
-    static constexpr int lanes = 8;
+    static constexpr std::size_t lanes = 8;
 
     BitExtractBlockTable mask{};
     __m512i blocks_simd[33]{};
@@ -805,7 +812,7 @@ struct BitExtractKernelBlockNEON
     static_assert((32 % UF) == 0, "UF must divide 32");
 
     using simd_vector = uint64x2_t;
-    static constexpr int lanes = 2;
+    static constexpr std::size_t lanes = 2;
 
     BitExtractBlockTable mask{};
     uint64x2_t blocks_simd[33]{};
