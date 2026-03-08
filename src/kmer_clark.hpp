@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -116,39 +117,47 @@ inline void clark_getSpacedSeed(
 }
 
 template<typename Enc>
-inline std::uint64_t clark_isFwdValid(
-    std::string_view seq, std::size_t i, std::array<bool, 32> const& m_mask, Enc&& enc
+inline bool clark_isFwdValid(
+    std::string_view seq,
+    std::size_t i,
+    std::array<bool, 32> const& m_mask,
+    Enc&& enc,
+    std::uint64_t& out_kmer
 ) {
     // A slower version of the kmer extract, where each kmer is extracted fully from scratch.
     // Also, adding some conditions that clark uses, and repeated calls to enc.
-    std::uint64_t kmer = 0;
+    out_kmer = 0;
     std::size_t const k = 31;
+    if( seq.size() < i + k ) {
+        return false;
+    }
 
     // Extract the kmer at the current positions.
-    size_t c = 0;  // fill of the kmer
+    size_t c = 0;  // fill state of the kmer
     size_t ic = i; // progression in the sequence, starting at current pos
     while(true) {
         if( c == k ) {
             // done with the kmer
-            break;
+            return true;
         }
         if( ic == seq.size() && c < k ) {
             // reached end of data. won't happen, as the outer loop with not run
             // in that case. but added here for clark completeness
-            break;
+            return false;
         }
         if( enc(seq[ic]) == -10 ) {
             // special condition for new lines, never happening here with our input
-            break;
+            ++ic;
+            continue;
         }
         if( enc(seq[ic]) < 0 ) {
             // special condition for other invalids, never happening here with our input
-            break;
+            return false;
         }
         if( enc(seq[ic]) != 4 ) {
             // the good case: add enc to the kmer
-            kmer <<= 2;
-            kmer ^= static_cast<uint64_t>(enc(seq[ic]));
+            out_kmer <<= 2;
+            out_kmer ^= static_cast<uint64_t>(enc(seq[ic]));
             ic++;
             c++;
             continue;
@@ -159,33 +168,43 @@ inline std::uint64_t clark_isFwdValid(
             // So it seems it might not be needed. But for `N` bases for instance, it should
             // still move the k-mer forward by left shifting, so that the base is not forgotten.
             // Not sure what is going on here, and it seems to work, so let's keep it.
-            kmer <<= 2;
-            kmer ^= 0;
+            out_kmer <<= 2;
+            out_kmer ^= 0;
             ic++;
             c++;
             continue;
         }
+        // if( enc(seq[ic]) == 4 && m_mask[c]) {
+        //     throw std::runtime_error(
+        //         "Infinite-loop case hit: ambiguous base at required mask position"
+        //     );
+        // }
+        return false;
     }
-    return kmer;
+    return false;
 }
 
 template<typename Enc>
-inline std::uint64_t clark_querySpacedElement(
+inline bool clark_querySpacedElement(
     std::string_view seq,
     std::size_t i,
     std::string const& mask,
     std::array<bool, 32> const& m_mask,
-    Enc&& enc
+    Enc&& enc,
+    std::uint64_t& out_kmer
 ) {
-    auto const kmer = clark_isFwdValid(seq, i, m_mask, enc);
-    std::uint64_t spaced;
-    clark_getSpacedSeed(mask, kmer, spaced);
-    return spaced;
+    std::uint64_t kmer;
+    if (!clark_isFwdValid(seq, i, m_mask, enc, kmer)) {
+        return false;
+    }
+    clark_getSpacedSeed(mask, kmer, out_kmer);
+    return true;
 }
 
 inline std::array<int, 256> clark_get_m_table()
 {
-    std::array<int, 256> m_table{-1};
+    std::array<int, 256> m_table{};
+    m_table.fill(-1);
 
     // Clark uses the inverse of our encoding; change it to fit.
     m_table['A']  = 0; m_table['C'] = 1; m_table['G'] = 2; m_table['T'] = 3; m_table['U'] = 3;
@@ -278,7 +297,7 @@ inline std::uint64_t clark_getObjectsDataComputeFull(
     static const std::array<int, 256> m_table = clark_get_m_table();
     auto clark_enc = [&](char c)
     {
-        return m_table[static_cast<size_t>(c)];
+        return m_table[static_cast<unsigned char>(c)];
     };
 
     // Prepare the m_masks, in which masked positions in the spaced k-mer are already left out
@@ -293,7 +312,10 @@ inline std::uint64_t clark_getObjectsDataComputeFull(
     const std::size_t stop = n - k;
     for( std::size_t i = 0; i <= stop; ++i) {
         for( size_t m = 0; m < masks.size(); ++m ) {
-            hash ^= clark_querySpacedElement( seq, i, masks[m], m_masks[m], clark_enc );
+            std::uint64_t kmer;
+            if (clark_querySpacedElement( seq, i, masks[m], m_masks[m], clark_enc, kmer )) {
+                hash ^= kmer;
+            }
         }
     }
     return hash;
@@ -379,6 +401,7 @@ inline void clark_getSpacedSeed_improved(
 ) {
     // We eliminate the expensive string comparison from computing each spaced k-mer.
     // Instead, we call all three masks at once, as we need all of them anyway.
+    // This function is only workable for sequences without non-ACGT charactters though.
     r1 = clark_getSpacedSeedOPTSS95s2_improved(_kmerR);
     r2 = clark_getSpacedSeedT38570_improved(_kmerR);
     r3 = clark_getSpacedSeedT58570_improved(_kmerR);
@@ -403,13 +426,13 @@ inline std::uint64_t clark_improved(
     std::uint64_t const span_mask = ((std::uint64_t{1} << (2 * k)) - 1u);
     std::size_t const seq_len = seq.size();
     char const* data = seq.data();
-    (void) masks;
 
     // Iterate all k-mers.
     // Clark seems to ignore invalid bases during the extraction, and just pretent they are A.
     // So that's what we are doing here as well. Our table gives value 4 = 0x100, which gets
     // reduced to 0x00.
     std::uint64_t kmer_word  = 0;
+    std::uint64_t valid_bits = 0;
     for( std::size_t i = 0; i < seq_len; ++i ) {
         std::uint8_t const code = static_cast<std::uint8_t>(char_to_nt_table(data[i]));
 
@@ -417,12 +440,31 @@ inline std::uint64_t clark_improved(
         // because validity is tested separately before emission.
         kmer_word = ((kmer_word << 2) & span_mask) | (code & 0x03u);
 
-        if( i < 31 - 1 ) {
-            continue;
+        // Shift in 11 for valid, 00 for invalid.
+        valid_bits
+            = ((valid_bits << 2) & span_mask)
+            | (static_cast<std::uint64_t>(code < 4) * 0x03u)
+        ;
+
+        // Apply the callback for all masks that are satisfied at this position.
+        // There are only three hard-coded masks, so we manually unroll.
+        if ((valid_bits & masks[0].mask) == masks[0].mask) {
+            hash ^= clark_getSpacedSeedOPTSS95s2_improved(kmer_word);
         }
-        uint64_t v1, v2, v3;
-        clark_getSpacedSeed_improved( kmer_word, v1, v2, v3 );
-        hash ^= v1 ^ v2 ^ v3;
+        if ((valid_bits & masks[1].mask) == masks[1].mask) {
+            hash ^= clark_getSpacedSeedT38570_improved(kmer_word);
+        }
+        if ((valid_bits & masks[2].mask) == masks[2].mask) {
+            hash ^= clark_getSpacedSeedT58570_improved(kmer_word);
+        }
+
+        // Simple approach that adds every kmer to the hash.
+        // if( i < 31 - 1 ) {
+        //     continue;
+        // }
+        // uint64_t v1, v2, v3;
+        // clark_getSpacedSeed_improved( kmer_word, v1, v2, v3 );
+        // hash ^= v1 ^ v2 ^ v3;
     }
     return hash;
 }
