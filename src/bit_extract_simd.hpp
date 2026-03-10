@@ -25,7 +25,7 @@
 #endif
 #if defined(__AVX512F__)
   #include <immintrin.h>
-  #define HAVE_AVX512F 1
+  #define HAVE_AVX512 1
 #endif
 #if (defined(__aarch64__) && defined(__ARM_NEON))
   #include <arm_neon.h>
@@ -318,7 +318,7 @@ struct BitExtractKernelButterflyAVX2
 //     AVX512 Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_AVX512F)
+#if defined(HAVE_AVX512)
 
 /**
  * @brief Kernel for bit extract using an AVX512 implementation of the butterfly table.
@@ -702,7 +702,7 @@ private:
 //     AVX512 Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_AVX512F)
+#if defined(HAVE_AVX512)
 
 /**
  * @brief Kernel for bit extract using an AVX512 implementation of the block table.
