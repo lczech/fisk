@@ -83,23 +83,23 @@ inline void bench_kmer_spaced_multi(
         // simd kernels
         BitExtractKernelDispatcher<BitExtractKernelButterflyScalar> simd_bf_scalar_kernel(raw_masks);
         BitExtractKernelDispatcher<BitExtractKernelBlockScalar<>>   simd_bt_scalar_kernel(raw_masks);
-        #if defined(HAVE_SSE2)
+        #if defined(FISK_HAS_SSE2)
         BitExtractKernelDispatcher<BitExtractKernelButterflySSE2>   simd_bf_sse2_kernel(raw_masks);
         BitExtractKernelDispatcher<BitExtractKernelBlockSSE2<>>     simd_bt_sse2_kernel(raw_masks);
         #endif
-        #if defined(HAVE_AVX2)
+        #if defined(FISK_HAS_AVX2)
         BitExtractKernelDispatcher<BitExtractKernelButterflyAVX2>   simd_bf_avx2_kernel(raw_masks);
         BitExtractKernelDispatcher<BitExtractKernelBlockAVX2<>>     simd_bt_avx2_kernel(raw_masks);
         #endif
-        #if defined(HAVE_AVX512)
+        #if defined(FISK_HAS_AVX512)
         BitExtractKernelDispatcher<BitExtractKernelButterflyAVX512> simd_bf_avx512_kernel(raw_masks);
         BitExtractKernelDispatcher<BitExtractKernelBlockAVX512<>>   simd_bt_avx512_kernel(raw_masks);
         #endif
-        #if defined(HAVE_NEON)
+        #if defined(FISK_HAS_NEON)
         BitExtractKernelDispatcher<BitExtractKernelButterflyNEON>   simd_bf_neon_kernel(raw_masks);
         BitExtractKernelDispatcher<BitExtractKernelBlockNEON<>>     simd_bt_neon_kernel(raw_masks);
         #endif
-        #if defined(HAVE_BMI2)
+        #if defined(FISK_HAS_BMI2)
         BitExtractKernelDispatcher<BitExtractKernelPEXT<>>          simd_pext_kernel(raw_masks);
         #endif
 
@@ -130,7 +130,7 @@ inline void bench_kmer_spaced_multi(
             ),
 
             // char_to_nt_table
-            #if defined(HAVE_BMI2)
+            #if defined(FISK_HAS_BMI2)
             bench(
                 "pext",
                 [&](std::string const& seq){
@@ -198,7 +198,7 @@ inline void bench_kmer_spaced_multi(
             ),
 
             // simd kernels
-            #if defined(HAVE_SSE2)
+            #if defined(FISK_HAS_SSE2)
             bench(
                 "simd_butterfly_table_sse2",
                 [&](std::string const& seq){
@@ -216,7 +216,7 @@ inline void bench_kmer_spaced_multi(
                 }
             ),
             #endif
-            #if defined(HAVE_AVX2)
+            #if defined(FISK_HAS_AVX2)
             bench(
                 "simd_butterfly_table_avx2",
                 [&](std::string const& seq){
@@ -234,7 +234,7 @@ inline void bench_kmer_spaced_multi(
                 }
             ),
             #endif
-            #if defined(HAVE_AVX512)
+            #if defined(FISK_HAS_AVX512)
             bench(
                 "simd_butterfly_table_avx512",
                 [&](std::string const& seq){
@@ -252,7 +252,7 @@ inline void bench_kmer_spaced_multi(
                 }
             ),
             #endif
-            #if defined(HAVE_NEON)
+            #if defined(FISK_HAS_NEON)
             bench(
                 "simd_butterfly_table_neon",
                 [&](std::string const& seq){
@@ -270,7 +270,7 @@ inline void bench_kmer_spaced_multi(
                 }
             ),
             #endif
-            #if defined(HAVE_BMI2)
+            #if defined(FISK_HAS_BMI2)
             bench(
                 "simd_pext",
                 [&](std::string const& seq){

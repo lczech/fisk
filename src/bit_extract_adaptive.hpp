@@ -19,6 +19,9 @@
 /**
  * @brief Helper to adaptively select the fastest bit extract implementation for a given fixed mask.
  *
+ * @deprecated This class dispatches the bit extraction via function pointers, which can be slow.
+ * We still keep it here in case it is useful to someone. Use bit_extract_selector() instead.
+ *
  * Upon construction, a benchmark is run that tests hardware PEXT and several flavors of software
  * bit extract implementations, and selects the most performant one for the given mask. Then, use
  * `operator()` to apply this mask to a value.
@@ -32,8 +35,7 @@
  * this class in performance-critical code. It could be adapted to just benchmark the algorithm,
  * and return the best mode. Then, the better solution for high performance is to build the full
  * k-mer extraction loop templated, and use a `switch` to instanciate it for each case of algorithm
- * present here. Left as future work, as this is mostly relevant for actual applications, but not
- * our benchmark here.
+ * present here. See bit_extract_selector() for an implementation of this strategy.
  */
 class AdaptiveBitExtract
 {
@@ -233,7 +235,7 @@ private:
         static_assert( static_cast<int>(ExtractMode::kButterflyTable) == 7 );
 
         // Depending on hardware, we might not want to test hardware pext, if not available.
-        #if defined(HAVE_BMI2)
+        #if defined(FISK_HAS_BMI2)
             auto const first_mode = ExtractMode::kPext;
         #else
             auto const first_mode = ExtractMode::kByteTable;
@@ -340,7 +342,7 @@ private:
 
     inline std::uint64_t bit_extract_pext_( std::uint64_t value ) const
     {
-        #if defined(HAVE_BMI2)
+        #if defined(FISK_HAS_BMI2)
             return bit_extract_pext( value, mask_ );
         #else
             // This function will be called if ExtractMode::kPext is set at construction,

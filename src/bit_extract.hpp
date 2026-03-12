@@ -17,7 +17,7 @@
 #include <stdexcept>
 #include <limits>
 
-#ifdef HAVE_BMI2
+#ifdef FISK_HAS_BMI2
 #include <immintrin.h>
 #endif
 
@@ -54,7 +54,7 @@ struct BitExtractMask
 //     Bit extract via hardware PEXT
 // =================================================================================================
 
-#if defined(HAVE_BMI2)
+#if defined(FISK_HAS_BMI2)
 
 /**
  * @brief Bit extract via hardware PEXT from the BMI2 instruction set.

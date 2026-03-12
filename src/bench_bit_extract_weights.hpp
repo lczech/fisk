@@ -129,7 +129,7 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
 
         auto results = suite.run(
             make_inputs_rep,
-            #ifdef HAVE_BMI2
+            #ifdef FISK_HAS_BMI2
             bench(
                 "pext",
                 [](BitExtractInput const& in){ return bit_extract_pext(in.value, in.mask);

@@ -17,19 +17,19 @@
 // The definitions are then set for usage in the code below.
 #if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
   #include <emmintrin.h>
-  #define HAVE_SSE2 1
+  #define FISK_HAS_SSE2 1
 #endif
 #if defined(__AVX2__)
   #include <immintrin.h>
-  #define HAVE_AVX2 1
+  #define FISK_HAS_AVX2 1
 #endif
 #if defined(__AVX512F__)
   #include <immintrin.h>
-  #define HAVE_AVX512 1
+  #define FISK_HAS_AVX512 1
 #endif
 #if (defined(__aarch64__) && defined(__ARM_NEON))
   #include <arm_neon.h>
-  #define HAVE_NEON 1
+  #define FISK_HAS_NEON 1
 #endif
 
 #include "bit_extract.hpp"
@@ -60,7 +60,7 @@
 //     Pseudo-SIMD Kernels for PEXT
 // =================================================================================================
 
-#if defined(HAVE_BMI2)
+#if defined(FISK_HAS_BMI2)
 
 /**
  * @brief Kernel for bit extract using hardware BMI2 PEXT, evaluated independently across lanes.
@@ -184,7 +184,7 @@ struct BitExtractKernelButterflyScalar
 //     SSE2 Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_SSE2)
+#if defined(FISK_HAS_SSE2)
 
 /**
  * @brief Kernel for bit extract using an SSE2 implementation of the butterfly table.
@@ -252,7 +252,7 @@ struct BitExtractKernelButterflySSE2
 //     AVX2 Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_AVX2)
+#if defined(FISK_HAS_AVX2)
 
 /**
  * @brief Kernel for bit extract using an AVX2 implementation of the butterfly table.
@@ -318,7 +318,7 @@ struct BitExtractKernelButterflyAVX2
 //     AVX512 Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_AVX512)
+#if defined(FISK_HAS_AVX512)
 
 /**
  * @brief Kernel for bit extract using an AVX512 implementation of the butterfly table.
@@ -384,7 +384,7 @@ struct BitExtractKernelButterflyAVX512
 //     NEON Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_NEON)
+#if defined(FISK_HAS_NEON)
 
 /**
  * @brief Kernel for bit extract using an ARM NEON implementation of the butterfly table.
@@ -507,7 +507,7 @@ struct BitExtractKernelBlockScalar
 //     SSE2 Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_SSE2)
+#if defined(FISK_HAS_SSE2)
 
 /**
  * @brief Kernel for bit extract using an SSE2 implementation of the block table.
@@ -605,7 +605,7 @@ private:
 //     AVX2 Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_AVX2)
+#if defined(FISK_HAS_AVX2)
 
 /**
  * @brief Kernel for bit extract using an AVX2 implementation of the block table.
@@ -702,7 +702,7 @@ private:
 //     AVX512 Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_AVX512)
+#if defined(FISK_HAS_AVX512)
 
 /**
  * @brief Kernel for bit extract using an AVX512 implementation of the block table.
@@ -797,7 +797,7 @@ private:
 //     NEON Kernel
 // -------------------------------------------------------------------------------------------------
 
-#if defined(HAVE_NEON)
+#if defined(FISK_HAS_NEON)
 
 /**
  * @brief Kernel for bit extract using an ARM NEON implementation of the block table.

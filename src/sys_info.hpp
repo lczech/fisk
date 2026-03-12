@@ -4,7 +4,7 @@
 #include <string>
 #include <stdexcept>
 
-#ifdef HAVE_BMI2
+#ifdef FISK_HAS_BMI2
 #include <immintrin.h>
 #endif
 
@@ -58,7 +58,7 @@ inline bool bmi2_enabled()
     // Cached result for speed
     static bool const enabled = [] {
         bool compiled = false;
-        #ifdef HAVE_BMI2
+        #ifdef FISK_HAS_BMI2
             compiled = true;
         #endif
 

@@ -109,10 +109,10 @@ inline constexpr std::uint8_t char_to_nt_ascii(char c) noexcept
     static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
 
     // Fold to lowercase: 'A'..'Z' -> 'a'..'z', ASCII only.
-    std::uint8_t const u = static_cast<std::uint8_t>(c) | 0x20u;
+    std::uint8_t const value = static_cast<std::uint8_t>(c) | 0x20u;
 
     // Extract the relevant bits to get two-bit code.
-    std::uint8_t const e = ((u >> 1) ^ (u >> 2)) & 0x03u;
+    std::uint8_t const encoding = ((value >> 1) ^ (value >> 2)) & 0x03u;
 
     // Use a bitset validator to check for correct char;
     // should be faster than actual character comparisons.
@@ -121,8 +121,8 @@ inline constexpr std::uint8_t char_to_nt_ascii(char c) noexcept
     // g & 31 = 7
     // t & 31 = 20
     constexpr std::uint32_t valid_mask = (1u << 1) | (1u << 3) | (1u << 7) | (1u << 20);
-    std::uint32_t const is_valid = (valid_mask >> (u & 31u)) & 1u;
-    return is_valid ? e : 4;
+    std::uint32_t const is_valid = (valid_mask >> (value & 31u)) & 1u;
+    return is_valid ? encoding : 4;
 
     // Alternative implementation with simple checks. Somewhat slower due to all the comparisons.
     // if(

@@ -219,7 +219,7 @@ void info_print_intrinsics(std::ostream& os)
     // BMI2
     // -----------------------------
     bool cmake_bmi2 =
-    #ifdef HAVE_BMI2
+    #ifdef FISK_HAS_BMI2
         true;
     #else
         false;
