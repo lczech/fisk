@@ -8,6 +8,7 @@
 
 #include "utils.hpp"
 #include "kmer_extract.hpp"
+#include "kmer_extract_simd.hpp"
 #include "seq_enc.hpp"
 #include "microbench.hpp"
 #include "sys_info.hpp"
@@ -113,6 +114,14 @@ inline void bench_kmer_extract(
                 "char_to_nt_ascii_shift",
                 [&](std::string const& seq){
                     return compute_kmer_hash(seq, k, char_to_nt_ascii);
+                }
+            ),
+
+            // SIMD, currently only AVX2, for testing
+            bench(
+                "char_to_nt_avx2",
+                [&](std::string const& seq){
+                    return compute_kmer_hash_simd(seq, k);
                 }
             )
         );

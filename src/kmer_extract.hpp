@@ -163,7 +163,7 @@ template<typename Enc>
 inline std::uint64_t compute_kmer_hash_reextract(
     std::string_view seq, std::size_t k, Enc&& enc
 ) {
-    // Simple wrapper around the main loop function whcih also keeps track of a "hash"
+    // Simple wrapper around the main loop function which also keeps track of a "hash"
     // by xor-ing all k-mers, just as a validity check that all implementations give the same.
     std::uint64_t hash = 0;
 
