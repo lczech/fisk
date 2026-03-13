@@ -30,6 +30,9 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
     std::cout << "\n=== sequence encode ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
+    // Quick verification check of the ascii exploit:
+    test_char_to_nt_ascii();
+
     Microbench<std::string> suite(suite_title);
     suite
         .rounds(rounds)

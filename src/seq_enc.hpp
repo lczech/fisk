@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <cstddef>
 #include <stdexcept>
+#include <cassert>
+#include <iostream>
 
 // =================================================================================================
 //     Character Encoding
@@ -120,8 +122,10 @@ inline constexpr std::uint8_t char_to_nt_ascii(char c) noexcept
     // c & 31 = 3
     // g & 31 = 7
     // t & 31 = 20
-    constexpr std::uint32_t valid_mask = (1u << 1) | (1u << 3) | (1u << 7) | (1u << 20);
-    std::uint32_t const is_valid = (valid_mask >> (value & 31u)) & 1u;
+    std::uint32_t constexpr valid_mask  = (1u << 1) | (1u << 3) | (1u << 7) | (1u << 20);
+    std::uint32_t const     low5_valid  = (valid_mask >> (value & 31u)) & 1u;
+    std::uint32_t const     ascii_lower = ((value & 0xE0u) == 0x60u);
+    std::uint32_t const     is_valid    = low5_valid & ascii_lower;
     return is_valid ? encoding : 4;
 
     // Alternative implementation with simple checks. Somewhat slower due to all the comparisons.
@@ -148,6 +152,41 @@ inline constexpr std::uint8_t char_to_nt_ascii_unchecked(char c) noexcept
     return ((u >> 1) ^ (u >> 2)) & 0x03u;
 }
 
+/**
+ * @brief Verify the char_to_nt_ascii() function for all ASCII values.
+ */
+inline void test_char_to_nt_ascii()
+{
+    auto expected = [](unsigned char c) -> std::uint8_t {
+        switch (c) {
+            case 'A': case 'a': return 0;
+            case 'C': case 'c': return 1;
+            case 'G': case 'g': return 2;
+            case 'T': case 't': return 3;
+            default:            return 4;
+        }
+    };
+
+    for (int i = 0; i < 256; ++i) {
+        unsigned char c = static_cast<unsigned char>(i);
+
+        std::uint8_t const got = char_to_nt_ascii(static_cast<char>(c));
+        std::uint8_t const exp = expected(c);
+
+        if (got != exp) {
+            std::cerr
+                << "Mismatch for byte 0x"
+                << std::hex << i
+                << " ('" << (std::isprint(c) ? char(c) : '?') << "')"
+                << " expected=" << std::dec << int(exp)
+                << " got=" << int(got) << "\n";
+
+            assert(false);
+        }
+    }
+    // std::cout << "char_to_nt_ascii(): all 256 values verified\n";
+}
+
 // -----------------------------------------------------------------------------
 //     table
 // -----------------------------------------------------------------------------
@@ -164,10 +203,12 @@ constexpr std::uint8_t SEQ_NT4_INVALID = 4;
  * @brief Lookup table for ASCII to two-bit encoding of nucleotides.
  *
  * See SEQ_NT4_INVALID for the magic constant holding the "invalid" value for all ASCII chars
- * that are not `ACGT` or `acgt`.
+ * that are not `ACGT` or `acgt`. The original table from Heng Li uses 0,1,2,3 as the first
+ * four entries, probably to make the table idempotent, but we explitly disallow this
+ * here to avoid accidental misuse.
  */
-constexpr std::uint8_t seq_nt4_table[256] = {
-	0, 1, 2, 3,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+inline constexpr std::uint8_t seq_nt4_table[256] = {
+	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
@@ -186,8 +227,8 @@ constexpr std::uint8_t seq_nt4_table[256] = {
 };
 
 /**
- * @brief Get the two-bit encoding of a char, using a lookup table,
- * throwing an exception if the char is not in `ACGT`.
+ * @brief Get the two-bit encoding of a char (values 0-3 for `ACGT`), using a lookup table,
+ * and returning `SEQ_NT4_INVALID = 4` if the char is not in `ACGT`.
  */
 inline constexpr std::uint8_t char_to_nt_table(char c) noexcept
 {
@@ -234,13 +275,9 @@ struct NucleotideEncoder
 {
     // Constants. The table is initialized in the translation unit `seq_enc.cpp`
     static constexpr std::uint8_t INVALID_NT = 4;
-    static const std::array<std::uint8_t, 256> table;
-
-    /**
-     * @brief Generate lookup table for typical nucleotide two-bit encoding.
-     */
-    static constexpr std::array<std::uint8_t, 256> make_table()
+    static inline constexpr std::array<std::uint8_t, 256> table = []
     {
+        // Generate lookup table for typical nucleotide two-bit encoding.
         std::array<std::uint8_t, 256> t{};
         for( auto& x : t ) {
             x = INVALID_NT;
@@ -254,7 +291,7 @@ struct NucleotideEncoder
         t[static_cast<unsigned char>('g')] = 2;
         t[static_cast<unsigned char>('t')] = 3;
         return t;
-    }
+    }();
 
     /**
      * @brief Get the two-bit encoding for a char.
@@ -281,7 +318,7 @@ inline std::uint64_t sequence_encode(std::string_view seq, EncodeFunc&& encode)
 {
     std::uint64_t h = 0;
     for (char c : seq) {
-        h += encode(c);
+        h = (h << 2) | encode(c);
     }
     return h;
 }
