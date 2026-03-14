@@ -118,7 +118,7 @@ inline std::uint64_t compute_spaced_kmer_hash_naive(
     // Slide the window over the sequence.
     const std::size_t stop = seq.size() - k;
     for (std::size_t i = 0; i <= stop; ++i) {
-        hash ^= comp( std::string_view(seq), mask, i );
+        hash += comp( std::string_view(seq), mask, i );
     }
     return hash;
 }
@@ -135,7 +135,7 @@ inline std::uint64_t compute_spaced_kmer_hash_naive(
     const std::size_t stop = seq.size() - k;
     for (std::size_t i = 0; i <= stop; ++i) {
         for( auto const& mask : masks ) {
-            hash ^= comp( std::string_view(seq), mask, i );
+            hash += comp( std::string_view(seq), mask, i );
         }
     }
     return hash;
@@ -387,7 +387,7 @@ inline std::uint64_t compute_spaced_kmer_hash(
         k, mask, enc, bit_ext,
         [&](std::size_t /* mask_idx */, std::size_t /* pos */, std::uint64_t spaced_kmer) {
             // Extract the spaced k-mer, and combine it into the hash.
-            hash ^= spaced_kmer;
+            hash += spaced_kmer;
         }
     );
     return hash;
@@ -414,7 +414,7 @@ inline std::uint64_t compute_spaced_kmer_hash(
         k, masks, enc, bit_ext,
         [&](std::size_t /* mask_idx */, std::size_t /* pos */, std::uint64_t spaced_kmer) {
             // Extract the spaced k-mer, and combine it into the hash.
-            hash ^= spaced_kmer;
+            hash += spaced_kmer;
         }
     );
     return hash;

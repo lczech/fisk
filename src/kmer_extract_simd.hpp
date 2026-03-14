@@ -242,7 +242,7 @@ inline std::uint64_t compute_kmer_hash_simd(
         std::string_view(seq),
         k,
         [&](std::uint64_t kmer_word) {
-            hash ^= kmer_word;
+            hash += kmer_word;
         }
     );
 

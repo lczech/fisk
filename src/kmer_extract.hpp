@@ -144,9 +144,8 @@ inline std::uint64_t compute_kmer_hash(
         k,
         enc,
         [&](std::uint64_t kmer_word) {
-            // Simple order-independent checksum.
-            // All implementations must use the same aggregation so sinks match.
-            hash ^= kmer_word;
+            // Simple checksum. All implementations must use the same aggregation so sinks match.
+            hash += kmer_word;
         }
     );
 
@@ -172,9 +171,8 @@ inline std::uint64_t compute_kmer_hash_reextract(
         k,
         enc,
         [&](std::uint64_t kmer_word) {
-            // Simple order-independent checksum.
-            // All implementations must use the same aggregation so sinks match.
-            hash ^= kmer_word;
+            // Simple checksum. All implementations must use the same aggregation so sinks match.
+            hash += kmer_word;
         }
     );
 

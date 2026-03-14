@@ -314,7 +314,7 @@ inline std::uint64_t clark_getObjectsDataComputeFull(
         for( size_t m = 0; m < masks.size(); ++m ) {
             std::uint64_t kmer;
             if (clark_querySpacedElement( seq, i, masks[m], m_masks[m], clark_enc, kmer )) {
-                hash ^= kmer;
+                hash += kmer;
             }
         }
     }
@@ -449,13 +449,13 @@ inline std::uint64_t clark_improved(
         // Apply the callback for all masks that are satisfied at this position.
         // There are only three hard-coded masks, so we manually unroll.
         if ((valid_bits & masks[0].mask) == masks[0].mask) {
-            hash ^= clark_getSpacedSeedOPTSS95s2_improved(kmer_word);
+            hash += clark_getSpacedSeedOPTSS95s2_improved(kmer_word);
         }
         if ((valid_bits & masks[1].mask) == masks[1].mask) {
-            hash ^= clark_getSpacedSeedT38570_improved(kmer_word);
+            hash += clark_getSpacedSeedT38570_improved(kmer_word);
         }
         if ((valid_bits & masks[2].mask) == masks[2].mask) {
-            hash ^= clark_getSpacedSeedT58570_improved(kmer_word);
+            hash += clark_getSpacedSeedT58570_improved(kmer_word);
         }
 
         // Simple approach that adds every kmer to the hash.

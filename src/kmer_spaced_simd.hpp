@@ -250,7 +250,7 @@ inline std::uint64_t compute_spaced_kmer_hash_simd(
         kernel,
         char_to_nt_table,
         [&](std::size_t /* start_pos */, std::uint64_t wmer) {
-            hash ^= wmer;
+            hash += wmer;
         }
     );
     return hash;
@@ -273,8 +273,8 @@ inline std::uint64_t compute_spaced_kmer_hash_simd(
             span_k,
             kernels_arr,
             char_to_nt_table,
-            [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t val) {
-                hash ^= val;
+            [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t wmer) {
+                hash += wmer;
             }
         );
     });
