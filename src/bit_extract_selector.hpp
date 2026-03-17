@@ -27,10 +27,8 @@
  */
 enum class BitExtractMode : int
 {
-    #if defined(FISK_HAS_BMI2)
     /** @brief Use hardware PEXT */
     kPext,
-    #endif
 
     /** @brief Use the block table algorithm */
     kBlockTable,
