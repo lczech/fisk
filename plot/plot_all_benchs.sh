@@ -39,44 +39,64 @@ for EXT in png svg ; do
   # Bit Extract Implementations
 
   python ./plot/plot_bit_extract_weights.py \
-    ${DIR}/bit_extract_weights.csv\
-    --out ${DIR}/bit_extract_weights.${EXT}
+    "${DIR}/bit_extract_weights.csv" \
+    --out "${DIR}/bit_extract_weights.${EXT}"
 
   python ./plot/plot_bit_extract_blocks.py \
-    ${DIR}/bit_extract_blocks.csv\
-    --out ${DIR}/bit_extract_blocks.${EXT}
+    "${DIR}/bit_extract_blocks.csv" \
+    --out "${DIR}/bit_extract_blocks.${EXT}"
 
 
   # Kmer Extract
 
   python ./plot/plot_kmer_extract.py \
-    ${DIR}/kmer_extract.csv\
-    --out ${DIR}/kmer_extract.${EXT}
+    "${DIR}/kmer_extract.csv" \
+    --out "${DIR}/kmer_extract.${EXT}"
 
   # python ./plot/plot_case_summary.py \
-  #   ${DIR}/kmer_extract.csv\
-  #   --out ${DIR}/kmer_extract_bars.${EXT}
+  #   "${DIR}/kmer_extract.csv" \
+  #   --out "${DIR}/kmer_extract_bars.${EXT}"
 
 
   # Kmer Spaced Single
 
   python ./plot/plot_kmer_spaced.py \
-    ${DIR}/kmer_spaced_single.csv\
-    --out ${DIR}/kmer_spaced_single.${EXT}
+    "${DIR}/kmer_spaced_single.csv" \
+    --out "${DIR}/kmer_spaced_single.${EXT}"
 
   python ./plot/plot_case_summary.py \
-    ${DIR}/kmer_spaced_single.csv\
-    --out ${DIR}/kmer_spaced_single_bars.${EXT}
+    "${DIR}/kmer_spaced_single.csv" \
+    --out "${DIR}/kmer_spaced_single_bars.${EXT}"
+
+  python ./plot/plot_case_summary.py \
+    "${DIR}/kmer_spaced_single.csv" \
+    --extended \
+    --out "${DIR}/kmer_spaced_single_bars.${EXT}"
+
+  python ./plot/plot_case_summary.py \
+    "${DIR}/kmer_spaced_single.csv" \
+    --reduced \
+    --out "${DIR}/kmer_spaced_single_bars.${EXT}"
 
 
   # Kmer Spaced Multi
 
   python ./plot/plot_kmer_spaced.py \
-    ${DIR}/kmer_spaced_multi.csv\
-    --out ${DIR}/kmer_spaced_multi.${EXT}
+    "${DIR}/kmer_spaced_multi.csv" \
+    --out "${DIR}/kmer_spaced_multi.${EXT}"
 
   python ./plot/plot_case_summary.py \
-    ${DIR}/kmer_spaced_multi.csv\
-    --out ${DIR}/kmer_spaced_multi_bars.${EXT}
+    "${DIR}/kmer_spaced_multi.csv" \
+    --out "${DIR}/kmer_spaced_multi_bars.${EXT}"
+
+  python ./plot/plot_case_summary.py \
+    "${DIR}/kmer_spaced_multi.csv" \
+    --extended \
+    --out "${DIR}/kmer_spaced_multi_bars.${EXT}"
+
+  python ./plot/plot_case_summary.py \
+    "${DIR}/kmer_spaced_multi.csv" \
+    --reduced \
+    --out "${DIR}/kmer_spaced_multi_bars.${EXT}"
 
 done

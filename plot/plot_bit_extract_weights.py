@@ -3,13 +3,20 @@
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import os, sys
 from pathlib import Path
+from typing import Dict, List, Optional
 
 # Such a cheat to import stuff in python...
 # See https://stackoverflow.com/a/22956038
 sys.path.insert(0, '.')
 from plot_common import *
+
+
+def _label_for_benchmark(name: str, rename_map: Dict[str, str]) -> str:
+    return rename_map.get(name, name)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Plot PEXT benchmark results")
@@ -28,7 +35,7 @@ def main():
     cpu = platform_from_csv_path(args.csv)
 
     # Subset to the benchmarks we want to plot
-    df = df[df["benchmark"].isin(BENCHMARKS_KEEP)]
+    df = df[df["benchmark"].isin(BENCHMARKS_KEEP_EXTENDED)]
 
     # Expect columns:
     #   suite, case, benchmark, ns_per_op
@@ -56,10 +63,17 @@ def main():
             g["weight"],
             g["ns_per_op"],
             marker=".",
-            label=name,
+            label=_label_for_benchmark(name, BENCHMARK_RENAMES),
             color=color,
             linewidth=2,
         )
+
+    # If pext is missing, insert an invisible placeholder at the front
+    # so the 2-column legend keeps the same visual grouping.
+    handles, labels = plt.gca().get_legend_handles_labels()
+    if "pext" not in set(df["benchmark"]):
+        handles = [Line2D([], [], linestyle="none", marker=None, alpha=0)] + handles
+        labels = [""] + labels
 
     plt.xlabel("Mask weight (popcount)")
     plt.ylabel("Time per operation [ns]")
@@ -68,10 +82,11 @@ def main():
 
     plt.xlim(0, 64)
     # plt.ylim(0, 75)
-    plt.ylim(0, 12)
+    plt.ylim(0, 13)
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
     # plt.legend(title="Implementation", ncol=2)
-    plt.legend(ncol=2)
+    # plt.legend(ncol=2)
+    plt.legend(handles, labels, ncol=2, loc="upper right")
 
     plt.tight_layout()
 

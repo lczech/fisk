@@ -24,6 +24,10 @@ def _apply_order(grouped: pd.DataFrame, order: Optional[List[str]]) -> pd.DataFr
     return grouped.set_index("benchmark").reindex(idx).reset_index()
 
 
+def _label_for_benchmark(name: str, rename_map: Dict[str, str]) -> str:
+    return rename_map.get(name, name)
+
+
 def _colors_for_benchmarks(benchmarks: List[str], color_map: Dict[str, str]) -> List[str]:
     # Deterministic: use provided colors; for the rest, use Matplotlib's default cycle in order.
     cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
@@ -85,7 +89,7 @@ def make_impl_summary_plot(
     x = np.arange(len(impls))
     width = 0.6
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(12, 8))
 
     cmap = benchmark_colors or {}
     bar_colors = _colors_for_benchmarks(impls, cmap)
@@ -106,7 +110,7 @@ def make_impl_summary_plot(
     # Add slanted mean labels, shifted right to avoid whiskers
     ymax = float(max(maxs)) if len(maxs) else 0.0
     x_offset = width * 0.18
-    y_offset = ymax * 0.01 if ymax > 0 else 0.0
+    y_offset = ymax * 0.015 if ymax > 0 else 0.0
 
     for xi, yi in zip(x, means):
         ax.text(
@@ -116,7 +120,7 @@ def make_impl_summary_plot(
             ha="left",
             va="bottom",
             rotation=45,     # slight clockwise tilt
-            fontsize=8,
+            fontsize=12,
         )
 
     # Extend y-axis slightly so labels stay inside the plot
@@ -127,11 +131,22 @@ def make_impl_summary_plot(
     # ax.set_xlabel("Implementation")
     ax.set_ylabel("Time per operation [ns]")
     ax.set_xticks(x)
-    ax.set_xticklabels(impls, rotation=45, ha="right")
+    # ax.set_xticklabels(impls, rotation=45, ha="right")
+    labels = [_label_for_benchmark(name, BENCHMARK_RENAMES) for name in impls]
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+
+    # set y-limit such that it coveres all values we have consistently
+    ax.set_ylim(0, 55)
 
     ax.grid(axis="y", linestyle="--", alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
+    ax.legend(loc="upper right")
+
+    # Fix layout such that white space does not differ if we have inputs here
+    # with different benchmarks. Tight layout would otherwise cause the bottom axis
+    # label to take up a different amount (tight) of whitespace across plots,
+    # making them misaligned when put next to each other in the manusript.
+    # fig.tight_layout()
+    fig.subplots_adjust(left=0.06, right=0.99, bottom=0.30, top=0.96)
 
     if outpath:
         fig.savefig(outpath, dpi=200)
@@ -151,6 +166,16 @@ def main():
         help="Suite name to select (if omitted, use all suites together)",
     )
     ap.add_argument(
+        "--extended",
+        action="store_true",
+        help="Use extended benchmark set (BENCHMARKS_KEEP_EXTENDED) and append _ext to output filename",
+    )
+    ap.add_argument(
+        "--reduced",
+        action="store_true",
+        help="Use BENCHMARKS_KEEP_REDUCED instead of BENCHMARKS_KEEP",
+    )
+    ap.add_argument(
         "--out",
         default=None,
         help="Output image path (if omitted, show interactively)",
@@ -168,12 +193,23 @@ def main():
     suite = args.suite
     title = args.title or (suite if suite else cpu)
 
+    outpath = args.out
+    if args.extended and outpath is not None:
+        root, ext = os.path.splitext(outpath)
+        outpath = f"{root}_ext{ext}"
+    if args.reduced and outpath is not None:
+        root, ext = os.path.splitext(outpath)
+        outpath = f"{root}_red{ext}"
+
+    benchmarks_keep = BENCHMARKS_KEEP_EXTENDED if args.extended else BENCHMARKS_KEEP
+    benchmarks_keep = BENCHMARKS_KEEP_REDUCED if args.reduced else benchmarks_keep
+
     make_impl_summary_plot(
         df=df,
         suite=suite,
         title=title,
-        outpath=args.out,
-        benchmarks_keep=BENCHMARKS_KEEP,
+        outpath=outpath,
+        benchmarks_keep=benchmarks_keep,
         benchmark_order=BENCHMARK_ORDER,
         benchmark_colors=BENCHMARK_COLORS,
     )

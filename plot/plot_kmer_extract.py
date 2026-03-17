@@ -119,9 +119,10 @@ def main():
     # plt.title(args.title)
 
     plt.xlim(1, 32)
+    plt.ylim(0, 210)
     plt.grid(True, which="both", linestyle="--", alpha=0.5)
     # plt.legend(title="Implementation")
-    plt.legend()
+    plt.legend(loc="upper left", handlelength=2.75)
 
     plt.tight_layout()
 

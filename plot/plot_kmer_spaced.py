@@ -70,7 +70,7 @@ def make_grouped_bar_plot_impl_first(df, suite, title, outpath):
         for j in range(num_cases)
     ]
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(10, 6))
     ymax = float(pivot.max().max())
 
     for j, case in enumerate(cases):
@@ -91,7 +91,7 @@ def make_grouped_bar_plot_impl_first(df, suite, title, outpath):
                     ha="center",
                     va="bottom",
                     rotation=90,
-                    fontsize=8,
+                    fontsize=10,
                 )
 
     ax.set_title(title)
@@ -99,13 +99,17 @@ def make_grouped_bar_plot_impl_first(df, suite, title, outpath):
     ax.set_xticks(x)
     ax.set_xticklabels(impls, rotation=45, ha="right")
 
+    # set y-limit such that it coveres all values we have consistently
+    ax.set_ylim(0, 55)
+
     ax.legend()
     ax.grid(axis="y", linestyle="--", alpha=0.3)
 
-    fig.tight_layout()
+    # fig.tight_layout()
+    fig.subplots_adjust(left=0.08, right=0.99, bottom=0.30, top=0.90)
 
     if outpath:
-        fig.savefig(outpath, dpi=200)
+        fig.savefig(outpath, dpi=300)
         print(f"Wrote {outpath}")
     else:
         plt.show()
