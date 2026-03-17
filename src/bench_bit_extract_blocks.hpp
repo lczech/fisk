@@ -19,6 +19,7 @@
 #include "bit_extract_zp7.hpp"
 #include "bit_extract_instlatx64.hpp"
 #include "bit_extract_adaptive.hpp"
+#include "bit_extract_selector.hpp"
 #include "bench_bit_extract_weights.hpp"
 #include "sys_info.hpp"
 
@@ -223,7 +224,8 @@ inline void print_bits(std::uint64_t x, std::ostream& os)
  */
 inline std::vector<BitExtractInput> make_input_blocks(
     std::size_t n, std::size_t runs, std::uint64_t seed,
-    std::vector<size_t>& adaptive_counts
+    std::vector<size_t>& adaptive_counts,
+    std::vector<size_t>& selector_counts
 ) {
     std::mt19937_64 rng(seed);
     std::uniform_int_distribution<std::uint64_t> dist_u64;
@@ -252,6 +254,7 @@ inline std::vector<BitExtractInput> make_input_blocks(
             AdaptiveBitExtract( mask )
         });
         ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
+        ++selector_counts[static_cast<size_t>( bit_extract_selector(v.back().mask) )];
         // std::cout << v.back().adaptive_bit_extract.mode_name() << "\n";
     }
     return v;
@@ -282,7 +285,9 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
     write_csv_header(csv_os);
 
     // Collect which adaptive mode was chosen how often.
+    // We test both the deprecated `adaptive`, and the recommended `selector` variants here.
     auto adaptive_counts = std::vector<size_t>( AdaptiveBitExtract::mode_count(), 0 );
+    auto selector_counts = std::vector<size_t>( 6, 0 );
 
     // Run a benchmark for each weight of the mask.
     // Most of our bit extract software implementations have a runtime depending on that,
@@ -297,10 +302,10 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
         }
 
         // Helper to generate fresh input for each repetition
-        auto make_inputs_rep = [runs, &adaptive_counts]()
+        auto make_inputs_rep = [runs, &adaptive_counts, &selector_counts]()
         {
             auto seed = static_cast<std::uint64_t>(0xC0FFEEULL) ^ static_cast<std::uint64_t>(runs);
-            return make_input_blocks( n, runs, seed, adaptive_counts );
+            return make_input_blocks( n, runs, seed, adaptive_counts, selector_counts );
         };
 
         Microbench<BitExtractInput> suite(suite_title);
@@ -376,6 +381,12 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
     std::cout << "adaptive bit extract counts:\n";
     for( size_t i = 0; i < adaptive_counts.size(); ++i ) {
         std::cout << "  " << adaptive_counts[i] << " <== " << AdaptiveBitExtract::mode_name(static_cast<AdaptiveBitExtract::ExtractMode>(i)) << "\n";
+    }
+    std::cout << "\n";
+
+    std::cout << "selector bit extract counts:\n";
+    for( size_t i = 0; i < selector_counts.size(); ++i ) {
+        std::cout << "  " << selector_counts[i] << " <== " << bit_extract_mode_name(static_cast<BitExtractMode>(i)) << "\n";
     }
     std::cout << "\n";
 }
