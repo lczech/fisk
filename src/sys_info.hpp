@@ -29,6 +29,27 @@
     #error "Unsupported architecture"
 #endif
 
+// Preprocessor checks for intrinsics support.
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+  #include <emmintrin.h>
+  #define FISK_HAS_SSE2 1
+#endif
+#if defined(__AVX2__)
+  #include <immintrin.h>
+  #define FISK_HAS_AVX2 1
+#endif
+#if defined(__AVX512F__)
+  #include <immintrin.h>
+  #define FISK_HAS_AVX512 1
+#endif
+#if (defined(__aarch64__) && defined(__ARM_NEON))
+  #include <arm_neon.h>
+  #define FISK_HAS_NEON 1
+#endif
+
+#include "bit_extract.hpp"
+#include "seq_enc.hpp"
+
 // =================================================================================================
 //     Hardware Info
 // =================================================================================================

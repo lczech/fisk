@@ -17,6 +17,8 @@
 #include <stdexcept>
 #include <limits>
 
+#include "sys_info.hpp"
+
 #ifdef FISK_HAS_BMI2
 #include <immintrin.h>
 #endif
@@ -24,8 +26,6 @@
 #ifdef HAVE_CLMUL
 #include <wmmintrin.h>
 #endif
-
-#include "sys_info.hpp"
 
 // =================================================================================================
 //     Bit extract mask

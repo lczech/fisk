@@ -10,6 +10,7 @@
 
 #include "bit_extract_simd.hpp"
 #include "seq_enc.hpp"
+#include "sys_info.hpp"
 
 // =================================================================================================
 //     K-mer Extraction SIMD

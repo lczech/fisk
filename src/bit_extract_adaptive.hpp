@@ -11,6 +11,7 @@
 
 #include "bit_extract.hpp"
 #include "utils.hpp"
+#include "sys_info.hpp"
 
 // =================================================================================================
 //     Adaptive Bit Extract Helper

@@ -11,6 +11,7 @@
 #include "bit_extract_simd.hpp"
 #include "kmer_spaced.hpp"
 #include "seq_enc.hpp"
+#include "sys_info.hpp"
 
 // =================================================================================================
 //     SIMD Helper Functions
