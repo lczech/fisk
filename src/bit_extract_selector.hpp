@@ -248,11 +248,17 @@ void switch_bit_extract_mode( std::uint64_t const mask )
 {
     auto const mode = bit_extract_selector(mask);
     switch (mode) {
-        #if defined(FISK_HAS_BMI2)
         case BitExtractMode::kPext:
+        {
+            #if defined(FISK_HAS_BMI2)
             // hot loop with bit_extract_pext(x, mask)
+            #else
+            throw std::runtime_error(
+                "bit_extract_selector: PEXT mode selected but BMI2 is not available"
+            );
+            #endif
             break;
-        #endif
+        }
         case BitExtractMode::kBlockTable:
         {
             auto const bt = bit_extract_block_table_preprocess(mask);
@@ -299,13 +305,19 @@ inline void run_bit_extract_mode(
 )
 {
     switch (mode) {
-        #if defined(FISK_HAS_BMI2)
         case BitExtractMode::kPext:
+        {
+            #if defined(FISK_HAS_BMI2)
             cb([&](std::uint64_t x) noexcept {
                 return bit_extract_pext(x, mask);
             });
+            #else
+            throw std::runtime_error(
+                "bit_extract_selector: PEXT mode selected but BMI2 is not available"
+            );
+            #endif
             break;
-        #endif
+        }
 
         case BitExtractMode::kBlockTable:
         {
