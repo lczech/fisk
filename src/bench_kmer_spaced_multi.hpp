@@ -11,6 +11,7 @@
 #include "utils.hpp"
 #include "kmer_spaced.hpp"
 #include "kmer_spaced_simd.hpp"
+#include "kmer_spaced_selector.hpp"
 #include "seq_enc.hpp"
 #include "microbench.hpp"
 #include "sys_info.hpp"
@@ -50,9 +51,8 @@ inline void bench_kmer_spaced_multi(
     // Run a benchmark for each mask
     for( size_t m = 0; m < multi_masks.size(); ++m) {
         if( stdout_is_terminal() ) {
-            std::cout << "\rmask set "
-                << std::setw(2) << (m+1) << " / " << multi_masks.size()
-                << std::flush;
+            std::cout << "\rmask set ";
+            std::cout << std::setw(2) << (m+1) << " / " << multi_masks.size() << "\n";
         }
         auto const k = multi_masks[m][0].size();
 
@@ -78,6 +78,10 @@ inline void bench_kmer_spaced_multi(
             bit_ext_butterfly_tables.push_back(
                 bit_extract_butterfly_table_preprocess(raw_masks.back())
             );
+
+            // Just to test the selector implementation
+            std::cout << "fastest mode: ";
+            std::cout << spaced_kmer_mode_name( spaced_kmer_selector( raw_masks.back(), k )) << "\n";
         }
 
         // simd kernels

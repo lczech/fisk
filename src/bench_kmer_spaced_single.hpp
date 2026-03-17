@@ -11,6 +11,7 @@
 #include "utils.hpp"
 #include "kmer_spaced.hpp"
 #include "kmer_spaced_simd.hpp"
+#include "kmer_spaced_selector.hpp"
 #include "seq_enc.hpp"
 #include "microbench.hpp"
 #include "sys_info.hpp"
@@ -44,18 +45,21 @@ inline void bench_kmer_spaced_single(
 
     // Run a benchmark for each mask
     for( size_t m = 0; m < masks.size(); ++m) {
-        if( stdout_is_terminal() ) {
-            std::cout << "\rmask "
-                << std::setw(2) << (m+1) << " / " << masks.size()
-                << std::flush;
-        }
         auto const k = masks[m].size();
+        if( stdout_is_terminal() ) {
+            std::cout << "\rmask ";
+            std::cout << std::setw(2) << (m+1) << " / " << masks.size() << "\n";
+        }
 
         // Prepare masks for all implementations as needed
         auto const naive_mask = prepare_naive_mask(masks[m]);
         auto const bit_ext_mask = prepare_spaced_kmer_bit_extract_mask(masks[m]);
         auto const bit_ext_block_mask = bit_extract_block_table_preprocess(bit_ext_mask);
         auto const bit_ext_butterfly_table = bit_extract_butterfly_table_preprocess(bit_ext_mask);
+
+        // Just to test the selector
+        std::cout << "fastest mode: ";
+        std::cout << spaced_kmer_mode_name( spaced_kmer_selector( bit_ext_mask, k )) << "\n";
 
         // simd kernels
         BitExtractKernelButterflyScalar simd_bf_scalar_kernel(bit_ext_mask);
