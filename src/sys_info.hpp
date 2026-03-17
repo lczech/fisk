@@ -1,16 +1,10 @@
 #pragma once
 
-#include <iostream>
+#include <cstdint>
+#include <iosfwd>
+#include <ostream>
 #include <string>
 #include <stdexcept>
-
-#ifdef FISK_HAS_BMI2
-#include <immintrin.h>
-#endif
-
-#ifdef HAVE_CLMUL
-#include <wmmintrin.h>
-#endif
 
 // =================================================================================================
 //     Platform Macros
@@ -30,21 +24,29 @@
 #endif
 
 // Preprocessor checks for intrinsics support.
+// The BMI2 is set in cmake, the other ones are checked here dynamically.
+#if defined(FISK_HAS_BMI2) || defined(__BMI2__)
+    #include <immintrin.h>
+    #define FISK_HAS_BMI2 1
+#endif
 #if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
-  #include <emmintrin.h>
-  #define FISK_HAS_SSE2 1
+    #include <emmintrin.h>
+    #define FISK_HAS_SSE2 1
 #endif
 #if defined(__AVX2__)
-  #include <immintrin.h>
-  #define FISK_HAS_AVX2 1
+    #include <immintrin.h>
+    #define FISK_HAS_AVX2 1
 #endif
 #if defined(__AVX512F__)
-  #include <immintrin.h>
-  #define FISK_HAS_AVX512 1
+    #include <immintrin.h>
+    #define FISK_HAS_AVX512 1
 #endif
-#if (defined(__aarch64__) && defined(__ARM_NEON))
-  #include <arm_neon.h>
-  #define FISK_HAS_NEON 1
+#if (defined(__aarch64__) && defined(__ARM_NEON)) || defined(__ARM_NEON__)
+    #include <arm_neon.h>
+    #define FISK_HAS_NEON 1
+#endif
+#if defined(_MSC_VER)
+    #include <intrin.h>
 #endif
 
 #include "bit_extract.hpp"
@@ -74,46 +76,38 @@ void info_print_compiler(std::ostream& os);
 //     CPU Intrinsics
 // =================================================================================================
 
-inline bool bmi2_enabled()
-{
-    // Cached result for speed
-    static bool const enabled = [] {
-        bool compiled = false;
-        #ifdef FISK_HAS_BMI2
-            compiled = true;
-        #endif
+// -----------------------------------------------------------------
+// Compile-time support
+// -----------------------------------------------------------------
 
-        bool cpu = false;
-        #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
-            __builtin_cpu_init();
-            cpu = __builtin_cpu_supports("bmi2");
-        #endif
+bool compiled_bmi2() noexcept;
+bool compiled_sse2() noexcept;
+bool compiled_avx2() noexcept;
+bool compiled_avx512() noexcept;
+bool compiled_neon() noexcept;
 
-        return compiled && cpu;
-    }();
+// -----------------------------------------------------------------
+// Runtime CPU / OS support
+// -----------------------------------------------------------------
 
-    return enabled;
-}
+bool cpu_bmi2() noexcept;
+bool cpu_sse2() noexcept;
+bool cpu_avx2() noexcept;
+bool cpu_avx512() noexcept;
+bool cpu_neon() noexcept;
 
-inline bool clmul_enabled()
-{
-    // Cached result for speed
-    static bool const enabled = [] {
-        bool compiled = false;
-        #ifdef HAVE_CLMUL
-            compiled = true;
-        #endif
+// -----------------------------------------------------------------
+// Combined checks: "safe to use in this build"
+// -----------------------------------------------------------------
 
-        bool cpu = false;
-        #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
-            __builtin_cpu_init();
-            cpu = __builtin_cpu_supports("pclmul");
-        #endif
+bool bmi2_enabled() noexcept;
+bool sse2_enabled() noexcept;
+bool avx2_enabled() noexcept;
+bool avx512_enabled() noexcept;
+bool neon_enabled() noexcept;
 
-        return compiled && cpu;
-    }();
-
-    return enabled;
-}
+// -----------------------------------------------------------------
+// Reporting
+// -----------------------------------------------------------------
 
 void info_print_intrinsics(std::ostream& os);
