@@ -208,6 +208,11 @@ def main() -> None:
         help="Use BENCHMARKS_KEEP_REDUCED instead of BENCHMARKS_KEEP",
     )
     ap.add_argument(
+        "--untight",
+        action="store_true",
+        help="Use BENCHMARKS_KEEP_REDUCED instead of BENCHMARKS_KEEP",
+    )
+    ap.add_argument(
         "--no-legend",
         action="store_true",
         help="Hide legend in the plot.",
@@ -298,6 +303,8 @@ def main() -> None:
     else:
         YLIM = 10.0
     YMAX = 0.88 * YLIM
+    if YLIM > 20:
+        YMAX = YLIM
 
     x = np.arange(len(benchmarks))
     group_width = 0.8
@@ -320,9 +327,18 @@ def main() -> None:
     #         linewidth=0.8,
     #     )
 
+    # We want to print the minimum per platform, as that's the fastest algorithm.
+    best_impl = []
+
+    # Plot all bars, manually for full control
     for j, s in enumerate(series):
         vals = pivot[s].values
         platform, compiler = s.split(" | ", 1)
+
+        # Find the minimum for this platform
+        # print(legend_label(s), str(vals))
+        min_idx = np.nanargmin(vals)
+        best_impl.append([legend_label(s), min_idx, vals[min_idx]])
 
         xpos = x + (j - (len(series) - 1) / 2.0) * bar_w
         plot_vals = [min(v, YMAX) for v in vals]
@@ -447,27 +463,44 @@ def main() -> None:
     ax.set_xticklabels(labels, rotation=45, ha="right")
 
     ax.set_ylim(0, YLIM)
-    ax.set_yticks(range(0, int(round(YMAX)) + 1, 1))
+    if YLIM <= 20:
+        ax.set_yticks(range(0, int(round(YMAX)) + 1, 1))
 
     ax.grid(axis="y", linestyle="--", alpha=0.3)
 
-    handles, labels = ax.get_legend_handles_labels()
+    handles, leg_labels = ax.get_legend_handles_labels()
     if not args.no_legend:
         ax.legend(
             handles,
-            labels,
+            leg_labels,
             title="CPU / Compiler",
             loc="upper right",
-            ncol=2
+            ncol=2 if len(leg_labels) > 5 else 3
         )
 
-    fig.tight_layout(pad=0.1, w_pad=0.1, h_pad=0.1)
+    if args.untight:
+        fig.subplots_adjust(left=0.07, right=0.99, bottom=0.28, top=0.94)
+    else:
+        fig.tight_layout(pad=0.1, w_pad=0.1, h_pad=0.1)
+
     # ax.margins(x=0)
     if len(labels) > 0:
         ax.set_xlim(-0.5, len(benchmarks) - 0.5)
 
     if args.out:
         out = args.out
+
+        # print best implementation for each arch
+        # print(title)
+        root, ext = os.path.splitext(out)
+        with open(f"{root}.csv", 'w') as f:
+            f.write(f"platform,best_impl,best_time\n")
+            for impl in best_impl:
+                f.write(f"{impl[0]},{labels[impl[1]]},{impl[2]}\n")
+                # name = impl[0]
+                # min_val = impl[1]
+                # min_idx = impl[2]
+                # print(name, min_idx, labels[min_idx], min_val)
 
         # Append suffix if extended mode is used
         # if args.extended and out is not None:

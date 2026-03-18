@@ -150,6 +150,28 @@ python ./plot/plot_bars_per_cpu.py "${args[@]}" \
 svg="${OUT}/Fig2b.svg"
 inkscape "$svg" --export-filename="${svg%.svg}.pdf"
 
+DUOHASH_SUITES=(
+  "single"
+  "multi"
+)
+
+for suite in "${DUOHASH_SUITES[@]}"; do
+
+  # DuoHash
+  csv="DuoHash.csv"
+  build_file_args "$csv" || exit 1
+  python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+    --y-lim "25" \
+    --y-lim "25" \
+    --suite "${suite}" \
+    --untight \
+    --title "Spaced k-mer extraction, existing implementations, ${suite}" \
+    --out "${OUT}/DuoHash-${suite}.svg"
+  svg="${OUT}/DuoHash-${suite}.svg"
+  inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+
+done
+
 # ------------------------------------------------------------
 # Per-directory loop
 # ------------------------------------------------------------

@@ -128,7 +128,21 @@ BENCHMARKS_KEEP = [
     # "simd_pext",
     # "simd_butterfly_table_scalar",
     # "simd_block_table_scalar",
+
+    # DuoHash
+    "naive",
+    "FSH",
+    "ISSH",
+    "naive",
+    "FSH",
+    "ISSH",
+    "FSH_multi",
+    "MISSH_v1",
+    "MISSH_col",
+    "MISSH_col_parallel",
+    "MISSH_row",
 ]
+
 
 # The third list is the small list of "recommended" algorithms and approaches,
 # for the main manuscript.
