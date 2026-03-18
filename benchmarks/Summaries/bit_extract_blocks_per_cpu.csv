@@ -1,0 +1,8 @@
+platform,best_impl,best_time
+Epyc / Clang,PEXT,0.2841440606060606
+Epyc / GCC,PEXT,0.2842329696969697
+Ryzen / Clang,Butterfly Table,1.3114109696969696
+Ryzen / GCC,Butterfly Table,2.440052090909091
+Xeon / Clang,PEXT,0.41739706060606063
+Xeon / GCC,PEXT,0.32630084848484847
+M1 / Clang,Butterfly Table,1.9125826969696968

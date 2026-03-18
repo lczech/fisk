@@ -1,0 +1,5 @@
+suite,case,benchmark,ns_per_op
+seq_encode,n/a,char_to_nt_ifs,6.267693
+seq_encode,n/a,char_to_nt_switch,6.169866
+seq_encode,n/a,char_to_nt_table,0.306983
+seq_encode,n/a,char_to_nt_ascii,0.413549

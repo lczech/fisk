@@ -1,0 +1,15 @@
+Platform:
+  name    : Apple
+  arch    : ARM64
+CPU:
+  vendor  : Unknown
+  model   : Apple M1 Pro
+Compiler:
+  family  : clang
+  version : 17.0.0 (clang-1700.6.4.2)
+Instruction sets:
+  BMI2    : compiled=no,  cpu=no
+  SSE2    : compiled=no,  cpu=no
+  AVX2    : compiled=no,  cpu=no
+  AVX512  : compiled=no,  cpu=no
+  NEON    : compiled=yes, cpu=yes

@@ -1,0 +1,3 @@
+suite,case,benchmark,ns_per_op
+kmer_clark,n/a,clark_original,112.766771
+kmer_clark,n/a,clark_improved,5.557036

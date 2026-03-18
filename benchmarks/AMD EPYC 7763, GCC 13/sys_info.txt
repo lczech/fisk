@@ -1,0 +1,15 @@
+Platform:
+  name    : Linux
+  arch    : x86-64
+CPU:
+  vendor  : AuthenticAMD
+  model   : AMD EPYC 7763 64-Core Processor                
+Compiler:
+  family  : gcc
+  version : 13.3.0
+Instruction sets:
+  BMI2    : compiled=yes, cpu=yes
+  SSE2    : compiled=yes, cpu=yes
+  AVX2    : compiled=yes, cpu=yes
+  AVX512  : compiled=no,  cpu=no
+  NEON    : compiled=no,  cpu=no

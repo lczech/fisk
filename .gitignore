@@ -43,3 +43,7 @@ bin/
 
 # debug information files
 *.dwo
+
+# Plots in other formats
+benchmarks/*/*.svg
+benchmarks/*/*.png

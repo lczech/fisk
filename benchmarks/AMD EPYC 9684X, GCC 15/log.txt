@@ -1,0 +1,395 @@
+No input provided, using default
+Generating input sequence of length 1048576 with N probability 0.001
+No k provided, testing all values
+No masks provided, using defaults
+Using 9 single masks
+Using 5 multi mask sets with { 9 9 9 9 9 } masks
+
+=== bit extract weights ===
+n=16, rounds=128, repeats=32
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+
+Sink: 0
+
+Sink: 645
+
+Sink: 2709
+
+Sink: 7482
+
+Sink: 15996
+
+Sink: 24510
+
+Sink: 57921
+
+Sink: 124227
+
+Sink: 255936
+
+Sink: 568503
+
+Sink: 1077150
+
+Sink: 2777241
+
+Sink: 4647612
+
+Sink: 10289943
+
+Sink: 20276994
+
+Sink: 37029966
+
+Sink: 56110872
+
+Sink: 158055315
+
+Sink: 314673312
+
+Sink: 533238657
+
+Sink: 1306450338
+
+Sink: 2579258121
+
+Sink: 3581443899
+
+Sink: 9228411417
+
+Sink: 20052994143
+
+Sink: 29511991512
+
+Sink: 64875381228
+
+Sink: 166886359461
+
+Sink: 271909756788
+
+Sink: 553706413362
+
+Sink: 1035034491768
+
+Sink: 2752588022205
+
+Sink: 4848451047618
+
+Sink: 7894116361662
+
+Sink: 16226567402961
+
+Sink: 40786352003763
+
+Sink: 83243880654051
+
+Sink: 163988277342060
+
+Sink: 298115419769475
+
+Sink: 604453690161270
+
+Sink: 1031827121070411
+
+Sink: 2242190435804265
+
+Sink: 4161016635461079
+
+Sink: 10518408502876455
+
+Sink: 17348678712506184
+
+Sink: 41524369448904219
+
+Sink: 73931222392303641
+
+Sink: 135593286676796628
+
+Sink: 319309188464530812
+
+Sink: 725730530112078312
+
+Sink: 1292240975097498561
+
+Sink: 2456694383459164665
+
+Sink: 4979462017308035166
+
+Sink: 8916768621538658301
+
+Sink: 289461735777286385
+
+Sink: 13451879078847192122
+
+Sink: 17871303725065192264
+
+Sink: 6907830937214238322
+
+Sink: 17988908686203737739
+
+Sink: 12470631941539168449
+
+Sink: 507274491944501608
+
+Sink: 3825583097927745651
+
+Sink: 4181319812645332324
+
+Sink: 18254073725507406663
+
+Sink: 15917358786581576961
+adaptive bit extract counts:
+  0 <== Automatic
+  33280 <== Pext
+  0 <== ByteTable
+  0 <== BlockTable
+  0 <== BlockTableUnrolled2
+  0 <== BlockTableUnrolled4
+  0 <== BlockTableUnrolled8
+  0 <== ButterflyTable
+
+
+=== bit extract blocks ===
+n=100, rounds=256, repeats=16
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+
+Sink: 0
+
+Sink: 16614287352851439762
+
+Sink: 16602654962854913618
+
+Sink: 17485898479192313170
+
+Sink: 2638126650460829671
+
+Sink: 4942814149399648879
+
+Sink: 15122309838489839870
+
+Sink: 11794866838917907837
+
+Sink: 1953255839637123337
+
+Sink: 5727609118514238435
+
+Sink: 9845515495405320358
+
+Sink: 15673653916621289614
+
+Sink: 4566090001499197182
+
+Sink: 2492708312844397441
+
+Sink: 2269032651471306864
+
+Sink: 1049662268731576179
+
+Sink: 402062978374921936
+
+Sink: 178447059314018801
+
+Sink: 158599372377176837
+
+Sink: 78519229060267586
+
+Sink: 52402522316570397
+
+Sink: 13553605620906244
+
+Sink: 11332288518341790
+
+Sink: 4164509245960237
+
+Sink: 2633727258917285
+
+Sink: 1917565094681534
+
+Sink: 988745345759442
+
+Sink: 545378325756236
+
+Sink: 384482640685879
+
+Sink: 229822904305552
+
+Sink: 134984028948111
+
+Sink: 97195345732180
+
+Sink: 83786569732934
+adaptive bit extract counts:
+  0 <== Automatic
+  52590 <== Pext
+  0 <== ByteTable
+  0 <== BlockTable
+  210 <== BlockTableUnrolled2
+  0 <== BlockTableUnrolled4
+  0 <== BlockTableUnrolled8
+  0 <== ButterflyTable
+
+
+=== sequence encode ===
+rounds=8, repeats=16
+
+Sink: 14175630
+
+=== k-mer extract ===
+rounds=8, repeats=8
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+Accumulation sink is 0. That is possible for empty masks etc, or points to a wrong setup, where the sink is incorrectly computed.
+
+Sink: 0
+
+Sink: 9
+
+Sink: 477
+
+Sink: 1494
+
+Sink: 1206
+
+Sink: 54
+
+Sink: 41517
+
+Sink: 354906
+
+Sink: 429021
+
+Sink: 1957437
+
+Sink: 7665597
+
+Sink: 142896573
+
+Sink: 307107279
+
+Sink: 510711273
+
+Sink: 8269372179
+
+Sink: 20494366902
+
+Sink: 144950038020
+
+Sink: 77440755852
+
+Sink: 1975054541877
+
+Sink: 2144457101448
+
+Sink: 301508493723
+
+Sink: 11172850812702
+
+Sink: 317859030313263
+
+Sink: 99114135026814
+
+Sink: 2680723031191677
+
+Sink: 26450499623331042
+
+Sink: 68915275748486883
+
+Sink: 506326485000318813
+
+Sink: 1105666659953375166
+
+Sink: 8093439873157346226
+
+Sink: 7296851388957587883
+
+Sink: 8001800646869716299
+
+=== spaced k-mer extract single mask ===
+rounds=1, repeats=8
+
+Sink: 8109807567858
+
+Sink: 3684229877166
+
+Sink: 31878788440154
+
+Sink: 11016905483634
+
+Sink: 13416491272166
+
+Sink: 225334651312
+
+Sink: 28967568221894
+
+Sink: 33157509689798
+
+Sink: 18492316249218
+
+=== spaced k-mer extract multi masks ===
+rounds=1, repeats=4
+
+Sink: 1184684
+
+Sink: 329197894
+
+Sink: 116462634076
+
+Sink: 11424853221024
+
+Sink: 8725270347419918
+
+=== spaced k-mer clark ===
+rounds=4, repeats=16
+
+Sink: 68114190488335

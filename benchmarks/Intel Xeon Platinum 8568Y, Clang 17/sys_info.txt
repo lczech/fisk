@@ -1,0 +1,15 @@
+Platform:
+  name    : Linux
+  arch    : x86-64
+CPU:
+  vendor  : GenuineIntel
+  model   : INTEL(R) XEON(R) PLATINUM 8568Y+
+Compiler:
+  family  : clang
+  version : 17.0.0 
+Instruction sets:
+  BMI2    : compiled=yes, cpu=yes
+  SSE2    : compiled=yes, cpu=yes
+  AVX2    : compiled=yes, cpu=yes
+  AVX512  : compiled=yes, cpu=yes
+  NEON    : compiled=no,  cpu=no

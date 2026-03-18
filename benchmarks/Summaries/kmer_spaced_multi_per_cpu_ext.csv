@@ -1,0 +1,8 @@
+platform,best_impl,best_time
+Epyc / Clang,SIMD PEXT,0.42408140000000005
+Epyc / GCC,SIMD Butterfly Table AVX512,1.4089136
+Ryzen / Clang,SIMD Butterfly Table AVX2,1.042587
+Ryzen / GCC,SIMD Butterfly Table SSE2,2.1761437999999997
+Xeon / Clang,PEXT,0.5787500000000001
+Xeon / GCC,PEXT,1.0788883999999999
+M1 / Clang,SIMD Butterfly Table Neon,1.2556822

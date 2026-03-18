@@ -1,0 +1,15 @@
+Platform:
+  name    : Linux
+  arch    : x86-64
+CPU:
+  vendor  : AuthenticAMD
+  model   : AMD Ryzen 7 PRO 4750U with Radeon Graphics
+Compiler:
+  family  : gcc
+  version : 14.2.0
+Instruction sets:
+  BMI2    : compiled=yes, cpu=yes
+  SSE2    : compiled=yes, cpu=yes
+  AVX2    : compiled=yes, cpu=yes
+  AVX512  : compiled=no,  cpu=no
+  NEON    : compiled=no,  cpu=no

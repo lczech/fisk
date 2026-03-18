@@ -1,0 +1,8 @@
+platform,best_impl,best_time
+Epyc / Clang,Lookup table shift,0.8822560625
+Epyc / GCC,Lookup table shift,0.935632
+Ryzen / Clang,Lookup table shift,1.03992925
+Ryzen / GCC,Lookup table shift,0.87674340625
+Xeon / Clang,ASCII shift,1.13498234375
+Xeon / GCC,'switch' shift,0.96034175
+M1 / Clang,Lookup table shift,0.95761596875

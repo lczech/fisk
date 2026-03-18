@@ -1,0 +1,8 @@
+platform,best_impl,best_time
+Epyc / Clang,ISSH,5.883372
+Epyc / GCC,ISSH,5.813602
+Ryzen / Clang,ISSH,6.882841666666667
+Ryzen / GCC,ISSH,6.964963333333333
+Xeon / Clang,ISSH,5.491502
+Xeon / GCC,ISSH,5.542994
+M1 / Clang,MISSH_row,6.888166666666667
