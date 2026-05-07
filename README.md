@@ -2,6 +2,14 @@
 
 This is a code exploration project to test different implementations to extract spaced k-mers from a genomic sequence. We find that the algorithms implemented here are up to an order of magnitude faster than existing approaches to extract spaced k-mers.
 
+For details, see our preprint:
+
+> **Fast Iteration of Spaced k-mers** <br />
+> Lucas Czech  <br />
+> arXiv, 2026, doi:[10.48550/arXiv.2603.25417](https://doi.org/10.48550/arXiv.2603.25417)
+
+For questions or bugs, please [open an issue](https://github.com/lczech/fisk/issues).
+
 
 ## Build and execute
 
