@@ -117,11 +117,17 @@ inline void bench_kmer_extract(
                 }
             ),
 
-            // SIMD, currently only AVX2, for testing
+            // SIMD, currently only AVX2 and scalar, for testing
             bench(
-                "char_to_nt_avx2",
+                "char_to_nt_simd_avx2",
                 [&](std::string const& seq){
                     return compute_kmer_hash_simd(seq, k);
+                }
+            ),
+            bench(
+                "char_to_nt_simd_scalar",
+                [&](std::string const& seq){
+                    return compute_kmer_hash_simd_scalar(seq, k);
                 }
             )
         );

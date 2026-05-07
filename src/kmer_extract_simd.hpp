@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <cstdint>
+#include <cstring>
 #include <cstddef>
 #include <stdexcept>
 
@@ -13,7 +14,7 @@
 #include "sys_info.hpp"
 
 // =================================================================================================
-//     K-mer Extraction SIMD
+//     K-mer Extraction SIMD AVX2
 // =================================================================================================
 
 // We here only test k-mer extraction with AVX2, to see how much gain we get.
@@ -229,6 +230,133 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 }
 
 // =================================================================================================
+//     K-mer Extraction SIMD Scalar
+// =================================================================================================
+
+// Alternative implementation, using only 64 bit scalar operations to do SIMD within a register.
+// It is not as fast as the AVX above, or just the lookup table... But kept here for reference.
+
+template<typename Func>
+inline void for_each_kmer_simd_scalar(
+    std::string_view seq,
+    std::size_t k,
+    Func&& func
+) {
+    if (k == 0 || k > 32) {
+        throw std::runtime_error(
+            "Invalid call to k-mer extraction with k not in [1, 32]"
+        );
+    }
+    if (seq.size() < k) {
+        return;
+    }
+
+    // Helper function to run the ASCII encoding exploit on a single character,
+    // returning the 2-bit code and validity in one go.
+    // Note that they are not bit packed yet here, and in separate bytes,
+    // to avoid unnecessary bit manipulation in the hot loop. We will pack them later.
+    auto encode_acgt8_ascii = [](char const* p) noexcept -> std::uint64_t
+    {
+        std::uint64_t x;
+        std::memcpy(&x, p, sizeof(x)); // unaligned-safe; usually optimized to one load
+
+        // ASCII trick per byte:
+        //
+        // code = ((c >> 1) ^ (c >> 2)) & 0x03
+        //
+        // This works for both upper/lowercase ACGT because the relevant
+        // lower bits are identical for upper and lower case.
+        return ((x >> 1) ^ (x >> 2)) & 0x0303030303030303ull;
+    };
+
+    // The above function does not perform a validity check, so we need to do that separately.
+    // We can do it in the same pass, and pack the result into a byte.
+    auto valid_acgt8_mask = [](char const* p) noexcept -> std::uint8_t
+    {
+        std::uint64_t x;
+        std::memcpy(&x, p, sizeof(x)); // unaligned-safe; optimized to one load
+
+        constexpr std::uint64_t lo = 0x0101010101010101ull;
+        constexpr std::uint64_t hi = 0x8080808080808080ull;
+
+        // ASCII uppercase: clears the lowercase bit, so a/c/g/t become A/C/G/T.
+        x &= 0xDFDFDFDFDFDFDFDFull;
+
+        // Compare against 'A', 'C', 'G', 'T' in parallel,
+        // getting 0x80 in each byte where there's a match.
+        auto byte_eq = [](std::uint64_t v, std::uint64_t c) noexcept {
+            std::uint64_t z = v ^ c;              // zero byte where equal
+            return (z - lo) & ~z & hi;            // high bit set in equal bytes
+        };
+        std::uint64_t m =
+            byte_eq(x, 0x4141414141414141ull) |   // A
+            byte_eq(x, 0x4343434343434343ull) |   // C
+            byte_eq(x, 0x4747474747474747ull) |   // G
+            byte_eq(x, 0x5454545454545454ull);    // T
+
+        // Compress byte high bits 7,15,...,63 into bits 0..7.
+        std::uint8_t r = static_cast<std::uint8_t>((m * 0x0002040810204081ull) >> 56);
+
+        return r;
+    };
+
+    // Shorthands
+    char const* const data    = seq.data();
+    std::size_t const seq_len = seq.size();
+    unsigned const kk = static_cast<unsigned>(k);
+
+    // Masks
+    std::uint64_t const kmer_mask = (kk == 32)
+        ? ~std::uint64_t{0}
+        : ((std::uint64_t{1} << (2u * kk)) - 1u);
+
+    std::uint64_t const valid_mask = (std::uint64_t{1} << kk) - 1u;
+
+    // State during iteration.
+    std::uint64_t kmer  = 0;
+    std::uint64_t valid = 0;
+    std::size_t seen = 0;
+
+    // Process one of the input bytes, as encoded above.
+    auto step = [&](std::uint64_t code, std::uint8_t is_valid) {
+        kmer  = ((kmer  << 2u) & kmer_mask)  | std::uint64_t{code};
+        valid = ((valid << 1u) & valid_mask) | std::uint64_t{is_valid};
+
+        ++seen;
+        if (seen >= kk && valid == valid_mask) {
+            func(kmer);
+        }
+    };
+
+    // Full 8-character blocks, unrolling the encoded data from the helper functions,
+    // and emitting 8 k-mers per iteration.
+    std::size_t i = 0;
+    for (; i + 8 <= seq_len; i += 8) {
+        std::uint64_t const enc = encode_acgt8_ascii(data + i);
+        std::uint8_t  const val = valid_acgt8_mask(data + i);
+
+        step( (enc >>  0) & 0x03u, (val >> 0) & 0x01u );
+        step( (enc >>  8) & 0x03u, (val >> 1) & 0x01u );
+        step( (enc >> 16) & 0x03u, (val >> 2) & 0x01u );
+        step( (enc >> 24) & 0x03u, (val >> 3) & 0x01u );
+        step( (enc >> 32) & 0x03u, (val >> 4) & 0x01u );
+        step( (enc >> 40) & 0x03u, (val >> 5) & 0x01u );
+        step( (enc >> 48) & 0x03u, (val >> 6) & 0x01u );
+        step( (enc >> 56) & 0x03u, (val >> 7) & 0x01u );
+    }
+
+    // Scalar tail.
+    for (; i < seq_len; ++i) {
+        std::uint8_t const code = char_to_nt_ascii(data[i]);
+
+        step(
+            static_cast<std::uint64_t>(code & 0x03u),
+            static_cast<std::uint8_t>(code < 4u)
+        );
+    }
+}
+
+// =================================================================================================
 //     Sum Hashing
 // =================================================================================================
 
@@ -243,6 +371,25 @@ inline std::uint64_t compute_kmer_hash_simd(
         std::string_view(seq),
         k,
         [&](std::uint64_t kmer_word) {
+            hash += kmer_word;
+        }
+    );
+
+    return hash;
+}
+
+inline std::uint64_t compute_kmer_hash_simd_scalar(
+    std::string_view seq, std::size_t k
+) {
+    // Simple wrapper around the main loop function which also keeps track of a "hash"
+    // by summing all k-mers, just as a validity check that all implementations give the same.
+    std::uint64_t hash = 0;
+
+    for_each_kmer_simd_scalar(
+        std::string_view(seq),
+        k,
+        [&](std::uint64_t kmer_word) {
+            // Simple checksum. All implementations must use the same aggregation so sinks match.
             hash += kmer_word;
         }
     );
