@@ -121,11 +121,11 @@ inline void for_each_kmer_reextract(
 }
 
 // =================================================================================================
-//     XOR Hashing
+//     Sum Hashing
 // =================================================================================================
 
 /**
- * @brief Simple "hashing" of k-mers by computing the xor of all their two bit encodings.
+ * @brief Simple "hashing" of k-mers by computing the sum of all their two bit encodings.
  *
  * This is just for benchmarking, to ensure that the values are actually used (and thus the
  * compuation cannot be omitted by the compiler), as well as to ensure consistent results
@@ -136,7 +136,7 @@ inline std::uint64_t compute_kmer_hash(
     std::string_view seq, std::size_t k, Enc&& enc
 ) {
     // Simple wrapper around the main loop function which also keeps track of a "hash"
-    // by xor-ing all k-mers, just as a validity check that all implementations give the same.
+    // by summing all k-mers, just as a validity check that all implementations give the same.
     std::uint64_t hash = 0;
 
     for_each_kmer(
@@ -153,7 +153,7 @@ inline std::uint64_t compute_kmer_hash(
 }
 
 /**
- * @brief Simple "hashing" of k-mers by computing the xor of all their two bit encodings.
+ * @brief Simple "hashing" of k-mers by computing the sum of all their two bit encodings.
  *
  * This is similar to compute_kmer_hash(), but re-extracts the whole k-mer in each step.
  * This is computationally wasteful compred to bit shifts, thus only used for benchmarking.
@@ -163,7 +163,7 @@ inline std::uint64_t compute_kmer_hash_reextract(
     std::string_view seq, std::size_t k, Enc&& enc
 ) {
     // Simple wrapper around the main loop function which also keeps track of a "hash"
-    // by xor-ing all k-mers, just as a validity check that all implementations give the same.
+    // by summing all k-mers, just as a validity check that all implementations give the same.
     std::uint64_t hash = 0;
 
     for_each_kmer_reextract(

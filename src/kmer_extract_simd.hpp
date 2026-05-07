@@ -229,14 +229,14 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 }
 
 // =================================================================================================
-//     XOR Hashing
+//     Sum Hashing
 // =================================================================================================
 
 inline std::uint64_t compute_kmer_hash_simd(
     std::string_view seq, std::size_t k
 ) {
     // Simple wrapper around the main loop function which also keeps track of a "hash"
-    // by xor-ing all k-mers, just as a validity check that all implementations give the same.
+    // by summing all k-mers, just as a validity check that all implementations give the same.
     std::uint64_t hash = 0;
 
     for_each_kmer_simd(

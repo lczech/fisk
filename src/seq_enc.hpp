@@ -33,6 +33,16 @@
  */
 inline constexpr std::uint8_t char_to_nt_ifs(char ch) noexcept
 {
+    // We need ASCII for the following to work.
+    static_assert( static_cast<int>('A') == 0x41, "Non-ASCII char set" );
+    static_assert( static_cast<int>('C') == 0x43, "Non-ASCII char set" );
+    static_assert( static_cast<int>('G') == 0x47, "Non-ASCII char set" );
+    static_assert( static_cast<int>('T') == 0x54, "Non-ASCII char set" );
+    static_assert( static_cast<int>('a') == 0x61, "Non-ASCII char set" );
+    static_assert( static_cast<int>('c') == 0x63, "Non-ASCII char set" );
+    static_assert( static_cast<int>('g') == 0x67, "Non-ASCII char set" );
+    static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
+
     // Make char lower case. The std implementation is locale dependend,
     // and very slow; we hence assume ASCII and simply set the lower case bit.
     // ch = static_cast<char>(std::tolower(ch));

@@ -236,14 +236,14 @@ inline void for_each_spaced_kmer_simd(
 }
 
 // =================================================================================================
-//     XOR Hashing
+//     Sum Hashing
 // =================================================================================================
 
 template<class Kernel>
 inline std::uint64_t compute_spaced_kmer_hash_simd(
     std::string const& seq, size_t k, Kernel const& kernel
 ) {
-    // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
+    // Compute all spaced kmers across the sequence, and sum their hashes, for our checking.
     std::uint64_t hash = 0;
     for_each_spaced_kmer_simd(
         std::string_view(seq),
@@ -265,7 +265,7 @@ inline std::uint64_t compute_spaced_kmer_hash_simd(
 ) {
     std::uint64_t hash = 0;
 
-    // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
+    // Compute all spaced kmers across the sequence, and sum their hashes, for our checking.
     dispatcher.run([&](auto const& kernels_arr)
     {
         // Callback: (mask_idx, start_pos, value)

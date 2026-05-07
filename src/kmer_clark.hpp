@@ -281,7 +281,7 @@ inline std::uint64_t clark_getObjectsDataComputeFull(
     // and match that in our improved version. Maybe there would be a way to improve on that
     // aspect as well, but that's for later.
 
-    // Our computation here is again the simple xor of all found spaced kmers, as a check.
+    // Our computation here is again the simple sum of all found spaced kmers, as a check.
     std::uint64_t hash = 0;
 
     // Boundary checks
@@ -415,7 +415,7 @@ inline std::uint64_t clark_improved(
     std::string const& seq,
     std::vector<BitExtractMask> const& masks
 ) {
-    // Compute all spaced kmers across the sequence, and xor their hashes, for our checking.
+    // Compute all spaced kmers across the sequence, and sum their hashes, for our checking.
     std::uint64_t hash = 0;
     size_t const k = 31;
     if (seq.size() < k) {

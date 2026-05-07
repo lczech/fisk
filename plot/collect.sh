@@ -29,5 +29,8 @@ mkdir -p "$outdir"
 # find all occurrences of the file in subdirectories
 find "$indir" -type f -name "$fname" -print0 | while IFS= read -r -d '' file; do
     dir="$(basename "$(dirname "$file")")"
+    # Replaces spaces with underscores in the dir name
+    dir="${dir// /_}"
+
     cp "$file" "$outdir/$dir.$ext"
 done
