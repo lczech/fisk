@@ -17,6 +17,10 @@
 //     do_not_optimize_u64()
 // -----------------------------------------------------------------------------
 
+/**
+ * Helper to make sure that the compiler does not simple optimize away
+ * the computation of a uint64_t result that we want to measure.
+ */
 inline void do_not_optimize_u64(std::uint64_t v)
 {
     #if defined(__GNUC__) || defined(__clang__)
@@ -105,6 +109,10 @@ inline void write_csv_rows(
 //     require_same_sinks()
 // -----------------------------------------------------------------------------
 
+/**
+ * Helper to check that all results have the same sink value of their hash function.
+ * This ensures that all our implementations give the same result.
+ */
 inline void require_same_sinks(
     std::vector<Result> const& rs,
     bool fatal = true
