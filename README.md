@@ -19,11 +19,13 @@ Simply call
 make
 ```
 
-to build the program, and
+to build the benchmark program, and
 
 ```
 ./bin/fisk
 ```
+
+to run it.
 
 <!--
 With thread pinning:
@@ -50,13 +52,29 @@ To create the plots from the manuscript, run `./plot/plot_all_cpus.sh`. This req
 
 ## Implementation
 
-The code separates the bit extraction functionality from the k-mer functionality. The bit extraction functions can thus be used in a general context as well.
+The code (in `src/`) separates the bit extraction functionality from the k-mer functionality. The bit extraction functions can thus be used in a general context as well.
 
-Functions that process k-mers are mostly templated here, in order to allow us to benchmark different implemenations of, e.g., the nucleotide to two-bit encoding and the bit extraction. Thus, to use these function in your code, you might want to replace those template parameters with hard-coded versions for simplicity.
+Overview of the files, and their most important functions and algorithms:
+
+ - `bit_extract.hpp`: Main bit extraction functions. This is probably the most relevant part, containing the core algorithms.
+ - `bit_extract_simd.hpp`: SIMD implementations of the bit extract algorithms.
+ - `bit_extract_selector.hpp`: Helper that runs a quick benchmark to find the most performant bit extraction algorithm for a given mask.
+ - `bit_extract_adaptive.hpp`, `bit_extract_instlatx64.hpp`, `bit_extract_zp7.hpp`: Alternative implementations of the selector and of bit extraction algorithms. Not recommended, but kept here for reference.
+ - `kmer_extract.hpp`: Basic extraction loop of k-mers from a sequence.
+ - `kmer_extract_simd.hpp`: SIMD variant of the rolling extraction, probably overkill for most use cases.
+ - `kmer_spaced.hpp`: Extraction loop for spaced k-mers from a sequence, templated with the bit extract function. Also contains the naive implementation, and some helper functions, e.g., to prepare the mask from a string of 1s and 0s.
+ - `kmer_spaced_simd.hpp`: SIMD variant of the spaced k-mer extraction, taking one of the `bit_extract_simd.hpp` implementations as template parameter.
+ - `kmer_spaced_selector.hpp`: Helper that runs a quick benchmark to find the most performant spaced k-mer extraction algorithm for a given mask. Similar to `bit_extract_selector.hpp`.
+ - `bench_*.cpp`: Benchmark run functions, for all benchmarks shown in the manuscript. Might be useful to see how each algorithm is intended to be called and used.
+ - `arg_parser.hpp`, `main.cpp`, `microbench.hpp`, `sys_info.[ch]pp`: Drivers for this benchmark program. Probably not much of it is needed outside of here.
+
+Functions that process k-mers are mostly templated here, in order to allow us to benchmark different implemenations of, e.g., the nucleotide to two-bit encoding and the bit extraction. Thus, to use these function in your code, you might want to replace those template parameters with hard-coded versions for simplicity - no need to use any of the sub-par alterative implementations if you can just use the fastest one.
 
 To use this in our own code, we recommend to use PEXT for bit extraction where possible, and a SIMD-accelerated Butterfly network otherwise. In the simplest case, use `bit_extract_selector()` as a dynamic check to test this, and a switch as shown in `switch_bit_extract_mode()` and `run_bit_extract_mode()` to run. This avoids overhead for function pointers in the hot loop per extracted value.
 
 Similarly, for spaced k-mer extraction, use `spaced_kmer_selector()` to decide which extraction algorithm to use dynamically on a given hardware, and again a switch outside of the hot loop to dispatch between the algorithms.
+
+Note that the SIMD implementations need to be guarded by hardware checks to ensure not calling invalid intrinsics. We mostly solve this here via preprocessor checks (e.g., for AVX). These checks likely need to be adapted as needed for your build system. They can be adapted to perform a dynamic check, allowing to cross-compile for different hardware architectures.
 
 
 ## Sources
