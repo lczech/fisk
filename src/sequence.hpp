@@ -32,9 +32,17 @@ inline std::vector<std::string> load_fasta_clean(std::string const& path)
     std::string line;
     while(std::getline(in, line)) {
         // skip headers/labels
-        if(line.empty() || line[0] == '>') {
+        if(line.empty()) {
+            continue;
+        }
+        if(line[0] == '>') {
             result.emplace_back();
             continue;
+        }
+        if(result.empty()) {
+            throw std::runtime_error(
+                "Invalid FASTA file (missing header before sequence data): " + path
+            );
         }
         std::string seq;
         seq.reserve(line.size());
@@ -50,11 +58,16 @@ inline std::vector<std::string> load_fasta_clean(std::string const& path)
                     seq.push_back(uc);
                     break;
                 default:
-                    // drop other nucleotides
+                    // replace other chancers with N, which we will ignore in k-mer extraction.
+                    seq.push_back('N');
                     break;
             }
         }
         result.back() += std::move(seq);
+    }
+
+    if(result.empty()) {
+        throw std::runtime_error("Invalid FASTA file (no FASTA records found): " + path);
     }
 
     return result;
