@@ -7,11 +7,11 @@
 #include <string_view>
 #include <type_traits>
 
-#include "bit_extract.hpp"
-#include "bit_extract_simd.hpp"
-#include "kmer_spaced.hpp"
-#include "seq_enc.hpp"
-#include "sys_info.hpp"
+#include "fisk/bit_extract/bit_extract.hpp"
+#include "fisk/bit_extract/simd.hpp"
+#include "fisk/kmer_spaced/kmer_spaced.hpp"
+#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/intrinsics.hpp"
 
 // =================================================================================================
 //     SIMD Helper Functions

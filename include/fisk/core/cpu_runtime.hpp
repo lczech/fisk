@@ -1,14 +1,12 @@
-#include "sys_info.hpp"
+#pragma once
 
 #include <array>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
-#include <memory>
+#include <ostream>
 #include <string>
-#include <utility>
-#include <vector>
-#include <string_view>
+
+#include "fisk/core/intrinsics.hpp"
 
 #if defined(SYSTEM_X86_64_GNU_CLANG)
     #include <cpuid.h>
@@ -22,7 +20,7 @@
 //     Hardware Info
 // =================================================================================================
 
-std::string info_platform_name()
+inline std::string info_platform_name()
 {
     #if defined _WIN64
         return "Win64";
@@ -39,7 +37,7 @@ std::string info_platform_name()
     #endif
 }
 
-std::string info_platform_arch()
+inline std::string info_platform_arch()
 {
     #if defined(__x86_64__) || defined(_M_X64)
         return "x86-64";
@@ -54,14 +52,14 @@ std::string info_platform_arch()
     #endif
 }
 
-void info_print_platform(std::ostream& os)
+inline void info_print_platform(std::ostream& os)
 {
     os << "Platform:\n";
     os << "  name    : " << info_platform_name() << "\n";
     os << "  arch    : " << info_platform_arch() << "\n";
 }
 
-std::string info_cpu_vendor()
+inline std::string info_cpu_vendor()
 {
     #if defined(PLATFORM_ARM64)
 
@@ -94,7 +92,7 @@ std::string info_cpu_vendor()
     #endif
 }
 
-std::string info_cpu_model()
+inline std::string info_cpu_model()
 {
     #if defined(PLATFORM_ARM64)
 
@@ -139,7 +137,7 @@ std::string info_cpu_model()
     #endif
 }
 
-void info_print_cpu(std::ostream& os)
+inline void info_print_cpu(std::ostream& os)
 {
     os << "CPU:\n";
     os << "  vendor  : " << info_cpu_vendor() << "\n";
@@ -150,7 +148,7 @@ void info_print_cpu(std::ostream& os)
 //     Compiler Info
 // =================================================================================================
 
-std::string info_compiler_family()
+inline std::string info_compiler_family()
 {
     #if defined(__clang__)
         return "clang";
@@ -173,7 +171,7 @@ std::string info_compiler_family()
     #endif
 }
 
-std::string info_compiler_version()
+inline std::string info_compiler_version()
 {
     #if defined(__clang__)
         return __clang_version__;
@@ -200,7 +198,7 @@ std::string info_compiler_version()
     #endif
 }
 
-void info_print_compiler(std::ostream& os)
+inline void info_print_compiler(std::ostream& os)
 {
     os << "Compiler:\n";
     os << "  family  : " << info_compiler_family() << "\n";
@@ -234,17 +232,17 @@ inline void ensure_cpu_init() noexcept
 
 #if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
 
-void cpuidex(int out[4], int leaf, int subleaf) noexcept
+inline void cpuidex(int out[4], int leaf, int subleaf) noexcept
 {
     __cpuidex(out, leaf, subleaf);
 }
 
-std::uint64_t xgetbv0() noexcept
+inline std::uint64_t xgetbv0() noexcept
 {
     return _xgetbv(0);
 }
 
-bool os_avx_state_enabled() noexcept
+inline bool os_avx_state_enabled() noexcept
 {
     int regs[4] = {};
     cpuidex(regs, 1, 0);
@@ -262,7 +260,7 @@ bool os_avx_state_enabled() noexcept
     return (xcr0 & 0x6) == 0x6;
 }
 
-bool os_avx512_state_enabled() noexcept
+inline bool os_avx512_state_enabled() noexcept
 {
     if (!os_avx_state_enabled()) {
         return false;
@@ -274,28 +272,28 @@ bool os_avx512_state_enabled() noexcept
     return (xcr0 & 0xE6) == 0xE6;
 }
 
-bool msvc_cpu_bmi2() noexcept
+inline bool msvc_cpu_bmi2() noexcept
 {
     int regs[4] = {};
     cpuidex(regs, 7, 0);
     return (regs[1] & (1 << 8)) != 0; // EBX.BMI2
 }
 
-bool msvc_cpu_sse2() noexcept
+inline bool msvc_cpu_sse2() noexcept
 {
     int regs[4] = {};
     cpuidex(regs, 1, 0);
     return (regs[3] & (1 << 26)) != 0; // EDX.SSE2
 }
 
-bool msvc_cpu_pclmul() noexcept
+inline bool msvc_cpu_pclmul() noexcept
 {
     int regs[4] = {};
     cpuidex(regs, 1, 0);
     return (regs[2] & (1 << 1)) != 0; // ECX.PCLMULQDQ
 }
 
-bool msvc_cpu_avx2() noexcept
+inline bool msvc_cpu_avx2() noexcept
 {
     if (!os_avx_state_enabled()) {
         return false;
@@ -306,7 +304,7 @@ bool msvc_cpu_avx2() noexcept
     return (regs[1] & (1 << 5)) != 0; // EBX.AVX2
 }
 
-bool msvc_cpu_avx512f() noexcept
+inline bool msvc_cpu_avx512f() noexcept
 {
     if (!os_avx512_state_enabled()) {
         return false;
@@ -323,7 +321,7 @@ bool msvc_cpu_avx512f() noexcept
 //     Compile-time checks
 // -----------------------------------------------------------------
 
-bool compiled_bmi2() noexcept
+inline bool compiled_bmi2() noexcept
 {
 #ifdef FISK_HAS_BMI2
     return true;
@@ -332,7 +330,7 @@ bool compiled_bmi2() noexcept
 #endif
 }
 
-bool compiled_sse2() noexcept
+inline bool compiled_sse2() noexcept
 {
 #ifdef FISK_HAS_SSE2
     return true;
@@ -341,7 +339,7 @@ bool compiled_sse2() noexcept
 #endif
 }
 
-bool compiled_avx2() noexcept
+inline bool compiled_avx2() noexcept
 {
 #ifdef FISK_HAS_AVX2
     return true;
@@ -350,7 +348,7 @@ bool compiled_avx2() noexcept
 #endif
 }
 
-bool compiled_avx512() noexcept
+inline bool compiled_avx512() noexcept
 {
 #ifdef FISK_HAS_AVX512
     return true;
@@ -359,7 +357,7 @@ bool compiled_avx512() noexcept
 #endif
 }
 
-bool compiled_neon() noexcept
+inline bool compiled_neon() noexcept
 {
 #ifdef FISK_HAS_NEON
     return true;
@@ -372,7 +370,7 @@ bool compiled_neon() noexcept
 //     Runtime CPU checks
 // -----------------------------------------------------------------
 
-bool cpu_bmi2() noexcept
+inline bool cpu_bmi2() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
         ensure_cpu_init();
@@ -384,7 +382,7 @@ bool cpu_bmi2() noexcept
     #endif
 }
 
-bool cpu_sse2() noexcept
+inline bool cpu_sse2() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
         ensure_cpu_init();
@@ -396,7 +394,7 @@ bool cpu_sse2() noexcept
     #endif
 }
 
-bool cpu_avx2() noexcept
+inline bool cpu_avx2() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
         ensure_cpu_init();
@@ -408,7 +406,7 @@ bool cpu_avx2() noexcept
     #endif
 }
 
-bool cpu_avx512() noexcept
+inline bool cpu_avx512() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
         ensure_cpu_init();
@@ -420,7 +418,7 @@ bool cpu_avx512() noexcept
     #endif
 }
 
-bool cpu_neon() noexcept
+inline bool cpu_neon() noexcept
 {
     #if defined(__aarch64__) || defined(_M_ARM64)
         return true;
@@ -430,45 +428,44 @@ bool cpu_neon() noexcept
 }
 
 // -----------------------------------------------------------------
-//     Combined checks
+//     Combined checks: "safe to use in this build"
 // -----------------------------------------------------------------
 
-bool bmi2_enabled() noexcept
+inline bool bmi2_enabled() noexcept
 {
     static bool const enabled = compiled_bmi2() && cpu_bmi2();
     return enabled;
 }
 
-bool sse2_enabled() noexcept
+inline bool sse2_enabled() noexcept
 {
     static bool const enabled = compiled_sse2() && cpu_sse2();
     return enabled;
 }
 
-bool avx2_enabled() noexcept
+inline bool avx2_enabled() noexcept
 {
     static bool const enabled = compiled_avx2() && cpu_avx2();
     return enabled;
 }
 
-bool avx512_enabled() noexcept
+inline bool avx512_enabled() noexcept
 {
     static bool const enabled = compiled_avx512() && cpu_avx512();
     return enabled;
 }
 
-bool neon_enabled() noexcept
+inline bool neon_enabled() noexcept
 {
     static bool const enabled = compiled_neon() && cpu_neon();
     return enabled;
 }
 
 // -----------------------------------------------------------------
-//     Print for user output
+//     Reporting
 // -----------------------------------------------------------------
 
-
-void info_print_intrinsics(std::ostream& os)
+inline void info_print_intrinsics(std::ostream& os)
 {
     auto print_one_feature = [&os](char const* name, bool compiled, bool cpu)
     {

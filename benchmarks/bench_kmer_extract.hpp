@@ -7,11 +7,10 @@
 #include <vector>
 
 #include "utils.hpp"
-#include "kmer_extract.hpp"
-#include "kmer_extract_simd.hpp"
-#include "seq_enc.hpp"
+#include "fisk/kmer_extract/kmer_extract.hpp"
+#include "fisk/kmer_extract/simd.hpp"
+#include "fisk/core/seq_enc.hpp"
 #include "microbench.hpp"
-#include "sys_info.hpp"
 
 /**
  * @brief Benchmark different implementations to extract and iterate all k-mers in a sequence.

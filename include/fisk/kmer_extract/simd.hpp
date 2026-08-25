@@ -9,9 +9,9 @@
 #include <cstddef>
 #include <stdexcept>
 
-#include "bit_extract_simd.hpp"
-#include "seq_enc.hpp"
-#include "sys_info.hpp"
+#include "fisk/bit_extract/simd.hpp"
+#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/intrinsics.hpp"
 
 // =================================================================================================
 //     K-mer Extraction SIMD AVX2

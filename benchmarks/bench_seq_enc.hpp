@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "seq_enc.hpp"
+#include "fisk/core/seq_enc.hpp"
 #include "microbench.hpp"
 
 /**

@@ -17,7 +17,7 @@
 
 
 // The whole functionality relies heavily on Intel intrinsics, which are not available on ARM.
-#include "sys_info.hpp"
+#include "fisk/core/intrinsics.hpp"
 #ifdef PLATFORM_X86_64
 
 #include <immintrin.h>

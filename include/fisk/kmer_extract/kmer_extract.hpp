@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <stdexcept>
 
-#include "seq_enc.hpp"
+#include "fisk/core/seq_enc.hpp"
 
 // =================================================================================================
 //     K-mer Extraction

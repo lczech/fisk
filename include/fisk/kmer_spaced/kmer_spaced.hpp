@@ -8,9 +8,9 @@
 #include <stdexcept>
 #include <vector>
 
-#include "kmer_extract.hpp"
-#include "bit_extract.hpp"
-#include "seq_enc.hpp"
+#include "fisk/kmer_extract/kmer_extract.hpp"
+#include "fisk/bit_extract/bit_extract.hpp"
+#include "fisk/core/seq_enc.hpp"
 
 // =================================================================================================
 //     Naive and MISSH implementations

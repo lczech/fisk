@@ -10,10 +10,9 @@
 
 #include "utils.hpp"
 #include "kmer_clark.hpp"
-#include "kmer_spaced.hpp"
-#include "seq_enc.hpp"
+#include "fisk/kmer_spaced/kmer_spaced.hpp"
+#include "fisk/core/seq_enc.hpp"
 #include "microbench.hpp"
-#include "sys_info.hpp"
 
 /**
  * @brief Benchmark the original CLARK implementation vs our improved one.

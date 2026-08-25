@@ -9,10 +9,10 @@
 #include <utility>
 #include <vector>
 
-#include "bit_extract.hpp"
-#include "bit_extract_simd.hpp"
-#include "utils.hpp"
-#include "sys_info.hpp"
+#include "fisk/bit_extract/bit_extract.hpp"
+#include "fisk/bit_extract/simd.hpp"
+#include "fisk/core/random.hpp"
+#include "fisk/core/cpu_runtime.hpp"
 
 // =================================================================================================
 //     Bit Extract Algorithms Enum

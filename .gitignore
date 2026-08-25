@@ -45,5 +45,5 @@ bin/
 *.dwo
 
 # Plots in other formats
-benchmarks/*/*.svg
-benchmarks/*/*.png
+results/*/*.svg
+results/*/*.png

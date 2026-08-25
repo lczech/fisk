@@ -10,12 +10,12 @@
 
 #include "utils.hpp"
 #include "microbench.hpp"
-#include "bit_extract.hpp"
-#include "bit_extract_zp7.hpp"
-#include "bit_extract_instlatx64.hpp"
-#include "bit_extract_adaptive.hpp"
-#include "bit_extract_selector.hpp"
-#include "sys_info.hpp"
+#include "fisk/bit_extract/bit_extract.hpp"
+#include "fisk/bit_extract/zp7.hpp"
+#include "fisk/bit_extract/instlatx64.hpp"
+#include "fisk/bit_extract/adaptive.hpp"
+#include "fisk/bit_extract/selector.hpp"
+#include "fisk/core/intrinsics.hpp"
 
 /**
  * @brief Helper to store a value and a mask (plus its software helpers) for testing.

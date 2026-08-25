@@ -9,12 +9,13 @@
 #include <utility>
 
 #include "utils.hpp"
-#include "kmer_spaced.hpp"
-#include "kmer_spaced_simd.hpp"
-#include "kmer_spaced_selector.hpp"
-#include "seq_enc.hpp"
+#include "fisk/kmer_spaced/kmer_spaced.hpp"
+#include "fisk/kmer_spaced/simd.hpp"
+#include "fisk/kmer_spaced/fused_avx2.hpp"
+#include "fisk/kmer_spaced/selector.hpp"
+#include "fisk/core/seq_enc.hpp"
 #include "microbench.hpp"
-#include "sys_info.hpp"
+#include "fisk/core/intrinsics.hpp"
 
 /**
  * @brief Benchmark spaced k-mer extract with single masks.

@@ -15,8 +15,8 @@
 #include "bench_bit_extract_weights.hpp"
 #include "bench_seq_enc.hpp"
 #include "utils.hpp"
-#include "sequence.hpp"
-#include "sys_info.hpp"
+#include "seq_data.hpp"
+#include "fisk/core/cpu_runtime.hpp"
 
 struct Options
 {
@@ -36,7 +36,7 @@ struct Options
     std::string masks_file;
 
     // Output directory for benchmark results
-    std::string output_dir = "benchmarks";
+    std::string output_dir = "results";
 };
 
 int main(int argc, char **argv)
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 
     parser.add_option(
         "--output-dir", "-o",
-        "Output directory for benchmark CSV files (default: benchmarks)",
+        "Output directory for benchmark CSV files (default: results)",
         opts.output_dir
     );
 

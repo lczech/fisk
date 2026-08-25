@@ -9,9 +9,9 @@
 #include <utility>
 #include <vector>
 
-#include "bit_extract.hpp"
-#include "utils.hpp"
-#include "sys_info.hpp"
+#include "fisk/bit_extract/bit_extract.hpp"
+#include "fisk/core/random.hpp"
+#include "fisk/core/intrinsics.hpp"
 
 // =================================================================================================
 //     Adaptive Bit Extract Helper

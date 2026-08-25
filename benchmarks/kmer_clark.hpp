@@ -11,10 +11,10 @@
 #include <string>
 #include <vector>
 
-#include "kmer_extract.hpp"
-#include "kmer_spaced.hpp"
-#include "bit_extract.hpp"
-#include "seq_enc.hpp"
+#include "fisk/kmer_extract/kmer_extract.hpp"
+#include "fisk/kmer_spaced/kmer_spaced.hpp"
+#include "fisk/bit_extract/bit_extract.hpp"
+#include "fisk/core/seq_enc.hpp"
 
 // =================================================================================================
 //     CLARK Original
