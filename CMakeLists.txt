@@ -46,19 +46,56 @@ target_compile_features(fisk INTERFACE cxx_std_20)
 #     Detect Instruction Sets
 # ==================================================================================================
 
+# Each instruction set below follows the identical shape: a compiler-capability check, an
+# opt-in FISK_ENABLE_* option, and, if enabled and supported, a compile flag plus a FISK_HAS_*
+# define. The best way to get "everything this build machine actually has" is -march=native, which
+# only ever enables extensions the CPU building reports. Those predefine the compiler flags such as
+#  __AVX2__/__BMI2__/etc., which core/intrinsics.hpp checks.
 include(CheckCXXCompilerFlag)
 
-check_cxx_compiler_flag("-mbmi2"   COMPILER_SUPPORTS_BMI2)
-check_cxx_compiler_flag("-mpclmul" COMPILER_SUPPORTS_PCLMUL)
+check_cxx_compiler_flag("-mbmi2"    COMPILER_SUPPORTS_BMI2)
+check_cxx_compiler_flag("-mpclmul"  COMPILER_SUPPORTS_PCLMUL)
+check_cxx_compiler_flag("-msse2"    COMPILER_SUPPORTS_SSE2)
+check_cxx_compiler_flag("-mavx2"    COMPILER_SUPPORTS_AVX2)
+check_cxx_compiler_flag("-mavx512f" COMPILER_SUPPORTS_AVX512)
 
-if (COMPILER_SUPPORTS_BMI2)
+option(FISK_ENABLE_BMI2   "Force-enable fisk's BMI2-accelerated code paths (PEXT); only safe if the deployment target actually has BMI2" OFF)
+option(FISK_ENABLE_PCLMUL "Force-enable fisk's PCLMUL-accelerated code paths; only safe if the deployment target actually has PCLMUL" OFF)
+option(FISK_ENABLE_SSE2   "Force-enable fisk's SSE2-accelerated code paths; only safe if the deployment target actually has SSE2" OFF)
+option(FISK_ENABLE_AVX2   "Force-enable fisk's AVX2-accelerated code paths; only safe if the deployment target actually has AVX2" OFF)
+option(FISK_ENABLE_AVX512 "Force-enable fisk's AVX512-accelerated code paths; only safe if the deployment target actually has AVX512" OFF)
+option(FISK_ENABLE_NEON   "Force-enable fisk's NEON-accelerated code paths (ARM64); only safe if the deployment target actually has NEON" OFF)
+
+if (FISK_ENABLE_BMI2 AND COMPILER_SUPPORTS_BMI2)
     target_compile_options(fisk INTERFACE "-mbmi2")
     target_compile_definitions(fisk INTERFACE FISK_HAS_BMI2=1)
 endif()
 
-if (COMPILER_SUPPORTS_PCLMUL)
+if (FISK_ENABLE_PCLMUL AND COMPILER_SUPPORTS_PCLMUL)
     target_compile_options(fisk INTERFACE "-mpclmul")
     target_compile_definitions(fisk INTERFACE FISK_HAS_CLMUL=1)
+endif()
+
+if (FISK_ENABLE_SSE2 AND COMPILER_SUPPORTS_SSE2)
+    target_compile_options(fisk INTERFACE "-msse2")
+    target_compile_definitions(fisk INTERFACE FISK_HAS_SSE2=1)
+endif()
+
+if (FISK_ENABLE_AVX2 AND COMPILER_SUPPORTS_AVX2)
+    target_compile_options(fisk INTERFACE "-mavx2")
+    target_compile_definitions(fisk INTERFACE FISK_HAS_AVX2=1)
+endif()
+
+if (FISK_ENABLE_AVX512 AND COMPILER_SUPPORTS_AVX512)
+    target_compile_options(fisk INTERFACE "-mavx512f")
+    target_compile_definitions(fisk INTERFACE FISK_HAS_AVX512=1)
+endif()
+
+# NEON is not an optional x86 extension selectable via a compile flag the way the others are —
+# it is a different base architecture. There is nothing to check_cxx_compiler_flag() here; we
+# just define the macro when actually building for ARM64, guarded so this never fires on x86.
+if (FISK_ENABLE_NEON AND (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64"))
+    target_compile_definitions(fisk INTERFACE FISK_HAS_NEON=1)
 endif()
 
 # ==================================================================================================

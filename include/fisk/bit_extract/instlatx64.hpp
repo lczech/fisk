@@ -14,11 +14,14 @@
 // Furthermore, we add `inline` to all functions here, to allow more compiler optimizations.
 // We also clean up a few preprocessor definitions, as well as an unfortunate `using namespace std`,
 // and replace pop count intrinsics with the C++20 std::popcount().
+// We additionally gate this whole file on our own FISK_HAS_CLMUL flag, since the code below
+// relies on the CLMUL instruction (`_mm_clmulepi64_si128`) unconditionally.
 
 
-// The whole functionality relies heavily on Intel intrinsics, which are not available on ARM.
+// The whole functionality relies heavily on Intel intrinsics, which are not available on ARM,
+// and unconditionally uses the CLMUL instruction, so we require that to be enabled as well.
 #include "fisk/core/intrinsics.hpp"
-#ifdef PLATFORM_X86_64
+#if defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)
 
 #include <immintrin.h>
 #include <wmmintrin.h>
@@ -530,4 +533,4 @@ inline void PEXT_PDEP_Emu_Test()
     }
 }
 
-#endif // SYSTEM_X86_64_GNU_CLANG
+#endif // PLATFORM_X86_64 && FISK_HAS_CLMUL

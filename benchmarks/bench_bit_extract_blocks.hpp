@@ -359,7 +359,7 @@ inline void bench_bit_extract_blocks(std::ostream& csv_os)
                 "adaptive",
                 [](BitExtractInput const& in){ return in.adaptive_bit_extract(in.value);
             }),
-            #ifdef PLATFORM_X86_64
+            #if defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)
             bench(
                 "instlatx",
                 [](BitExtractInput const& in){ return pext64_emu(in.value, in.mask.mask);

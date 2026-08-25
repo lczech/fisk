@@ -12,6 +12,11 @@
 // These are the three instances of static_cast<> in the code below.
 // Furthermore, we add `inline` to all functions here, to allow more compiler optimizations,
 // and use the C++20 std::popcount function instead of intrinsics or fallback.
+// We also bridge our own FISK_HAS_CLMUL flag (set by CMakeLists.txt's FISK_ENABLE_PCLMUL option)
+// to this file's own HAVE_CLMUL flag below, so that we do not need to touch its translation logic.
+#ifdef FISK_HAS_CLMUL
+    #define HAVE_CLMUL 1
+#endif
 
 // We need to translate from our preprocessor flag to theirs. Note that we are not setting
 // `HAS_BZHI` or `HAS_POPCNT` here, as those are only needed for the implemtation of PDEP,
