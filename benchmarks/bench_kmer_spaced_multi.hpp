@@ -133,13 +133,13 @@ inline void bench_kmer_spaced_multi(
                 }
             ),
 
-            // char_to_nt_table
+            // char_to_nt_table_acgt
             #if defined(FISK_HAS_BMI2)
             bench(
                 "pext",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_masks, char_to_nt_table, bit_extract_pext
+                        seq, k, bit_ext_masks, char_to_nt_table_acgt, bit_extract_pext
                     );
                 }
             ),
@@ -148,7 +148,7 @@ inline void bench_kmer_spaced_multi(
                 "bitloop",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_masks, char_to_nt_table, bit_extract_bitloop
+                        seq, k, bit_ext_masks, char_to_nt_table_acgt, bit_extract_bitloop
                     );
                 }
             ),
@@ -156,7 +156,7 @@ inline void bench_kmer_spaced_multi(
                 "byte_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_masks, char_to_nt_table, bit_extract_byte_table
+                        seq, k, bit_ext_masks, char_to_nt_table_acgt, bit_extract_byte_table
                     );
                 }
             ),
@@ -164,7 +164,7 @@ inline void bench_kmer_spaced_multi(
                 "block_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_masks, char_to_nt_table, bit_extract_block_table
+                        seq, k, bit_ext_block_masks, char_to_nt_table_acgt, bit_extract_block_table
                     );
                 }
             ),
@@ -172,7 +172,7 @@ inline void bench_kmer_spaced_multi(
                 "block_table_unrolled2",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_masks, char_to_nt_table, bit_extract_block_table_unrolled<2>
+                        seq, k, bit_ext_block_masks, char_to_nt_table_acgt, bit_extract_block_table_unrolled<2>
                     );
                 }
             ),
@@ -180,7 +180,7 @@ inline void bench_kmer_spaced_multi(
                 "block_table_unrolled4",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_masks, char_to_nt_table, bit_extract_block_table_unrolled<4>
+                        seq, k, bit_ext_block_masks, char_to_nt_table_acgt, bit_extract_block_table_unrolled<4>
                     );
                 }
             ),
@@ -188,7 +188,7 @@ inline void bench_kmer_spaced_multi(
                 "block_table_unrolled8",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_masks, char_to_nt_table, bit_extract_block_table_unrolled<8>
+                        seq, k, bit_ext_block_masks, char_to_nt_table_acgt, bit_extract_block_table_unrolled<8>
                     );
                 }
             ),
@@ -196,7 +196,7 @@ inline void bench_kmer_spaced_multi(
                 "butterfly_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_butterfly_tables, char_to_nt_table, bit_extract_butterfly_table
+                        seq, k, bit_ext_butterfly_tables, char_to_nt_table_acgt, bit_extract_butterfly_table
                     );
                 }
             ),

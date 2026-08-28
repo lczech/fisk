@@ -9,6 +9,7 @@
 #include "fisk/core/cpu_runtime.hpp"
 #include "fisk/core/random.hpp"
 #include "fisk/core/seq_enc.hpp"
+#include "fisk/core/seq_pack.hpp"
 
 // Bit extraction
 #include "fisk/bit_extract/bit_extract.hpp"
@@ -26,4 +27,3 @@
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
 #include "fisk/kmer_spaced/simd.hpp"
 #include "fisk/kmer_spaced/selector.hpp"
-#include "fisk/kmer_spaced/fused_avx2.hpp"

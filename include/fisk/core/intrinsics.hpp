@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bit>
+#include <cstdint>
 
 // =================================================================================================
 //     Platform Macros
@@ -58,4 +59,51 @@ static_assert(
 #endif
 #if defined(_MSC_VER)
     #include <intrin.h>
+#endif
+
+// =================================================================================================
+//     Byte Swap
+// =================================================================================================
+
+// Needed e.g. to convert between the two TwoBitSequence bit orders (see core/seq_enc.hpp).
+//
+// Tiered fallback, fastest/most standard first:
+//   1) std::byteswap (C++23; we currently use C++20, so this only activates once building
+//      with a standard library that has shipped it, tracked via the __cpp_lib_byteswap
+//      feature-test macro rather than checking the language mode directly).
+//   2) The MSVC/GCC/Clang compiler builtins.
+//   3) A fully portable hand-rolled shift-mask-or fallback. This only collapses to a single
+//      instruction once the optimizer's idiom-recognition kicks in (reliably the case for GCC,
+//      Clang, and MSVC at -O2/-O3), kept as last resort.
+#if defined(__cpp_lib_byteswap) && __cpp_lib_byteswap >= 202110L
+
+    inline constexpr std::uint64_t byte_swap_64(std::uint64_t x) noexcept
+    {
+        return std::byteswap(x);
+    }
+
+#elif defined(_MSC_VER)
+
+    inline std::uint64_t byte_swap_64(std::uint64_t x) noexcept
+    {
+        return _byteswap_uint64(x);
+    }
+
+#elif defined(__GNUC__) || defined(__clang__)
+
+    inline constexpr std::uint64_t byte_swap_64(std::uint64_t x) noexcept
+    {
+        return __builtin_bswap64(x);
+    }
+
+#else
+
+    inline constexpr std::uint64_t byte_swap_64(std::uint64_t x) noexcept
+    {
+        x = ((x & 0x00000000FFFFFFFFULL) << 32) | ((x & 0xFFFFFFFF00000000ULL) >> 32);
+        x = ((x & 0x0000FFFF0000FFFFULL) << 16) | ((x & 0xFFFF0000FFFF0000ULL) >> 16);
+        x = ((x & 0x00FF00FF00FF00FFULL) <<  8) | ((x & 0xFF00FF00FF00FF00ULL) >>  8);
+        return x;
+    }
+
 #endif

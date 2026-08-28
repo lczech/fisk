@@ -49,7 +49,7 @@ inline std::uint32_t encode_32_nts_avx2(char const* data, std::uint8_t* codes) n
         _mm256_or_si256(is_g, is_t)
     );
 
-    // Same ASCII bit trick as char_to_nt_ascii(), but vectorized.
+    // Same ASCII bit trick as char_to_nt_ascii_acgt(), but vectorized.
     // Shift within 16-bit lanes, then mask back to byte-local bits.
     __m256i const s1 = _mm256_and_si256(
         _mm256_srli_epi16(lower, 1),
@@ -214,7 +214,7 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 
     // Scalar tail, and full fallback if AVX2 is unavailable.
     for (; i < seq_len; ++i) {
-        std::uint8_t const code = char_to_nt_ascii(data[i]);
+        std::uint8_t const code = char_to_nt_ascii_acgt(data[i]);
 
         if (code < 4) {
             kmer = ((kmer << 2) & mask) | (code & 0x03u);
@@ -347,7 +347,7 @@ inline void for_each_kmer_simd_scalar(
 
     // Scalar tail.
     for (; i < seq_len; ++i) {
-        std::uint8_t const code = char_to_nt_ascii(data[i]);
+        std::uint8_t const code = char_to_nt_ascii_acgt(data[i]);
 
         step(
             static_cast<std::uint64_t>(code & 0x03u),

@@ -249,7 +249,7 @@ inline std::uint64_t compute_spaced_kmer_hash_simd(
         std::string_view(seq),
         k,
         kernel,
-        char_to_nt_table,
+        char_to_nt_table_acgt,
         [&](std::size_t /* start_pos */, std::uint64_t wmer) {
             hash += wmer;
         }
@@ -273,7 +273,7 @@ inline std::uint64_t compute_spaced_kmer_hash_simd(
             std::string_view(seq),
             span_k,
             kernels_arr,
-            char_to_nt_table,
+            char_to_nt_table_acgt,
             [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t wmer) {
                 hash += wmer;
             }

@@ -68,25 +68,25 @@ inline void bench_kmer_extract(
             bench(
                 "char_to_nt_ifs_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ifs);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ifs_acgt);
                 }
             ),
             bench(
                 "char_to_nt_switch_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_switch);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_switch_acgt);
                 }
             ),
             bench(
                 "char_to_nt_table_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_table);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_table_acgt);
                 }
             ),
             bench(
                 "char_to_nt_ascii_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ascii);
+                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ascii_acgt);
                 }
             ),
 
@@ -94,25 +94,25 @@ inline void bench_kmer_extract(
             bench(
                 "char_to_nt_ifs_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_ifs);
+                    return compute_kmer_hash(seq, k, char_to_nt_ifs_acgt);
                 }
             ),
             bench(
                 "char_to_nt_switch_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_switch);
+                    return compute_kmer_hash(seq, k, char_to_nt_switch_acgt);
                 }
             ),
             bench(
                 "char_to_nt_table_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_table);
+                    return compute_kmer_hash(seq, k, char_to_nt_table_acgt);
                 }
             ),
             bench(
                 "char_to_nt_ascii_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_ascii);
+                    return compute_kmer_hash(seq, k, char_to_nt_ascii_acgt);
                 }
             ),
 

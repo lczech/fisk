@@ -434,7 +434,7 @@ inline std::uint64_t clark_improved(
     std::uint64_t kmer_word  = 0;
     std::uint64_t valid_bits = 0;
     for( std::size_t i = 0; i < seq_len; ++i ) {
-        std::uint8_t const code = static_cast<std::uint8_t>(char_to_nt_table(data[i]));
+        std::uint8_t const code = static_cast<std::uint8_t>(char_to_nt_table_acgt(data[i]));
 
         // Shift in the base. For invalid bases, the low 2 bits are irrelevant,
         // because validity is tested separately before emission.

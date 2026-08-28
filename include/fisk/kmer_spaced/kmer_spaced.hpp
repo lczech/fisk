@@ -66,7 +66,7 @@ inline std::uint64_t compute_spaced_kmer_missh(
     for( size_t i = 0; i < mask.size(); ++i ) {
         // Comin et al use a switch statement for the encoding, which is slow.
         auto const c = static_cast<std::uint64_t>(
-            char_to_nt_switch( seq[start_pos + mask[i]] )
+            char_to_nt_switch_acgt( seq[start_pos + mask[i]] )
         );
         valid &= (c < 4);
 
@@ -88,14 +88,14 @@ inline std::uint64_t compute_spaced_kmer_naive(
     std::string_view seq, std::vector<size_t> const& mask, size_t start_pos
 ) {
     // This is the same as the above compute_spaced_kmer_missh() function, with the only
-    // difference being the use of the char_to_nt_table() function instead of the switch statement.
+    // difference being the use of the char_to_nt_table_acgt() function instead of the switch statement.
     // As the char encoding is called k times for each k-mer, this is significantly faster.
 
     // Compute a single spaced kmer at the given position
     std::uint64_t result = 0;
     bool valid = true;
     for( auto p : mask ) {
-        auto const c = static_cast<std::uint64_t>( char_to_nt_table( seq[start_pos + p] ));
+        auto const c = static_cast<std::uint64_t>( char_to_nt_table_acgt( seq[start_pos + p] ));
         valid &= (c < 4);
         result <<= 2;
         result |= c;

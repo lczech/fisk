@@ -178,7 +178,7 @@ inline SpacedKmerMode spaced_kmer_selector(
                     seq,
                     span_k,
                     mask,
-                    char_to_nt_table,
+                    char_to_nt_table_acgt,
                     [&](std::uint64_t x, BitExtractMask const& m) noexcept {
                         return bit_extract_pext(x, m);
                     }
@@ -195,7 +195,7 @@ inline SpacedKmerMode spaced_kmer_selector(
                 seq,
                 span_k,
                 mask,
-                char_to_nt_table,
+                char_to_nt_table_acgt,
                 [&](std::uint64_t x, BitExtractMask const&) noexcept {
                     return bit_extract_butterfly_table(x, butterfly_table);
                 }

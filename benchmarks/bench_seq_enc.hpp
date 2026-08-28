@@ -10,6 +10,24 @@
 #include "microbench.hpp"
 
 /**
+ * @brief Scan a sequence and encode each character, combining them to get a final "hash".
+ *
+ * The hash obtained here is not a good one, as it is simply the sum of all two-bit encodings
+ * of the characters. But it is enough to check that all the above functions give the same result,
+ * and sufficient to force the compiler to actually run the encoding.
+ */
+template <typename EncodeFunc>
+inline std::uint64_t sequence_encode_hash(std::string_view seq, EncodeFunc&& encode)
+{
+    std::uint64_t h = 0;
+    for (char c : seq) {
+        // h = (h << 2) | encode(c);
+        h += encode(c);
+    }
+    return h;
+}
+
+/**
  * @brief Benchmark different implementations for encoding ASCII chars into the two bit encoding.
  *
  * This tests both variants of the implementations, those that check that the character is valid
@@ -30,8 +48,9 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
     std::cout << "\n=== sequence encode ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
-    // Quick verification check of the ascii exploit:
-    test_char_to_nt_ascii();
+    // Quick verification check of the ascii exploit, for both conventions:
+    test_char_to_nt_ascii_acgt();
+    test_char_to_nt_ascii_actg();
 
     Microbench<std::string> suite(suite_title);
     suite
@@ -46,27 +65,27 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
         sequences, // vector<std::string>
 
         bench(
-            "char_to_nt_ifs",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ifs);
+            "char_to_nt_ifs_acgt",
+            [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_ifs_acgt);
         }),
         bench(
-            "char_to_nt_switch",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_switch);
+            "char_to_nt_switch_acgt",
+            [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_switch_acgt);
         }),
         bench(
-            "char_to_nt_table",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_table);
+            "char_to_nt_table_acgt",
+            [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_table_acgt);
         }),
         bench(
-            "char_to_nt_ascii",
-            [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii);
+            "char_to_nt_ascii_acgt",
+            [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_ascii_acgt);
         })
 
         // The unchecked ascii encoder is the fastest, but only valid if it is guaranteed
         // that the input only consists of ACGT characters.
         // bench(
-        //     "char_to_nt_ascii_unchecked",
-        //     [&](std::string const& seq){ return sequence_encode(seq, char_to_nt_ascii_unchecked);
+        //     "char_to_nt_ascii_unchecked_acgt",
+        //     [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_ascii_unchecked_acgt);
         // })
     );
 
