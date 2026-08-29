@@ -57,7 +57,8 @@ check_cxx_compiler_flag("-mbmi2"    COMPILER_SUPPORTS_BMI2)
 check_cxx_compiler_flag("-mpclmul"  COMPILER_SUPPORTS_PCLMUL)
 check_cxx_compiler_flag("-msse2"    COMPILER_SUPPORTS_SSE2)
 check_cxx_compiler_flag("-mavx2"    COMPILER_SUPPORTS_AVX2)
-check_cxx_compiler_flag("-mavx512f" COMPILER_SUPPORTS_AVX512)
+check_cxx_compiler_flag("-mavx512f"  COMPILER_SUPPORTS_AVX512)
+check_cxx_compiler_flag("-mavx512bw" COMPILER_SUPPORTS_AVX512BW)
 
 option(FISK_ENABLE_BMI2   "Force-enable fisk's BMI2-accelerated code paths (PEXT); only safe if the deployment target actually has BMI2" OFF)
 option(FISK_ENABLE_PCLMUL "Force-enable fisk's PCLMUL-accelerated code paths; only safe if the deployment target actually has PCLMUL" OFF)
@@ -86,8 +87,12 @@ if (FISK_ENABLE_AVX2 AND COMPILER_SUPPORTS_AVX2)
     target_compile_definitions(fisk INTERFACE FISK_HAS_AVX2=1)
 endif()
 
-if (FISK_ENABLE_AVX512 AND COMPILER_SUPPORTS_AVX512)
-    target_compile_options(fisk INTERFACE "-mavx512f")
+# AVX512BW is required alongside AVX512F: seq_pack's Msb byte-reversal uses _mm512_shuffle_epi8,
+# which needs BW. It's present on essentially all mainstream AVX512 hardware since Skylake-X/Ice
+# Lake -- only the earliest, now-obsolete Xeon Phi "Knights Landing" parts are F-only -- so this is
+# folded into the single FISK_ENABLE_AVX512 option rather than a separate opt-in tier.
+if (FISK_ENABLE_AVX512 AND COMPILER_SUPPORTS_AVX512 AND COMPILER_SUPPORTS_AVX512BW)
+    target_compile_options(fisk INTERFACE "-mavx512f" "-mavx512bw")
     target_compile_definitions(fisk INTERFACE FISK_HAS_AVX512=1)
 endif()
 

@@ -6,7 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "fisk/core/seq_pack.hpp"
+#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/seq_pack/simd.hpp"
 #include "microbench.hpp"
 
 /**
@@ -69,6 +70,34 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
                 pack_sequence(seq, EncodeAcgt8ButterflyLsb{}, out);
                 return pack_sequence_sink(out);
             })
+            #if defined(FISK_HAS_SSE2)
+            ,
+            bench("butterfly_sse2", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeAcgtButterflySse2Lsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            ,
+            bench("butterfly_avx2", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeAcgtButterflyAvx2Lsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            ,
+            bench("butterfly_avx512", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeAcgtButterflyAvx512Lsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_NEON)
+            ,
+            bench("butterfly_neon", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeAcgtButterflyNeonLsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
         );
         write_csv_rows(csv_os, suite_title, "conv=acgt;order=lsb", results);
     }
@@ -94,6 +123,34 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
                 pack_sequence(seq, EncodeAcgt8ButterflyMsb{}, out);
                 return pack_sequence_sink(out);
             })
+            #if defined(FISK_HAS_SSE2)
+            ,
+            bench("butterfly_sse2", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeAcgtButterflySse2Msb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            ,
+            bench("butterfly_avx2", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeAcgtButterflyAvx2Msb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            ,
+            bench("butterfly_avx512", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeAcgtButterflyAvx512Msb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_NEON)
+            ,
+            bench("butterfly_neon", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeAcgtButterflyNeonMsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
         );
         write_csv_rows(csv_os, suite_title, "conv=acgt;order=msb", results);
     }
@@ -119,6 +176,34 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
                 pack_sequence(seq, EncodeActg8ButterflyLsb{}, out);
                 return pack_sequence_sink(out);
             })
+            #if defined(FISK_HAS_SSE2)
+            ,
+            bench("butterfly_sse2", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeActgButterflySse2Lsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            ,
+            bench("butterfly_avx2", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeActgButterflyAvx2Lsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            ,
+            bench("butterfly_avx512", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeActgButterflyAvx512Lsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_NEON)
+            ,
+            bench("butterfly_neon", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeActgButterflyNeonLsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
         );
         write_csv_rows(csv_os, suite_title, "conv=actg;order=lsb", results);
     }
@@ -144,6 +229,34 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
                 pack_sequence(seq, EncodeActg8ButterflyMsb{}, out);
                 return pack_sequence_sink(out);
             })
+            #if defined(FISK_HAS_SSE2)
+            ,
+            bench("butterfly_sse2", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeActgButterflySse2Msb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            ,
+            bench("butterfly_avx2", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeActgButterflyAvx2Msb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            ,
+            bench("butterfly_avx512", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeActgButterflyAvx512Msb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
+            #if defined(FISK_HAS_NEON)
+            ,
+            bench("butterfly_neon", [&](std::string const& seq) {
+                pack_sequence_simd(seq, EncodeActgButterflyNeonMsb{}, out);
+                return pack_sequence_sink(out);
+            })
+            #endif
         );
         write_csv_rows(csv_os, suite_title, "conv=actg;order=msb", results);
     }
