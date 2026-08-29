@@ -142,3 +142,44 @@ if(FISK_BUILD_BENCHMARKS)
         )
     endif()
 endif()
+
+# ==================================================================================================
+#     Tests
+# ==================================================================================================
+
+# Only built by default when fisk is the top-level project, same rationale as
+# FISK_BUILD_BENCHMARKS above, and can likewise be forced either way via -DFISK_BUILD_TESTS=.
+option(FISK_BUILD_TESTS "Build the fisk test suite" ${FISK_IS_TOP_LEVEL_DEFAULT})
+
+if(FISK_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(fisk_tests
+        tests/main.cpp
+        tests/test_placeholder.cpp
+    )
+    target_include_directories(fisk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+    target_link_libraries(fisk_tests PRIVATE fisk::fisk)
+
+    # Same rationale as fisk_benchmarks above: build-quality choices private to this binary.
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        target_compile_options(fisk_tests PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wshadow
+            -Wconversion
+            -Wsign-conversion
+            -Wnull-dereference
+            -Wdouble-promotion
+            -Werror
+        )
+    elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(fisk_tests PRIVATE
+            /W4
+            /WX
+        )
+    endif()
+
+    add_test(NAME fisk_tests COMMAND fisk_tests)
+endif()
