@@ -119,11 +119,11 @@ if(FISK_BUILD_BENCHMARKS)
     # Optimization and warning flags are private to the benchmark binary: they are build-quality
     # choices for this repo, not correctness requirements for the library, and must not propagate
     # to anything that links fisk::fisk.
-    target_compile_options(fisk_benchmarks PRIVATE
-        $<$<CONFIG:Release>:-O3 -march=native>
-    )
-
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        target_compile_options(fisk_benchmarks PRIVATE
+            $<$<CONFIG:Release>:-O3 -march=native>
+        )
+
         target_compile_options(fisk_benchmarks PRIVATE
             -Wall
             -Wextra
@@ -167,6 +167,12 @@ if(FISK_BUILD_TESTS)
 
     # Same rationale as fisk_benchmarks above: build-quality choices private to this binary.
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        # Activate whatever ISA extensions this build machine actually has, for the test
+        # suite only, so that the library itself stays portable.
+        target_compile_options(fisk_tests PRIVATE
+            -march=native
+        )
+
         target_compile_options(fisk_tests PRIVATE
             -Wall
             -Wextra

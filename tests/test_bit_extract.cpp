@@ -1,9 +1,11 @@
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
+#include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/random.hpp"
 #include "testing.hpp"
 
@@ -164,5 +166,159 @@ TEST(BitExtract, Pext)
     check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
         return bit_extract_pext(x, BitExtractMask(mask));
     });
+}
+#endif
+
+// =================================================================================================
+//     SIMD Kernel Tests
+// =================================================================================================
+
+// All simd.hpp kernels share the same structural interface (a `simd_vector` type, a `lanes`
+// constant, static load()/store(), a bit_extract(simd_vector) SIMD path, a bit_extract(uint64_t)
+// scalar fallback path, and construction from a single uint64_t mask), so one generic helper
+// covers all of them. Checks both paths against the same bit_extract_oracle() used above, for
+// every mask in the shared edge-case + random mask set.
+template <typename KernelType>
+static void check_kernel()
+{
+    std::vector<std::uint64_t> masks = edge_case_masks();
+    for (auto const m : random_masks()) {
+        masks.push_back(m);
+    }
+
+    std::vector<std::uint64_t> values = {
+        0x0000000000000000ULL,
+        0xFFFFFFFFFFFFFFFFULL,
+    };
+    for (auto const v : random_values()) {
+        values.push_back(v);
+    }
+
+    constexpr std::size_t lanes = KernelType::lanes;
+
+    for (auto const mask : masks) {
+        KernelType const kernel(mask);
+
+        // Scalar fallback path: every value checked directly.
+        for (auto const value : values) {
+            EXPECT_EQ(kernel.bit_extract(value), bit_extract_oracle(value, mask));
+        }
+
+        // SIMD-lane path: values processed in chunks of `lanes`, wrapping around to fill the
+        // last chunk if `values.size()` is not a multiple of `lanes`.
+        alignas(64) std::array<std::uint64_t, lanes> in_buf{};
+        alignas(64) std::array<std::uint64_t, lanes> out_buf{};
+        for (std::size_t chunk_start = 0; chunk_start < values.size(); chunk_start += lanes) {
+            for (std::size_t i = 0; i < lanes; ++i) {
+                in_buf[i] = values[(chunk_start + i) % values.size()];
+            }
+            auto const vec = KernelType::load(in_buf.data());
+            auto const result = kernel.bit_extract(vec);
+            KernelType::store(result, out_buf.data());
+            for (std::size_t i = 0; i < lanes; ++i) {
+                EXPECT_EQ(out_buf[i], bit_extract_oracle(in_buf[i], mask));
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+//     Butterfly Kernels
+// -----------------------------------------------------------------------------
+
+TEST(BitExtractSimd, KernelButterflyScalar)
+{
+    check_kernel<BitExtractKernelButterflyScalar>();
+}
+
+#ifdef FISK_HAS_SSE2
+TEST(BitExtractSimd, KernelButterflySSE2)
+{
+    check_kernel<BitExtractKernelButterflySSE2>();
+}
+#endif
+
+#ifdef FISK_HAS_AVX2
+TEST(BitExtractSimd, KernelButterflyAVX2)
+{
+    check_kernel<BitExtractKernelButterflyAVX2>();
+}
+#endif
+
+#ifdef FISK_HAS_AVX512
+TEST(BitExtractSimd, KernelButterflyAVX512)
+{
+    check_kernel<BitExtractKernelButterflyAVX512>();
+}
+#endif
+
+#ifdef FISK_HAS_NEON
+TEST(BitExtractSimd, KernelButterflyNEON)
+{
+    check_kernel<BitExtractKernelButterflyNEON>();
+}
+#endif
+
+// -----------------------------------------------------------------------------
+//     Block Kernels
+// -----------------------------------------------------------------------------
+
+// Each ISA tier is swept over UF = 1, 8 (the library default), and 32 (the low and high
+// extremes plus the default of the or_reduce_ compile-time balanced-tree reduction).
+
+TEST(BitExtractSimd, KernelBlockScalar)
+{
+    check_kernel<BitExtractKernelBlockScalar<1>>();
+    check_kernel<BitExtractKernelBlockScalar<8>>();
+    check_kernel<BitExtractKernelBlockScalar<32>>();
+}
+
+#ifdef FISK_HAS_SSE2
+TEST(BitExtractSimd, KernelBlockSSE2)
+{
+    check_kernel<BitExtractKernelBlockSSE2<1>>();
+    check_kernel<BitExtractKernelBlockSSE2<8>>();
+    check_kernel<BitExtractKernelBlockSSE2<32>>();
+}
+#endif
+
+#ifdef FISK_HAS_AVX2
+TEST(BitExtractSimd, KernelBlockAVX2)
+{
+    check_kernel<BitExtractKernelBlockAVX2<1>>();
+    check_kernel<BitExtractKernelBlockAVX2<8>>();
+    check_kernel<BitExtractKernelBlockAVX2<32>>();
+}
+#endif
+
+#ifdef FISK_HAS_AVX512
+TEST(BitExtractSimd, KernelBlockAVX512)
+{
+    check_kernel<BitExtractKernelBlockAVX512<1>>();
+    check_kernel<BitExtractKernelBlockAVX512<8>>();
+    check_kernel<BitExtractKernelBlockAVX512<32>>();
+}
+#endif
+
+#ifdef FISK_HAS_NEON
+TEST(BitExtractSimd, KernelBlockNEON)
+{
+    check_kernel<BitExtractKernelBlockNEON<1>>();
+    check_kernel<BitExtractKernelBlockNEON<8>>();
+    check_kernel<BitExtractKernelBlockNEON<32>>();
+}
+#endif
+
+// -----------------------------------------------------------------------------
+//     PEXT Kernel
+// -----------------------------------------------------------------------------
+
+#ifdef FISK_HAS_BMI2
+TEST(BitExtractSimd, KernelPext)
+{
+    check_kernel<BitExtractKernelPEXT<1>>();
+    check_kernel<BitExtractKernelPEXT<2>>();
+    check_kernel<BitExtractKernelPEXT<4>>();
+    check_kernel<BitExtractKernelPEXT<8>>();
 }
 #endif
