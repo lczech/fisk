@@ -156,6 +156,7 @@ if(FISK_BUILD_TESTS)
 
     add_executable(fisk_tests
         tests/main.cpp
+        tests/test_seq_enc.cpp
         tests/test_random.cpp
         tests/test_intrinsics.cpp
         tests/test_cpu_runtime.cpp

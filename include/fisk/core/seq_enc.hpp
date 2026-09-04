@@ -6,8 +6,6 @@
 #include <cstdint>
 #include <cstddef>
 #include <stdexcept>
-#include <cassert>
-#include <iostream>
 #include <vector>
 
 // =================================================================================================
@@ -182,41 +180,6 @@ inline constexpr std::uint8_t char_to_nt_ascii_unchecked_acgt(char c) noexcept
     return ((u >> 1) ^ (u >> 2)) & 0x03u;
 }
 
-/**
- * @brief Verify the char_to_nt_ascii_acgt() function for all ASCII values.
- */
-inline void test_char_to_nt_ascii_acgt()
-{
-    auto expected = [](unsigned char c) -> std::uint8_t {
-        switch (c) {
-            case 'A': case 'a': return 0;
-            case 'C': case 'c': return 1;
-            case 'G': case 'g': return 2;
-            case 'T': case 't': return 3;
-            default:            return 4;
-        }
-    };
-
-    for (int i = 0; i < 256; ++i) {
-        unsigned char c = static_cast<unsigned char>(i);
-
-        std::uint8_t const got = char_to_nt_ascii_acgt(static_cast<char>(c));
-        std::uint8_t const exp = expected(c);
-
-        if (got != exp) {
-            std::cerr
-                << "Mismatch for byte 0x"
-                << std::hex << i
-                << " ('" << (std::isprint(c) ? char(c) : '?') << "')"
-                << " expected=" << std::dec << int(exp)
-                << " got=" << int(got) << "\n";
-
-            assert(false);
-        }
-    }
-    // std::cout << "char_to_nt_ascii_acgt(): all 256 values verified\n";
-}
-
 // -----------------------------------------------------------------------------
 //     ascii (ACTG)
 // -----------------------------------------------------------------------------
@@ -227,8 +190,8 @@ inline void test_char_to_nt_ascii_acgt()
  *
  * Unlike char_to_nt_ascii_acgt(), this extracts bits 1-2 of the (lowercase-folded) ASCII code
  * directly, with no further transformation, giving A=0, C=1, T=2, G=3 (ACTG order). This is
- * cheaper than the ACGT variant, at the cost of not having ACGT's cheap-reverse-complement
- * property.
+ * cheaper than the ACGT variant, at the cost of not having ACGT's cheap reverse complement
+ * by bit negation property.
  *
  * Note though that this variant still performs a validity check, which is more expensive than
  * the encoding itself. For full speed, and if it is clear that the input is in `ACGT`, use
@@ -261,50 +224,17 @@ inline constexpr std::uint8_t char_to_nt_ascii_actg(char c) noexcept
 }
 
 /**
- * @brief Get the two-bit ACTG encoding of a char, using bit twiddling to utilize a coincidence
- * in ASCII code, without char validity check. Only use when it is clear that the input is
- * in `ACGT`. It is the fastest of all the char_to_nt_ascii_*() variants.
+ * @brief Get the two-bit ACTG encoding of a char, using the ASCII exploit.
+ *
+ * See char_to_nt_ascii_actg() for details. Here, we skip char validity check for full speed.
+ * Only use when it is clear that the input is in `ACGT`. It is the fastest of all the
+ * char_to_nt_ascii_*() variants.
  */
 inline constexpr std::uint8_t char_to_nt_ascii_unchecked_actg(char c) noexcept
 {
     // Same logic as above.
     auto const u = static_cast<std::uint8_t>(c);
     return (u >> 1) & 0x03u;
-}
-
-/**
- * @brief Verify the char_to_nt_ascii_actg() function for all ASCII values.
- */
-inline void test_char_to_nt_ascii_actg()
-{
-    auto expected = [](unsigned char c) -> std::uint8_t {
-        switch (c) {
-            case 'A': case 'a': return 0;
-            case 'C': case 'c': return 1;
-            case 'T': case 't': return 2;
-            case 'G': case 'g': return 3;
-            default:            return 4;
-        }
-    };
-
-    for (int i = 0; i < 256; ++i) {
-        unsigned char c = static_cast<unsigned char>(i);
-
-        std::uint8_t const got = char_to_nt_ascii_actg(static_cast<char>(c));
-        std::uint8_t const exp = expected(c);
-
-        if (got != exp) {
-            std::cerr
-                << "Mismatch for byte 0x"
-                << std::hex << i
-                << " ('" << (std::isprint(c) ? char(c) : '?') << "')"
-                << " expected=" << std::dec << int(exp)
-                << " got=" << int(got) << "\n";
-
-            assert(false);
-        }
-    }
-    // std::cout << "char_to_nt_ascii_actg(): all 256 values verified\n";
 }
 
 // -----------------------------------------------------------------------------
@@ -326,8 +256,9 @@ constexpr std::uint8_t SEQ_NT4_INVALID = 4;
  *
  * See SEQ_NT4_INVALID for the magic constant holding the "invalid" value for all ASCII chars
  * that are not `ACGT` or `acgt`. The original table from Heng Li uses 0,1,2,3 as the first
- * four entries, probably to make the table idempotent, but we explitly disallow this
- * here to avoid accidental misuse. Also maps 'U'/'u' to the same value as 'T'/'t'.
+ * four entries of the table, probably to make the table idempotent, but we explitly disallow this
+ * here to avoid accidental misuse. Also, this is deliberately ACGT-only, matching every other
+ * encoder here: 'U'/'u' (as in RNA input) is treated as invalid rather than aliased to 'T'/'t'.
  */
 inline constexpr std::uint8_t seq_nt4_table_acgt[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
@@ -335,9 +266,9 @@ inline constexpr std::uint8_t seq_nt4_table_acgt[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
-	4, 4, 4, 4,  3, 3, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+	4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4,
-	4, 4, 4, 4,  3, 3, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+	4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
@@ -432,7 +363,10 @@ struct NucleotideEncoderAcgt
  * @brief Lookup table for ASCII to two-bit ACTG encoding of nucleotides.
  *
  * Same structure as seq_nt4_table_acgt, but with A=0, C=1, T=2, G=3, including the same
- * 'U'/'u' as 'T'/'t' synonym handling.
+ * ACGT-only handling (see seq_nt4_table_acgt for why 'U'/'u' is not aliased to 'T'/'t' here).
+ *
+ * When using a lookup table, the encoding speed does not depend on the ACGT/ACTG convention.
+ * We merely offer this table for completeness and compatibility with the other variants.
  */
 inline constexpr std::uint8_t seq_nt4_table_actg[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
@@ -440,9 +374,9 @@ inline constexpr std::uint8_t seq_nt4_table_actg[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 0, 4, 1,  4, 4, 4, 3,  4, 4, 4, 4,  4, 4, 4, 4,
-	4, 4, 4, 4,  2, 2, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+	4, 4, 4, 4,  2, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 0, 4, 1,  4, 4, 4, 3,  4, 4, 4, 4,  4, 4, 4, 4,
-	4, 4, 4, 4,  2, 2, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
+	4, 4, 4, 4,  2, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,
