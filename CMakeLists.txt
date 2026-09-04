@@ -160,6 +160,7 @@ if(FISK_BUILD_TESTS)
         tests/test_random.cpp
         tests/test_intrinsics.cpp
         tests/test_cpu_runtime.cpp
+        tests/test_bit_extract.cpp
     )
     target_include_directories(fisk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     target_link_libraries(fisk_tests PRIVATE fisk::fisk)
