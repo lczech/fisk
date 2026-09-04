@@ -156,7 +156,9 @@ if(FISK_BUILD_TESTS)
 
     add_executable(fisk_tests
         tests/main.cpp
-        tests/test_placeholder.cpp
+        tests/test_random.cpp
+        tests/test_intrinsics.cpp
+        tests/test_cpu_runtime.cpp
     )
     target_include_directories(fisk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     target_link_libraries(fisk_tests PRIVATE fisk::fisk)
