@@ -393,3 +393,99 @@ TEST(BitExtractSelector, SmokeTest)
         EXPECT_TRUE(is_known_mode);
     }
 }
+
+// =================================================================================================
+//     Dispatcher Tests
+// =================================================================================================
+
+// BitExtractKernelDispatcher is independent of which Kernel type is plugged in,
+// so a single kernel type is enough here.
+using DispatcherTestKernel = BitExtractKernelButterflyScalar;
+
+TEST(BitExtractDispatcher, RoundTrip)
+{
+    // Checks that dispatcher.run()'s array slot i actually corresponds to input mask i.
+
+    std::vector<std::uint64_t> const sample_values = {
+        0x0000000000000000ULL,
+        0xFFFFFFFFFFFFFFFFULL,
+        random_values()[0],
+        random_values()[1],
+        random_values()[2],
+    };
+
+    std::vector<std::size_t> const counts = {1, 2, 3, 8, 16};
+
+    for (auto const n : counts) {
+        std::vector<std::uint64_t> masks;
+        std::vector<DispatcherTestKernel> kernels;
+        for (std::size_t i = 0; i < n; ++i) {
+            masks.push_back(random_masks()[i]);
+            kernels.push_back(DispatcherTestKernel(masks.back()));
+        }
+
+        auto const check_dispatcher = [&](auto const& dispatcher) {
+            EXPECT_EQ(dispatcher.size(), n);
+            dispatcher.run([&](auto const& kernels_arr) {
+                EXPECT_EQ(kernels_arr.size(), n);
+                for (std::size_t i = 0; i < n; ++i) {
+                    for (auto const value : sample_values) {
+                        EXPECT_EQ(
+                            kernels_arr[i].bit_extract(value),
+                            bit_extract_oracle(value, masks[i])
+                        );
+                    }
+                }
+            });
+        };
+
+        check_dispatcher(BitExtractKernelDispatcher<DispatcherTestKernel>(masks));
+        check_dispatcher(BitExtractKernelDispatcher<DispatcherTestKernel>(kernels));
+    }
+}
+
+TEST(BitExtractDispatcher, InvalidMaskCount)
+{
+    // N=0 and N>16 must be rejected by both constructors;
+    // N=1 and N=16 (the inclusive boundary values) must succeed.
+
+    std::vector<std::uint64_t> const empty_masks;
+    std::vector<std::uint64_t> const one_mask = {random_masks()[0]};
+    std::vector<std::uint64_t> sixteen_masks;
+    for (std::size_t i = 0; i < 16; ++i) {
+        sixteen_masks.push_back(random_masks()[i]);
+    }
+    std::vector<std::uint64_t> seventeen_masks = sixteen_masks;
+    seventeen_masks.push_back(random_masks()[16]);
+
+    std::vector<DispatcherTestKernel> empty_kernels;
+    std::vector<DispatcherTestKernel> one_kernel = {DispatcherTestKernel(one_mask[0])};
+    std::vector<DispatcherTestKernel> sixteen_kernels;
+    for (auto const m : sixteen_masks) {
+        sixteen_kernels.push_back(DispatcherTestKernel(m));
+    }
+    std::vector<DispatcherTestKernel> seventeen_kernels;
+    for (auto const m : seventeen_masks) {
+        seventeen_kernels.push_back(DispatcherTestKernel(m));
+    }
+
+    // N=0 and N=17: both constructors must reject, for both masks and pre-built kernels.
+    EXPECT_ANY_THROW(BitExtractKernelDispatcher<DispatcherTestKernel>(empty_masks));
+    EXPECT_ANY_THROW(BitExtractKernelDispatcher<DispatcherTestKernel>(seventeen_masks));
+    EXPECT_ANY_THROW(BitExtractKernelDispatcher<DispatcherTestKernel>(empty_kernels));
+    EXPECT_ANY_THROW(BitExtractKernelDispatcher<DispatcherTestKernel>(seventeen_kernels));
+
+    // N=1 and N=16: both constructors must succeed, for both masks and pre-built kernels.
+    EXPECT_EQ(
+        BitExtractKernelDispatcher<DispatcherTestKernel>(one_mask).size(), std::size_t{1}
+    );
+    EXPECT_EQ(
+        BitExtractKernelDispatcher<DispatcherTestKernel>(sixteen_masks).size(), std::size_t{16}
+    );
+    EXPECT_EQ(
+        BitExtractKernelDispatcher<DispatcherTestKernel>(one_kernel).size(), std::size_t{1}
+    );
+    EXPECT_EQ(
+        BitExtractKernelDispatcher<DispatcherTestKernel>(sixteen_kernels).size(), std::size_t{16}
+    );
+}

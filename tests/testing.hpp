@@ -110,6 +110,23 @@ inline std::string format_bool_failure(char const* expr, bool expected)
     return oss.str();
 }
 
+inline std::string format_any_throw_failure(char const* stmt_expr)
+{
+    std::ostringstream oss;
+    oss << "Expected: " << stmt_expr << " throws an exception\n"
+        << "  Actual: it did not throw";
+    return oss.str();
+}
+
+inline std::string format_throw_failure(
+    char const* stmt_expr, char const* type_expr, bool threw_other
+) {
+    std::ostringstream oss;
+    oss << "Expected: " << stmt_expr << " throws an exception of type " << type_expr << "\n"
+        << "  Actual: it threw " << (threw_other ? "an exception of a different type" : "nothing");
+    return oss.str();
+}
+
 } // namespace detail
 
 // -------------------------------------------------------------------------------------------
@@ -233,3 +250,54 @@ inline int run_all_tests()
 #define ASSERT_TRUE(cond)  FISK_TESTING_BOOL_(cond, true, return)
 #define EXPECT_FALSE(cond) FISK_TESTING_BOOL_(cond, false, (void) 0)
 #define ASSERT_FALSE(cond) FISK_TESTING_BOOL_(cond, false, return)
+
+// -----------------------------------------------------------------------------
+//     EXPECT_ANY_THROW / ASSERT_ANY_THROW / EXPECT_THROW / ASSERT_THROW
+// -----------------------------------------------------------------------------
+
+// ANY_THROW checks only that *some* exception was thrown, regardless of type, for whenever the
+// exception type itself isn't a documented part of the contract under test. THROW
+// additionally requires the specific type, for the rarer case where callers are expected to
+// catch that exact type.
+
+#define FISK_TESTING_ANY_THROW_(stmt, on_fail) \
+    do { \
+        bool fisk_testing_threw_ = false; \
+        try { \
+            (stmt); \
+        } catch (...) { \
+            fisk_testing_threw_ = true; \
+        } \
+        if (!fisk_testing_threw_) { \
+            ::fisk_testing::detail::record_failure(__FILE__, __LINE__, \
+                ::fisk_testing::detail::format_any_throw_failure(#stmt) \
+            ); \
+            on_fail; \
+        } \
+    } while (0)
+
+#define FISK_TESTING_THROW_(stmt, exception_type, on_fail) \
+    do { \
+        bool fisk_testing_threw_expected_ = false; \
+        bool fisk_testing_threw_other_ = false; \
+        try { \
+            (stmt); \
+        } catch (exception_type const&) { \
+            fisk_testing_threw_expected_ = true; \
+        } catch (...) { \
+            fisk_testing_threw_other_ = true; \
+        } \
+        if (!fisk_testing_threw_expected_) { \
+            ::fisk_testing::detail::record_failure(__FILE__, __LINE__, \
+                ::fisk_testing::detail::format_throw_failure( \
+                    #stmt, #exception_type, fisk_testing_threw_other_ \
+                ) \
+            ); \
+            on_fail; \
+        } \
+    } while (0)
+
+#define EXPECT_ANY_THROW(stmt) FISK_TESTING_ANY_THROW_(stmt, (void) 0)
+#define ASSERT_ANY_THROW(stmt) FISK_TESTING_ANY_THROW_(stmt, return)
+#define EXPECT_THROW(stmt, exception_type) FISK_TESTING_THROW_(stmt, exception_type, (void) 0)
+#define ASSERT_THROW(stmt, exception_type) FISK_TESTING_THROW_(stmt, exception_type, return)
