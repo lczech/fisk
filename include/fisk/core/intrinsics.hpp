@@ -77,12 +77,32 @@ static_assert(
 //      Clang, and MSVC at -O2/-O3), kept as last resort.
 #if defined(__cpp_lib_byteswap) && __cpp_lib_byteswap >= 202110L
 
+    inline constexpr std::uint16_t byte_swap_16(std::uint16_t x) noexcept
+    {
+        return std::byteswap(x);
+    }
+
+    inline constexpr std::uint32_t byte_swap_32(std::uint32_t x) noexcept
+    {
+        return std::byteswap(x);
+    }
+
     inline constexpr std::uint64_t byte_swap_64(std::uint64_t x) noexcept
     {
         return std::byteswap(x);
     }
 
 #elif defined(_MSC_VER)
+
+    inline std::uint16_t byte_swap_16(std::uint16_t x) noexcept
+    {
+        return _byteswap_ushort(x);
+    }
+
+    inline std::uint32_t byte_swap_32(std::uint32_t x) noexcept
+    {
+        return _byteswap_ulong(x);
+    }
 
     inline std::uint64_t byte_swap_64(std::uint64_t x) noexcept
     {
@@ -91,12 +111,34 @@ static_assert(
 
 #elif defined(__GNUC__) || defined(__clang__)
 
+    inline constexpr std::uint16_t byte_swap_16(std::uint16_t x) noexcept
+    {
+        return __builtin_bswap16(x);
+    }
+
+    inline constexpr std::uint32_t byte_swap_32(std::uint32_t x) noexcept
+    {
+        return __builtin_bswap32(x);
+    }
+
     inline constexpr std::uint64_t byte_swap_64(std::uint64_t x) noexcept
     {
         return __builtin_bswap64(x);
     }
 
 #else
+
+    inline constexpr std::uint16_t byte_swap_16(std::uint16_t x) noexcept
+    {
+        return static_cast<std::uint16_t>((x << 8) | (x >> 8));
+    }
+
+    inline constexpr std::uint32_t byte_swap_32(std::uint32_t x) noexcept
+    {
+        x = ((x & 0x0000FFFFu) << 16) | ((x & 0xFFFF0000u) >> 16);
+        x = ((x & 0x00FF00FFu) <<  8) | ((x & 0xFF00FF00u) >>  8);
+        return x;
+    }
 
     inline constexpr std::uint64_t byte_swap_64(std::uint64_t x) noexcept
     {
