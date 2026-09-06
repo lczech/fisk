@@ -11,6 +11,7 @@
 #include "fisk/core/seq_enc.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
+#include "fisk/seq_pack/seq_pack.hpp"
 
 // =================================================================================================
 //     SIMD Kernel Extensions
@@ -362,8 +363,8 @@ using EncodeAcgtButterflyNeonMsb =
 //     pack_sequence_simd()
 // =================================================================================================
 
-// Output addressing matches scalar pack_sequence: chunk k (0..3) of output word `word_idx` goes
-// at byte offset 2k (Lsb) or 6-2k (Msb) within that word.
+// Output addressing matches scalar pack_sequence: the chunk starting at seq byte offset `off`
+// writes its 2 bytes at out.data[off/4 .. off/4+1], via write_two_bit_chunk() (seq_pack.hpp).
 
 /**
  * @brief Pack a whole ASCII sequence into a TwoBitSequence via a SIMD Extractor (see
@@ -382,28 +383,22 @@ inline void pack_sequence_simd(
     constexpr std::size_t vec_bytes = lanes * 8;
 
     std::size_t const seq_len   = seq.size();
-    std::size_t const num_words = (seq_len + 31) / 32;
+    std::size_t const num_bytes = (seq_len + 3) / 4;
 
     out.length = seq_len;
-    out.data.assign(num_words + 1, 0);
+    out.data.assign(num_bytes + 8, 0); // +8 trailing all-zero sentinel bytes
     char* const out_bytes = reinterpret_cast<char*>(out.data.data());
     char const* const data = seq.data();
 
-    auto chunk_offset = [](std::size_t k) {
-        return order == BitOrder::Msb ? (6 - 2 * k) : (2 * k);
-    };
     auto write_chunk = [&](std::size_t off, std::uint64_t value) {
-        std::size_t const chunk_idx = off / 8;
-        std::size_t const word_idx  = chunk_idx / 4;
-        std::size_t const k         = chunk_idx % 4;
-        std::uint16_t const v16 = static_cast<std::uint16_t>(value);
-        std::memcpy(out_bytes + word_idx * 8 + chunk_offset(k), &v16, 2);
+        write_two_bit_chunk<order>(out_bytes + off / 4, value);
     };
 
     std::size_t i = 0;
     for (; i + vec_bytes <= seq_len; i += vec_bytes) {
-        simd_vector const x =
-            extract(ExtractorT::loadu(reinterpret_cast<std::uint64_t const*>(data + i)));
+        simd_vector const x = extract(
+            ExtractorT::loadu(reinterpret_cast<std::uint64_t const*>(data + i))
+        );
         alignas(alignof(simd_vector)) std::uint64_t lane_buf[lanes];
         ExtractorT::store(x, lane_buf);
         for (std::size_t lane = 0; lane < lanes; ++lane) {

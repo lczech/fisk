@@ -160,15 +160,42 @@ struct EncodeAcgt8ButterflyMsb
 };
 
 // =================================================================================================
+//     Chunk Write Helper
+// =================================================================================================
+
+/**
+ * @brief Write the packed bases of one extractor call to `dest`, respecting `Order`.
+ *
+ * Each extractor above packs 8 bases (16 bits) into the low bits of its return value. A byte is
+ * the smallest addressable unit of TwoBitSequence's storage, so those 16 bits become 2 sequential
+ * output bytes. For `Lsb`, the extractor already produces those 2 bytes in the right relative
+ * order for free (the first of the 8 bases ends up in the low bits of the first byte, and so on);
+ * for `Msb`, the two bytes come out address-reversed relative to base order (the byte holding the
+ * later 4 bases lands first), so they need a fix-up swap before the sequential write.
+ */
+template <BitOrder Order>
+inline void write_two_bit_chunk(char* dest, std::uint64_t value) noexcept
+{
+    assert(dest != nullptr);
+    assert(value <= 0xFFFF);
+    std::uint16_t v16 = static_cast<std::uint16_t>(value);
+    if constexpr (Order == BitOrder::Msb) {
+        v16 = byte_swap_16(v16);
+    }
+    std::memcpy(dest, &v16, 2);
+}
+
+// =================================================================================================
 //     pack_sequence()
 // =================================================================================================
 
 /**
  * @brief Pack a whole ASCII sequence into a TwoBitSequence, reusing existing storage.
  *
- * Processes the sequence in 8-byte chunks via `extract` (see the extractor structs above),
- * writing each chunk's 16-bit result directly to its byte offset in `out.data` (offset `2k` for
- * `Lsb`, `6-2k` for `Msb`, where `k` is the chunk's index 0..3 within its 32-base word).
+ * Processes the sequence in 8-byte chunks via `extract` (see the extractor structs above), writing
+ * each chunk's 16-bit result to its 2 sequential output bytes at `out.data[i/4 .. i/4+1]`, where
+ * `i` is the chunk's starting byte offset into `seq` (see write_two_bit_chunk() for the per-byte
+ * ordering).
  *
  * `Extractor::order` (see BitOrder in core/seq_enc.hpp) both selects the out type. Passing an
  * extractor of the wrong order for a given `out` is a compile error.
@@ -185,55 +212,34 @@ inline void pack_sequence(
     constexpr BitOrder order = std::remove_cvref_t<Extractor>::order;
 
     std::size_t const seq_len   = seq.size();
-    std::size_t const num_words = (seq_len + 31) / 32;
+    std::size_t const num_bytes = (seq_len + 3) / 4;
 
     out.length = seq_len;
-    out.data.assign(num_words + 1, 0); // +1 trailing all-zero sentinel word
+    out.data.assign(num_bytes + 8, 0); // +8 trailing all-zero sentinel bytes
     char* const out_bytes = reinterpret_cast<char*>(out.data.data());
-
-    // Byte offset of chunk k (0..3) within its own 8-byte output word.
-    auto chunk_offset = [](std::size_t k) {
-        return order == BitOrder::Msb ? (6 - 2 * k) : (2 * k);
-    };
-
-    // Write `value`'s low 16 bits to `dest`.
-    auto write_chunk = [](char* dest, std::uint64_t value) {
-        std::uint16_t const v16 = static_cast<std::uint16_t>(value);
-        std::memcpy(dest, &v16, 2);
-    };
+    char const* const data = seq.data();
 
     // Read the 8-byte chunk starting at seq byte offset `off`.
-    auto read_chunk = [data = seq.data()](std::size_t off) -> std::uint64_t {
+    auto read_chunk = [data](std::size_t off) -> std::uint64_t {
         std::uint64_t word;
         std::memcpy(&word, data + off, 8);
         return word;
     };
 
-    char const* const data = seq.data();
-    std::size_t i = 0; // byte offset into seq
-    std::size_t word_idx = 0;
+    // byte offset into seq
+    std::size_t i = 0;
 
-    // Full 32-byte (32-base) blocks: 4 chunks of 8 bytes each per output word,
-    // written into one 64-bit word.
-    for (; i + 32 <= seq_len; i += 32, ++word_idx) {
-        char* const word_ptr = out_bytes + word_idx * 8;
-        write_chunk(word_ptr + chunk_offset(0), extract(read_chunk(i +  0)));
-        write_chunk(word_ptr + chunk_offset(1), extract(read_chunk(i +  8)));
-        write_chunk(word_ptr + chunk_offset(2), extract(read_chunk(i + 16)));
-        write_chunk(word_ptr + chunk_offset(3), extract(read_chunk(i + 24)));
+    // Full 8-base chunks.
+    for (; i + 8 <= seq_len; i += 8) {
+        write_two_bit_chunk<order>(out_bytes + i / 4, extract(read_chunk(i)));
     }
 
-    // Remaining < 32 bases: write only the chunks that actually exist.
-    char* const word_ptr = out_bytes + word_idx * 8;
-    for (std::size_t k = 0; i < seq_len && k < 4; ++k) {
+    // Remaining < 8 bases: zero-pad into a local word before extracting.
+    if (i < seq_len) {
         std::size_t const remaining = seq_len - i;
-        std::size_t const take = remaining < 8 ? remaining : std::size_t{8};
-
         std::uint64_t word = 0;
-        std::memcpy(&word, data + i, take);
-
-        write_chunk(word_ptr + chunk_offset(k), extract(word));
-        i += take;
+        std::memcpy(&word, data + i, remaining);
+        write_two_bit_chunk<order>(out_bytes + i / 4, extract(word));
     }
 }
 

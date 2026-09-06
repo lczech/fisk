@@ -433,17 +433,15 @@ struct NucleotideEncoderActg
 // =================================================================================================
 
 /**
- * @brief Bit order convention for how bases are packed within each word of a TwoBitSequence.
+ * @brief Bit order convention for how bases are packed within each byte of a TwoBitSequence.
  *
- * `Msb`: the first (leftmost) base of a word occupies the most significant bits, matching the
+ * `Msb`: earlier bases of the input sequence occupy the most significant bits, matching the
  * rolling k-mer convention `kmer = (kmer << 2) | code`, and hence preserving lexicographic string
- * order as integer order. This is the same convention widely used by k-mer tools
- * (e.g. KMC packs k-mers "leftmost symbol first") for exactly this reason, useful for canonical
- * k-mer/minimizer selection.
+ * order as integer order.
  *
- * `Lsb`: the first base occupies the least significant bits. This is the order that falls out
- * directly of a little-endian PEXT-based batch encode with no extra transformation, and is
- * therefore cheaper to produce with PEXT, at the cost of not preserving lexicographic order.
+ * `Lsb`: earlier bases of the input sequence occupy the least significant bits. This is the order
+ * that falls out directly of a little-endian PEXT-based batch encode with no extra transformation,
+ * and is therefore cheaper to produce with PEXT, at the cost of not preserving lexicographic order.
  *
  * Deliberately tracked as a template parameter on TwoBitSequence rather than left to convention,
  * so that mixing up the two orderings between producer and consumer is a compile error rather
@@ -458,18 +456,17 @@ enum class BitOrder
 /**
  * @brief A whole sequence, encoded into a densely packed two-bit-per-base representation.
  *
- * `data` holds `ceil(length / 32)` words of 32 bases each, plus one trailing all-zero sentinel
- * word past the real content, so that any window read spanning up to two words is guaranteed to
- * have valid bits to read even at the very end of the sequence. Bases at or beyond `length` are
- * unspecified padding and must not be accessed by callers.
+ * `data` holds `ceil(length / 4)` bytes of 4 bases each, plus 8 trailing all-zero sentinel bytes
+ * past the real content, so that any unaligned read up to 8 bytes (64 bits) wide, starting
+ * anywhere within the real content, is guaranteed to have valid bits to read.
  *
- * See BitOrder for what the `Order` template parameter means.
+ * See BitOrder for what the `Order` template parameter means, and for how it applies per byte.
  */
 template <BitOrder Order>
 struct TwoBitSequence
 {
     static constexpr BitOrder order = Order;
 
-    std::vector<std::uint64_t> data;
+    std::vector<std::uint8_t> data;
     std::size_t length = 0;
 };
