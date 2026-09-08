@@ -13,6 +13,23 @@
 // =================================================================================================
 
 /**
+ * @brief Throw for an invalid k-mer extraction precondition.
+ *
+ * The extracted k-mer length must satisfy `1 <= k <= k_max`.
+ * This helper is kept separate from the hot loop so the performance-critical extractor
+ * can remain branch-free and avoid the runtime overhead of an inlined exception path.
+ */
+[[gnu::noinline, gnu::cold]]
+inline void throw_invalid_kmer_k_(std::size_t k_max)
+{
+    // Keep the validity check out of the hot path: throwing here avoids a cold branch/landing pad
+    // in otherwise branch-free extractors, which could prevent their inlining.
+    throw std::runtime_error(
+        "Invalid call to k-mer extraction with k not in [1, " + std::to_string(k_max) + "]"
+    );
+}
+
+/**
  * @brief Iterate a sequence, extract all valid k-mers from it (using bit shifts),
  * and call a callback function on each k-mer.
  *
@@ -36,9 +53,7 @@ inline void for_each_kmer(
 
     // Boundary checks
     if (k == 0 || k > 32) {
-        throw std::runtime_error(
-            "Invalid call to k-mer extraction with k not in [1, 32]"
-        );
+        throw_invalid_kmer_k_(32);
     }
     if (seq.size() < k) {
         return;
@@ -90,9 +105,7 @@ inline void for_each_kmer_reextract(
 
     // Boundary checks
     if (k == 0 || k > 32) {
-        throw std::runtime_error(
-            "Invalid call to k-mer extraction with k not in [1, 32]"
-        );
+        throw_invalid_kmer_k_(32);
     }
     if (seq.size() < k) {
         return;

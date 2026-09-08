@@ -12,6 +12,7 @@
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/seq_enc.hpp"
 #include "fisk/core/intrinsics.hpp"
+#include "fisk/kmer_extract/kmer_extract.hpp"
 
 // =================================================================================================
 //     K-mer Extraction SIMD AVX2
@@ -145,9 +146,7 @@ template<typename Func>
 inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 {
     if (k == 0 || k > 32) {
-        throw std::runtime_error(
-            "Invalid call to k-mer extraction with k not in [1, 32]"
-        );
+        throw_invalid_kmer_k_(32);
     }
     if (seq.size() < k) {
         return;
@@ -243,9 +242,7 @@ inline void for_each_kmer_simd_scalar(
     Func&& func
 ) {
     if (k == 0 || k > 32) {
-        throw std::runtime_error(
-            "Invalid call to k-mer extraction with k not in [1, 32]"
-        );
+        throw_invalid_kmer_k_(32);
     }
     if (seq.size() < k) {
         return;
