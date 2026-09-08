@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "utils.hpp"
@@ -11,6 +12,47 @@
 #include "fisk/kmer_extract/simd.hpp"
 #include "fisk/core/seq_enc.hpp"
 #include "microbench.hpp"
+
+// =================================================================================================
+//     Sum Hashing
+// =================================================================================================
+
+// Benchmark sinks for the for_each_kmer*() functions (kmer_extract/kmer_extract.hpp and
+// kmer_extract/simd.hpp): sum every emitted k-mer into `hash`, so that the compiler cannot
+// optimize the extraction away as dead code, and so that all benchmarked variants below can be
+// checked against the same aggregate. Not library functionality, hence living here rather than in
+// those headers; see bench_kmer_extract_packed.hpp's compute_kmer_hash_packed_*() for the same
+// pattern applied to the packed extractors.
+
+template<typename Enc>
+inline std::uint64_t compute_kmer_hash(std::string_view seq, std::size_t k, Enc&& enc)
+{
+    std::uint64_t hash = 0;
+    for_each_kmer_rolling(seq, k, enc, [&](std::uint64_t kmer_word) { hash += kmer_word; });
+    return hash;
+}
+
+template<typename Enc>
+inline std::uint64_t compute_kmer_hash_reextract(std::string_view seq, std::size_t k, Enc&& enc)
+{
+    std::uint64_t hash = 0;
+    for_each_kmer_reextract(seq, k, enc, [&](std::uint64_t kmer_word) { hash += kmer_word; });
+    return hash;
+}
+
+inline std::uint64_t compute_kmer_hash_simd(std::string_view seq, std::size_t k)
+{
+    std::uint64_t hash = 0;
+    for_each_kmer_simd(seq, k, [&](std::uint64_t kmer_word) { hash += kmer_word; });
+    return hash;
+}
+
+inline std::uint64_t compute_kmer_hash_simd_scalar(std::string_view seq, std::size_t k)
+{
+    std::uint64_t hash = 0;
+    for_each_kmer_simd_scalar(seq, k, [&](std::uint64_t kmer_word) { hash += kmer_word; });
+    return hash;
+}
 
 /**
  * @brief Benchmark different implementations to extract and iterate all k-mers in a sequence.

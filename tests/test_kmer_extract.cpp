@@ -39,7 +39,7 @@ static int code_actg(char c)
     }
 }
 
-// Ground truth for for_each_kmer()'s contract, built from scratch: MSB/left-rolling k-mers,
+// Ground truth for for_each_kmer_rolling()'s contract, built from scratch: MSB/left-rolling k-mers,
 // skipping every window that overlaps a symbol `code_of` reports as invalid (< 0), and requiring
 // a full re-accumulation of k valid symbols before emitting again.
 template <typename CodeFn>
@@ -80,10 +80,10 @@ static void check_kmers(
 // Collectors, one per implementation, so call sites read the same regardless of which extractor
 // is under test.
 template <typename Enc>
-static std::vector<std::uint64_t> collect_core(std::string const& seq, std::size_t k, Enc&& enc)
+static std::vector<std::uint64_t> collect_rolling(std::string const& seq, std::size_t k, Enc&& enc)
 {
     std::vector<std::uint64_t> out;
-    for_each_kmer(seq, k, enc, [&](std::uint64_t kmer) { out.push_back(kmer); });
+    for_each_kmer_rolling(seq, k, enc, [&](std::uint64_t kmer) { out.push_back(kmer); });
     return out;
 }
 
@@ -114,7 +114,7 @@ static std::vector<std::uint64_t> collect_simd_scalar(std::string const& seq, st
 // scope, since both hardcode ACGT-ascii encoding and cannot be checked against any other ordering.
 static void check_all_impls_acgt(std::string const& seq, std::size_t k)
 {
-    check_kmers(collect_core(seq, k, char_to_nt_table_acgt), seq, k, code_acgt);
+    check_kmers(collect_rolling(seq, k, char_to_nt_table_acgt), seq, k, code_acgt);
     check_kmers(collect_reextract(seq, k, char_to_nt_table_acgt), seq, k, code_acgt);
     check_kmers(collect_simd(seq, k), seq, k, code_acgt);
     check_kmers(collect_simd_scalar(seq, k), seq, k, code_acgt);
@@ -156,7 +156,7 @@ static std::vector<std::string> const& valid_sequences()
     return seqs;
 }
 
-// k values spanning for_each_kmer()'s full supported range [1, 32].
+// k values spanning the full supported range [1, 32] shared by every for_each_kmer*() variant.
 static std::vector<std::size_t> const& test_ks()
 {
     static std::vector<std::size_t> const ks = {
@@ -209,17 +209,50 @@ TEST(KmerExtract, OracleAcgtTable)
     }
 }
 
-// Same, but with an ACTG-ordered encoder, to prove for_each_kmer()/for_each_kmer_reextract() do
-// not hardcode ACGT ordering. for_each_kmer_simd()/for_each_kmer_simd_scalar() cannot be checked
-// here, since they hardcode ACGT-ascii encoding.
+// Same, but with an ACTG-ordered encoder, to prove for_each_kmer_rolling()/for_each_kmer_reextract()
+// do not hardcode ACGT ordering. for_each_kmer_simd()/for_each_kmer_simd_scalar() cannot be checked
+// here, since they hardcode ACGT-ascii encoding; neither can for_each_kmer(), which fixes its
+// encoder to the ACGT lookup table (see the Convenience Wrapper section below).
 TEST(KmerExtract, OracleActgTable)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            check_kmers(collect_core(seq, k, char_to_nt_table_actg), seq, k, code_actg);
+            check_kmers(collect_rolling(seq, k, char_to_nt_table_actg), seq, k, code_actg);
             check_kmers(collect_reextract(seq, k, char_to_nt_table_actg), seq, k, code_actg);
         }
     }
+}
+
+// =================================================================================================
+//     Convenience Wrapper (for_each_kmer)
+// =================================================================================================
+
+// for_each_kmer() is a thin forward to for_each_kmer_rolling() with the ACGT lookup-table encoder
+// fixed in; this checks it against the oracle directly (rather than relying purely on the rolling
+// tests above), plus its own k-validity and a couple of invalid-character sanity cases. The
+// underlying skip/reset logic itself is exhaustively covered by the for_each_kmer_rolling() tests.
+TEST(KmerExtract, ConvenienceWrapperMatchesRolling)
+{
+    for (auto const& seq : valid_sequences()) {
+        for (auto const k : test_ks()) {
+            std::vector<std::uint64_t> got;
+            for_each_kmer(seq, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
+            check_kmers(got, seq, k, code_acgt);
+        }
+    }
+
+    std::vector<std::string> const invalid_seqs = { "NACGTACGT", "ACGTNNNACGT" };
+    std::vector<std::size_t> const invalid_ks = { 1, 4, 8 };
+    for (auto const& seq : invalid_seqs) {
+        for (auto const k : invalid_ks) {
+            std::vector<std::uint64_t> got;
+            for_each_kmer(seq, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
+            check_kmers(got, seq, k, code_acgt);
+        }
+    }
+
+    EXPECT_ANY_THROW(for_each_kmer("ACGT", 0, [](std::uint64_t) {}));
+    EXPECT_ANY_THROW(for_each_kmer("ACGT", 33, [](std::uint64_t) {}));
 }
 
 // =================================================================================================
@@ -229,8 +262,8 @@ TEST(KmerExtract, OracleActgTable)
 // k must be in [1, 32]; k == 0 or k > 32 is a documented precondition violation for every variant.
 TEST(KmerExtract, InvalidKThrows)
 {
-    EXPECT_ANY_THROW(for_each_kmer("ACGT", 0, char_to_nt_table_acgt, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer("ACGT", 33, char_to_nt_table_acgt, [](std::uint64_t) {}));
+    EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 0, char_to_nt_table_acgt, [](std::uint64_t) {}));
+    EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 33, char_to_nt_table_acgt, [](std::uint64_t) {}));
     EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 0, char_to_nt_table_acgt, [](std::uint64_t) {}));
     EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 33, char_to_nt_table_acgt, [](std::uint64_t) {}));
     EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 0, [](std::uint64_t) {}));
@@ -291,9 +324,10 @@ TEST(KmerExtract, InvalidCharacterPlacement)
 }
 
 // Custom encoder whose invalid sentinel is not exactly 4 (255 here, and lowercase bases are
-// deliberately "invalid" under it), checking that for_each_kmer()/for_each_kmer_reextract() honor
-// the documented ">= 4 is invalid" contract rather than special-casing the value 4. Only applies
-// to these two, since for_each_kmer_simd()/for_each_kmer_simd_scalar() do not take an encoder.
+// deliberately "invalid" under it), checking that for_each_kmer_rolling()/for_each_kmer_reextract()
+// honor the documented ">= 4 is invalid" contract rather than special-casing the value 4. Only
+// applies to these two, since neither for_each_kmer_simd()/for_each_kmer_simd_scalar() nor the
+// for_each_kmer() convenience wrapper take a custom encoder.
 TEST(KmerExtract, InvalidSentinelNotFour)
 {
     auto const enc = [](char c) -> std::uint8_t {
@@ -317,7 +351,7 @@ TEST(KmerExtract, InvalidSentinelNotFour)
 
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            check_kmers(collect_core(seq, k, enc), seq, k, code_of);
+            check_kmers(collect_rolling(seq, k, enc), seq, k, code_of);
             check_kmers(collect_reextract(seq, k, enc), seq, k, code_of);
         }
     }
@@ -413,14 +447,13 @@ TEST(KmerExtract, SimdBlockBoundaries)
 //     Cross-Implementation Differential
 // =================================================================================================
 
-// All four implementations must emit the exact same k-mer sequence for the same input -- not just
-// an equal aggregate (see the hash-based check below for that weaker property). ACGT-table
+// All four implementations must emit the exact same k-mer sequence for the same input. ACGT-table
 // encoding throughout, since the SIMD variants hardcode that convention.
 TEST(KmerExtract, DifferentialAllImplementationsAgree)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            auto const core        = collect_core(seq, k, char_to_nt_table_acgt);
+            auto const core        = collect_rolling(seq, k, char_to_nt_table_acgt);
             auto const reextract   = collect_reextract(seq, k, char_to_nt_table_acgt);
             auto const simd        = collect_simd(seq, k);
             auto const simd_scalar = collect_simd_scalar(seq, k);
@@ -428,24 +461,6 @@ TEST(KmerExtract, DifferentialAllImplementationsAgree)
             EXPECT_EQ(reextract, core);
             EXPECT_EQ(simd, core);
             EXPECT_EQ(simd_scalar, core);
-        }
-    }
-}
-
-// The sum-based "hash" every variant is reduced to in bench_kmer_extract.hpp, checked directly --
-// this is the literal value the benchmark relies on staying consistent across implementations.
-TEST(KmerExtract, DifferentialHashesAgree)
-{
-    for (auto const& seq : valid_sequences()) {
-        for (auto const k : test_ks()) {
-            auto const h_core        = compute_kmer_hash(seq, k, char_to_nt_table_acgt);
-            auto const h_reextract   = compute_kmer_hash_reextract(seq, k, char_to_nt_table_acgt);
-            auto const h_simd        = compute_kmer_hash_simd(seq, k);
-            auto const h_simd_scalar = compute_kmer_hash_simd_scalar(seq, k);
-
-            EXPECT_EQ(h_reextract, h_core);
-            EXPECT_EQ(h_simd, h_core);
-            EXPECT_EQ(h_simd_scalar, h_core);
         }
     }
 }

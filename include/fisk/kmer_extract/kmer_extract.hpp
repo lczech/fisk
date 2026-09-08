@@ -39,11 +39,15 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
  *
  * Any k-mer overlapping an invalid symbol is skipped.
  *
+ * This is the generic, encoder-parameterized building block behind for_each_kmer() below; most
+ * callers should use that instead. Call this directly only to plug in a specific encoder or
+ * ordering, e.g. for benchmarking different encoders against each other.
+ *
  * @tparam Enc  Encoding function to turn characters into two-bit encoding.
  * @tparam Func Callback function to be called for each valid k-mer.
  */
 template<typename Enc, typename Func>
-inline void for_each_kmer(
+inline void for_each_kmer_rolling(
     std::string_view seq, std::size_t k, Enc&& enc, Func&& func
 ) {
     // Iterate all k-mers of a sequence, encoded as 2-bit packed uint64_t.
@@ -92,7 +96,7 @@ inline void for_each_kmer(
  * @brief Iterate a sequence, extract all k-mers from it (using re-extraction each time),
  * and call a callback function on each k-mer.
  *
- * This is the same as for_each_kmer(), but re-extract the k-mer each time from the input
+ * This is the same as for_each_kmer_rolling(), but re-extract the k-mer each time from the input
  * characters. This is of course slower, but apparently used in practice. We hence implement
  * it here for benchmarking.
  */
@@ -133,63 +137,22 @@ inline void for_each_kmer_reextract(
     }
 }
 
-// =================================================================================================
-//     Sum Hashing
-// =================================================================================================
-
 /**
- * @brief Simple "hashing" of k-mers by computing the sum of all their two bit encodings.
+ * @brief Iterate a sequence, extract all valid k-mers from it, and call a callback function on
+ * each k-mer.
  *
- * This is just for benchmarking, to ensure that the values are actually used (and thus the
- * compuation cannot be omitted by the compiler), as well as to ensure consistent results
- * between different implementations.
- */
-template<typename Enc>
-inline std::uint64_t compute_kmer_hash(
-    std::string_view seq, std::size_t k, Enc&& enc
-) {
-    // Simple wrapper around the main loop function which also keeps track of a "hash"
-    // by summing all k-mers, just as a validity check that all implementations give the same.
-    std::uint64_t hash = 0;
-
-    for_each_kmer(
-        std::string_view(seq),
-        k,
-        enc,
-        [&](std::uint64_t kmer_word) {
-            // Simple checksum. All implementations must use the same aggregation so sinks match.
-            hash += kmer_word;
-        }
-    );
-
-    return hash;
-}
-
-/**
- * @brief Simple "hashing" of k-mers by computing the sum of all their two bit encodings.
+ * Convenience entry point for callers who do not need to choose an encoder or extraction
+ * technique themselves: fixes the encoder to the ACGT lookup table (char_to_nt_table_acgt(), see
+ * core/seq_enc.hpp) and forwards to for_each_kmer_rolling(), the fastest of the extraction
+ * techniques offered here. Call for_each_kmer_rolling() directly instead to plug in a different
+ * encoder or ordering.
  *
- * This is similar to compute_kmer_hash(), but re-extracts the whole k-mer in each step.
- * This is computationally wasteful compred to bit shifts, thus only used for benchmarking.
+ * @tparam Func Callback function to be called for each valid k-mer.
  */
-template<typename Enc>
-inline std::uint64_t compute_kmer_hash_reextract(
-    std::string_view seq, std::size_t k, Enc&& enc
-) {
-    // Simple wrapper around the main loop function which also keeps track of a "hash"
-    // by summing all k-mers, just as a validity check that all implementations give the same.
-    std::uint64_t hash = 0;
-
-    for_each_kmer_reextract(
-        std::string_view(seq),
-        k,
-        enc,
-        [&](std::uint64_t kmer_word) {
-            // Simple checksum. All implementations must use the same aggregation so sinks match.
-            hash += kmer_word;
-        }
-    );
-
-    return hash;
+template<typename Func>
+inline void for_each_kmer(std::string_view seq, std::size_t k, Func&& func)
+{
+    for_each_kmer_rolling(seq, k, char_to_nt_table_acgt, func);
 }
 
 // =================================================================================================
