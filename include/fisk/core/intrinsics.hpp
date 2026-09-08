@@ -149,3 +149,24 @@ static_assert(
     }
 
 #endif
+
+// =================================================================================================
+//     Compiler Optimization Barrier
+// =================================================================================================
+
+/**
+ * @brief Forces a value into a register (not into memory necessarily).
+ *
+ * Used to keep microbenchmarks honest: without it, a compiler might be able to prove a branch-free
+ * computation to be reducible and silently skip real work, skewing the benchmark.
+ */
+[[gnu::always_inline]]
+inline void do_not_optimize_u64(std::uint64_t v)
+{
+    #if defined(__GNUC__) || defined(__clang__)
+        asm volatile("" : : "r"(v));
+    #else
+        volatile std::uint64_t sink = v;
+        (void) sink;
+    #endif
+}
