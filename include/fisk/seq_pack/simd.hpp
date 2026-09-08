@@ -386,7 +386,7 @@ inline void pack_sequence_simd(
     std::size_t const num_bytes = (seq_len + 3) / 4;
 
     out.length = seq_len;
-    out.data.assign(num_bytes + 8, 0); // +8 trailing all-zero sentinel bytes
+    out.data.assign(num_bytes, 0);
     char* const out_bytes = reinterpret_cast<char*>(out.data.data());
     char const* const data = seq.data();
 
@@ -410,7 +410,13 @@ inline void pack_sequence_simd(
         std::size_t const take = remaining < 8 ? remaining : std::size_t{8};
         std::uint64_t word = 0;
         std::memcpy(&word, data + i, take);
-        write_chunk(i, extract(word));
+        // out holds no trailing bytes beyond its real content (see pack_sequence(), seq_pack.hpp,
+        // for why the <=4-base remainder needs a 1-byte write instead of write_chunk()'s usual 2).
+        if (remaining <= 4) {
+            write_two_bit_chunk<order, 1>(out_bytes + i / 4, extract(word));
+        } else {
+            write_two_bit_chunk<order, 2>(out_bytes + i / 4, extract(word));
+        }
     }
 }
 

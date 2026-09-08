@@ -80,8 +80,8 @@ static std::vector<std::string> const& test_sequences()
     return seqs;
 }
 
-// Checks a packed TwoBitSequence against `seq` and its oracle: length, data size, the sentinel
-// bytes, and every base's code.
+// Checks a packed TwoBitSequence against `seq` and its oracle: length, data size, and every
+// base's code.
 template <BitOrder Order, typename OracleFn>
 static void check_packed(
     std::string const& seq, TwoBitSequence<Order> const& packed, OracleFn&& oracle
@@ -89,11 +89,7 @@ static void check_packed(
     EXPECT_EQ(packed.length, seq.size());
 
     std::size_t const expected_content_bytes = (seq.size() + 3) / 4;
-    EXPECT_EQ(packed.data.size(), expected_content_bytes + 8);
-
-    for (std::size_t k = 0; k < 8; ++k) {
-        EXPECT_EQ(static_cast<int>(packed.data[expected_content_bytes + k]), 0);
-    }
+    EXPECT_EQ(packed.data.size(), expected_content_bytes);
 
     for (std::size_t i = 0; i < seq.size(); ++i) {
         EXPECT_EQ(decode_base(packed, i), oracle(seq[i]));

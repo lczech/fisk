@@ -165,24 +165,30 @@ struct EncodeAcgt8ButterflyMsb
 
 /**
  * @brief Write the packed bases of one extractor call to `dest`, respecting `Order`.
- *
- * Each extractor above packs 8 bases (16 bits) into the low bits of its return value. A byte is
- * the smallest addressable unit of TwoBitSequence's storage, so those 16 bits become 2 sequential
- * output bytes. For `Lsb`, the extractor already produces those 2 bytes in the right relative
- * order for free (the first of the 8 bases ends up in the low bits of the first byte, and so on);
- * for `Msb`, the two bytes come out address-reversed relative to base order (the byte holding the
- * later 4 bases lands first), so they need a fix-up swap before the sequential write.
  */
-template <BitOrder Order>
+template <BitOrder Order, int Bytes = 2>
 inline void write_two_bit_chunk(char* dest, std::uint64_t value) noexcept
 {
+    // Each extractor above packs 8 bases (16 bits) into the low bits of its return value. A byte is
+    // the smallest addressable unit of TwoBitSequence's storage, so those 16 bits become 2 sequential
+    // output bytes. For `Lsb`, the extractor already produces those 2 bytes in the right relative
+    // order for free (the first of the 8 bases ends up in the low bits of the first byte, and so on);
+    // for `Msb`, the two bytes come out address-reversed relative to base order (the byte holding the
+    // later 4 bases lands first), so they need a fix-up swap before the sequential write.
+    //
+    // `Bytes` (1 or 2) is a template parameter rather than a runtime one so that the hot full-chunk
+    // call sites below (always 2) keep a fixed-width store with no added branch; only the ragged tail
+    // chunk (<=4 real bases) ever instantiates the 1-byte write, and byte 0 -- the first of the two
+    // output bytes post-swap -- is the one holding those bases in both bit orders.
+
+    static_assert(Bytes == 1 || Bytes == 2, "write_two_bit_chunk() only supports 1 or 2 bytes");
     assert(dest != nullptr);
     assert(value <= 0xFFFF);
     std::uint16_t v16 = static_cast<std::uint16_t>(value);
     if constexpr (Order == BitOrder::Msb) {
         v16 = byte_swap_16(v16);
     }
-    std::memcpy(dest, &v16, 2);
+    std::memcpy(dest, &v16, Bytes);
 }
 
 // =================================================================================================
@@ -215,7 +221,7 @@ inline void pack_sequence(
     std::size_t const num_bytes = (seq_len + 3) / 4;
 
     out.length = seq_len;
-    out.data.assign(num_bytes + 8, 0); // +8 trailing all-zero sentinel bytes
+    out.data.assign(num_bytes, 0);
     char* const out_bytes = reinterpret_cast<char*>(out.data.data());
     char const* const data = seq.data();
 
@@ -234,12 +240,18 @@ inline void pack_sequence(
         write_two_bit_chunk<order>(out_bytes + i / 4, extract(read_chunk(i)));
     }
 
-    // Remaining < 8 bases: zero-pad into a local word before extracting.
+    // Remaining < 8 bases: zero-pad into a local word before extracting. `out` holds no trailing
+    // bytes beyond its real content, so a <=4-base remainder (one real output byte, not two) must
+    // write only that one byte -- writing the usual 2 would spill past the allocation.
     if (i < seq_len) {
         std::size_t const remaining = seq_len - i;
         std::uint64_t word = 0;
         std::memcpy(&word, data + i, remaining);
-        write_two_bit_chunk<order>(out_bytes + i / 4, extract(word));
+        if (remaining <= 4) {
+            write_two_bit_chunk<order, 1>(out_bytes + i / 4, extract(word));
+        } else {
+            write_two_bit_chunk<order, 2>(out_bytes + i / 4, extract(word));
+        }
     }
 }
 
