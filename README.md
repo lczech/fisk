@@ -1,3 +1,9 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="logo/fisk-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="logo/fisk-light.png">
+  <img alt="fisk logo" src="logo/fisk-light.png">
+</picture>
+
 # FISK: Fast Iteration of Spaced K-mers
 
 This is a code exploration project to test different implementations to extract spaced k-mers from a genomic sequence. We find that the algorithms implemented here are up to an order of magnitude faster than existing approaches to extract spaced k-mers.
