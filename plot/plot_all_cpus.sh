@@ -14,7 +14,7 @@ export QT_QPA_PLATFORM=xcb
 # ------------------------------------------------------------
 
 # Select which CPUs we want in the summary plots
-ROOT="benchmarks"
+ROOT="results"
 CPUS=(
   # "AMD EPYC 7763, Clang 18"
   # "AMD EPYC 7763, GCC 13"
@@ -114,10 +114,10 @@ done
 
 # Simple example for reference of what we are doing
 # ./plot/plot_bars_per_cpu.py \
-#     --file "benchmarks/AMD_Epyc_7763/kmer_extract.csv" \
-#     --file "benchmarks/AMD_Ryzen_4750U/kmer_extract.csv" \
-#     --file "benchmarks/Apple_M1/kmer_extract.csv" \
-#     --file "benchmarks/Intel_Xeon_8568Y/kmer_extract.csv"
+#     --file "results/AMD_Epyc_7763/kmer_extract.csv" \
+#     --file "results/AMD_Ryzen_4750U/kmer_extract.csv" \
+#     --file "results/Apple_M1/kmer_extract.csv" \
+#     --file "results/Intel_Xeon_8568Y/kmer_extract.csv"
 
 # ------------------------------------------------------------
 # Manuscript figures

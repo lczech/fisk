@@ -21,7 +21,7 @@ fi
 fname="$1"
 base="${fname%.*}"          # filename without extension
 ext="${fname##*.}"          # extension
-indir="benchmarks"
+indir="results"
 outdir="${indir}/Collect/${base}"
 
 mkdir -p "$outdir"
