@@ -456,9 +456,8 @@ enum class BitOrder
 /**
  * @brief A whole sequence, encoded into a densely packed two-bit-per-base representation.
  *
- * `data` holds exactly `ceil(length / 4)` bytes of 4 bases each -- no trailing padding. Readers
- * that load more than a single byte at a time (e.g. for_each_kmer_packed_narrow(),
- * kmer_extract/packed.hpp) are responsible for their own bounds safety near the end of `data`.
+ * `data` holds exactly `ceil(length / 4)` bytes of 4 bases each, with no trailing padding.
+ * Readers are responsible for bounds checking when reading from `data`.
  *
  * See BitOrder for what the `Order` template parameter means, and for how it applies per byte.
  */

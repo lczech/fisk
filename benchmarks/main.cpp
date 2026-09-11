@@ -8,6 +8,7 @@
 
 #include "arg_parser.hpp"
 #include "bench_kmer_extract.hpp"
+#include "bench_kmer_extract_packed.hpp"
 #include "bench_kmer_spaced_single.hpp"
 #include "bench_kmer_spaced_multi.hpp"
 #include "bench_kmer_clark.hpp"
@@ -235,6 +236,16 @@ int main(int argc, char **argv)
             bench_kmer_extract( sequences, os_kmer_extract );
         } else {
             bench_kmer_extract( sequences, k, k, os_kmer_extract );
+        }
+    }
+
+    // Kmer extract, directly from a packed TwoBitSequence
+    {
+        auto os_kmer_extract_packed = get_ofstream(out_dir, "kmer_extract_packed.csv" );
+        if( k == 0 ) {
+            bench_kmer_extract_packed( sequences, os_kmer_extract_packed );
+        } else {
+            bench_kmer_extract_packed( sequences, k, k, os_kmer_extract_packed );
         }
     }
 

@@ -25,6 +25,7 @@
 // K-mer extraction
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/simd.hpp"
+#include "fisk/kmer_extract/packed.hpp"
 
 // Spaced k-mers
 #include "fisk/kmer_spaced/kmer_spaced.hpp"

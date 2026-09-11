@@ -297,7 +297,7 @@ private:
         for (auto const& in : inputs) {
             acc += static_cast<std::uint64_t>(b.fn(in));
         }
-        do_not_optimize_u64(acc);
+        do_not_optimize(acc);
 
         auto t0 = std::chrono::steady_clock::now();
         for (int r = 0; r < rounds_; ++r) {
@@ -306,7 +306,7 @@ private:
             }
         }
         auto t1 = std::chrono::steady_clock::now();
-        do_not_optimize_u64(acc);
+        do_not_optimize(acc);
 
         double secs        = std::chrono::duration<double>(t1 - t0).count();
         double total_units = units_per_run * static_cast<double>(rounds_);

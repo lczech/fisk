@@ -26,6 +26,26 @@ def platform_from_csv_path(csv_path: str) -> str:
     return p.parent.name
 
 
+def parse_case_fields(df: pd.DataFrame, column: str = "case") -> pd.DataFrame:
+    """
+    Split a "case" column of "key1=val1;key2=val2;..." into one new string column
+    per key (e.g. "order=msb;k=17" -> columns "order"="msb", "k"="17").
+
+    Values are left as strings; callers should convert the specific fields they
+    need (e.g. `df["k"] = df["k"].astype(int)`), the same way the single-key
+    "k=17"/"popcount=17"-style CSVs already do inline. A plain single-field case
+    (no ";") still works, yielding just that one key's column.
+    """
+    df = df.copy()
+    parsed = df[column].apply(
+        lambda s: dict(part.split("=", 1) for part in s.split(";"))
+    )
+    keys = sorted({key for entry in parsed for key in entry})
+    for key in keys:
+        df[key] = parsed.apply(lambda entry: entry.get(key))
+    return df
+
+
 # Select which benchmarks to plot at all.
 # This list is across all types of benchmarks we run;
 # not all are thus present in all tables.
@@ -345,3 +365,36 @@ BENCHMARK_ORDER = [
     "simd_butterfly_table_neon",
     "simd_block_table_neon",
 ]
+
+# Stable order and colors for the kmer_extract_packed benchmark family (packed.hpp), kept as its
+# own dict rather than folded into BENCHMARK_COLORS/BENCHMARK_ORDER above since it's a distinct
+# naming scheme (internal implementation-comparison variants, not final library-facing benchmark
+# names). Colors are paired by technique where the same suffix exists in both the narrow and wide
+# families (_blockwise, _fixed_k, _rolling all appear twice, once per family) -- same hue, lighter
+# for narrow / darker for wide -- so a technique's identity is visible across both families at a
+# glance; wide-only techniques (no narrow counterpart) get their own distinct hues instead.
+PACKED_KMER_VARIANT_ORDER = [
+    "narrow_blockwise",
+    "narrow_fixed_k",
+    "narrow_rolling",
+    "wide_blockwise",
+    "wide_fixed_k",
+    "wide_hybrid",
+    "wide_hoisted",
+    "wide_hybrid_hoisted",
+    "wide_128",
+    "wide_rolling",
+]
+
+PACKED_KMER_VARIANT_COLORS = {
+    "narrow_blockwise"    : "#6baed6",  # blue, light
+    "wide_blockwise"      : "#08519c",  # blue, dark
+    "narrow_fixed_k"      : "#74c476",  # green, light
+    "wide_fixed_k"        : "#006d2c",  # green, dark
+    "narrow_rolling"      : "#bdbdbd",  # grey, light
+    "wide_rolling"        : "#636363",  # grey, dark
+    "wide_hybrid"         : "#e6550d",  # orange
+    "wide_hoisted"        : "#756bb1",  # purple
+    "wide_hybrid_hoisted" : "#e377c2",  # pink
+    "wide_128"            : "#8c564b",  # brown
+}

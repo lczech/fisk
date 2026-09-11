@@ -16,6 +16,7 @@ BENCHMARKS=(
     "bit_extract_blocks"
     # "seq_enc"
     "kmer_extract"
+    "kmer_extract_packed"
     "kmer_spaced_multi_bars"
     "kmer_spaced_single_bars"
     # "kmer_clark"

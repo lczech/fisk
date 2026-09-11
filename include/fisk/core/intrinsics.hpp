@@ -161,7 +161,7 @@ static_assert(
  * computation to be reducible and silently skip real work, skewing the benchmark.
  */
 [[gnu::always_inline]]
-inline void do_not_optimize_u64(std::uint64_t v)
+inline void do_not_optimize(std::uint64_t v)
 {
     #if defined(__GNUC__) || defined(__clang__)
         asm volatile("" : : "r"(v));

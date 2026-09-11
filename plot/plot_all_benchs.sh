@@ -71,6 +71,11 @@ for EXT in png svg ; do
   #   "${DIR}/kmer_extract.csv" \
   #   --out "${DIR}/kmer_extract_bars.${EXT}"
 
+  CSV="${DIR}/kmer_extract_packed.csv"
+  run_plot "$CSV" python ./plot/plot_kmer_extract_packed.py \
+    "$CSV" \
+    --out "${DIR}/kmer_extract_packed.${EXT}"
+
 
   # Kmer Spaced Single
 
