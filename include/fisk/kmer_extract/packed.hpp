@@ -55,7 +55,13 @@ static_assert(
 
 // do_not_optimize barriers on the k-mer emission in some of the functions below force each value
 // to at least be manifested in a register, so a benchmark summing them cannot be proven reducible
-// by the compiler. Real (non-benchmark) callers are unaffected by these.
+// by the compiler. They emit no instructions on GCC/Clang, but their register requirements can
+// affect optimization for real callers too. Keep all four before the callbacks for comparison.
+
+// We experimented with several variations of the basic algorithm here, in order to find a solution
+// that compiles to optimal code across all compilers and platforms. Some of the more promosing
+// variants are in commit f3910762f1d4a577da88de02347faf94e584a0f1, but we since have cleaned up
+// a bit, and are only keeping a final selection of reasoanable variants here.
 
 // =================================================================================================
 //     Narrow (1 <= k <= 29) K-mer Extraction
@@ -1105,5 +1111,177 @@ inline void for_each_kmer_packed_wide_hybrid_hoisted(
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
         func(tail_vals[i]);
+    }
+}
+
+// =================================================================================================
+//     Aligned Windows (Experimental)
+// =================================================================================================
+
+/**
+ * @brief Narrow extraction with one shared runtime alignment for Msb, then constant local shifts.
+ * Lsb already uses constant shifts, so its arithmetic is unchanged from narrow_blockwise.
+ */
+template <BitOrder Order, typename Func>
+inline void for_each_kmer_packed_narrow_aligned(
+    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+) {
+    if (k == 0 || k > 29) {
+        throw_invalid_kmer_k_(29);
+    }
+    if (seq.length < k) {
+        return;
+    }
+
+    unsigned const k32 = static_cast<unsigned>(k);
+    std::uint64_t const mask = (std::uint64_t{1} << (2 * k32)) - 1u;
+    std::size_t const p_max = seq.length - k;
+    std::size_t const full_bytes = (p_max + 1) / 4;
+    std::size_t const num_bytes = (seq.length + 3) / 4;
+    // Match the existing variants' conservative read margin to isolate the arithmetic change.
+    std::size_t const fast_bytes = std::min(
+        full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
+    );
+
+    for (std::size_t b = 0; b < fast_bytes; ++b) {
+        std::uint64_t word;
+        std::memcpy(&word, &seq.data[b], 8);
+        if constexpr (Order == BitOrder::Msb) {
+            // 58-2k is in [0,56]; adding the local shift recovers 64-2k-2*local.
+            word = byte_swap_64(word) >> (58 - 2 * k32);
+        }
+        std::uint64_t v0, v1, v2, v3;
+        if constexpr (Order == BitOrder::Msb) {
+            v0 = (word >> 6) & mask;
+            v1 = (word >> 4) & mask;
+            v2 = (word >> 2) & mask;
+            v3 = (word >> 0) & mask;
+        } else {
+            v0 = (word >> 0) & mask;
+            v1 = (word >> 2) & mask;
+            v2 = (word >> 4) & mask;
+            v3 = (word >> 6) & mask;
+        }
+
+        // Preserve the existing materialization and callback order in every experimental loop.
+        do_not_optimize(v0);
+        do_not_optimize(v1);
+        do_not_optimize(v2);
+        do_not_optimize(v3);
+        func(v0);
+        func(v1);
+        func(v2);
+        func(v3);
+    }
+
+    std::array<std::uint64_t, 32> tail_vals;
+    std::size_t const tail_n = for_each_kmer_packed_narrow_tail_<Order>(
+        seq, fast_bytes, num_bytes, p_max, k32, mask, tail_vals
+    );
+    for (std::size_t i = 0; i < tail_n; ++i) {
+        func(tail_vals[i]);
+    }
+}
+
+// Build a 32-base window first; selecting k then needs no boundary-dependent case selection.
+// Local is a template argument so the Lsb local=0 case never forms a shift by 64.
+template <BitOrder Order, unsigned Local>
+inline std::uint64_t packed_aligned_window_(
+    std::uint64_t word, std::uint64_t extra, unsigned right_shift, std::uint64_t mask
+) {
+    static_assert(Local < 4, "Local must be in [0, 3]");
+    unsigned constexpr s = 2 * Local;
+    if constexpr (Order == BitOrder::Msb) {
+        // s is [0,6], 8-s is [2,8], and right_shift is [0,62]. Unsigned left shifts
+        // intentionally discard the bases before Local; extra supplies the missing low bits.
+        return ((word << s) | (extra >> (8 - s))) >> right_shift;
+    } else if constexpr (Local == 0) {
+        return word & mask;
+    } else {
+        // s is [2,6], so 64-s is [58,62]; extra is already widened to uint64_t.
+        return ((word >> s) | (extra << (64 - s))) & mask;
+    }
+}
+
+// Shared body for runtime-k wide_aligned (K=0) and wide_split_k's three wide specializations.
+// Callers validate k and sequence length before entering; no callback type erasure is needed.
+template <BitOrder Order, unsigned K, typename Func>
+inline void for_each_kmer_packed_wide_aligned_impl_(
+    TwoBitSequence<Order> const& seq, std::size_t runtime_k, Func& func
+) {
+    static_assert(K == 0 || (K >= 30 && K <= 32), "K must be 0 (runtime) or in [30, 32]");
+    unsigned const k32 = K == 0 ? static_cast<unsigned>(runtime_k) : K;
+    std::uint64_t const mask = k32 == 32 ? ~std::uint64_t{0}
+        : (std::uint64_t{1} << (2 * k32)) - 1u;
+    unsigned const right_shift = 64 - 2 * k32;
+    std::size_t const p_max = seq.length - k32;
+    std::size_t const full_bytes = (p_max + 1) / 4;
+    std::size_t const num_bytes = (seq.length + 3) / 4;
+    // Keep the same 8+1-byte loads and tail cutoff as wide_blockwise.
+    std::size_t const fast_bytes = num_bytes >= 9
+        ? std::min(full_bytes, num_bytes - 9) : std::size_t{0};
+
+    for (std::size_t b = 0; b < fast_bytes; ++b) {
+        std::uint64_t word;
+        std::memcpy(&word, &seq.data[b], 8);
+        std::uint64_t const extra = seq.data[b + 8];
+        if constexpr (Order == BitOrder::Msb) {
+            word = byte_swap_64(word);
+        }
+        auto const v0 = packed_aligned_window_<Order, 0>(word, extra, right_shift, mask);
+        auto const v1 = packed_aligned_window_<Order, 1>(word, extra, right_shift, mask);
+        auto const v2 = packed_aligned_window_<Order, 2>(word, extra, right_shift, mask);
+        auto const v3 = packed_aligned_window_<Order, 3>(word, extra, right_shift, mask);
+
+        do_not_optimize(v0);
+        do_not_optimize(v1);
+        do_not_optimize(v2);
+        do_not_optimize(v3);
+        func(v0);
+        func(v1);
+        func(v2);
+        func(v3);
+    }
+
+    std::array<std::uint64_t, 64> tail_vals;
+    std::size_t const tail_n = for_each_kmer_packed_wide_tail_<Order>(
+        seq, 4 * fast_bytes, p_max, k32, tail_vals
+    );
+    for (std::size_t i = 0; i < tail_n; ++i) {
+        func(tail_vals[i]);
+    }
+}
+
+/** @brief Runtime-k extraction for k in [1,32], using constant-offset 64-bit windows. */
+template <BitOrder Order, typename Func>
+inline void for_each_kmer_packed_wide_aligned(
+    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+) {
+    if (k == 0 || k > 32) {
+        throw_invalid_kmer_k_(32);
+    }
+    if (seq.length < k) {
+        return;
+    }
+    for_each_kmer_packed_wide_aligned_impl_<Order, 0>(seq, k, func);
+}
+
+/** @brief Use narrow_aligned for k<=29 and direct wide specializations for k=30,31,32. */
+template <BitOrder Order, typename Func>
+inline void for_each_kmer_packed_wide_split_k(
+    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+) {
+    if (k == 0 || k > 32) {
+        throw_invalid_kmer_k_(32);
+    }
+    if (seq.length < k) {
+        return;
+    }
+    // Dispatch once per sequence, with three direct calls instead of a 32-entry pointer table.
+    switch (k) {
+        case 30: for_each_kmer_packed_wide_aligned_impl_<Order, 30>(seq, k, func); break;
+        case 31: for_each_kmer_packed_wide_aligned_impl_<Order, 31>(seq, k, func); break;
+        case 32: for_each_kmer_packed_wide_aligned_impl_<Order, 32>(seq, k, func); break;
+        default: for_each_kmer_packed_narrow_aligned(seq, k, func); break;
     }
 }

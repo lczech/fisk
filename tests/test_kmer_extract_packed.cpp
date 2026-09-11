@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -94,6 +95,41 @@ static void check_kmers(
     std::size_t const n = std::min(got.size(), exp.size());
     for (std::size_t i = 0; i < n; ++i) {
         EXPECT_EQ(got[i], exp[i]);
+    }
+}
+
+// Reuse the base-by-base oracle for every new variant, covering all k and every short length.
+template <typename Extractor, typename Encoder, typename OracleFn>
+static void check_aligned_variant(
+    Extractor extract, Encoder encoder, OracleFn oracle, std::size_t max_k
+) {
+    auto check_sequence = [&](std::string const& seq) {
+        auto const packed = pack_sequence(seq, encoder);
+        for (std::size_t k = 1; k <= max_k; ++k) {
+            std::vector<std::uint64_t> got;
+            extract(packed, k, [&](std::uint64_t v) { got.push_back(v); });
+            check_kmers(got, seq, k, oracle);
+        }
+    };
+    for (auto const& seq : test_sequences()) {
+        check_sequence(seq);
+    }
+
+    // All-zero/all-one windows and isolated nonzero bases expose lost high bits and bad masks.
+    check_sequence(std::string(129, 'A'));
+    check_sequence(std::string(129, 'T'));
+    for (std::size_t p = 0; p < 40; ++p) {
+        std::string seq(40, 'A');
+        seq[p] = 'T';
+        check_sequence(seq);
+    }
+
+    // Reject invalid k before arithmetic, even for empty input or a value too large for unsigned.
+    for (std::size_t length : {std::size_t{0}, std::size_t{129}}) {
+        auto const packed = pack_sequence(std::string(length, 'T'), encoder);
+        for (std::size_t k : {std::size_t{0}, max_k + 1, std::numeric_limits<std::size_t>::max()}) {
+            EXPECT_THROW(extract(packed, k, [](std::uint64_t) {}), std::runtime_error);
+        }
     }
 }
 
@@ -452,4 +488,66 @@ TEST(KmerExtractPacked, InvalidKThrows)
     EXPECT_ANY_THROW(for_each_kmer_packed_wide_hybrid_hoisted(empty, 33, [](std::uint64_t) {}));
     EXPECT_ANY_THROW(for_each_kmer_packed_wide_fixed_k(empty, 0, [](std::uint64_t) {}));
     EXPECT_ANY_THROW(for_each_kmer_packed_wide_fixed_k(empty, 33, [](std::uint64_t) {}));
+}
+
+// Experimental variants: compare the complete ordered output, not merely the benchmark sum.
+
+TEST(KmerExtractPacked, NarrowAlignedMsb)
+{
+    check_aligned_variant(
+        [](auto const& seq, std::size_t k, auto func) {
+            for_each_kmer_packed_narrow_aligned(seq, k, func);
+        },
+        EncodeAcgt8ButterflyMsb{}, oracle_msb, 29
+    );
+}
+
+TEST(KmerExtractPacked, WideAlignedMsb)
+{
+    check_aligned_variant(
+        [](auto const& seq, std::size_t k, auto func) {
+            for_each_kmer_packed_wide_aligned(seq, k, func);
+        },
+        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+    );
+}
+
+TEST(KmerExtractPacked, WideSplitKMsb)
+{
+    check_aligned_variant(
+        [](auto const& seq, std::size_t k, auto func) {
+            for_each_kmer_packed_wide_split_k(seq, k, func);
+        },
+        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+    );
+}
+
+TEST(KmerExtractPacked, NarrowAlignedLsb)
+{
+    check_aligned_variant(
+        [](auto const& seq, std::size_t k, auto func) {
+            for_each_kmer_packed_narrow_aligned(seq, k, func);
+        },
+        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 29
+    );
+}
+
+TEST(KmerExtractPacked, WideAlignedLsb)
+{
+    check_aligned_variant(
+        [](auto const& seq, std::size_t k, auto func) {
+            for_each_kmer_packed_wide_aligned(seq, k, func);
+        },
+        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+    );
+}
+
+TEST(KmerExtractPacked, WideSplitKLsb)
+{
+    check_aligned_variant(
+        [](auto const& seq, std::size_t k, auto func) {
+            for_each_kmer_packed_wide_split_k(seq, k, func);
+        },
+        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+    );
 }

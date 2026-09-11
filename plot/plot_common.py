@@ -376,9 +376,12 @@ BENCHMARK_ORDER = [
 PACKED_KMER_VARIANT_ORDER = [
     "narrow_blockwise",
     "narrow_fixed_k",
+    "narrow_aligned",
     "narrow_rolling",
     "wide_blockwise",
     "wide_fixed_k",
+    "wide_aligned",
+    "wide_split_k",
     "wide_hybrid",
     "wide_hoisted",
     "wide_hybrid_hoisted",
@@ -397,4 +400,7 @@ PACKED_KMER_VARIANT_COLORS = {
     "wide_hoisted"        : "#756bb1",  # purple
     "wide_hybrid_hoisted" : "#e377c2",  # pink
     "wide_128"            : "#8c564b",  # brown
+    "narrow_aligned"      : "#9edae5",  # cyan, light
+    "wide_aligned"        : "#17becf",  # cyan, dark
+    "wide_split_k"        : "#bcbd22",  # olive
 }
