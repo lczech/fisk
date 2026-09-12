@@ -70,7 +70,7 @@ static std::vector<std::string> const& test_sequences()
     return seqs;
 }
 
-// k values spanning for_each_kmer_packed_narrow_blockwise()'s supported range and up to the documented max.
+// k values spanning both the narrow (k<=29) and wide (k in [30,32]) internal specializations.
 static std::vector<std::size_t> const& test_ks()
 {
     static std::vector<std::size_t> const ks = {
@@ -98,7 +98,7 @@ static void check_kmers(
     }
 }
 
-// Reuse the base-by-base oracle for every new variant, covering all k and every short length.
+// Reuse the base-by-base oracle for every variant, covering all k and every short length.
 template <typename Extractor, typename Encoder, typename OracleFn>
 static void check_aligned_variant(
     Extractor extract, Encoder encoder, OracleFn oracle, std::size_t max_k
@@ -134,17 +134,17 @@ static void check_aligned_variant(
 }
 
 // =================================================================================================
-//     for_each_kmer_packed_wide_rolling()
+//     for_each_kmer_packed_rolling()
 // =================================================================================================
 
-TEST(KmerExtractPacked, WideRollingMsb)
+TEST(KmerExtractPacked, RollingMsb)
 {
     EncodeAcgt8ButterflyMsb ex;
     for (auto const& seq : test_sequences()) {
         auto const packed = pack_sequence(seq, ex);
         for (auto const k : test_ks()) {
             std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_rolling(
+            for_each_kmer_packed_rolling(
                 packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
             );
             check_kmers(got, seq, k, oracle_msb);
@@ -152,306 +152,14 @@ TEST(KmerExtractPacked, WideRollingMsb)
     }
 }
 
-TEST(KmerExtractPacked, WideRollingLsb)
+TEST(KmerExtractPacked, RollingLsb)
 {
     EncodeAcgt8ButterflyLsb ex;
     for (auto const& seq : test_sequences()) {
         auto const packed = pack_sequence(seq, ex);
         for (auto const k : test_ks()) {
             std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_rolling(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-// =================================================================================================
-//     for_each_kmer_packed_narrow_blockwise()
-// =================================================================================================
-
-TEST(KmerExtractPacked, NarrowBlockwiseMsb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            if (k > 29) {
-                continue;
-            }
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_narrow_blockwise(packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, NarrowBlockwiseLsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            if (k > 29) {
-                continue;
-            }
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_narrow_blockwise(packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-// =================================================================================================
-//     for_each_kmer_packed_narrow_fixed_k()
-// =================================================================================================
-
-// for_each_kmer_packed_narrow_fixed_k() dispatches through all 29 compile-time-k instantiations, so
-// this uses every k in [1, 29], not just test_ks()'s sampled subset, to exercise each one.
-TEST(KmerExtractPacked, NarrowFixedKMsb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (std::size_t k = 1; k <= 29; ++k) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_narrow_fixed_k(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, NarrowFixedKLsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (std::size_t k = 1; k <= 29; ++k) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_narrow_fixed_k(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-// =================================================================================================
-//     for_each_kmer_packed_narrow_rolling()
-// =================================================================================================
-
-TEST(KmerExtractPacked, NarrowRollingMsb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            if (k > 29) {
-                continue;
-            }
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_narrow_rolling(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, NarrowRollingLsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            if (k > 29) {
-                continue;
-            }
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_narrow_rolling(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, WideBlockwiseMsb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_blockwise(packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, WideBlockwiseLsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_blockwise(packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-// for_each_kmer_packed_wide_128() only exists where `unsigned __int128` does -- see the
-// __SIZEOF_INT128__ guard around its definition in kmer_extract/packed.hpp.
-#ifdef __SIZEOF_INT128__
-
-TEST(KmerExtractPacked, Wide128Msb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_128(packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, Wide128Lsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_128(packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-#endif // __SIZEOF_INT128__
-
-TEST(KmerExtractPacked, WideHybridMsb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_hybrid(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, WideHybridLsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_hybrid(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, WideHoistedMsb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_hoisted(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, WideHoistedLsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_hoisted(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, WideHybridHoistedMsb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_hybrid_hoisted(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, WideHybridHoistedLsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_hybrid_hoisted(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
-}
-
-// for_each_kmer_packed_wide_fixed_k() dispatches through all 32 compile-time-k instantiations, so
-// this uses every k in [1, 32], not just test_ks()'s sampled subset, to exercise each one.
-TEST(KmerExtractPacked, WideFixedKMsb)
-{
-    EncodeAcgt8ButterflyMsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (std::size_t k = 1; k <= 32; ++k) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_fixed_k(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
-            );
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
-}
-
-TEST(KmerExtractPacked, WideFixedKLsb)
-{
-    EncodeAcgt8ButterflyLsb ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (std::size_t k = 1; k <= 32; ++k) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_wide_fixed_k(
+            for_each_kmer_packed_rolling(
                 packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
             );
             check_kmers(got, seq, k, oracle_lsb);
@@ -466,87 +174,28 @@ TEST(KmerExtractPacked, WideFixedKLsb)
 TEST(KmerExtractPacked, InvalidKThrows)
 {
     TwoBitSequence<BitOrder::Msb> empty;
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_rolling(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_rolling(empty, 33, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_narrow_blockwise(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_narrow_blockwise(empty, 30, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_narrow_fixed_k(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_narrow_fixed_k(empty, 30, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_narrow_rolling(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_narrow_rolling(empty, 30, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_blockwise(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_blockwise(empty, 33, [](std::uint64_t) {}));
-#ifdef __SIZEOF_INT128__
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_128(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_128(empty, 33, [](std::uint64_t) {}));
-#endif // __SIZEOF_INT128__
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_hybrid(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_hybrid(empty, 33, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_hoisted(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_hoisted(empty, 33, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_hybrid_hoisted(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_hybrid_hoisted(empty, 33, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_fixed_k(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_wide_fixed_k(empty, 33, [](std::uint64_t) {}));
+    EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 0, [](std::uint64_t) {}));
+    EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 33, [](std::uint64_t) {}));
 }
 
-// Experimental variants: compare the complete ordered output, not merely the benchmark sum.
+// for_each_kmer_packed_aligned(): compare the complete ordered output, not merely a benchmark sum,
+// and cover its own invalid-k contract too (see check_aligned_variant() above).
 
-TEST(KmerExtractPacked, NarrowAlignedMsb)
+TEST(KmerExtractPacked, AlignedMsb)
 {
     check_aligned_variant(
         [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_narrow_aligned(seq, k, func);
-        },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 29
-    );
-}
-
-TEST(KmerExtractPacked, WideAlignedMsb)
-{
-    check_aligned_variant(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_wide_aligned(seq, k, func);
+            for_each_kmer_packed_aligned(seq, k, func);
         },
         EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
     );
 }
 
-TEST(KmerExtractPacked, WideSplitKMsb)
+TEST(KmerExtractPacked, AlignedLsb)
 {
     check_aligned_variant(
         [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_wide_split_k(seq, k, func);
-        },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
-    );
-}
-
-TEST(KmerExtractPacked, NarrowAlignedLsb)
-{
-    check_aligned_variant(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_narrow_aligned(seq, k, func);
-        },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 29
-    );
-}
-
-TEST(KmerExtractPacked, WideAlignedLsb)
-{
-    check_aligned_variant(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_wide_aligned(seq, k, func);
-        },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
-    );
-}
-
-TEST(KmerExtractPacked, WideSplitKLsb)
-{
-    check_aligned_variant(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_wide_split_k(seq, k, func);
+            for_each_kmer_packed_aligned(seq, k, func);
         },
         EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
     );

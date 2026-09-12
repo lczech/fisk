@@ -22,119 +22,20 @@
 // emitted k-mer into `hash`.
 
 template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_narrow_blockwise(TwoBitSequence<Order> const& seq, std::size_t k)
-{
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_narrow_blockwise(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_narrow_fixed_k(TwoBitSequence<Order> const& seq, std::size_t k)
-{
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_narrow_fixed_k(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_narrow_rolling(
+inline std::uint64_t compute_kmer_hash_packed_rolling(
     TwoBitSequence<Order> const& seq, std::size_t k
 ) {
     std::uint64_t hash = 0;
-    for_each_kmer_packed_narrow_rolling(seq, k, [&](std::uint64_t v) { hash += v; });
+    for_each_kmer_packed_rolling(seq, k, [&](std::uint64_t v) { hash += v; });
     return hash;
 }
 
 template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_rolling(
+inline std::uint64_t compute_kmer_hash_packed_aligned(
     TwoBitSequence<Order> const& seq, std::size_t k
 ) {
     std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_rolling(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_blockwise(TwoBitSequence<Order> const& seq, std::size_t k)
-{
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_blockwise(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-// for_each_kmer_packed_wide_128() only exists where `unsigned __int128` does -- see the
-// __SIZEOF_INT128__ guard around its definition in kmer_extract/packed.hpp.
-#ifdef __SIZEOF_INT128__
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_128(TwoBitSequence<Order> const& seq, std::size_t k)
-{
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_128(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-#endif // __SIZEOF_INT128__
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_hybrid(
-    TwoBitSequence<Order> const& seq, std::size_t k
-) {
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_hybrid(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_hoisted(
-    TwoBitSequence<Order> const& seq, std::size_t k
-) {
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_hoisted(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_fixed_k(TwoBitSequence<Order> const& seq, std::size_t k)
-{
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_fixed_k(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_hybrid_hoisted(
-    TwoBitSequence<Order> const& seq, std::size_t k
-) {
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_hybrid_hoisted(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-// Experimental aligned-window variants use the same sum sink as the existing implementations.
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_narrow_aligned(
-    TwoBitSequence<Order> const& seq, std::size_t k
-) {
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_narrow_aligned(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_aligned(
-    TwoBitSequence<Order> const& seq, std::size_t k
-) {
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_aligned(seq, k, [&](std::uint64_t v) { hash += v; });
-    return hash;
-}
-
-template <BitOrder Order>
-inline std::uint64_t compute_kmer_hash_packed_wide_split_k(
-    TwoBitSequence<Order> const& seq, std::size_t k
-) {
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_wide_split_k(seq, k, [&](std::uint64_t v) { hash += v; });
+    for_each_kmer_packed_aligned(seq, k, [&](std::uint64_t v) { hash += v; });
     return hash;
 }
 
@@ -196,46 +97,11 @@ inline void bench_kmer_extract_packed(
         );
         auto results = suite.run(
             packed_msb,
-            bench("narrow_blockwise", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_narrow_blockwise(seq, k);
+            bench("aligned", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+                return compute_kmer_hash_packed_aligned(seq, k);
             }),
-            bench("narrow_fixed_k", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_narrow_fixed_k(seq, k);
-            }),
-            bench("narrow_aligned", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_narrow_aligned(seq, k);
-            }),
-            bench("narrow_rolling", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_narrow_rolling(seq, k);
-            }),
-            bench("wide_rolling", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_rolling(seq, k);
-            }),
-            bench("wide_blockwise", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_blockwise(seq, k);
-            }),
-#ifdef __SIZEOF_INT128__
-            bench("wide_128", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_128(seq, k);
-            }),
-#endif // __SIZEOF_INT128__
-            bench("wide_hybrid", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_hybrid(seq, k);
-            }),
-            bench("wide_hoisted", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_hoisted(seq, k);
-            }),
-            bench("wide_hybrid_hoisted", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_hybrid_hoisted(seq, k);
-            }),
-            bench("wide_fixed_k", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_fixed_k(seq, k);
-            }),
-            bench("wide_aligned", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_aligned(seq, k);
-            }),
-            bench("wide_split_k", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_split_k(seq, k);
+            bench("rolling", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+                return compute_kmer_hash_packed_rolling(seq, k);
             })
         );
         write_csv_rows(csv_os, suite_title, "order=msb;k=" + std::to_string(k), results);
@@ -256,34 +122,11 @@ inline void bench_kmer_extract_packed(
         );
         auto results = suite.run(
             packed_msb,
-            bench("wide_rolling", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_rolling(seq, k);
+            bench("rolling", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+                return compute_kmer_hash_packed_rolling(seq, k);
             }),
-            bench("wide_blockwise", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_blockwise(seq, k);
-            }),
-#ifdef __SIZEOF_INT128__
-            bench("wide_128", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_128(seq, k);
-            }),
-#endif // __SIZEOF_INT128__
-            bench("wide_hybrid", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_hybrid(seq, k);
-            }),
-            bench("wide_hoisted", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_hoisted(seq, k);
-            }),
-            bench("wide_hybrid_hoisted", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_hybrid_hoisted(seq, k);
-            }),
-            bench("wide_fixed_k", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_fixed_k(seq, k);
-            }),
-            bench("wide_aligned", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_aligned(seq, k);
-            }),
-            bench("wide_split_k", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
-                return compute_kmer_hash_packed_wide_split_k(seq, k);
+            bench("aligned", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+                return compute_kmer_hash_packed_aligned(seq, k);
             })
         );
         write_csv_rows(csv_os, suite_title, "order=msb;k=" + std::to_string(k), results);
@@ -304,46 +147,11 @@ inline void bench_kmer_extract_packed(
         );
         auto results = suite.run(
             packed_lsb,
-            bench("narrow_blockwise", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_narrow_blockwise(seq, k);
+            bench("aligned", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+                return compute_kmer_hash_packed_aligned(seq, k);
             }),
-            bench("narrow_fixed_k", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_narrow_fixed_k(seq, k);
-            }),
-            bench("narrow_aligned", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_narrow_aligned(seq, k);
-            }),
-            bench("narrow_rolling", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_narrow_rolling(seq, k);
-            }),
-            bench("wide_rolling", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_rolling(seq, k);
-            }),
-            bench("wide_blockwise", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_blockwise(seq, k);
-            }),
-#ifdef __SIZEOF_INT128__
-            bench("wide_128", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_128(seq, k);
-            }),
-#endif // __SIZEOF_INT128__
-            bench("wide_hybrid", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_hybrid(seq, k);
-            }),
-            bench("wide_hoisted", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_hoisted(seq, k);
-            }),
-            bench("wide_hybrid_hoisted", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_hybrid_hoisted(seq, k);
-            }),
-            bench("wide_fixed_k", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_fixed_k(seq, k);
-            }),
-            bench("wide_aligned", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_aligned(seq, k);
-            }),
-            bench("wide_split_k", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_split_k(seq, k);
+            bench("rolling", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+                return compute_kmer_hash_packed_rolling(seq, k);
             })
         );
         write_csv_rows(csv_os, suite_title, "order=lsb;k=" + std::to_string(k), results);
@@ -364,34 +172,11 @@ inline void bench_kmer_extract_packed(
         );
         auto results = suite.run(
             packed_lsb,
-            bench("wide_rolling", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_rolling(seq, k);
+            bench("rolling", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+                return compute_kmer_hash_packed_rolling(seq, k);
             }),
-            bench("wide_blockwise", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_blockwise(seq, k);
-            }),
-#ifdef __SIZEOF_INT128__
-            bench("wide_128", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_128(seq, k);
-            }),
-#endif // __SIZEOF_INT128__
-            bench("wide_hybrid", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_hybrid(seq, k);
-            }),
-            bench("wide_hoisted", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_hoisted(seq, k);
-            }),
-            bench("wide_hybrid_hoisted", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_hybrid_hoisted(seq, k);
-            }),
-            bench("wide_fixed_k", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_fixed_k(seq, k);
-            }),
-            bench("wide_aligned", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_aligned(seq, k);
-            }),
-            bench("wide_split_k", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
-                return compute_kmer_hash_packed_wide_split_k(seq, k);
+            bench("aligned", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+                return compute_kmer_hash_packed_aligned(seq, k);
             })
         );
         write_csv_rows(csv_os, suite_title, "order=lsb;k=" + std::to_string(k), results);

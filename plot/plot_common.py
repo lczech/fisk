@@ -368,39 +368,15 @@ BENCHMARK_ORDER = [
 
 # Stable order and colors for the kmer_extract_packed benchmark family (packed.hpp), kept as its
 # own dict rather than folded into BENCHMARK_COLORS/BENCHMARK_ORDER above since it's a distinct
-# naming scheme (internal implementation-comparison variants, not final library-facing benchmark
-# names). Colors are paired by technique where the same suffix exists in both the narrow and wide
-# families (_blockwise, _fixed_k, _rolling all appear twice, once per family) -- same hue, lighter
-# for narrow / darker for wide -- so a technique's identity is visible across both families at a
-# glance; wide-only techniques (no narrow counterpart) get their own distinct hues instead.
+# naming scheme. Just two variants: "aligned" (the recommended, fastest one) and "rolling" (a
+# slower reference baseline, not recommended for production) -- both cover the full k in [1, 32]
+# themselves now, internally specializing for k<=29 vs k>29 where that's faster.
 PACKED_KMER_VARIANT_ORDER = [
-    "narrow_blockwise",
-    "narrow_fixed_k",
-    "narrow_aligned",
-    "narrow_rolling",
-    "wide_blockwise",
-    "wide_fixed_k",
-    "wide_aligned",
-    "wide_split_k",
-    "wide_hybrid",
-    "wide_hoisted",
-    "wide_hybrid_hoisted",
-    "wide_128",
-    "wide_rolling",
+    "aligned",
+    "rolling",
 ]
 
 PACKED_KMER_VARIANT_COLORS = {
-    "narrow_blockwise"    : "#6baed6",  # blue, light
-    "wide_blockwise"      : "#08519c",  # blue, dark
-    "narrow_fixed_k"      : "#74c476",  # green, light
-    "wide_fixed_k"        : "#006d2c",  # green, dark
-    "narrow_rolling"      : "#bdbdbd",  # grey, light
-    "wide_rolling"        : "#636363",  # grey, dark
-    "wide_hybrid"         : "#e6550d",  # orange
-    "wide_hoisted"        : "#756bb1",  # purple
-    "wide_hybrid_hoisted" : "#e377c2",  # pink
-    "wide_128"            : "#8c564b",  # brown
-    "narrow_aligned"      : "#9edae5",  # cyan, light
-    "wide_aligned"        : "#17becf",  # cyan, dark
-    "wide_split_k"        : "#bcbd22",  # olive
+    "aligned" : "#17becf",  # cyan
+    "rolling" : "#636363",  # grey
 }
