@@ -24,7 +24,9 @@ CPUS=(
   "AMD Ryzen 7 Pro 4750U, GCC 14"
   "Intel Xeon Platinum 8568Y, Clang 17"
   "Intel Xeon Platinum 8568Y, GCC 15"
-  "Apple M1 Pro, Clang 17"
+  # Standing in for the Apple entry until M1 Pro measurements exist -- swap for
+  # "Apple M1 Pro, Clang 17" (currently has no kmer_extract_packed.csv) once available.
+  "Apple M1, Clang 21"
 )
 
 if ((${#CPUS[@]} == 0)); then

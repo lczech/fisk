@@ -95,6 +95,10 @@ def main():
         action="store_true",
         help="Also show the rolling reference implementation (hidden by default)",
     )
+    parser.add_argument(
+        "--y-lim", type=float, default=None,
+        help="Fixed y-axis upper limit in ns/op (default: auto-scaled from the data)",
+    )
     args = parser.parse_args()
 
     # -------------------------------------------------------------------------
@@ -144,8 +148,8 @@ def main():
     _plot_panel(ax_lsb, df, "lsb", plot_order, colors, BENCHMARK_LINESTYLES)
 
     ax_msb.set_ylabel("Time per operation [ns]")
-    ymax = float(df["ns_per_op"].max())
-    ax_msb.set_ylim(0, ymax * 1.05)
+    ymax = args.y_lim if args.y_lim is not None else float(df["ns_per_op"].max()) * 1.05
+    ax_msb.set_ylim(0, ymax)
 
     fig.suptitle(args.title or cpu.replace("_", " "))
 

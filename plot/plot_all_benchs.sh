@@ -74,6 +74,7 @@ for EXT in png svg ; do
   CSV="${DIR}/kmer_extract_packed.csv"
   run_plot "$CSV" python ./plot/plot_kmer_extract_packed.py \
     "$CSV" \
+    --y-lim "0.7" \
     --out "${DIR}/kmer_extract_packed.${EXT}"
 
 
