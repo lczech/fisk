@@ -162,6 +162,7 @@ if(FISK_BUILD_TESTS)
         tests/test_seq_pack.cpp
         tests/test_kmer_extract.cpp
         tests/test_kmer_extract_packed.cpp
+        tests/test_kmer_extract_packed_simd.cpp
     )
     target_include_directories(fisk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     target_link_libraries(fisk_tests PRIVATE fisk::fisk)

@@ -170,3 +170,63 @@ inline void do_not_optimize(std::uint64_t v)
         (void) sink;
     #endif
 }
+
+// Overloads of the above for SIMD register types, one per register class -- unlike the scalar
+// GPR case, there is no single inline-asm constraint letter that works for all of them (legacy
+// SSE/AVX xmm/ymm registers, AVX-512 zmm registers, and ARM NEON registers are each their own
+// constraint class), so this is an overload set rather than a template. Guarded by the same
+// FISK_HAS_* macros as the types themselves, so each overload only exists where its type does.
+#if defined(FISK_HAS_SSE2)
+    [[gnu::always_inline]]
+    inline void do_not_optimize(__m128i v)
+    {
+        #if defined(__GNUC__) || defined(__clang__)
+            asm volatile("" : : "x"(v));
+        #else
+            volatile __m128i sink = v;
+            (void) sink;
+        #endif
+    }
+#endif
+
+#if defined(FISK_HAS_AVX2)
+    [[gnu::always_inline]]
+    inline void do_not_optimize(__m256i v)
+    {
+        #if defined(__GNUC__) || defined(__clang__)
+            asm volatile("" : : "x"(v));
+        #else
+            volatile __m256i sink = v;
+            (void) sink;
+        #endif
+    }
+#endif
+
+#if defined(FISK_HAS_AVX512)
+    [[gnu::always_inline]]
+    inline void do_not_optimize(__m512i v)
+    {
+        #if defined(__GNUC__) || defined(__clang__)
+            // "v" (rather than "x") is the constraint for the extended EVEX-encodable vector
+            // registers (zmm0-31) that a __m512i needs.
+            asm volatile("" : : "v"(v));
+        #else
+            volatile __m512i sink = v;
+            (void) sink;
+        #endif
+    }
+#endif
+
+#if defined(FISK_HAS_NEON)
+    [[gnu::always_inline]]
+    inline void do_not_optimize(uint64x2_t v)
+    {
+        #if defined(__GNUC__) || defined(__clang__)
+            // "w" is the AArch64 constraint for the SIMD&FP register file NEON vectors live in.
+            asm volatile("" : : "w"(v));
+        #else
+            volatile uint64x2_t sink = v;
+            (void) sink;
+        #endif
+    }
+#endif
