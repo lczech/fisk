@@ -122,7 +122,7 @@ std::size_t for_each_kmer_packed_tail_(
 // others. Kept as a known trade-off for for_each_kmer_packed_aligned()'s simpler single-name API.
 template <BitOrder Order, typename Func>
 inline void for_each_kmer_packed_aligned_narrow_impl_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func& func
+    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
 ) {
     unsigned const k32 = static_cast<unsigned>(k);
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k32)) - 1u;
@@ -198,7 +198,7 @@ inline std::uint64_t aligned_boundary_window_(
 }
 
 template <BitOrder Order, unsigned K, typename Func>
-inline void for_each_kmer_packed_aligned_wide_impl_(TwoBitSequence<Order> const& seq, Func& func)
+inline void for_each_kmer_packed_aligned_wide_impl_(TwoBitSequence<Order> const& seq, Func&& func)
 {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
 
@@ -271,10 +271,22 @@ inline void for_each_kmer_packed_aligned(
         return;
     }
     switch (k) {
-        case 30: for_each_kmer_packed_aligned_wide_impl_<Order, 30>(seq, func); break;
-        case 31: for_each_kmer_packed_aligned_wide_impl_<Order, 31>(seq, func); break;
-        case 32: for_each_kmer_packed_aligned_wide_impl_<Order, 32>(seq, func); break;
-        default: for_each_kmer_packed_aligned_narrow_impl_(seq, k, func); break;
+        case 30: {
+            for_each_kmer_packed_aligned_wide_impl_<Order, 30>(seq, std::forward<Func>(func));
+            break;
+        }
+        case 31: {
+            for_each_kmer_packed_aligned_wide_impl_<Order, 31>(seq, std::forward<Func>(func));
+            break;
+        }
+        case 32: {
+            for_each_kmer_packed_aligned_wide_impl_<Order, 32>(seq, std::forward<Func>(func));
+            break;
+        }
+        default: {
+            for_each_kmer_packed_aligned_narrow_impl_(seq, k, std::forward<Func>(func));
+            break;
+        }
     }
 }
 
@@ -287,7 +299,7 @@ inline void for_each_kmer_packed_aligned(
 // That serial dependency chain is what makes this version slower.
 template <BitOrder Order, typename Func>
 inline void for_each_kmer_packed_rolling_narrow_impl_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func& func
+    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
 ) {
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
 
@@ -332,7 +344,7 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
 // byte, which is why the narrow impl above still exists as the faster choice for k <= 29.
 template <BitOrder Order, typename Func>
 inline void for_each_kmer_packed_rolling_wide_impl_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func& func
+    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
 ) {
     std::uint64_t const mask = (k == 32)
         ? ~std::uint64_t{0}
@@ -429,8 +441,8 @@ inline void for_each_kmer_packed_rolling(
         return;
     }
     if (k <= 29) {
-        for_each_kmer_packed_rolling_narrow_impl_(seq, k, func);
+        for_each_kmer_packed_rolling_narrow_impl_(seq, k, std::forward<Func>(func));
     } else {
-        for_each_kmer_packed_rolling_wide_impl_(seq, k, func);
+        for_each_kmer_packed_rolling_wide_impl_(seq, k, std::forward<Func>(func));
     }
 }

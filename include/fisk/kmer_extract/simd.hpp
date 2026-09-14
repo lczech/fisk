@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cstddef>
 #include <stdexcept>
+#include <utility>
 
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/seq_enc.hpp"
@@ -352,4 +353,3 @@ inline void for_each_kmer_simd_scalar(
         );
     }
 }
-

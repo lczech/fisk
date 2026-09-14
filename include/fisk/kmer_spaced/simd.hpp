@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"

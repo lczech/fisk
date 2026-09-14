@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <stdexcept>
+#include <utility>
 
 #include "fisk/core/seq_enc.hpp"
 
@@ -152,7 +153,7 @@ inline void for_each_kmer_reextract(
 template<typename Func>
 inline void for_each_kmer(std::string_view seq, std::size_t k, Func&& func)
 {
-    for_each_kmer_rolling(seq, k, char_to_nt_table_acgt, func);
+    for_each_kmer_rolling(seq, k, char_to_nt_table_acgt, std::forward<Func>(func));
 }
 
 // =================================================================================================
