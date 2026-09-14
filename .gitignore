@@ -47,3 +47,6 @@ bin/
 # Plots in other formats
 results/*/*.svg
 results/*/*.png
+
+# Plotting related
+plot/__pycache__/

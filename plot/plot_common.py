@@ -26,6 +26,59 @@ def platform_from_csv_path(csv_path: str) -> str:
     return p.parent.name
 
 
+# Canonical CPU-family / compiler orderings, shared by every cross-CPU plot script, so that
+# platforms and compilers appear in the same relative order across every chart in the project
+# regardless of which script produced it.
+PLATFORM_ORDER = [
+    "Epyc",
+    "Ryzen",
+    "Xeon",
+    "M1",
+    "M2",
+    "M3",
+]
+
+COMPILER_ORDER = [
+    "Clang",
+    "GCC",
+]
+
+
+def infer_platform(raw_label: str) -> str:
+    """Case-insensitive substring match of `raw_label` (e.g. a results subdirectory name like
+    "AMD EPYC 9684X, Clang 17") against PLATFORM_ORDER, returning "Other" if none match."""
+    s = raw_label.casefold()
+    for plat in PLATFORM_ORDER:
+        if plat.casefold() in s:
+            return plat
+    return "Other"
+
+
+def infer_compiler(raw_label: str) -> str:
+    """Case-insensitive substring match of `raw_label` against COMPILER_ORDER, returning "Other"
+    if none match. See infer_platform() for the label format."""
+    s = raw_label.casefold()
+    for comp in COMPILER_ORDER:
+        if comp.casefold() in s:
+            return comp
+    return "Other"
+
+
+def platform_compiler_sort_key(raw_label: str) -> tuple[int, int, str]:
+    """Sort key for a raw platform/compiler label (e.g. a results subdirectory name), ordering by
+    PLATFORM_ORDER first, then COMPILER_ORDER, falling back to alphabetical for anything neither
+    list recognizes. Used to keep platform axes in the same order across every cross-CPU chart,
+    even in plots (like the packed k-mer comparison) that keep platform+compiler as one combined
+    label rather than splitting them into separate color/hatch dimensions the way
+    plot_bars_per_cpu.py does.
+    """
+    platform = infer_platform(raw_label)
+    compiler = infer_compiler(raw_label)
+    p_idx = PLATFORM_ORDER.index(platform) if platform in PLATFORM_ORDER else len(PLATFORM_ORDER)
+    c_idx = COMPILER_ORDER.index(compiler) if compiler in COMPILER_ORDER else len(COMPILER_ORDER)
+    return (p_idx, c_idx, raw_label)
+
+
 def parse_case_fields(df: pd.DataFrame, column: str = "case") -> pd.DataFrame:
     """
     Split a "case" column of "key1=val1;key2=val2;..." into one new string column
@@ -252,6 +305,22 @@ BENCHMARK_RENAMES = {
     "simd_pext"                   : "SIMD PEXT",
     "simd_butterfly_table_scalar" : "SIMD Butterfly Table scalar",
     "simd_block_table_scalar"     : "SIMD Block Table scalar",
+
+    # Kmer extract packed
+    "aligned"              : "Scalar",
+    "rolling"              : "Rolling",
+    "simd_narrow_sse2"     : "SIMD Narrow SSE2",
+    "simd_wide_sse2"       : "SIMD Wide SSE2",
+    "simd_sse2"            : "SIMD SSE2",
+    "simd_narrow_avx2"     : "SIMD Narrow AVX2",
+    "simd_wide_avx2"       : "SIMD Wide AVX2",
+    "simd_avx2"            : "SIMD AVX2",
+    "simd_narrow_avx512"   : "SIMD Narrow AVX512",
+    "simd_wide_avx512"     : "SIMD Wide AVX512",
+    "simd_avx512"          : "SIMD AVX512",
+    "simd_narrow_neon"     : "SIMD Narrow Neon",
+    "simd_wide_neon"       : "SIMD Wide Neon",
+    "simd_neon"            : "SIMD Neon",
 }
 
 # "Reduced" names for the main manuscript, to keep it simple.
@@ -265,6 +334,13 @@ BENCHMARK_RENAMES_REDUCED = {
     "simd_butterfly_table_avx2"   : "SIMD AVX2",
     "simd_butterfly_table_avx512" : "SIMD AVX512",
     "simd_butterfly_table_neon"   : "SIMD Neon",
+
+    # Kmer extract packed
+    "aligned"     : "Scalar",
+    "simd_sse2"   : "SIMD SSE2",
+    "simd_avx2"   : "SIMD AVX2",
+    "simd_avx512" : "SIMD AVX512",
+    "simd_neon"   : "SIMD Neon",
 }
 
 # Stable colors for each implementation / benchmark
@@ -368,15 +444,66 @@ BENCHMARK_ORDER = [
 
 # Stable order and colors for the kmer_extract_packed benchmark family (packed.hpp), kept as its
 # own dict rather than folded into BENCHMARK_COLORS/BENCHMARK_ORDER above since it's a distinct
-# naming scheme. Just two variants: "aligned" (the recommended, fastest one) and "rolling" (a
-# slower reference baseline, not recommended for production) -- both cover the full k in [1, 32]
-# themselves now, internally specializing for k<=29 vs k>29 where that's faster.
+# naming scheme. Direct narrow/wide rows are retained for code-generation comparisons; dispatchers
+# are the user-facing entry points.
 PACKED_KMER_VARIANT_ORDER = [
     "aligned",
+    "simd_narrow_sse2",
+    "simd_wide_sse2",
+    "simd_sse2",
+    "simd_narrow_avx2",
+    "simd_wide_avx2",
+    "simd_avx2",
+    "simd_narrow_avx512",
+    "simd_wide_avx512",
+    "simd_avx512",
+    "simd_narrow_neon",
+    "simd_wide_neon",
+    "simd_neon",
     "rolling",
 ]
 
 PACKED_KMER_VARIANT_COLORS = {
-    "aligned" : "#17becf",  # cyan
+    "aligned" : "#107D84",
     "rolling" : "#636363",  # grey
+    # SSE2: purple shades, ordered narrow -> wide -> dispatcher.
+    "simd_narrow_sse2" : "#c5b0d5",
+    "simd_wide_sse2" : "#9467bd",
+    "simd_sse2" : "#5C338A",
+    # AVX2: green shades, ordered narrow -> wide -> dispatcher.
+    "simd_narrow_avx2" : "#78c679",
+    "simd_wide_avx2" : "#2ca02c",
+    "simd_avx2" : "#207542",
+    # AVX-512: red shades, ordered narrow -> wide -> dispatcher.
+    "simd_narrow_avx512" : "#fb6a4a",
+    "simd_wide_avx512" : "#d62728",
+    "simd_avx512" : "#a23236",
+    # NEON: blue shades, ordered narrow -> wide -> dispatcher.
+    "simd_narrow_neon" : "#9ecae1",
+    "simd_wide_neon" : "#6baed6",
+    "simd_neon" : "#23609d",
 }
+
+# Headline subset of PACKED_KMER_VARIANT_ORDER: the scalar baseline plus each ISA's public
+# dispatcher only -- no narrow/wide/rolling implementation detail. Each dispatcher already picks
+# narrow or wide internally depending on k, so a chart already split by k-tier (e.g. one figure per
+# narrow/wide range) loses nothing by showing only the dispatcher row: it *is* whichever of
+# narrow/wide applies at that k. Used as the default (non---extended) comparison view.
+PACKED_KMER_VARIANT_ORDER_REDUCED = [
+    "aligned",
+    "simd_sse2",
+    "simd_avx2",
+    "simd_avx512",
+    "simd_neon",
+]
+
+# Fold the packed k-mer variant names into the generic BENCHMARKS_KEEP*/BENCHMARK_ORDER lists too,
+# so plot_bars_per_cpu.py's cross-CPU summary shows them instead of filtering every row out (those
+# lists predate this benchmark family and never got extended for it). Appended rather than merged
+# in above since BENCHMARK_ORDER/BENCHMARKS_KEEP are defined earlier in this file, before
+# PACKED_KMER_VARIANT_ORDER exists.
+BENCHMARK_ORDER += PACKED_KMER_VARIANT_ORDER
+BENCHMARKS_KEEP += PACKED_KMER_VARIANT_ORDER
+BENCHMARKS_KEEP_EXTENDED += PACKED_KMER_VARIANT_ORDER
+BENCHMARKS_KEEP_REDUCED += PACKED_KMER_VARIANT_ORDER_REDUCED
+BENCHMARK_COLORS.update(PACKED_KMER_VARIANT_COLORS)

@@ -12,9 +12,11 @@ import pandas as pd
 
 sys.path.insert(0, '.')
 from plot_common import (
+    BENCHMARK_RENAMES,
     PACKED_KMER_VARIANT_COLORS,
     PACKED_KMER_VARIANT_ORDER,
     parse_case_fields,
+    platform_compiler_sort_key,
     platform_from_csv_path,
 )
 
@@ -23,41 +25,58 @@ from plot_common import (
 VARIANT_ORDER = PACKED_KMER_VARIANT_ORDER
 VARIANT_COLORS = PACKED_KMER_VARIANT_COLORS
 
-# Variants excluded from these comparison plots -- too slow to be worth the space, cluttering the
-# "which algorithm wins where" picture these charts exist for. Not deleted from VARIANT_ORDER/
-# VARIANT_COLORS above, just filtered out at plot time: removing a name here (or clearing this set
-# entirely) brings it straight back with its color/position already defined, no other change needed.
-EXCLUDED_VARIANTS = {"narrow_rolling", "wide_rolling"}
+# Direct narrow/wide rows are useful while tuning, but the dispatcher rows are the default user-facing
+# comparison. Pass --show-direct to include the helper rows as well.
+DIRECT_SIMD_VARIANTS = {
+    v for v in VARIANT_ORDER if v.startswith("simd_") and ("_narrow_" in v or "_wide_" in v)
+}
+ROLLING_VARIANTS = {"rolling", "narrow_rolling", "wide_rolling"}
 
 # (order, k) combos to produce one heatmap + one bar chart for each.
 COMBOS = [("msb", 29), ("msb", 32), ("lsb", 29), ("lsb", 32)]
 
 
-def load_all(results_dir: str) -> pd.DataFrame:
+def load_all(csv_paths: List[str]) -> pd.DataFrame:
     """
-    Find every kmer_extract_packed.csv under immediate subdirectories of `results_dir`, tag each
-    row with its platform (the subdirectory name, e.g. "AMD EPYC 9684X, Clang 17"), and
-    concatenate into one long-format DataFrame.
+    Load each given kmer_extract_packed.csv, tag each row with its platform (the parent directory
+    name, e.g. "AMD EPYC 9684X, Clang 17"), and concatenate into one long-format DataFrame. Takes
+    an explicit file list (built by the caller, e.g. from plot_all_cpus.sh's curated CPUS array via
+    --file, same as plot_bars_per_cpu.py) rather than globbing a results directory itself, so the
+    set of platforms shown here always matches the rest of the cross-CPU plots -- not a second,
+    independently-curated selection.
     """
     frames = []
-    for csv_path in sorted(glob.glob(os.path.join(results_dir, "*", "kmer_extract_packed.csv"))):
+    for csv_path in csv_paths:
         df = pd.read_csv(csv_path)
         df = parse_case_fields(df)
         df["k"] = df["k"].astype(int)
         df["platform"] = platform_from_csv_path(csv_path)
         frames.append(df)
     if not frames:
-        raise ValueError(f"No kmer_extract_packed.csv found under {results_dir!r}/*/")
+        raise ValueError("No input files. Provide --file ... or --glob ...")
     return pd.concat(frames, ignore_index=True)
 
 
 def variant_order_for(df: pd.DataFrame) -> List[str]:
     present = set(df["benchmark"])
-    return [v for v in VARIANT_ORDER if v in present and v not in EXCLUDED_VARIANTS]
+    return [v for v in VARIANT_ORDER if v in present]
+
+
+def filter_variants(
+    df: pd.DataFrame, *, show_rolling: bool, show_direct: bool
+) -> pd.DataFrame:
+    """Apply the plot switches once so every comparison chart uses the same exclusions."""
+    excluded = set() if show_rolling else set(ROLLING_VARIANTS)
+    if not show_direct:
+        excluded |= DIRECT_SIMD_VARIANTS
+    return df[~df["benchmark"].isin(excluded)]
 
 
 def platform_order_for(df: pd.DataFrame) -> List[str]:
-    return sorted(df["platform"].unique())
+    # Sorted by the same PLATFORM_ORDER/COMPILER_ORDER precedence as plot_bars_per_cpu.py, so a
+    # given machine sits in the same relative position across every cross-CPU chart in the project,
+    # not just within this file.
+    return sorted(df["platform"].unique(), key=platform_compiler_sort_key)
 
 
 def plot_heatmap(df: pd.DataFrame, order: str, k: int, out_path: str) -> None:
@@ -82,7 +101,7 @@ def plot_heatmap(df: pd.DataFrame, order: str, k: int, out_path: str) -> None:
     ax.set_xticks(range(len(platforms)))
     ax.set_xticklabels(platforms, rotation=30, ha="right")
     ax.set_yticks(range(len(variants)))
-    ax.set_yticklabels(variants)
+    ax.set_yticklabels([BENCHMARK_RENAMES.get(v, v) for v in variants])
 
     for i in range(len(variants)):
         for j in range(len(platforms)):
@@ -130,7 +149,7 @@ def plot_grouped_bars(df: pd.DataFrame, order: str, k: int, out_path: str) -> No
         offsets = [xi - group_width / 2 + vi * bar_width + bar_width / 2 for xi in x]
         ax.bar(
             offsets, pivot[variant].values, width=bar_width,
-            color=VARIANT_COLORS[variant], label=variant,
+            color=VARIANT_COLORS[variant], label=BENCHMARK_RENAMES.get(variant, variant),
         )
 
     ax.set_xticks(list(x))
@@ -188,20 +207,63 @@ def main():
     parser = argparse.ArgumentParser(
         description="Cross-platform/compiler comparison plots for kmer_extract_packed benchmarks"
     )
-    parser.add_argument("results_dir", help="Directory containing one subdir per platform/compiler")
-    parser.add_argument("--out-dir", default=None, help="Output directory (default: results_dir)")
+    parser.add_argument(
+        "--file",
+        action="append",
+        default=[],
+        help="kmer_extract_packed.csv path. Can be given multiple times.",
+    )
+    parser.add_argument(
+        "--glob",
+        action="append",
+        default=[],
+        help="Glob pattern(s) for kmer_extract_packed.csv files. Can be given multiple times.",
+    )
+    parser.add_argument("--out-dir", required=True, help="Output directory")
+    parser.add_argument(
+        "--show-rolling",
+        action="store_true",
+        help="Include rolling reference implementations (hidden by default)",
+    )
+    parser.add_argument(
+        "--show-direct",
+        action="store_true",
+        help="Include direct narrow/wide SIMD helper rows (hidden by default)",
+    )
+    parser.add_argument(
+        "--show-heatmaps",
+        action="store_true",
+        help="Also produce the per-(order,k) relative-performance heatmaps (off by default -- "
+             "the grouped bar charts and platform summary cover the same ground more usefully)",
+    )
     args = parser.parse_args()
 
-    out_dir = args.out_dir or args.results_dir
+    files: List[str] = list(args.file)
+    for pattern in args.glob:
+        files.extend(sorted(glob.glob(pattern)))
+    files = [f for f in files if f]
+
+    out_dir = args.out_dir
     Path(out_dir).mkdir(parents=True, exist_ok=True)
 
-    df = load_all(args.results_dir)
+    df = filter_variants(
+        load_all(files), show_rolling=args.show_rolling, show_direct=args.show_direct
+    )
 
     for order, k in COMBOS:
-        plot_heatmap(df, order, k, os.path.join(out_dir, f"compare_heatmap_{order}_k{k}.png"))
-        plot_grouped_bars(df, order, k, os.path.join(out_dir, f"compare_bars_{order}_k{k}.png"))
+        if args.show_heatmaps:
+            plot_heatmap(
+                df, order, k,
+                os.path.join(out_dir, f"kmer_extract_packed_compare_heatmap_{order}_k{k}.png"),
+            )
+        plot_grouped_bars(
+            df, order, k,
+            os.path.join(out_dir, f"kmer_extract_packed_compare_bars_{order}_k{k}.png"),
+        )
 
-    plot_platform_summary(df, os.path.join(out_dir, "compare_platform_summary.png"))
+    plot_platform_summary(
+        df, os.path.join(out_dir, "kmer_extract_packed_compare_platform_summary.png")
+    )
 
 
 if __name__ == "__main__":

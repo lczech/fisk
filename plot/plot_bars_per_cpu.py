@@ -29,6 +29,11 @@ Usage examples:
 
   python plot_bars_per_cpu.py --glob "artifacts/*/pext.csv" --suite PEXT
 
+  # Restrict to rows whose "case" column (e.g. "order=msb;k=17") matches given fields:
+  python plot_bars_per_cpu.py --glob "results/*/kmer_extract_packed.csv" \
+      --case-filter "order=msb" --case-filter "k<=29" --reduced \
+      --out kmer_extract_packed_msb_narrow.png
+
 If --out is omitted, shows interactively.
 """
 
@@ -36,7 +41,8 @@ from __future__ import annotations
 
 import argparse
 import glob
-import os, sys
+import math
+import os, sys, re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -54,50 +60,16 @@ mpl.rcParams["hatch.linewidth"] = 0.7
 sys.path.insert(0, '.')
 from plot_common import *
 
-PLATFORM_ORDER = [
-    "Epyc",
-    "Ryzen",
-    "Xeon",
-    "M1",
-    "M2",
-    "M3",
-]
-
-COMPILER_ORDER = [
-    "Clang",
-    "GCC",
-]
-
 TITLE_FROM_FILENAME = {
     "bit_extract_weights.csv": "Bit extract with different mask weights",
     "bit_extract_blocks.csv":  "Bit extract with different block sizes in the mask",
     "seq_enc.csv":             "Sequence encoding from char to two-bit codes",
     "kmer_extract.csv":        "Extraction from sequence to two-bit coded k-mers",
+    "kmer_extract_packed.csv": "Extraction from a packed two-bit sequence to k-mers",
     "kmer_spaced_multi.csv":   "Extraction from sequence to spaced k-mers with multiple masks",
     "kmer_spaced_single.csv":  "Extraction from sequence to spaced k-mers with a single mask",
     "kmer_clark.csv":          "K-mer Clark test",
 }
-
-
-def raw_label_from_csv_path(csv_path: str) -> str:
-    p = Path(csv_path)
-    return p.parent.name
-
-
-def infer_platform(raw_label: str) -> str:
-    s = raw_label.casefold()
-    for plat in PLATFORM_ORDER:
-        if plat.casefold() in s:
-            return plat
-    return "Other"
-
-
-def infer_compiler(raw_label: str) -> str:
-    s = raw_label.casefold()
-    for comp in COMPILER_ORDER:
-        if comp.casefold() in s:
-            return comp
-    return "Other"
 
 
 def load_one(
@@ -108,7 +80,7 @@ def load_one(
     df = pd.read_csv(csv_path)
 
     if raw_label is None:
-        raw_label = raw_label_from_csv_path(csv_path)
+        raw_label = platform_from_csv_path(csv_path)
 
     platform = infer_platform(raw_label)
     compiler = infer_compiler(raw_label)
@@ -173,6 +145,59 @@ def legend_label(series_name: str) -> str:
     return f"{platform} / {compiler}"
 
 
+def nice_tick_step(ymax: float, target_ticks: int = 10) -> float:
+    """
+    Pick a "nice" step (1/2/5 times a power of ten) giving roughly `target_ticks` ticks between 0
+    and `ymax`. Reproduces the previous hardcoded step=1 for the y-axis ranges already in use
+    (YLIM 6, 10) while still giving a sensible number of ticks for a much smaller --y-lim (e.g.
+    0.7) instead of collapsing to just "0" and "1" the way a fixed integer step did.
+    """
+    if ymax <= 0:
+        return 1.0
+    raw_step = ymax / target_ticks
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    for m in (1, 2, 5, 10):
+        step = m * magnitude
+        if step >= raw_step:
+            return step
+    return 10 * magnitude
+
+
+def apply_case_filters(df: pd.DataFrame, filters: list[str]) -> pd.DataFrame:
+    """
+    Filter rows by fields parsed out of the "case" column (e.g. "order=msb;k=17" -> fields
+    "order"="msb", "k"="17"), so a caller can restrict a chart to e.g. one BitOrder or one k-range
+    without the CSV needing a dedicated column for it. Each filter is "key<op>value" with op one of
+    =, <=, >=, <, > (e.g. "order=msb", "k<=29"); comparison operators coerce both sides to numbers,
+    "=" compares as strings. Multiple filters are ANDed together.
+    """
+    if not filters:
+        return df
+    df = parse_case_fields(df)
+    for f in filters:
+        m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\s*(<=|>=|<|>|=)\s*(.+)$', f)
+        if not m:
+            raise SystemExit(f"Invalid --case-filter {f!r}, expected e.g. 'k<=29' or 'order=msb'")
+        key, op, val = m.group(1), m.group(2), m.group(3)
+        if key not in df.columns:
+            case_keys = sorted(set(df.columns) - {"suite", "case", "benchmark", "ns_per_op"})
+            raise SystemExit(f"--case-filter key {key!r} not found in case fields: {case_keys}")
+        if op == "=":
+            df = df[df[key] == val]
+        else:
+            col = pd.to_numeric(df[key])
+            val_num = float(val)
+            if op == "<=":
+                df = df[col <= val_num]
+            elif op == ">=":
+                df = df[col >= val_num]
+            elif op == "<":
+                df = df[col < val_num]
+            else:
+                df = df[col > val_num]
+    return df
+
+
 def main() -> None:
 
     # --------------------------------------
@@ -196,6 +221,13 @@ def main() -> None:
         "--suite",
         default=None,
         help="Suite name to filter (recommended). If omitted, all suites are combined.",
+    )
+    ap.add_argument(
+        "--case-filter",
+        action="append",
+        default=[],
+        help="Filter rows by a 'case' field, e.g. 'order=msb' or 'k<=29'. Can be given multiple "
+             "times (ANDed together). See apply_case_filters() for the supported operators.",
     )
     ap.add_argument(
         "--extended",
@@ -270,6 +302,10 @@ def main() -> None:
         if df.empty:
             available = sorted(set(pd.concat(dfs)["suite"].astype(str)))
             raise SystemExit(f"No rows for suite='{suite}'. Available suites: {available}")
+
+    df = apply_case_filters(df, args.case_filter)
+    if df.empty:
+        raise SystemExit(f"No rows left after --case-filter {args.case_filter}")
 
     # Aggregate: mean over cases for each (benchmark, platform, compiler)
     agg = (
@@ -464,7 +500,8 @@ def main() -> None:
 
     ax.set_ylim(0, YLIM)
     if YLIM <= 20:
-        ax.set_yticks(range(0, int(round(YMAX)) + 1, 1))
+        step = nice_tick_step(YMAX)
+        ax.set_yticks(np.arange(0, YMAX + step / 2, step))
 
     ax.grid(axis="y", linestyle="--", alpha=0.3)
 

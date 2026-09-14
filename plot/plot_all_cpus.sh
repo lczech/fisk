@@ -43,16 +43,24 @@ mkdir -p "$OUT"
 # ------------------------------------------------------------
 
 # Build the arguments --file A --file B for a given CSV name,
-# which is searched in the directories given above.
+# which is searched in the directories given above. Missing files are skipped so
+# a benchmark collected on only some CPUs can still be plotted.
 build_file_args() {
   local csv_name="$1"
 
   args=()
   for cpu in "${CPUS[@]}"; do
     local f="${ROOT}/${cpu}/${csv_name}"
-    [[ -f "$f" ]] || { echo "Missing file: $f" >&2; return 1; }
-    args+=( --file "$f" )
+    if [[ -f "$f" ]]; then
+      args+=( --file "$f" )
+    else
+      echo "Skipping missing file: $f" >&2
+    fi
   done
+  if ((${#args[@]} == 0)); then
+    echo "No ${csv_name} files found for the selected CPUs." >&2
+    return 1
+  fi
 }
 
 # ------------------------------------------------------------
@@ -118,6 +126,54 @@ done
 #     --file "results/AMD_Ryzen_4750U/kmer_extract.csv" \
 #     --file "results/Apple_M1/kmer_extract.csv" \
 #     --file "results/Intel_Xeon_8568Y/kmer_extract.csv"
+
+# ------------------------------------------------------------
+# Kmer extract packed: detailed cross-platform comparison
+# ------------------------------------------------------------
+
+# Not in the generic CSV_FILES loop above: that loop applies the same (default-variant-set,
+# unbounded y-axis) call to every CSV uniformly, but this suite needs its own y-axis limits and
+# its regular (non-extended) call needs the reduced dispatcher-only variant set -- same reasoning
+# as the "Manuscript figures" calls further below, which are for the same reason not in that loop
+# either. Y-limits found by checking actual max ns_per_op across all current platforms.
+YLIM_PACKED_REDUCED="0.75"
+YLIM_PACKED_EXTENDED="1.2"
+
+build_file_args "kmer_extract_packed.csv" || exit 1
+
+# Regular: reduced variant set (scalar baseline + each ISA's dispatcher only), matching the
+# per-CPU line plots' default and the narrow/wide tier plots below -- a summary, not full detail.
+python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+  --reduced --y-lim "$YLIM_PACKED_REDUCED" \
+  --out "${OUT}/kmer_extract_packed_per_cpu.png"
+
+# Extended: every variant, including narrow/wide/rolling, for internal checking.
+python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+  --extended --y-lim "$YLIM_PACKED_EXTENDED" \
+  --out "${OUT}/kmer_extract_packed_per_cpu_ext.png"
+
+# Complements the summary above (which averages over all cases) with per-(order,k) grouped bar
+# charts and a platform summary, one variant per bar, so individual SIMD tiers/dispatchers stay
+# distinguishable rather than collapsed into one mean.
+# echo "Plotting kmer_extract_packed comparison"
+# python ./plot/plot_kmer_extract_packed_compare.py "${args[@]}" \
+#   --out-dir "$OUT"
+
+# Same per-CPU grouped-bar style as the summary above (bars = platform/compiler, x-axis =
+# implementation), but split by BitOrder and narrow/wide k-tier instead of blending everything into
+# one mean. Reduced by default: at a fixed tier, each ISA's dispatcher bench already resolves to
+# whichever of narrow/wide applies, so the narrow/wide/rolling detail rows would be redundant here.
+for order in msb lsb; do
+  python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+    --case-filter "order=${order}" --case-filter "k<=29" \
+    --reduced --y-lim "$YLIM_PACKED_REDUCED" \
+    --out "${OUT}/kmer_extract_packed_per_cpu_${order}_narrow.png"
+
+  python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+    --case-filter "order=${order}" --case-filter "k>=30" --case-filter "k<=32" \
+    --reduced --y-lim "$YLIM_PACKED_REDUCED" \
+    --out "${OUT}/kmer_extract_packed_per_cpu_${order}_wide.png"
+done
 
 # ------------------------------------------------------------
 # Manuscript figures

@@ -18,6 +18,14 @@ from plot_common import *
 # by position, so a given uncurated name still gets a stable color within one run at least.
 FALLBACK_PALETTE = plt.get_cmap("tab20").colors
 
+# Narrow/wide implementation-detail rows: present in PACKED_KMER_VARIANT_ORDER but not in the
+# headline PACKED_KMER_VARIANT_ORDER_REDUCED subset (which is just the scalar baseline + each ISA's
+# public dispatcher). Hidden by default, same as plot_kmer_extract_packed_compare.py's --show-direct.
+DIRECT_SIMD_VARIANTS = {
+    v for v in PACKED_KMER_VARIANT_ORDER
+    if v not in PACKED_KMER_VARIANT_ORDER_REDUCED and v != "rolling"
+}
+
 
 def _ordered_benchmarks(present: List[str], order: Optional[List[str]]) -> List[str]:
     """
@@ -77,6 +85,16 @@ def main():
                         help="Plot title (default: platform name from the CSV's directory)")
     parser.add_argument("--out", default=None,
                         help="Output image file (e.g. kmer_extract_packed.png). If omitted, show interactively.")
+    parser.add_argument(
+        "--show-direct",
+        action="store_true",
+        help="Also show the narrow/wide implementation-detail lines (hidden by default)",
+    )
+    parser.add_argument(
+        "--show-rolling",
+        action="store_true",
+        help="Also show the rolling reference implementation (hidden by default)",
+    )
     args = parser.parse_args()
 
     # -------------------------------------------------------------------------
@@ -100,8 +118,23 @@ def main():
     # Plot
     # -------------------------------------------------------------------------
 
-    # Plot every benchmark present -- no BENCHMARKS_KEEP filtering here.
-    present = df["benchmark"].drop_duplicates().tolist()
+    # Curated allowlist rather than "everything present": an old CSV can still carry benchmark
+    # names that no longer exist in the code (past renames/removals), and those should just
+    # disappear rather than clutter the plot. Reduced (dispatcher + scalar baseline only) by
+    # default; --show-direct/--show-rolling opt back into the narrow/wide/rolling detail rows.
+    allowed = set(PACKED_KMER_VARIANT_ORDER_REDUCED)
+    if args.show_direct:
+        allowed |= DIRECT_SIMD_VARIANTS
+    if args.show_rolling:
+        allowed.add("rolling")
+    present = [b for b in df["benchmark"].drop_duplicates().tolist() if b in allowed]
+    if not present:
+        in_csv = sorted(df["benchmark"].unique())
+        raise ValueError(
+            f"None of the current packed k-mer variant names were found in {args.csv!r} "
+            f"(benchmarks in this file: {in_csv}). This CSV may predate the current benchmark "
+            f"naming -- rerun the benchmark to regenerate it."
+        )
     plot_order = _ordered_benchmarks(present, PACKED_KMER_VARIANT_ORDER)
     colors = _colors_for_benchmarks(plot_order, PACKED_KMER_VARIANT_COLORS)
 
