@@ -17,6 +17,8 @@
 #include "fisk/core/cpu_runtime.hpp"
 #include "fisk/core/random.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     Spaced K-mer Algorithms Enum
 // =================================================================================================
@@ -283,3 +285,5 @@ inline SpacedKmerMode spaced_kmer_selector(
 ) {
     return spaced_kmer_selector(BitExtractMask(mask), span_k, seq_len);
 }
+
+} // namespace fisk

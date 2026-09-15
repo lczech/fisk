@@ -12,6 +12,8 @@
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/seq_enc.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     Naive and MISSH implementations
 // =================================================================================================
@@ -419,3 +421,5 @@ inline std::uint64_t compute_spaced_kmer_hash(
     );
     return hash;
 }
+
+} // namespace fisk

@@ -13,6 +13,8 @@
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 
+namespace fisk {
+
 // Both MSB and LSB below load larger words from raw bytes via memcpy and rely on how the host
 // interprets them as an integer. Both are therefore little-endian-specific; see
 // core/platform.hpp for the assertion that enforces this.
@@ -446,3 +448,5 @@ inline void for_each_kmer_packed_rolling(
         for_each_kmer_packed_rolling_wide_impl_(seq, k, std::forward<Func>(func));
     }
 }
+
+} // namespace fisk

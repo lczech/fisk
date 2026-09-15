@@ -23,6 +23,8 @@
 #include <immintrin.h>
 #endif
 
+namespace fisk {
+
 // =================================================================================================
 //     Bit extract mask
 // =================================================================================================
@@ -430,3 +432,5 @@ inline std::uint64_t bit_extract_butterfly_table(
     step( 32, bf.sieves[5] );
     return x;
 }
+
+} // namespace fisk

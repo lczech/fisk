@@ -9,6 +9,8 @@
 
 #include "fisk/core/seq_enc.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     K-mer Extraction
 // =================================================================================================
@@ -178,3 +180,5 @@ inline std::string decode_kmer_2bit( std::uint64_t kmer, std::size_t k )
 
     return s;
 }
+
+} // namespace fisk

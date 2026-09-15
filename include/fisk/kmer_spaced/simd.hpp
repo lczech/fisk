@@ -14,6 +14,8 @@
 #include "fisk/core/seq_enc.hpp"
 #include "fisk/core/intrinsics.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     SIMD Helper Functions
 // =================================================================================================
@@ -283,3 +285,5 @@ inline std::uint64_t compute_spaced_kmer_hash_simd(
 
     return hash;
 }
+
+} // namespace fisk

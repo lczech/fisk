@@ -13,6 +13,8 @@
 #include "fisk/core/random.hpp"
 #include "fisk/core/intrinsics.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     Adaptive Bit Extract Helper
 // =================================================================================================
@@ -409,3 +411,5 @@ private:
     BitExtractBlockTable block_table_;
     BitExtractButterflyTable butterfly_table_;
 };
+
+} // namespace fisk

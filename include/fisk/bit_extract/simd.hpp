@@ -12,6 +12,8 @@
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/intrinsics.hpp"
 
+namespace fisk {
+
 // Kernel concept:
 //
 //   simd_vector     Type of the SIMD vector
@@ -1070,3 +1072,5 @@ private:
     Storage kernels_;
 
 };
+
+} // namespace fisk

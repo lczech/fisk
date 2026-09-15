@@ -6,6 +6,8 @@
 
 #include "fisk/core/platform.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     Conventions
 // =================================================================================================
@@ -74,3 +76,5 @@ struct PackedSequence
     std::vector<std::uint8_t> data;
     std::size_t length = 0;
 };
+
+} // namespace fisk

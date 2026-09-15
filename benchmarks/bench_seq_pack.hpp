@@ -11,6 +11,8 @@
 #include "fisk/seq_pack/simd.hpp"
 #include "microbench.hpp"
 
+using namespace fisk;
+
 /**
  * @brief Simple order-insensitive checksum over a PackedSequence.
  *

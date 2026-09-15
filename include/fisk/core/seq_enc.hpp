@@ -9,6 +9,8 @@
 
 #include "fisk/core/platform.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     Character Encoding
 // =================================================================================================
@@ -410,3 +412,5 @@ struct NucleotideEncoderActg
         return table[static_cast<std::uint8_t>(c)];
     }
 };
+
+} // namespace fisk

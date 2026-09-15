@@ -23,6 +23,8 @@
 #include "bench_bit_extract_weights.hpp"
 #include "fisk/core/intrinsics.hpp"
 
+using namespace fisk;
+
 // Already defined in `bench_bit_extract_weights.hpp`
 // struct BitExtractInput
 // {

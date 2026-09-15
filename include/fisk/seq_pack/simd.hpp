@@ -11,6 +11,8 @@
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     SIMD Kernel Extensions
 // =================================================================================================
@@ -421,3 +423,5 @@ inline PackedSequence<Extractor::encoding, Extractor::layout> pack_sequence_simd
     pack_sequence_simd(seq, extract, out);
     return out;
 }
+
+} // namespace fisk

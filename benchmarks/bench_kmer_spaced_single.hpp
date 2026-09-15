@@ -16,6 +16,8 @@
 #include "microbench.hpp"
 #include "fisk/core/intrinsics.hpp"
 
+using namespace fisk;
+
 /**
  * @brief Benchmark spaced k-mer extract with single masks.
  */

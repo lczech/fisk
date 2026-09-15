@@ -15,6 +15,8 @@
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     K-mer Extraction SIMD AVX2
 // =================================================================================================
@@ -353,3 +355,5 @@ inline void for_each_kmer_simd_scalar(
         );
     }
 }
+
+} // namespace fisk

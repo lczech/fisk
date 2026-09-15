@@ -8,6 +8,8 @@
 #include "fisk/core/types.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     8-Base Extractors -- PEXT
 // =================================================================================================
@@ -276,3 +278,5 @@ inline PackedSequence<Extractor::encoding, Extractor::layout> pack_sequence(
     pack_sequence(seq, extract, out);
     return out;
 }
+
+} // namespace fisk

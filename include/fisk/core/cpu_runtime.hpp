@@ -16,6 +16,8 @@
     #include <intrin.h>
 #endif
 
+namespace fisk {
+
 // =================================================================================================
 //     Hardware Info
 // =================================================================================================
@@ -485,3 +487,5 @@ inline void info_print_intrinsics(std::ostream& os)
     print_one_feature("AVX512", compiled_avx512(), cpu_avx512());
     print_one_feature("NEON",   compiled_neon(),   cpu_neon());
 }
+
+} // namespace fisk

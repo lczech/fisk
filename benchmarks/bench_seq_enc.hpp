@@ -9,6 +9,8 @@
 #include "fisk/core/seq_enc.hpp"
 #include "microbench.hpp"
 
+using namespace fisk;
+
 /**
  * @brief Scan a sequence and encode each character, combining them to get a final "hash".
  *

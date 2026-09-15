@@ -12,6 +12,8 @@
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/packed.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     K-mer Extraction from a PackedSequence, SIMD
 // =================================================================================================
@@ -874,3 +876,5 @@ inline void for_each_kmer_packed_simd_neon(
 }
 
 #endif // FISK_HAS_NEON
+
+} // namespace fisk

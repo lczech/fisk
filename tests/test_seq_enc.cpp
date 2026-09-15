@@ -1,6 +1,8 @@
 #include "fisk/core/seq_enc.hpp"
 #include "testing.hpp"
 
+using namespace fisk;
+
 // Ground truth for the ACGT and ACTG two-bit encodings, independent of any of the
 // implementations under test below. Every char_to_nt_*_acgt()/char_to_nt_*_actg() variant is
 // checked against these over all 256 byte values.

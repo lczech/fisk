@@ -14,6 +14,8 @@
 #include "fisk/core/seq_enc.hpp"
 #include "microbench.hpp"
 
+using namespace fisk;
+
 /**
  * @brief Benchmark the original CLARK implementation vs our improved one.
  */

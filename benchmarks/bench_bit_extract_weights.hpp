@@ -17,6 +17,8 @@
 #include "fisk/bit_extract/selector.hpp"
 #include "fisk/core/intrinsics.hpp"
 
+using namespace fisk;
+
 /**
  * @brief Helper to store a value and a mask (plus its software helpers) for testing.
  *

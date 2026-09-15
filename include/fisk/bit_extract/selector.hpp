@@ -14,6 +14,8 @@
 #include "fisk/core/random.hpp"
 #include "fisk/core/cpu_runtime.hpp"
 
+namespace fisk {
+
 // =================================================================================================
 //     Bit Extract Algorithms Enum
 // =================================================================================================
@@ -365,3 +367,5 @@ inline void run_bit_extract_mode(
         }
     }
 }
+
+} // namespace fisk

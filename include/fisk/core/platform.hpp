@@ -2,6 +2,8 @@
 
 #include <bit>
 
+namespace fisk {
+
 // =================================================================================================
 //     Host Assumptions
 // =================================================================================================
@@ -22,3 +24,5 @@ static_assert(
     std::endian::native == std::endian::little,
     "fisk assumes a little-endian host for its byte-to-integer packing tricks"
 );
+
+} // namespace fisk
