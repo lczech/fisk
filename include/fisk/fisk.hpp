@@ -15,10 +15,8 @@
 // Bit extraction
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/adaptive.hpp"
-#include "fisk/bit_extract/instlatx64.hpp"
 #include "fisk/bit_extract/selector.hpp"
 #include "fisk/bit_extract/simd.hpp"
-#include "fisk/bit_extract/zp7.hpp"
 
 // Sequence packing
 #include "fisk/seq_pack/seq_pack.hpp"
