@@ -7,6 +7,8 @@
 #include <cstddef>
 #include <stdexcept>
 
+#include "fisk/core/platform.hpp"
+
 // =================================================================================================
 //     Character Encoding
 // =================================================================================================
@@ -37,6 +39,18 @@
 //
 // We provide and benchmark different variants of these functions here.
 
+// Every encoder below relies on the ASCII code points of the nucleotide characters, whether
+// through the lookup tables or the bit tricks. Assert once here that the host character set
+// really is ASCII, rather than repeating the same check inside each of them.
+static_assert( static_cast<int>('A') == 0x41, "Non-ASCII char set" );
+static_assert( static_cast<int>('C') == 0x43, "Non-ASCII char set" );
+static_assert( static_cast<int>('G') == 0x47, "Non-ASCII char set" );
+static_assert( static_cast<int>('T') == 0x54, "Non-ASCII char set" );
+static_assert( static_cast<int>('a') == 0x61, "Non-ASCII char set" );
+static_assert( static_cast<int>('c') == 0x63, "Non-ASCII char set" );
+static_assert( static_cast<int>('g') == 0x67, "Non-ASCII char set" );
+static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
+
 // -----------------------------------------------------------------------------
 //     ifs (ACGT)
 // -----------------------------------------------------------------------------
@@ -46,16 +60,6 @@
  */
 inline constexpr std::uint8_t char_to_nt_ifs_acgt(char ch) noexcept
 {
-    // We need ASCII for the following to work.
-    static_assert( static_cast<int>('A') == 0x41, "Non-ASCII char set" );
-    static_assert( static_cast<int>('C') == 0x43, "Non-ASCII char set" );
-    static_assert( static_cast<int>('G') == 0x47, "Non-ASCII char set" );
-    static_assert( static_cast<int>('T') == 0x54, "Non-ASCII char set" );
-    static_assert( static_cast<int>('a') == 0x61, "Non-ASCII char set" );
-    static_assert( static_cast<int>('c') == 0x63, "Non-ASCII char set" );
-    static_assert( static_cast<int>('g') == 0x67, "Non-ASCII char set" );
-    static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
-
     // Make char lower case. The std implementation is locale dependend,
     // and very slow; we hence assume ASCII and simply set the lower case bit.
     // ch = static_cast<char>(std::tolower(ch));
@@ -127,16 +131,6 @@ inline constexpr std::uint8_t char_to_nt_ascii_acgt(char c) noexcept
     // the two conventions; see char_to_nt_ascii_actg() below for the ACTG convention, which skips
     // it, at the cost of no longer having ACGT's cheap-reverse-complement property.
 
-    // We need ASCII for the following to work. Probably fine, but doesn't hurt to check.
-    static_assert( static_cast<int>('A') == 0x41, "Non-ASCII char set" );
-    static_assert( static_cast<int>('C') == 0x43, "Non-ASCII char set" );
-    static_assert( static_cast<int>('G') == 0x47, "Non-ASCII char set" );
-    static_assert( static_cast<int>('T') == 0x54, "Non-ASCII char set" );
-    static_assert( static_cast<int>('a') == 0x61, "Non-ASCII char set" );
-    static_assert( static_cast<int>('c') == 0x63, "Non-ASCII char set" );
-    static_assert( static_cast<int>('g') == 0x67, "Non-ASCII char set" );
-    static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
-
     // Fold to lowercase: 'A'..'Z' -> 'a'..'z', ASCII only.
     std::uint8_t const value = static_cast<std::uint8_t>(c) | 0x20u;
 
@@ -198,16 +192,6 @@ inline constexpr std::uint8_t char_to_nt_ascii_unchecked_acgt(char c) noexcept
  */
 inline constexpr std::uint8_t char_to_nt_ascii_actg(char c) noexcept
 {
-    // We need ASCII for the following to work. Probably fine, but doesn't hurt to check.
-    static_assert( static_cast<int>('A') == 0x41, "Non-ASCII char set" );
-    static_assert( static_cast<int>('C') == 0x43, "Non-ASCII char set" );
-    static_assert( static_cast<int>('G') == 0x47, "Non-ASCII char set" );
-    static_assert( static_cast<int>('T') == 0x54, "Non-ASCII char set" );
-    static_assert( static_cast<int>('a') == 0x61, "Non-ASCII char set" );
-    static_assert( static_cast<int>('c') == 0x63, "Non-ASCII char set" );
-    static_assert( static_cast<int>('g') == 0x67, "Non-ASCII char set" );
-    static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
-
     // Fold to lowercase: 'A'..'Z' -> 'a'..'z', ASCII only.
     std::uint8_t const value = static_cast<std::uint8_t>(c) | 0x20u;
 

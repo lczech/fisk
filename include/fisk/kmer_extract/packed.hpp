@@ -1,6 +1,5 @@
 #pragma once
 
-#include <bit>
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -15,11 +14,8 @@
 #include "fisk/kmer_extract/kmer_extract.hpp"
 
 // Both MSB and LSB below load larger words from raw bytes via memcpy and rely on how the host
-// interprets them as an integer. Both are therefore little-endian-specific.
-static_assert(
-    std::endian::native == std::endian::little,
-    "fisk assumes a little-endian host for its byte-to-integer packing tricks"
-);
+// interprets them as an integer. Both are therefore little-endian-specific; see
+// core/platform.hpp for the assertion that enforces this.
 
 // =================================================================================================
 //     K-mer Extraction from a PackedSequence

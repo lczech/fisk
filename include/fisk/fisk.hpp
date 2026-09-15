@@ -5,6 +5,7 @@
 // see the theme subdirectories (bit_extract/, kmer_extract/, kmer_spaced/, core/).
 
 // Core
+#include "fisk/core/platform.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/cpu_runtime.hpp"
 #include "fisk/core/random.hpp"
