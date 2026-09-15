@@ -154,7 +154,7 @@ python ./plot/plot_bars_per_cpu.py "${args[@]}" \
   --extended --y-lim "$YLIM_PACKED_EXTENDED" \
   --out "${OUT}/kmer_extract_packed_per_cpu_ext.png"
 
-# Complements the summary above (which averages over all cases) with per-(order,k) grouped bar
+# Complements the summary above (which averages over all cases) with per-(layout,k) grouped bar
 # charts and a platform summary, one variant per bar, so individual SIMD tiers/dispatchers stay
 # distinguishable rather than collapsed into one mean.
 # echo "Plotting kmer_extract_packed comparison"
@@ -162,19 +162,19 @@ python ./plot/plot_bars_per_cpu.py "${args[@]}" \
 #   --out-dir "$OUT"
 
 # Same per-CPU grouped-bar style as the summary above (bars = platform/compiler, x-axis =
-# implementation), but split by BitOrder and narrow/wide k-tier instead of blending everything into
+# implementation), but split by Layout and narrow/wide k-tier instead of blending everything into
 # one mean. Reduced by default: at a fixed tier, each ISA's dispatcher bench already resolves to
 # whichever of narrow/wide applies, so the narrow/wide/rolling detail rows would be redundant here.
-for order in msb lsb; do
+for layout in msb lsb; do
   python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-    --case-filter "order=${order}" --case-filter "k<=29" \
+    --case-filter "layout=${layout}" --case-filter "k<=29" \
     --reduced --y-lim "$YLIM_PACKED_REDUCED" \
-    --out "${OUT}/kmer_extract_packed_per_cpu_${order}_narrow.png"
+    --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_narrow.png"
 
   python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-    --case-filter "order=${order}" --case-filter "k>=30" --case-filter "k<=32" \
+    --case-filter "layout=${layout}" --case-filter "k>=30" --case-filter "k<=32" \
     --reduced --y-lim "$YLIM_PACKED_REDUCED" \
-    --out "${OUT}/kmer_extract_packed_per_cpu_${order}_wide.png"
+    --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_wide.png"
 done
 
 # ------------------------------------------------------------

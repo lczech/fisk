@@ -8,15 +8,15 @@
 #include <utility>
 
 #include "fisk/core/intrinsics.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/packed.hpp"
 
 // =================================================================================================
-//     K-mer Extraction from a Packed TwoBitSequence, SIMD
+//     K-mer Extraction from a PackedSequence, SIMD
 // =================================================================================================
 
-// Per-ISA extractors for packed TwoBitSequence values. Each public dispatcher accepts k in [1, 32]
+// Per-ISA extractors for PackedSequence values. Each public dispatcher accepts k in [1, 32]
 // and calls `func(vec, valid_count)` with consecutive k-mers in the ISA's native integer vector.
 // Full vectors have `valid_count == lane_count`; the final vector may be zero-padded in high lanes.
 // The suffixed narrow/wide functions are internal helpers used by the dispatchers.
@@ -54,10 +54,10 @@ inline void emit_tail_packed_(
  * SSE2 shifts both lanes by one count, so each pair uses the same local position from adjacent
  * starting bytes.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_narrow_sse2_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 29) {
         throw_invalid_kmer_k_(29);
@@ -83,10 +83,10 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
 
     __m128i const mask_v = _mm_set1_epi64x(static_cast<std::int64_t>(mask));
 
-    // Precomputed shift amount shared by both lanes of a byte-paired register: Lsb is
-    // a compile-time-shaped constant per `local`; Msb depends on runtime `k`.
+    // Precomputed shift amount shared by both lanes of a byte-paired register: LSB is
+    // a compile-time-shaped constant per `local`; MSB depends on runtime `k`.
     auto shift_of = [&](unsigned local) -> std::uint64_t {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             return (64u - 2u * k32) - 2u * local;
         } else {
             return 2u * local;
@@ -106,7 +106,7 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
         std::uint64_t word0, word1;
         std::memcpy(&word0, &seq.data[b],     8);
         std::memcpy(&word1, &seq.data[b + 1], 8);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             word0 = byte_swap_64(word0);
             word1 = byte_swap_64(word1);
         }
@@ -131,7 +131,7 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
     // Any byte excluded purely by the parity rounding above (fast_bytes odd) is still safe to
     // fast-read but has no partner to pair with. It is left to the scalar tail.
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
@@ -150,10 +150,10 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
  *
  * Builds boundary-spanning windows from adjacent 64-bit words before applying the SSE2 shifts.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_wide_sse2_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -180,7 +180,7 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
     // Per-local start of the 2k-bit window in the combined 128-bit (hi:lo) value. Both lanes
     // share the same start for each byte pair.
     auto start_of = [&](unsigned local) -> std::uint64_t {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             return 128u - 2u * local - 2u * k32;
         } else {
             return 2u * local;
@@ -226,7 +226,7 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
         std::memcpy(&lo1, &seq.data[b + 1], 8);
         std::uint64_t hi0 = static_cast<std::uint64_t>(seq.data[b + 8]);
         std::uint64_t hi1 = static_cast<std::uint64_t>(seq.data[b + 9]);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             // Byte-swap each paired word before combining it with its extra byte.
             std::uint64_t const swapped_lo0 = byte_swap_64(lo0);
             std::uint64_t const swapped_lo1 = byte_swap_64(lo1);
@@ -253,7 +253,7 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
 
     // Any odd trailing byte is left to the scalar tail.
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
@@ -271,10 +271,10 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
  * @brief Extracts all k-mers for k in [1, 32] from a bitpacked sequence with SSE2,
  * yielding k-mers directly in SIMD vectors.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_sse2(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -299,10 +299,10 @@ inline void for_each_kmer_packed_simd_sse2(
  *
  * AVX2's per-lane variable shift maps one byte's four local positions directly onto the lanes.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_narrow_avx2_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 29) {
         throw_invalid_kmer_k_(29);
@@ -326,7 +326,7 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
     // Per-lane shift-count vector {shift(0), shift(1), shift(2), shift(3)}, loop-invariant.
     std::uint64_t shifts[4];
     for (unsigned local = 0; local < 4; ++local) {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             shifts[local] = (64u - 2u * k32) - 2u * local;
         } else {
             shifts[local] = 2u * local;
@@ -340,7 +340,7 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
     for (std::size_t b = 0; b < fast_bytes; ++b) {
         std::uint64_t word;
         std::memcpy(&word, &seq.data[b], 8);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             word = byte_swap_64(word);
         }
         __m256i const bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(word));
@@ -350,7 +350,7 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<4>(
@@ -367,10 +367,10 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
  *
  * Three per-lane shifts combine the two words that may contain a k-mer.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_wide_avx2_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -392,7 +392,7 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
 
     std::uint64_t starts[4];
     for (unsigned local = 0; local < 4; ++local) {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             starts[local] = 128u - 2u * local - 2u * k32;
         } else {
             starts[local] = 2u * local;
@@ -410,7 +410,7 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
         std::uint64_t lo;
         std::memcpy(&lo, &seq.data[b], 8);
         std::uint64_t hi = static_cast<std::uint64_t>(seq.data[b + 8]);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             std::uint64_t const swapped_lo = byte_swap_64(lo);
             lo = hi << 56;
             hi = swapped_lo;
@@ -428,7 +428,7 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<4>(
@@ -444,10 +444,10 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
  * @brief Extracts all k-mers for k in [1, 32] from a bitpacked sequence with AVX2,
  * yielding k-mers directly in SIMD vectors.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_avx2(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -474,10 +474,10 @@ inline void for_each_kmer_packed_simd_avx2(
  *
  * Two adjacent starting bytes are replicated into the register's two four-lane halves.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_narrow_avx512_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 29) {
         throw_invalid_kmer_k_(29);
@@ -507,7 +507,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
     // of the two paired bytes a lane belongs to).
     std::uint64_t shifts[4];
     for (unsigned local = 0; local < 4; ++local) {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             shifts[local] = (64u - 2u * k32) - 2u * local;
         } else {
             shifts[local] = 2u * local;
@@ -524,7 +524,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
         std::uint64_t word0, word1;
         std::memcpy(&word0, &seq.data[b],     8);
         std::memcpy(&word1, &seq.data[b + 1], 8);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             word0 = byte_swap_64(word0);
             word1 = byte_swap_64(word1);
         }
@@ -540,7 +540,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<8>(
@@ -557,10 +557,10 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
  *
  * Two adjacent 128-bit windows are combined with three per-lane shifts.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_wide_avx512_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -587,7 +587,7 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
 
     std::uint64_t starts[4];
     for (unsigned local = 0; local < 4; ++local) {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             starts[local] = 128u - 2u * local - 2u * k32;
         } else {
             starts[local] = 2u * local;
@@ -619,7 +619,7 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
         std::memcpy(&lo1, &seq.data[b + 1], 8);
         std::uint64_t hi0 = static_cast<std::uint64_t>(seq.data[b + 8]);
         std::uint64_t hi1 = static_cast<std::uint64_t>(seq.data[b + 9]);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             std::uint64_t const swapped_lo0 = byte_swap_64(lo0);
             std::uint64_t const swapped_lo1 = byte_swap_64(lo1);
             lo0 = hi0 << 56; hi0 = swapped_lo0;
@@ -644,7 +644,7 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<8>(
@@ -660,10 +660,10 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
  * @brief Extracts all k-mers for k in [1, 32] from a bitpacked sequence with AVX-5
  * 12, yielding k-mers directly in SIMD vectors.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_avx512(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -686,10 +686,10 @@ inline void for_each_kmer_packed_simd_avx512(
 /**
  * @brief Extracts k in [1, 29] as two k-mers per uint64x2_t register.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_narrow_neon_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     // Unlike SSE2, NEON's ushl (vshlq_u64) takes a genuine per-lane
     // signed shift-count vector, so one byte's 4 locals split cleanly into two registers
@@ -716,11 +716,11 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
     uint64x2_t const mask_v = vdupq_n_u64(mask);
 
     // Per-lane shift-count vectors, negated (right shift): {-shift(local0), -shift(local1)} and
-    // {-shift(local2), -shift(local3)}. Loop-invariant regardless of Order -- Lsb's is a
-    // compile-time-shaped constant, Msb's depends on runtime k -- so built once, not per byte.
+    // {-shift(local2), -shift(local3)}. Loop-invariant regardless of L -- LSB's is a
+    // compile-time-shaped constant, MSB's depends on runtime k -- so built once, not per byte.
     auto shift_of = [&](unsigned local) -> std::int64_t {
         std::uint64_t s;
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             s = (64u - 2u * k32) - 2u * local;
         } else {
             s = 2u * local;
@@ -735,7 +735,7 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
     for (std::size_t b = 0; b < fast_bytes; ++b) {
         std::uint64_t word;
         std::memcpy(&word, &seq.data[b], 8);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             word = byte_swap_64(word);
         }
         uint64x2_t const bcast = vdupq_n_u64(word);
@@ -748,7 +748,7 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
@@ -762,10 +762,10 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
  * @brief Extracts k in [1, 32] as two k-mers per uint64x2_t register.
  *
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_wide_neon_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     // The same per-byte, no-transpose arrangement as the narrow path is used. The lo:hi
     // boundary-spanning window collapses to a single ushl each for the lo and hi contribution,
@@ -793,7 +793,7 @@ inline void for_each_kmer_packed_simd_wide_neon_(
     uint64x2_t const mask_v = vdupq_n_u64(mask);
 
     auto start_of = [&](unsigned local) -> std::uint64_t {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             return 128u - 2u * local - 2u * k32;
         } else {
             return 2u * local;
@@ -824,7 +824,7 @@ inline void for_each_kmer_packed_simd_wide_neon_(
         std::uint64_t lo;
         std::memcpy(&lo, &seq.data[b], 8);
         std::uint64_t hi = static_cast<std::uint64_t>(seq.data[b + 8]);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             std::uint64_t const swapped_lo = byte_swap_64(lo);
             lo = hi << 56;
             hi = swapped_lo;
@@ -844,7 +844,7 @@ inline void for_each_kmer_packed_simd_wide_neon_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
@@ -858,10 +858,10 @@ inline void for_each_kmer_packed_simd_wide_neon_(
  * @brief Extracts all k-mers for k in [1, 32] from a bitpacked sequence with NEON,
  * yielding k-mers directly in SIMD vectors.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 [[gnu::always_inline]]
 inline void for_each_kmer_packed_simd_neon(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);

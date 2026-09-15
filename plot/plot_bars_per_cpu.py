@@ -29,9 +29,9 @@ Usage examples:
 
   python plot_bars_per_cpu.py --glob "artifacts/*/pext.csv" --suite PEXT
 
-  # Restrict to rows whose "case" column (e.g. "order=msb;k=17") matches given fields:
+  # Restrict to rows whose "case" column (e.g. "layout=msb;k=17") matches given fields:
   python plot_bars_per_cpu.py --glob "results/*/kmer_extract_packed.csv" \
-      --case-filter "order=msb" --case-filter "k<=29" --reduced \
+      --case-filter "layout=msb" --case-filter "k<=29" --reduced \
       --out kmer_extract_packed_msb_narrow.png
 
 If --out is omitted, shows interactively.
@@ -165,10 +165,10 @@ def nice_tick_step(ymax: float, target_ticks: int = 10) -> float:
 
 def apply_case_filters(df: pd.DataFrame, filters: list[str]) -> pd.DataFrame:
     """
-    Filter rows by fields parsed out of the "case" column (e.g. "order=msb;k=17" -> fields
-    "order"="msb", "k"="17"), so a caller can restrict a chart to e.g. one BitOrder or one k-range
+    Filter rows by fields parsed out of the "case" column (e.g. "layout=msb;k=17" -> fields
+    "layout"="msb", "k"="17"), so a caller can restrict a chart to e.g. one Layout or one k-range
     without the CSV needing a dedicated column for it. Each filter is "key<op>value" with op one of
-    =, <=, >=, <, > (e.g. "order=msb", "k<=29"); comparison operators coerce both sides to numbers,
+    =, <=, >=, <, > (e.g. "layout=msb", "k<=29"); comparison operators coerce both sides to numbers,
     "=" compares as strings. Multiple filters are ANDed together.
     """
     if not filters:
@@ -177,7 +177,7 @@ def apply_case_filters(df: pd.DataFrame, filters: list[str]) -> pd.DataFrame:
     for f in filters:
         m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\s*(<=|>=|<|>|=)\s*(.+)$', f)
         if not m:
-            raise SystemExit(f"Invalid --case-filter {f!r}, expected e.g. 'k<=29' or 'order=msb'")
+            raise SystemExit(f"Invalid --case-filter {f!r}, expected e.g. 'k<=29' or 'layout=msb'")
         key, op, val = m.group(1), m.group(2), m.group(3)
         if key not in df.columns:
             case_keys = sorted(set(df.columns) - {"suite", "case", "benchmark", "ns_per_op"})
@@ -226,7 +226,7 @@ def main() -> None:
         "--case-filter",
         action="append",
         default=[],
-        help="Filter rows by a 'case' field, e.g. 'order=msb' or 'k<=29'. Can be given multiple "
+        help="Filter rows by a 'case' field, e.g. 'layout=msb' or 'k<=29'. Can be given multiple "
              "times (ANDed together). See apply_case_filters() for the supported operators.",
     )
     ap.add_argument(

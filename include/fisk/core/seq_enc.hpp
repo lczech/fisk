@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstddef>
 #include <stdexcept>
-#include <vector>
 
 // =================================================================================================
 //     Character Encoding
@@ -426,46 +425,4 @@ struct NucleotideEncoderActg
     {
         return table[static_cast<std::uint8_t>(c)];
     }
-};
-
-// =================================================================================================
-//     Two-Bit Packed Sequence
-// =================================================================================================
-
-/**
- * @brief Bit order convention for how bases are packed within each byte of a TwoBitSequence.
- *
- * `Msb`: earlier bases of the input sequence occupy the most significant bits, matching the
- * rolling k-mer convention `kmer = (kmer << 2) | code`, and hence preserving lexicographic string
- * order as integer order.
- *
- * `Lsb`: earlier bases of the input sequence occupy the least significant bits. This is the order
- * that falls out directly of a little-endian PEXT-based batch encode with no extra transformation,
- * and is therefore cheaper to produce with PEXT, at the cost of not preserving lexicographic order.
- *
- * Deliberately tracked as a template parameter on TwoBitSequence rather than left to convention,
- * so that mixing up the two orderings between producer and consumer is a compile error rather
- * than a silent error.
- */
-enum class BitOrder
-{
-    Msb,
-    Lsb
-};
-
-/**
- * @brief A whole sequence, encoded into a densely packed two-bit-per-base representation.
- *
- * `data` holds exactly `ceil(length / 4)` bytes of 4 bases each, with no trailing padding.
- * Readers are responsible for bounds checking when reading from `data`.
- *
- * See BitOrder for what the `Order` template parameter means, and for how it applies per byte.
- */
-template <BitOrder Order>
-struct TwoBitSequence
-{
-    static constexpr BitOrder order = Order;
-
-    std::vector<std::uint8_t> data;
-    std::size_t length = 0;
 };

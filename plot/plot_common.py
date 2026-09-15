@@ -82,7 +82,7 @@ def platform_compiler_sort_key(raw_label: str) -> tuple[int, int, str]:
 def parse_case_fields(df: pd.DataFrame, column: str = "case") -> pd.DataFrame:
     """
     Split a "case" column of "key1=val1;key2=val2;..." into one new string column
-    per key (e.g. "order=msb;k=17" -> columns "order"="msb", "k"="17").
+    per key (e.g. "layout=msb;k=17" -> columns "layout"="msb", "k"="17").
 
     Values are left as strings; callers should convert the specific fields they
     need (e.g. `df["k"] = df["k"].astype(int)`), the same way the single-key

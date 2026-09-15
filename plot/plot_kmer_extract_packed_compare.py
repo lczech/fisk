@@ -32,7 +32,7 @@ DIRECT_SIMD_VARIANTS = {
 }
 ROLLING_VARIANTS = {"rolling", "narrow_rolling", "wide_rolling"}
 
-# (order, k) combos to produce one heatmap + one bar chart for each.
+# (layout, k) combos to produce one heatmap + one bar chart for each.
 COMBOS = [("msb", 29), ("msb", 32), ("lsb", 29), ("lsb", 32)]
 
 
@@ -79,7 +79,7 @@ def platform_order_for(df: pd.DataFrame) -> List[str]:
     return sorted(df["platform"].unique(), key=platform_compiler_sort_key)
 
 
-def plot_heatmap(df: pd.DataFrame, order: str, k: int, out_path: str) -> None:
+def plot_heatmap(df: pd.DataFrame, layout: str, k: int, out_path: str) -> None:
     """
     Rows = variant, columns = platform/compiler, color = ns_per_op relative to that column's own
     fastest variant (1.0 = winner on that platform). Normalizing per column (not globally) is
@@ -87,7 +87,7 @@ def plot_heatmap(df: pd.DataFrame, order: str, k: int, out_path: str) -> None:
     chart -- raw clock-speed differences between platforms would otherwise dominate the color
     scale and hide the thing this chart is for.
     """
-    sub = df[(df["order"] == order) & (df["k"] == k)]
+    sub = df[(df["layout"] == layout) & (df["k"] == k)]
     variants = variant_order_for(sub)
     platforms = platform_order_for(sub)
 
@@ -117,7 +117,7 @@ def plot_heatmap(df: pd.DataFrame, order: str, k: int, out_path: str) -> None:
     cbar.set_label("ns/op, relative to fastest\non that platform", fontsize=9)
 
     ax.set_title(
-        f"order={order}, k={k} -- relative performance\n(1.0 = fastest variant on that platform)",
+        f"layout={layout}, k={k} -- relative performance\n(1.0 = fastest variant on that platform)",
         fontsize=13,
     )
     fig.tight_layout()
@@ -126,13 +126,13 @@ def plot_heatmap(df: pd.DataFrame, order: str, k: int, out_path: str) -> None:
     print(f"Wrote {out_path}")
 
 
-def plot_grouped_bars(df: pd.DataFrame, order: str, k: int, out_path: str) -> None:
+def plot_grouped_bars(df: pd.DataFrame, layout: str, k: int, out_path: str) -> None:
     """
     One group of bars per platform/compiler, one bar per variant within each group (same variant
     order/color as the heatmap), so bars for variants run on the same platform sit next to each
     other for direct comparison, and a given variant's color is consistent across every group.
     """
-    sub = df[(df["order"] == order) & (df["k"] == k)]
+    sub = df[(df["layout"] == layout) & (df["k"] == k)]
     variants = variant_order_for(sub)
     platforms = platform_order_for(sub)
 
@@ -155,7 +155,7 @@ def plot_grouped_bars(df: pd.DataFrame, order: str, k: int, out_path: str) -> No
     ax.set_xticks(list(x))
     ax.set_xticklabels(platforms, rotation=30, ha="right")
     ax.set_ylabel("ns/op")
-    ax.set_title(f"order={order}, k={k} -- all variants, grouped by platform/compiler")
+    ax.set_title(f"layout={layout}, k={k} -- all variants, grouped by platform/compiler")
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
 
     handles, labels = ax.get_legend_handles_labels()
@@ -173,7 +173,7 @@ def plot_grouped_bars(df: pd.DataFrame, order: str, k: int, out_path: str) -> No
 def plot_platform_summary(df: pd.DataFrame, out_path: str) -> None:
     """
     One chart, separate from the per-variant comparisons above: for each platform/compiler, the
-    best achievable ns/op (min across all variants), grouped into the 4 order/k combos. Answers
+    best achievable ns/op (min across all variants), grouped into the 4 layout/k combos. Answers
     "how do the machines/compilers compare to each other", deliberately kept apart from "which
     algorithm wins" so the two questions don't get conflated in one overloaded chart.
     """
@@ -184,11 +184,11 @@ def plot_platform_summary(df: pd.DataFrame, out_path: str) -> None:
 
     fig, ax = plt.subplots(figsize=(1.6 * len(platforms) + 3, 5.5))
     combo_colors = plt.get_cmap("tab10").colors
-    for ci, (order, k) in enumerate(COMBOS):
-        sub = df[(df["order"] == order) & (df["k"] == k)]
+    for ci, (layout, k) in enumerate(COMBOS):
+        sub = df[(df["layout"] == layout) & (df["k"] == k)]
         best = sub.groupby("platform")["ns_per_op"].min().reindex(platforms)
         offsets = [xi - group_width / 2 + ci * bar_width + bar_width / 2 for xi in x]
-        ax.bar(offsets, best.values, width=bar_width, color=combo_colors[ci], label=f"{order}, k={k}")
+        ax.bar(offsets, best.values, width=bar_width, color=combo_colors[ci], label=f"{layout}, k={k}")
 
     ax.set_xticks(list(x))
     ax.set_xticklabels(platforms, rotation=20, ha="right")
@@ -233,7 +233,7 @@ def main():
     parser.add_argument(
         "--show-heatmaps",
         action="store_true",
-        help="Also produce the per-(order,k) relative-performance heatmaps (off by default -- "
+        help="Also produce the per-(layout,k) relative-performance heatmaps (off by default -- "
              "the grouped bar charts and platform summary cover the same ground more usefully)",
     )
     args = parser.parse_args()
@@ -250,15 +250,15 @@ def main():
         load_all(files), show_rolling=args.show_rolling, show_direct=args.show_direct
     )
 
-    for order, k in COMBOS:
+    for layout, k in COMBOS:
         if args.show_heatmaps:
             plot_heatmap(
-                df, order, k,
-                os.path.join(out_dir, f"kmer_extract_packed_compare_heatmap_{order}_k{k}.png"),
+                df, layout, k,
+                os.path.join(out_dir, f"kmer_extract_packed_compare_heatmap_{layout}_k{k}.png"),
             )
         plot_grouped_bars(
-            df, order, k,
-            os.path.join(out_dir, f"kmer_extract_packed_compare_bars_{order}_k{k}.png"),
+            df, layout, k,
+            os.path.join(out_dir, f"kmer_extract_packed_compare_bars_{layout}_k{k}.png"),
         )
 
     plot_platform_summary(

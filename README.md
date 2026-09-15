@@ -109,16 +109,16 @@ The repository separates the library (bit extraction and k-mer functionality, fo
 
 Overview of the library headers (in `include/fisk/`), and their most important functions and algorithms:
 
- - `core/`: Shared building blocks. `seq_enc.hpp` for nucleotide-to-2-bit encoding; `intrinsics.hpp`/`cpu_runtime.hpp` for compile-time and runtime CPU feature detection; `random.hpp` for a fast PRNG used internally by the adaptive/selector algorithms.
+ - `core/`: Shared building blocks. `seq_enc.hpp` for nucleotide-to-2-bit encoding; `types.hpp` for the shared `Encoding`/`Layout` conventions and `PackedSequence`; `intrinsics.hpp`/`cpu_runtime.hpp` for compile-time and runtime CPU feature detection; `random.hpp` for a fast PRNG used internally by the adaptive/selector algorithms.
  - `bit_extract/bit_extract.hpp`: Main bit extraction functions. This is probably the most relevant part, containing the core algorithms.
  - `bit_extract/simd.hpp`: SIMD implementations of the bit extract algorithms.
  - `bit_extract/selector.hpp`: Helper that runs a quick benchmark to find the most performant bit extraction algorithm for a given mask.
  - `bit_extract/adaptive.hpp`, `instlatx64.hpp`, `zp7.hpp`: Alternative implementations of the selector and of bit extraction algorithms. Not recommended, but kept here for reference.
- - `seq_pack/seq_pack.hpp`: Packs an ASCII sequence into a compact 2-bit-per-base representation (`TwoBitSequence`), using the same PEXT/butterfly building blocks as bit extraction.
+ - `seq_pack/seq_pack.hpp`: Packs an ASCII sequence into a compact 2-bit-per-base representation (`PackedSequence`), using the same PEXT/butterfly building blocks as bit extraction.
  - `seq_pack/simd.hpp`: SIMD implementation of sequence packing.
  - `kmer_extract/kmer_extract.hpp`: Basic extraction loop of k-mers from a sequence.
  - `kmer_extract/simd.hpp`: SIMD variant of the rolling extraction, probably overkill for most use cases.
- - `kmer_extract/packed.hpp`: K-mer extraction reading directly from an already-packed `TwoBitSequence` (`seq_pack.hpp`), instead of re-deriving codes from ASCII on every call.
+ - `kmer_extract/packed.hpp`: K-mer extraction reading directly from an already-packed `PackedSequence` (`seq_pack.hpp`), instead of re-deriving codes from ASCII on every call.
  - `kmer_spaced/kmer_spaced.hpp`: Extraction loop for spaced k-mers from a sequence, templated with the bit extract function. Also contains the naive implementation, and some helper functions, e.g., to prepare the mask from a string of 1s and 0s.
  - `kmer_spaced/simd.hpp`: SIMD variant of the spaced k-mer extraction, taking one of the `bit_extract/simd.hpp` implementations as template parameter.
  - `kmer_spaced/selector.hpp`: Helper that runs a quick benchmark to find the most performant spaced k-mer extraction algorithm for a given mask. Similar to `bit_extract/selector.hpp`.

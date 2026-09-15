@@ -11,10 +11,10 @@
 #include <utility>
 
 #include "fisk/core/intrinsics.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 
-// Both Msb and Lsb below load larger words from raw bytes via memcpy and rely on how the host
+// Both MSB and LSB below load larger words from raw bytes via memcpy and rely on how the host
 // interprets them as an integer. Both are therefore little-endian-specific.
 static_assert(
     std::endian::native == std::endian::little,
@@ -22,7 +22,7 @@ static_assert(
 );
 
 // =================================================================================================
-//     K-mer Extraction from a Packed TwoBitSequence
+//     K-mer Extraction from a PackedSequence
 // =================================================================================================
 
 // ------------------------------------------------------------------------
@@ -30,14 +30,18 @@ static_assert(
 // ------------------------------------------------------------------------
 
 // Unlike the functions in kmer_extract.hpp, which take ASCII input and check character validity,
-// the functions here read directly from an already-packed TwoBitSequence (seq_pack.hpp).
+// the functions here read directly from a PackedSequence (seq_pack.hpp).
 // They assume `seq` holds only valid, already-encoded bases, allowing for higher performance.
 //
-// `Order` (see BitOrder in core/seq_enc.hpp) selects both which packed layout is read and the
-// resulting k-mer's own bit convention. `Msb` produces the left-rolling convention
+// `L` (see Layout in core/types.hpp) selects both which packed layout is read and the
+// resulting k-mer's own bit convention. `kMSB` produces the left-rolling convention
 // (`kmer = (kmer << 2) | code`), preserving lexicographic string order as integer order.
-// `Lsb` produces the mirrored right-rolling convention (newest base in the high bits), which does
-// not preserve lexicographic order but is cheaper to produce from Lsb-packed data.
+// `kLSB` produces the mirrored right-rolling convention (newest base in the high bits), which does
+// not preserve lexicographic order but is cheaper to produce from LSB-packed data.
+//
+// `E` (see Encoding in core/types.hpp) is carried through unchanged: extraction only moves
+// 2-bit codes around and never depends on which base a code stands for, but keeping it in the
+// type prevents a sequence packed under one encoding from reaching code that expects another.
 //
 // Two public functions cover the full documented k in [1, 32]: for_each_kmer_packed_aligned()
 // (the fast path) and for_each_kmer_packed_rolling() (a simpler reference baseline, not
@@ -71,16 +75,16 @@ static_assert(
 // rather than reusing a main loop's word-width trick; only ever runs for the handful of k-mers
 // after the fast path. The callback function is never passed in directly, as that would prevent
 // compiler optimizations; instead, values are returned to the caller.
-template <BitOrder Order>
+template <Encoding E, Layout L>
 [[gnu::noinline, gnu::cold]]
 std::size_t for_each_kmer_packed_tail_(
-    TwoBitSequence<Order> const& seq, std::size_t start_pos, std::size_t p_max,
+    PackedSequence<E, L> const& seq, std::size_t start_pos, std::size_t p_max,
     unsigned k32, std::array<std::uint64_t, 64>& out
 ) {
     auto decode_base_ = [&](std::size_t p) -> unsigned {
         std::uint8_t const byte = seq.data[p / 4];
         unsigned const in_byte = static_cast<unsigned>(p % 4);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             return (byte >> (6 - 2 * in_byte)) & 0x3u;
         } else {
             return (byte >> (2 * in_byte)) & 0x3u;
@@ -92,7 +96,7 @@ std::size_t for_each_kmer_packed_tail_(
         std::uint64_t kmer = 0;
         for (unsigned i = 0; i < k32; ++i) {
             unsigned const code = decode_base_(p + i);
-            if constexpr (Order == BitOrder::Msb) {
+            if constexpr (L == Layout::kMSB) {
                 kmer = (kmer << 2) | code;
             } else {
                 kmer |= std::uint64_t{code} << (2 * i);
@@ -120,9 +124,9 @@ std::size_t for_each_kmer_packed_tail_(
 // avoided this -- it appears to be an inherent cost of one function covering both ranges, not an
 // inlining decision we can override. Measured up to ~1.5x on some platforms; not measurable on
 // others. Kept as a known trade-off for for_each_kmer_packed_aligned()'s simpler single-name API.
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 inline void for_each_kmer_packed_aligned_narrow_impl_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     unsigned const k32 = static_cast<unsigned>(k);
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k32)) - 1u;
@@ -136,12 +140,12 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
     for (std::size_t b = 0; b < fast_bytes; ++b) {
         std::uint64_t word;
         std::memcpy(&word, &seq.data[b], 8);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             // 58-2k is in [0,56]; adding the local shift recovers 64-2k-2*local.
             word = byte_swap_64(word) >> (58 - 2 * k32);
         }
         std::uint64_t v0, v1, v2, v3;
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             v0 = (word >> 6) & mask;
             v1 = (word >> 4) & mask;
             v2 = (word >> 2) & mask;
@@ -164,7 +168,7 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
@@ -175,13 +179,13 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
 // k in [30, 32] needs a 9th margin byte beyond the main 8-byte word, which breaks the narrow
 // single-shift exploit above. These three cases instead get their own specializations, where every
 // shift is a compile-time constant via the K template parameter for best optimization potential.
-template <BitOrder Order, unsigned K>
+template <Layout L, unsigned K>
 inline std::uint64_t aligned_boundary_window_(
     std::uint64_t hi, std::uint64_t lo, unsigned local, std::uint64_t mask
 ) {
     // Shift values are compile-time constants.
     unsigned start;
-    if constexpr (Order == BitOrder::Msb) {
+    if constexpr (L == Layout::kMSB) {
         start = 128 - 2 * local - 2 * K;
     } else {
         start = 2 * local;
@@ -197,8 +201,8 @@ inline std::uint64_t aligned_boundary_window_(
     return bits & mask;
 }
 
-template <BitOrder Order, unsigned K, typename Func>
-inline void for_each_kmer_packed_aligned_wide_impl_(TwoBitSequence<Order> const& seq, Func&& func)
+template <Encoding E, Layout L, unsigned K, typename Func>
+inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& seq, Func&& func)
 {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
 
@@ -220,16 +224,16 @@ inline void for_each_kmer_packed_aligned_wide_impl_(TwoBitSequence<Order> const&
         std::uint64_t lo;
         std::memcpy(&lo, &seq.data[b], 8);
         std::uint64_t hi = static_cast<std::uint64_t>(seq.data[b + 8]);
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             std::uint64_t const swapped_lo = byte_swap_64(lo);
             lo = hi << 56;
             hi = swapped_lo;
         }
 
-        auto const v0 = aligned_boundary_window_<Order, K>(hi, lo, 0, mask);
-        auto const v1 = aligned_boundary_window_<Order, K>(hi, lo, 1, mask);
-        auto const v2 = aligned_boundary_window_<Order, K>(hi, lo, 2, mask);
-        auto const v3 = aligned_boundary_window_<Order, K>(hi, lo, 3, mask);
+        auto const v0 = aligned_boundary_window_<L, K>(hi, lo, 0, mask);
+        auto const v1 = aligned_boundary_window_<L, K>(hi, lo, 1, mask);
+        auto const v2 = aligned_boundary_window_<L, K>(hi, lo, 2, mask);
+        auto const v3 = aligned_boundary_window_<L, K>(hi, lo, 3, mask);
 
         do_not_optimize(v0);
         do_not_optimize(v1);
@@ -243,7 +247,7 @@ inline void for_each_kmer_packed_aligned_wide_impl_(TwoBitSequence<Order> const&
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<Order>(
+    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, K, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
@@ -252,7 +256,7 @@ inline void for_each_kmer_packed_aligned_wide_impl_(TwoBitSequence<Order> const&
 }
 
 /**
- * @brief Extract all k-mers for k in [1, 32] directly from a packed TwoBitSequence, and call a
+ * @brief Extract all k-mers for k in [1, 32] directly from a PackedSequence, and call a
  * callback on each. The recommended, fastest variant in this file.
  *
  * For k <= 29, delegates to for_each_kmer_packed_aligned_narrow_impl_(). For k in [30, 32], where
@@ -260,9 +264,9 @@ inline void for_each_kmer_packed_aligned_wide_impl_(TwoBitSequence<Order> const&
  * switch, not a function-pointer table) to for_each_kmer_packed_aligned_wide_impl_() instead,
  * whose shifts are all compile-time constants via its own K template parameter.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 inline void for_each_kmer_packed_aligned(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -272,15 +276,15 @@ inline void for_each_kmer_packed_aligned(
     }
     switch (k) {
         case 30: {
-            for_each_kmer_packed_aligned_wide_impl_<Order, 30>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_wide_impl_<E, L, 30>(seq, std::forward<Func>(func));
             break;
         }
         case 31: {
-            for_each_kmer_packed_aligned_wide_impl_<Order, 31>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_wide_impl_<E, L, 31>(seq, std::forward<Func>(func));
             break;
         }
         case 32: {
-            for_each_kmer_packed_aligned_wide_impl_<Order, 32>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_wide_impl_<E, L, 32>(seq, std::forward<Func>(func));
             break;
         }
         default: {
@@ -297,16 +301,16 @@ inline void for_each_kmer_packed_aligned(
 // k <= 29 fits in a single 64-bit accumulator, folded one byte at a time. Each byte's fold
 // depends serially on the previous one, as opposed to the above independent loads.
 // That serial dependency chain is what makes this version slower.
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 inline void for_each_kmer_packed_rolling_narrow_impl_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
 
     std::uint64_t acc = 0;
 
     auto fold_byte_ = [&](std::uint8_t byte) {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             acc = (acc << 8) | byte;
         } else {
             acc = (acc >> 8) | (std::uint64_t{byte} << 56);
@@ -329,7 +333,7 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
 
             unsigned const s = 6 - 2 * local;
             unsigned shift;
-            if constexpr (Order == BitOrder::Msb) {
+            if constexpr (L == Layout::kMSB) {
                 shift = s;
             } else {
                 shift = 64 - 2 * static_cast<unsigned>(k) - s;
@@ -342,9 +346,9 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
 // k > 29 needs more than 64 bits of accumulator, so this variant folds into a hi:lo pair instead
 // of narrow's single 64-bit `acc`; correct for any k in [1, 32], just with more bookkeeping per
 // byte, which is why the narrow impl above still exists as the faster choice for k <= 29.
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 inline void for_each_kmer_packed_rolling_wide_impl_(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     std::uint64_t const mask = (k == 32)
         ? ~std::uint64_t{0}
@@ -361,7 +365,7 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
     for (unsigned local = 0; local < 4; ++local) {
         unsigned const s = 6 - 2 * local;
         unsigned start;
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             start = s;
         } else {
             start = 128 - 2 * static_cast<unsigned>(k) - s;
@@ -381,7 +385,7 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
     std::uint64_t lo = 0;
 
     auto fold_byte_ = [&](std::uint8_t byte) {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             std::uint64_t const carry = lo >> 56;
             lo = (lo << 8) | byte;
             hi = (hi << 8) | carry;
@@ -420,7 +424,7 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
 }
 
 /**
- * @brief Extract all k-mers for k in [1, 32] from a packed TwoBitSequence via a rolling
+ * @brief Extract all k-mers for k in [1, 32] from a PackedSequence via a rolling
  * accumulator, folding one byte at a time.
  *
  * Kept only as a slower algorithmic comparison baseline; prefer for_each_kmer_packed_aligned()
@@ -430,9 +434,9 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
  * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_wide_impl_() (hi:lo pair)
  * instead, since a single 64-bit accumulator no longer fits.
  */
-template <BitOrder Order, typename Func>
+template <Encoding E, Layout L, typename Func>
 inline void for_each_kmer_packed_rolling(
-    TwoBitSequence<Order> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);

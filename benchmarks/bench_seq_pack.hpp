@@ -6,19 +6,20 @@
 #include <string>
 #include <vector>
 
+#include "fisk/core/types.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
 #include "fisk/seq_pack/simd.hpp"
 #include "microbench.hpp"
 
 /**
- * @brief Simple order-insensitive checksum over a packed TwoBitSequence.
+ * @brief Simple order-insensitive checksum over a PackedSequence.
  *
- * Sufficient for cross-validation within one convention/order group (bit match expected), and to
+ * Sufficient for cross-validation within one encoding/bit-order group (bit match expected), and to
  * keep the compiler from optimizing calls away. This is deliberately not order-sensitive:
  * that would mean adding a multiply or the like into the hot loop; too expensive.
  */
-template <BitOrder Order>
-inline std::uint64_t pack_sequence_sink(TwoBitSequence<Order> const& s)
+template <Encoding E, Layout L>
+inline std::uint64_t pack_sequence_sink(PackedSequence<E, L> const& s)
 {
     std::uint64_t h = 0;
     for (auto const w : s.data) {
@@ -28,14 +29,14 @@ inline std::uint64_t pack_sequence_sink(TwoBitSequence<Order> const& s)
 }
 
 /**
- * @brief Benchmark pack_sequence() across all four convention x bit-order combinations.
+ * @brief Benchmark pack_sequence() across all four encoding x bit-order combinations.
  *
- * Each combination (conv=actg/acgt, order=lsb/msb) runs as its own Microbench suite, never mixed
- * with another: within one suite, PEXT and butterfly-table candidates are supposed to agree
- * bit-for-bit (same convention, same order), which is exactly what the sink cross-validation
+ * Each combination (encoding=actg/acgt, layout=lsb/msb) runs as its own Microbench suite, never
+ * mixed with another: within one suite, PEXT and butterfly-table candidates are supposed to agree
+ * bit-for-bit (same encoding, same bit order), which is exactly what the sink cross-validation
  * checks.
  *
- * One TwoBitSequence per group is constructed outside the timed calls and reused across all
+ * One PackedSequence per group is constructed outside the timed calls and reused across all
  * rounds/repeats, avoiding repeated heap allocation during measured.
  */
 inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv_os)
@@ -50,10 +51,10 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
     write_csv_header(csv_os);
 
     // -----------------------------------------------------------------------
-    //     conv=acgt;order=lsb
+    //     encoding=acgt;layout=lsb
     // -----------------------------------------------------------------------
     {
-        TwoBitSequence<BitOrder::Lsb> out;
+        PackedSequence<Encoding::kACGT, Layout::kLSB> out;
         Microbench<std::string> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
             [](std::string const& in) { return static_cast<double>(in.size()); }
@@ -99,14 +100,14 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
             })
             #endif
         );
-        write_csv_rows(csv_os, suite_title, "conv=acgt;order=lsb", results);
+        write_csv_rows(csv_os, suite_title, "encoding=acgt;layout=lsb", results);
     }
 
     // -----------------------------------------------------------------------
-    //     conv=acgt;order=msb
+    //     encoding=acgt;layout=msb
     // -----------------------------------------------------------------------
     {
-        TwoBitSequence<BitOrder::Msb> out;
+        PackedSequence<Encoding::kACGT, Layout::kMSB> out;
         Microbench<std::string> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
             [](std::string const& in) { return static_cast<double>(in.size()); }
@@ -152,14 +153,14 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
             })
             #endif
         );
-        write_csv_rows(csv_os, suite_title, "conv=acgt;order=msb", results);
+        write_csv_rows(csv_os, suite_title, "encoding=acgt;layout=msb", results);
     }
 
     // -----------------------------------------------------------------------
-    //     conv=actg;order=lsb
+    //     encoding=actg;layout=lsb
     // -----------------------------------------------------------------------
     {
-        TwoBitSequence<BitOrder::Lsb> out;
+        PackedSequence<Encoding::kACTG, Layout::kLSB> out;
         Microbench<std::string> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
             [](std::string const& in) { return static_cast<double>(in.size()); }
@@ -205,14 +206,14 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
             })
             #endif
         );
-        write_csv_rows(csv_os, suite_title, "conv=actg;order=lsb", results);
+        write_csv_rows(csv_os, suite_title, "encoding=actg;layout=lsb", results);
     }
 
     // -----------------------------------------------------------------------
-    //     conv=actg;order=msb
+    //     encoding=actg;layout=msb
     // -----------------------------------------------------------------------
     {
-        TwoBitSequence<BitOrder::Msb> out;
+        PackedSequence<Encoding::kACTG, Layout::kMSB> out;
         Microbench<std::string> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
             [](std::string const& in) { return static_cast<double>(in.size()); }
@@ -258,6 +259,6 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
             })
             #endif
         );
-        write_csv_rows(csv_os, suite_title, "conv=actg;order=msb", results);
+        write_csv_rows(csv_os, suite_title, "encoding=actg;layout=msb", results);
     }
 }

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "fisk/core/random.hpp"
+#include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/packed.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
 #include "testing.hpp"
@@ -25,7 +26,7 @@ static int code_acgt(char c)
     }
 }
 
-// Ground truth, Msb/left-rolling convention -- matches for_each_kmer_rolling() in kmer_extract.hpp.
+// Ground truth, MSB/left-rolling convention -- matches for_each_kmer_rolling() in kmer_extract.hpp.
 static std::uint64_t oracle_msb(std::string const& seq, std::size_t start, std::size_t k)
 {
     std::uint64_t v = 0;
@@ -35,7 +36,7 @@ static std::uint64_t oracle_msb(std::string const& seq, std::size_t start, std::
     return v;
 }
 
-// Ground truth, Lsb/right-rolling convention -- earliest base in the low bits instead.
+// Ground truth, LSB/right-rolling convention -- earliest base in the low bits instead.
 static std::uint64_t oracle_lsb(std::string const& seq, std::size_t start, std::size_t k)
 {
     std::uint64_t v = 0;
@@ -173,7 +174,7 @@ TEST(KmerExtractPacked, RollingLsb)
 
 TEST(KmerExtractPacked, InvalidKThrows)
 {
-    TwoBitSequence<BitOrder::Msb> empty;
+    PackedSequence<Encoding::kACGT, Layout::kMSB> empty;
     EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 0, [](std::uint64_t) {}));
     EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 33, [](std::uint64_t) {}));
 }

@@ -58,10 +58,10 @@ def _label_for_benchmark(name: str, rename_map: Dict[str, str]) -> str:
     return rename_map.get(name, name)
 
 
-def _plot_panel(ax, df, order_value, plot_order, colors, linestyle_map):
-    g_order = df[df["order"] == order_value]
+def _plot_panel(ax, df, layout_value, plot_order, colors, linestyle_map):
+    g_layout = df[df["layout"] == layout_value]
     for name in plot_order:
-        g = g_order[g_order["benchmark"] == name].sort_values("k")
+        g = g_layout[g_layout["benchmark"] == name].sort_values("k")
         if g.empty:
             continue
         ax.plot(
@@ -72,7 +72,7 @@ def _plot_panel(ax, df, order_value, plot_order, colors, linestyle_map):
             color=colors[name],
             linestyle=linestyle_map.get(name),
         )
-    ax.set_title(order_value)
+    ax.set_title(layout_value)
     ax.set_xlabel("k-mer size (k)")
     ax.set_xlim(1, 32)
     ax.grid(True, which="both", linestyle="--", alpha=0.5)
@@ -111,7 +111,7 @@ def main():
     # Expect columns:
     #   suite, case, benchmark, ns_per_op
     #
-    # "case" looks like "order=msb;k=17" -- split into an "order" and a "k" column.
+    # "case" looks like "layout=msb;k=17" -- split into a "layout" and a "k" column.
     df = parse_case_fields(df)
     df["k"] = df["k"].astype(int)
 

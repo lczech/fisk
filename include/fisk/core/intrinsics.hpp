@@ -65,7 +65,7 @@ static_assert(
 //     Byte Swap
 // =================================================================================================
 
-// Needed e.g. to convert between the two TwoBitSequence bit orders (see core/seq_enc.hpp).
+// Needed e.g. to convert between the two PackedSequence bit orders (see core/types.hpp).
 //
 // Tiered fallback, fastest/most standard first:
 //   1) std::byteswap (C++23; we currently use C++20, so this only activates once building

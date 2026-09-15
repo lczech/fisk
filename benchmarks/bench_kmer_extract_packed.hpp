@@ -12,7 +12,7 @@
 #include "fisk/kmer_extract/packed.hpp"
 #include "fisk/kmer_extract/packed_simd.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/types.hpp"
 #include "microbench.hpp"
 
 // =================================================================================================
@@ -35,18 +35,18 @@ struct PackedScalarSum
     void operator()(std::uint64_t v) noexcept { value += v; }
 };
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_rolling(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedScalarSum sum;
     for_each_kmer_packed_rolling(seq, k, sum);
     return sum.value;
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_aligned(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedScalarSum sum;
     for_each_kmer_packed_aligned(seq, k, sum);
@@ -80,27 +80,27 @@ struct PackedSse2Sum
     }
 };
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_narrow_sse2(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedSse2Sum sum;
     for_each_kmer_packed_simd_narrow_sse2_(seq, k, sum);
     return sum.result();
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_wide_sse2(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedSse2Sum sum;
     for_each_kmer_packed_simd_wide_sse2_(seq, k, sum);
     return sum.result();
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_sse2(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedSse2Sum sum;
     for_each_kmer_packed_simd_sse2(seq, k, sum);
@@ -129,27 +129,27 @@ struct PackedAvx2Sum
     }
 };
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_narrow_avx2(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedAvx2Sum sum;
     for_each_kmer_packed_simd_narrow_avx2_(seq, k, sum);
     return sum.result();
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_wide_avx2(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedAvx2Sum sum;
     for_each_kmer_packed_simd_wide_avx2_(seq, k, sum);
     return sum.result();
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_avx2(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedAvx2Sum sum;
     for_each_kmer_packed_simd_avx2(seq, k, sum);
@@ -180,27 +180,27 @@ struct PackedAvx512Sum
     }
 };
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_narrow_avx512(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedAvx512Sum sum;
     for_each_kmer_packed_simd_narrow_avx512_(seq, k, sum);
     return sum.result();
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_wide_avx512(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedAvx512Sum sum;
     for_each_kmer_packed_simd_wide_avx512_(seq, k, sum);
     return sum.result();
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_avx512(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedAvx512Sum sum;
     for_each_kmer_packed_simd_avx512(seq, k, sum);
@@ -227,27 +227,27 @@ struct PackedNeonSum
     }
 };
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_narrow_neon(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedNeonSum sum;
     for_each_kmer_packed_simd_narrow_neon_(seq, k, sum);
     return sum.result();
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_wide_neon(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedNeonSum sum;
     for_each_kmer_packed_simd_wide_neon_(seq, k, sum);
     return sum.result();
 }
 
-template <BitOrder Order>
+template <Encoding E, Layout L>
 inline std::uint64_t compute_kmer_hash_packed_simd_neon(
-    TwoBitSequence<Order> const& seq, std::size_t k
+    PackedSequence<E, L> const& seq, std::size_t k
 ) {
     PackedNeonSum sum;
     for_each_kmer_packed_simd_neon(seq, k, sum);
@@ -261,8 +261,8 @@ inline std::uint64_t compute_kmer_hash_packed_simd_neon(
 // =================================================================================================
 
 /**
- * @brief Benchmark k-mer extraction directly from a packed TwoBitSequence (kmer_extract/packed.hpp),
- * across both BitOrder conventions and both accumulator widths (narrow: single 64-bit register,
+ * @brief Benchmark k-mer extraction directly from a PackedSequence (kmer_extract/packed.hpp),
+ * across both Layout conventions and both accumulator widths (narrow: single 64-bit register,
  * k<=29; wide: 128-bit-equivalent, k<=32).
  *
  * Packing is done once per sequence, outside the timed region: real usage would already have `seq`
@@ -292,8 +292,12 @@ inline void bench_kmer_extract_packed(
 
     write_csv_header(csv_os);
 
-    std::vector<TwoBitSequence<BitOrder::Msb>> packed_msb;
-    std::vector<TwoBitSequence<BitOrder::Lsb>> packed_lsb;
+    // Every sequence here is packed with an ACGT extractor; only the bit order varies.
+    using PackedMsb = PackedSequence<Encoding::kACGT, Layout::kMSB>;
+    using PackedLsb = PackedSequence<Encoding::kACGT, Layout::kLSB>;
+
+    std::vector<PackedMsb> packed_msb;
+    std::vector<PackedLsb> packed_lsb;
     packed_msb.reserve(sequences.size());
     packed_lsb.reserve(sequences.size());
     for (auto const& seq : sequences) {
@@ -304,255 +308,255 @@ inline void bench_kmer_extract_packed(
     std::size_t const narrow_k_max = std::min<std::size_t>(k_max, 29);
 
     // -----------------------------------------------------------------------
-    //     order=msb, k in [k_min, min(k_max, 29)]: narrow and wide
+    //     layout=msb, k in [k_min, min(k_max, 29)]: narrow and wide
     // -----------------------------------------------------------------------
     for (std::size_t k = k_min; k <= narrow_k_max; ++k) {
         if (stdout_is_terminal()) {
-            std::cout << "\rorder=msb k " << std::setw(2) << k << std::flush;
+            std::cout << "\rlayout=msb k " << std::setw(2) << k << std::flush;
         }
-        Microbench<TwoBitSequence<BitOrder::Msb>> suite(suite_title);
+        Microbench<PackedMsb> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
-            [k](TwoBitSequence<BitOrder::Msb> const& seq) {
+            [k](PackedMsb const& seq) {
                 return static_cast<double>(seq.length - k + 1);
             }
         );
         auto results = suite.run(
             packed_msb,
             #if defined(FISK_HAS_SSE2)
-            bench("simd_narrow_sse2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_narrow_sse2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_narrow_sse2(seq, k);
             }),
-            bench("simd_wide_sse2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_wide_sse2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_sse2(seq, k);
             }),
-            bench("simd_sse2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_sse2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_sse2(seq, k);
             }),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
-            bench("simd_narrow_avx2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_narrow_avx2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_narrow_avx2(seq, k);
             }),
-            bench("simd_wide_avx2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_wide_avx2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_avx2(seq, k);
             }),
-            bench("simd_avx2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_avx2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_avx2(seq, k);
             }),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
-            bench("simd_narrow_avx512", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_narrow_avx512", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_narrow_avx512(seq, k);
             }),
-            bench("simd_wide_avx512", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_wide_avx512", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_avx512(seq, k);
             }),
-            bench("simd_avx512", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_avx512", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_avx512(seq, k);
             }),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
-            bench("simd_narrow_neon", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_narrow_neon", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_narrow_neon(seq, k);
             }),
-            bench("simd_wide_neon", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_wide_neon", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_neon(seq, k);
             }),
-            bench("simd_neon", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_neon", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_neon(seq, k);
             }),
             #endif // FISK_HAS_NEON
-            bench("aligned", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("aligned", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_aligned(seq, k);
             }),
-            bench("rolling", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("rolling", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_rolling(seq, k);
             })
         );
-        write_csv_rows(csv_os, suite_title, "order=msb;k=" + std::to_string(k), results);
+        write_csv_rows(csv_os, suite_title, "layout=msb;k=" + std::to_string(k), results);
     }
 
     // -----------------------------------------------------------------------
-    //     order=msb, k in [30, k_max]: wide only
+    //     layout=msb, k in [30, k_max]: wide only
     // -----------------------------------------------------------------------
     for (std::size_t k = std::max<std::size_t>(k_min, 30); k <= k_max; ++k) {
         if (stdout_is_terminal()) {
-            std::cout << "\rorder=msb k " << std::setw(2) << k << std::flush;
+            std::cout << "\rlayout=msb k " << std::setw(2) << k << std::flush;
         }
-        Microbench<TwoBitSequence<BitOrder::Msb>> suite(suite_title);
+        Microbench<PackedMsb> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
-            [k](TwoBitSequence<BitOrder::Msb> const& seq) {
+            [k](PackedMsb const& seq) {
                 return static_cast<double>(seq.length - k + 1);
             }
         );
         auto results = suite.run(
             packed_msb,
             #if defined(FISK_HAS_SSE2)
-            bench("simd_wide_sse2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_wide_sse2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_sse2(seq, k);
             }),
-            bench("simd_sse2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_sse2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_sse2(seq, k);
             }),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
-            bench("simd_wide_avx2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_wide_avx2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_avx2(seq, k);
             }),
-            bench("simd_avx2", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_avx2", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_avx2(seq, k);
             }),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
-            bench("simd_wide_avx512", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_wide_avx512", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_avx512(seq, k);
             }),
-            bench("simd_avx512", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_avx512", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_avx512(seq, k);
             }),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
-            bench("simd_wide_neon", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_wide_neon", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_neon(seq, k);
             }),
-            bench("simd_neon", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("simd_neon", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_simd_neon(seq, k);
             }),
             #endif // FISK_HAS_NEON
-            bench("aligned", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("aligned", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_aligned(seq, k);
             }),
-            bench("rolling", [&](TwoBitSequence<BitOrder::Msb> const& seq) {
+            bench("rolling", [&](PackedMsb const& seq) {
                 return compute_kmer_hash_packed_rolling(seq, k);
             })
         );
-        write_csv_rows(csv_os, suite_title, "order=msb;k=" + std::to_string(k), results);
+        write_csv_rows(csv_os, suite_title, "layout=msb;k=" + std::to_string(k), results);
     }
 
     // -----------------------------------------------------------------------
-    //     order=lsb, k in [k_min, min(k_max, 29)]: narrow and wide
+    //     layout=lsb, k in [k_min, min(k_max, 29)]: narrow and wide
     // -----------------------------------------------------------------------
     for (std::size_t k = k_min; k <= narrow_k_max; ++k) {
         if (stdout_is_terminal()) {
-            std::cout << "\rorder=lsb k=" << std::setw(2) << k << std::flush;
+            std::cout << "\rlayout=lsb k=" << std::setw(2) << k << std::flush;
         }
-        Microbench<TwoBitSequence<BitOrder::Lsb>> suite(suite_title);
+        Microbench<PackedLsb> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
-            [k](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            [k](PackedLsb const& seq) {
                 return static_cast<double>(seq.length - k + 1);
             }
         );
         auto results = suite.run(
             packed_lsb,
             #if defined(FISK_HAS_SSE2)
-            bench("simd_narrow_sse2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_narrow_sse2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_narrow_sse2(seq, k);
             }),
-            bench("simd_wide_sse2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_wide_sse2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_sse2(seq, k);
             }),
-            bench("simd_sse2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_sse2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_sse2(seq, k);
             }),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
-            bench("simd_narrow_avx2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_narrow_avx2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_narrow_avx2(seq, k);
             }),
-            bench("simd_wide_avx2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_wide_avx2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_avx2(seq, k);
             }),
-            bench("simd_avx2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_avx2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_avx2(seq, k);
             }),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
-            bench("simd_narrow_avx512", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_narrow_avx512", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_narrow_avx512(seq, k);
             }),
-            bench("simd_wide_avx512", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_wide_avx512", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_avx512(seq, k);
             }),
-            bench("simd_avx512", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_avx512", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_avx512(seq, k);
             }),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
-            bench("simd_narrow_neon", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_narrow_neon", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_narrow_neon(seq, k);
             }),
-            bench("simd_wide_neon", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_wide_neon", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_neon(seq, k);
             }),
-            bench("simd_neon", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_neon", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_neon(seq, k);
             }),
             #endif // FISK_HAS_NEON
-            bench("aligned", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("aligned", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_aligned(seq, k);
             }),
-            bench("rolling", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("rolling", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_rolling(seq, k);
             })
         );
-        write_csv_rows(csv_os, suite_title, "order=lsb;k=" + std::to_string(k), results);
+        write_csv_rows(csv_os, suite_title, "layout=lsb;k=" + std::to_string(k), results);
     }
 
     // -----------------------------------------------------------------------
-    //     order=lsb, k in [30, k_max]: wide only
+    //     layout=lsb, k in [30, k_max]: wide only
     // -----------------------------------------------------------------------
     for (std::size_t k = std::max<std::size_t>(k_min, 30); k <= k_max; ++k) {
         if (stdout_is_terminal()) {
-            std::cout << "\rorder=lsb k=" << std::setw(2) << k << std::flush;
+            std::cout << "\rlayout=lsb k=" << std::setw(2) << k << std::flush;
         }
-        Microbench<TwoBitSequence<BitOrder::Lsb>> suite(suite_title);
+        Microbench<PackedLsb> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
-            [k](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            [k](PackedLsb const& seq) {
                 return static_cast<double>(seq.length - k + 1);
             }
         );
         auto results = suite.run(
             packed_lsb,
             #if defined(FISK_HAS_SSE2)
-            bench("simd_wide_sse2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_wide_sse2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_sse2(seq, k);
             }),
-            bench("simd_sse2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_sse2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_sse2(seq, k);
             }),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
-            bench("simd_wide_avx2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_wide_avx2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_avx2(seq, k);
             }),
-            bench("simd_avx2", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_avx2", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_avx2(seq, k);
             }),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
-            bench("simd_wide_avx512", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_wide_avx512", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_avx512(seq, k);
             }),
-            bench("simd_avx512", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_avx512", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_avx512(seq, k);
             }),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
-            bench("simd_wide_neon", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_wide_neon", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_wide_neon(seq, k);
             }),
-            bench("simd_neon", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("simd_neon", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_simd_neon(seq, k);
             }),
             #endif // FISK_HAS_NEON
-            bench("aligned", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("aligned", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_aligned(seq, k);
             }),
-            bench("rolling", [&](TwoBitSequence<BitOrder::Lsb> const& seq) {
+            bench("rolling", [&](PackedLsb const& seq) {
                 return compute_kmer_hash_packed_rolling(seq, k);
             })
         );
-        write_csv_rows(csv_os, suite_title, "order=lsb;k=" + std::to_string(k), results);
+        write_csv_rows(csv_os, suite_title, "layout=lsb;k=" + std::to_string(k), results);
     }
 
     if (stdout_is_terminal()) {

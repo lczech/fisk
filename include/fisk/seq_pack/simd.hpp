@@ -4,11 +4,9 @@
 #include <cstdint>
 #include <cstring>
 #include <string_view>
-#include <type_traits>
-#include <utility>
 
 #include "fisk/core/intrinsics.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/types.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
@@ -19,7 +17,7 @@
 
 // These extend the existing BitExtractKernelButterfly<SIMD> structs (bit_extract/simd.hpp) with
 // extra vector ops needed: an unaligned load, a per-lane broadcast, and-or/xor for the ACGT SWAR
-// pre-transform, a shift for the same, and a per-64-bit-lane byte reversal for the Msb bit order.
+// pre-transform, a shift for the same, and a per-64-bit-lane byte reversal for the MSB layout.
 //
 // byte_reverse_lanes() uses a single shuffle (_mm256/_mm512_shuffle_epi8) on AVX2 and AVX512,
 // where that's just baseline AVX2 / already-required AVX512BW (see CMakeLists.txt) respectively.
@@ -236,32 +234,23 @@ struct SeqPackButterflyKernelNEON : public BitExtractKernelButterflyNEON
 // =================================================================================================
 
 /**
- * @brief Which ASCII-to-2-bit convention a SIMD extractor applies; see NucleotideEncoderActg /
- * NucleotideEncoderAcgt in core/seq_enc.hpp for the underlying per-character conventions.
- */
-enum class SeqPackConvention
-{
-    Actg,
-    Acgt
-};
-
-/**
  * @brief Encode ASCII chars into 2-bit packed nucleotide data using SIMD instructions.
  *
  * Encodes `Kernel::lanes` 8-byte chunks at once (one `Kernel::simd_vector`), for a given ASCII
- * convention and bit order, usable as the `Extractor` argument to pack_sequence_simd() below.
+ * encoding and bit order, usable as the `Extractor` argument to pack_sequence_simd() below.
  *
  * `Kernel` is one of the SeqPackButterflyKernel<SIMD> structs above. Mirrors the scalar
- * Encode<Conv>8Butterfly<Order> structs in seq_pack.hpp: same ACGT SWAR pre-transform, same Msb
- * byte-swap-before-extracting, just applied to a whole SIMD vector of chunks instead of one
+ * Encode<Encoding>8Butterfly<Layout> structs in seq_pack.hpp: same ACGT SWAR pre-transform, same
+ * MSB byte-swap-before-extracting, just applied to a whole SIMD vector of chunks instead of one
  * uint64_t chunk. Provides both a vector call operator (for the main SIMD loop) and a scalar one
  * (for the head/tail loops in pack_sequence_simd, reusing the Kernel's own inherited scalar
  * bit_extract()), so a single extractor instance drives all three loop phases.
  */
-template <typename Kernel, SeqPackConvention Convention, BitOrder Order>
+template <typename Kernel, Encoding E, Layout L>
 struct EncodeButterflySimd
 {
-    static constexpr BitOrder order = Order;
+    static constexpr Encoding encoding = E;
+    static constexpr Layout layout = L;
     static constexpr std::size_t lanes = Kernel::lanes;
     using simd_vector = typename Kernel::simd_vector;
 
@@ -270,7 +259,7 @@ struct EncodeButterflySimd
 
     EncodeButterflySimd()
         : kernel(
-              Convention == SeqPackConvention::Acgt
+              E == Encoding::kACGT
                   ? 0x0303030303030303ULL
                   : 0x0606060606060606ULL
           )
@@ -289,10 +278,10 @@ struct EncodeButterflySimd
 
     simd_vector operator()(simd_vector x) const noexcept
     {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             x = Kernel::byte_reverse_lanes(x);
         }
-        if constexpr (Convention == SeqPackConvention::Acgt) {
+        if constexpr (E == Encoding::kACGT) {
             simd_vector const s1 = Kernel::template shr<1>(x);
             simd_vector const s2 = Kernel::template shr<2>(x);
             x = Kernel::and_(Kernel::xor_(s1, s2), acgt_mask_simd);
@@ -302,61 +291,61 @@ struct EncodeButterflySimd
 
     std::uint64_t operator()(std::uint64_t word) const noexcept
     {
-        if constexpr (Order == BitOrder::Msb) {
+        if constexpr (L == Layout::kMSB) {
             word = byte_swap_64(word);
         }
-        if constexpr (Convention == SeqPackConvention::Acgt) {
+        if constexpr (E == Encoding::kACGT) {
             word = ((word >> 1) ^ (word >> 2)) & 0x0303030303030303ULL;
         }
         return kernel.bit_extract(word);
     }
 };
 
-// Named aliases for all (ACGT/ACTG convention x MSB/LSB order) combinations, one set per available
-// SIMD. Matches the scalar Encode<Conv>8Butterfly<Order> functions in seq_pack.hpp.
+// Named aliases for all (ACGT/ACTG encoding x MSB/LSB bit order) combinations, one set per
+// available SIMD. Matches the scalar Encode<Encoding>8Butterfly<Layout> structs in seq_pack.hpp.
 
 #if defined(FISK_HAS_SSE2)
 using EncodeActgButterflySse2Lsb =
-    EncodeButterflySimd<SeqPackButterflyKernelSSE2, SeqPackConvention::Actg, BitOrder::Lsb>;
+    EncodeButterflySimd<SeqPackButterflyKernelSSE2, Encoding::kACTG, Layout::kLSB>;
 using EncodeActgButterflySse2Msb =
-    EncodeButterflySimd<SeqPackButterflyKernelSSE2, SeqPackConvention::Actg, BitOrder::Msb>;
+    EncodeButterflySimd<SeqPackButterflyKernelSSE2, Encoding::kACTG, Layout::kMSB>;
 using EncodeAcgtButterflySse2Lsb =
-    EncodeButterflySimd<SeqPackButterflyKernelSSE2, SeqPackConvention::Acgt, BitOrder::Lsb>;
+    EncodeButterflySimd<SeqPackButterflyKernelSSE2, Encoding::kACGT, Layout::kLSB>;
 using EncodeAcgtButterflySse2Msb =
-    EncodeButterflySimd<SeqPackButterflyKernelSSE2, SeqPackConvention::Acgt, BitOrder::Msb>;
+    EncodeButterflySimd<SeqPackButterflyKernelSSE2, Encoding::kACGT, Layout::kMSB>;
 #endif
 
 #if defined(FISK_HAS_AVX2)
 using EncodeActgButterflyAvx2Lsb =
-    EncodeButterflySimd<SeqPackButterflyKernelAVX2, SeqPackConvention::Actg, BitOrder::Lsb>;
+    EncodeButterflySimd<SeqPackButterflyKernelAVX2, Encoding::kACTG, Layout::kLSB>;
 using EncodeActgButterflyAvx2Msb =
-    EncodeButterflySimd<SeqPackButterflyKernelAVX2, SeqPackConvention::Actg, BitOrder::Msb>;
+    EncodeButterflySimd<SeqPackButterflyKernelAVX2, Encoding::kACTG, Layout::kMSB>;
 using EncodeAcgtButterflyAvx2Lsb =
-    EncodeButterflySimd<SeqPackButterflyKernelAVX2, SeqPackConvention::Acgt, BitOrder::Lsb>;
+    EncodeButterflySimd<SeqPackButterflyKernelAVX2, Encoding::kACGT, Layout::kLSB>;
 using EncodeAcgtButterflyAvx2Msb =
-    EncodeButterflySimd<SeqPackButterflyKernelAVX2, SeqPackConvention::Acgt, BitOrder::Msb>;
+    EncodeButterflySimd<SeqPackButterflyKernelAVX2, Encoding::kACGT, Layout::kMSB>;
 #endif
 
 #if defined(FISK_HAS_AVX512)
 using EncodeActgButterflyAvx512Lsb =
-    EncodeButterflySimd<SeqPackButterflyKernelAVX512, SeqPackConvention::Actg, BitOrder::Lsb>;
+    EncodeButterflySimd<SeqPackButterflyKernelAVX512, Encoding::kACTG, Layout::kLSB>;
 using EncodeActgButterflyAvx512Msb =
-    EncodeButterflySimd<SeqPackButterflyKernelAVX512, SeqPackConvention::Actg, BitOrder::Msb>;
+    EncodeButterflySimd<SeqPackButterflyKernelAVX512, Encoding::kACTG, Layout::kMSB>;
 using EncodeAcgtButterflyAvx512Lsb =
-    EncodeButterflySimd<SeqPackButterflyKernelAVX512, SeqPackConvention::Acgt, BitOrder::Lsb>;
+    EncodeButterflySimd<SeqPackButterflyKernelAVX512, Encoding::kACGT, Layout::kLSB>;
 using EncodeAcgtButterflyAvx512Msb =
-    EncodeButterflySimd<SeqPackButterflyKernelAVX512, SeqPackConvention::Acgt, BitOrder::Msb>;
+    EncodeButterflySimd<SeqPackButterflyKernelAVX512, Encoding::kACGT, Layout::kMSB>;
 #endif
 
 #if defined(FISK_HAS_NEON)
 using EncodeActgButterflyNeonLsb =
-    EncodeButterflySimd<SeqPackButterflyKernelNEON, SeqPackConvention::Actg, BitOrder::Lsb>;
+    EncodeButterflySimd<SeqPackButterflyKernelNEON, Encoding::kACTG, Layout::kLSB>;
 using EncodeActgButterflyNeonMsb =
-    EncodeButterflySimd<SeqPackButterflyKernelNEON, SeqPackConvention::Actg, BitOrder::Msb>;
+    EncodeButterflySimd<SeqPackButterflyKernelNEON, Encoding::kACTG, Layout::kMSB>;
 using EncodeAcgtButterflyNeonLsb =
-    EncodeButterflySimd<SeqPackButterflyKernelNEON, SeqPackConvention::Acgt, BitOrder::Lsb>;
+    EncodeButterflySimd<SeqPackButterflyKernelNEON, Encoding::kACGT, Layout::kLSB>;
 using EncodeAcgtButterflyNeonMsb =
-    EncodeButterflySimd<SeqPackButterflyKernelNEON, SeqPackConvention::Acgt, BitOrder::Msb>;
+    EncodeButterflySimd<SeqPackButterflyKernelNEON, Encoding::kACGT, Layout::kMSB>;
 #endif
 
 // =================================================================================================
@@ -367,19 +356,18 @@ using EncodeAcgtButterflyNeonMsb =
 // writes its 2 bytes at out.data[off/4 .. off/4+1], via write_two_bit_chunk() (seq_pack.hpp).
 
 /**
- * @brief Pack a whole ASCII sequence into a TwoBitSequence via a SIMD Extractor (see
+ * @brief Pack a whole ASCII sequence into a PackedSequence via a SIMD Extractor (see
  * EncodeButterflySimd above), reusing existing storage.
  */
 template <typename Extractor>
 inline void pack_sequence_simd(
     std::string_view seq,
-    Extractor&& extract,
-    TwoBitSequence<std::remove_cvref_t<Extractor>::order>& out
+    Extractor const& extract,
+    PackedSequence<Extractor::encoding, Extractor::layout>& out
 ) {
-    using ExtractorT = std::remove_cvref_t<Extractor>;
-    constexpr BitOrder order = ExtractorT::order;
-    constexpr std::size_t lanes = ExtractorT::lanes;
-    using simd_vector = typename ExtractorT::simd_vector;
+    constexpr Layout layout = Extractor::layout;
+    constexpr std::size_t lanes = Extractor::lanes;
+    using simd_vector = typename Extractor::simd_vector;
     constexpr std::size_t vec_bytes = lanes * 8;
 
     std::size_t const seq_len   = seq.size();
@@ -391,16 +379,16 @@ inline void pack_sequence_simd(
     char const* const data = seq.data();
 
     auto write_chunk = [&](std::size_t off, std::uint64_t value) {
-        write_two_bit_chunk<order>(out_bytes + off / 4, value);
+        write_two_bit_chunk<layout>(out_bytes + off / 4, value);
     };
 
     std::size_t i = 0;
     for (; i + vec_bytes <= seq_len; i += vec_bytes) {
         simd_vector const x = extract(
-            ExtractorT::loadu(reinterpret_cast<std::uint64_t const*>(data + i))
+            Extractor::loadu(reinterpret_cast<std::uint64_t const*>(data + i))
         );
         alignas(alignof(simd_vector)) std::uint64_t lane_buf[lanes];
-        ExtractorT::store(x, lane_buf);
+        Extractor::store(x, lane_buf);
         for (std::size_t lane = 0; lane < lanes; ++lane) {
             write_chunk(i + lane * 8, lane_buf[lane]);
         }
@@ -413,23 +401,23 @@ inline void pack_sequence_simd(
         // out holds no trailing bytes beyond its real content (see pack_sequence(), seq_pack.hpp,
         // for why the <=4-base remainder needs a 1-byte write instead of write_chunk()'s usual 2).
         if (remaining <= 4) {
-            write_two_bit_chunk<order, 1>(out_bytes + i / 4, extract(word));
+            write_two_bit_chunk<layout, 1>(out_bytes + i / 4, extract(word));
         } else {
-            write_two_bit_chunk<order, 2>(out_bytes + i / 4, extract(word));
+            write_two_bit_chunk<layout, 2>(out_bytes + i / 4, extract(word));
         }
     }
 }
 
 /**
- * @brief Pack a whole ASCII sequence into a freshly allocated TwoBitSequence via a SIMD Extractor.
+ * @brief Pack a whole ASCII sequence into a freshly allocated PackedSequence via a SIMD Extractor.
  * Convenience wrapper around pack_sequence_simd() above; see its docs for the caveat about
- * reusing one TwoBitSequence across repeated calls (e.g. in a benchmark) instead.
+ * reusing one PackedSequence across repeated calls (e.g. in a benchmark) instead.
  */
 template <typename Extractor>
-inline TwoBitSequence<std::remove_cvref_t<Extractor>::order> pack_sequence_simd(
-    std::string_view seq, Extractor&& extract
+inline PackedSequence<Extractor::encoding, Extractor::layout> pack_sequence_simd(
+    std::string_view seq, Extractor const& extract
 ) {
-    TwoBitSequence<std::remove_cvref_t<Extractor>::order> out;
-    pack_sequence_simd(seq, std::forward<Extractor>(extract), out);
+    PackedSequence<Extractor::encoding, Extractor::layout> out;
+    pack_sequence_simd(seq, extract, out);
     return out;
 }

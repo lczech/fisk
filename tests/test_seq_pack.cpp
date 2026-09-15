@@ -1,9 +1,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "fisk/core/random.hpp"
+#include "fisk/core/types.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
 #include "fisk/seq_pack/simd.hpp"
 #include "testing.hpp"
@@ -36,14 +39,14 @@ static int expected_actg(char c)
     }
 }
 
-// Decode base `i` per TwoBitSequence's documented contract (see BitOrder in core/seq_enc.hpp),
+// Decode base `i` per PackedSequence's documented contract (see Layout in core/types.hpp),
 // independent of pack_sequence()/pack_sequence_simd()'s internals.
-template <BitOrder Order>
-static int decode_base(TwoBitSequence<Order> const& s, std::size_t i)
+template <Encoding E, Layout L>
+static int decode_base(PackedSequence<E, L> const& s, std::size_t i)
 {
     std::uint8_t const byte = s.data[i / 4];
     std::size_t const in_byte = i % 4;
-    if constexpr (Order == BitOrder::Msb) {
+    if constexpr (L == Layout::kMSB) {
         return (byte >> (6 - 2 * in_byte)) & 0x3;
     } else {
         return (byte >> (2 * in_byte)) & 0x3;
@@ -80,11 +83,11 @@ static std::vector<std::string> const& test_sequences()
     return seqs;
 }
 
-// Checks a packed TwoBitSequence against `seq` and its oracle: length, data size, and every
+// Checks a PackedSequence against `seq` and its oracle: length, data size, and every
 // base's code.
-template <BitOrder Order, typename OracleFn>
+template <Encoding E, Layout L, typename OracleFn>
 static void check_packed(
-    std::string const& seq, TwoBitSequence<Order> const& packed, OracleFn&& oracle
+    std::string const& seq, PackedSequence<E, L> const& packed, OracleFn&& oracle
 ) {
     EXPECT_EQ(packed.length, seq.size());
 
@@ -96,13 +99,13 @@ static void check_packed(
     }
 }
 
-// Checks pack_sequence() -- both overloads, and reuse of one TwoBitSequence across calls -- for a
+// Checks pack_sequence() -- both overloads, and reuse of one PackedSequence across calls -- for a
 // given scalar Extractor and its matching oracle.
 template <typename Extractor, typename OracleFn>
 static void check_scalar_pack(OracleFn&& oracle)
 {
     Extractor extract{};
-    TwoBitSequence<Extractor::order> out;
+    PackedSequence<Extractor::encoding, Extractor::layout> out;
 
     for (auto const& seq : test_sequences()) {
         pack_sequence(seq, extract, out);
@@ -128,7 +131,7 @@ template <typename Extractor, typename OracleFn>
 static void check_simd_pack(OracleFn&& oracle)
 {
     Extractor extract{};
-    TwoBitSequence<Extractor::order> out;
+    PackedSequence<Extractor::encoding, Extractor::layout> out;
 
     for (auto const& seq : test_sequences()) {
         pack_sequence_simd(seq, extract, out);
@@ -144,6 +147,53 @@ static void check_simd_pack(OracleFn&& oracle)
 }
 
 #endif
+
+// =================================================================================================
+//     Compile-Time Conventions
+// =================================================================================================
+
+// Encoding and Layout are part of PackedSequence's type, so mixing them up between producer and
+// consumer is rejected by the compiler. These checks pin that guarantee down.
+
+namespace {
+
+using AcgtMsb = PackedSequence<Encoding::kACGT, Layout::kMSB>;
+using AcgtLsb = PackedSequence<Encoding::kACGT, Layout::kLSB>;
+using ActgMsb = PackedSequence<Encoding::kACTG, Layout::kMSB>;
+
+template <typename Extractor, Encoding E, Layout L>
+constexpr bool tagged_as = Extractor::encoding == E && Extractor::layout == L;
+
+template <typename Extractor, typename Out>
+concept PackableInto = requires(std::string_view seq, Extractor extract, Out& out) {
+    pack_sequence(seq, extract, out);
+};
+
+} // namespace
+
+// Scalar extractors carry `encoding` as a pure tag that packing never consults, so the byte-level
+// tests below could not catch a wrong one; check each against its name instead.
+static_assert(tagged_as<EncodeActg8ButterflyLsb, Encoding::kACTG, Layout::kLSB>);
+static_assert(tagged_as<EncodeActg8ButterflyMsb, Encoding::kACTG, Layout::kMSB>);
+static_assert(tagged_as<EncodeAcgt8ButterflyLsb, Encoding::kACGT, Layout::kLSB>);
+static_assert(tagged_as<EncodeAcgt8ButterflyMsb, Encoding::kACGT, Layout::kMSB>);
+#if defined(FISK_HAS_BMI2)
+static_assert(tagged_as<EncodeActg8PextLsb, Encoding::kACTG, Layout::kLSB>);
+static_assert(tagged_as<EncodeActg8PextMsb, Encoding::kACTG, Layout::kMSB>);
+static_assert(tagged_as<EncodeAcgt8PextLsb, Encoding::kACGT, Layout::kLSB>);
+static_assert(tagged_as<EncodeAcgt8PextMsb, Encoding::kACGT, Layout::kMSB>);
+#endif // FISK_HAS_BMI2
+
+// The packed sequence type follows the extractor's tags.
+static_assert(std::is_same_v<decltype(pack_sequence("", EncodeAcgt8ButterflyMsb{})), AcgtMsb>);
+
+// Packing into an existing sequence of a different encoding or bit order does not compile.
+static_assert( PackableInto<EncodeAcgt8ButterflyMsb, AcgtMsb>);
+static_assert(!PackableInto<EncodeAcgt8ButterflyMsb, ActgMsb>);
+static_assert(!PackableInto<EncodeAcgt8ButterflyMsb, AcgtLsb>);
+
+// Nor can a sequence of one encoding be passed where another is expected.
+static_assert(!std::is_convertible_v<ActgMsb const&, AcgtMsb const&>);
 
 // =================================================================================================
 //     Scalar pack_sequence()
