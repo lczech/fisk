@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <array>
 #include <cstdint>
 #include <cstddef>
@@ -8,6 +9,7 @@
 #include <utility>
 
 #include "fisk/core/intrinsics.hpp"
+#include "fisk/core/kmer.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/packed.hpp"
@@ -22,6 +24,13 @@ namespace fisk {
 // and calls `func(vec, valid_count)` with consecutive k-mers in the ISA's native integer vector.
 // Full vectors have `valid_count == lane_count`; the final vector may be zero-padded in high lanes.
 // The suffixed narrow/wide functions are internal helpers used by the dispatchers.
+//
+// Unlike the scalar extractors in packed.hpp, these hand out raw vectors rather than Kmer values
+// (core/kmer.hpp): a vector holds several k-mers at once, so the scalar wrapper does not apply to
+// it, and wrapping the vector itself would buy a guarantee the ABI is not reliably asked to
+// honour. These callbacks are therefore the one seam in the k-mer API where the conventions are
+// carried by the PackedSequence's type rather than by the emitted value. The vector overloads
+// of kmer_cast() (core/kmer.hpp) are the sanctioned way back across it.
 
 // =================================================================================================
 //     Shared tail packing
@@ -67,6 +76,11 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
     if (seq.length < k) {
         return;
     }
+
+    // SSE2 does not have variable shifts per lane, so instead of using the two lanes for two
+    // consecutive k-mers, we use a pair of lanes for each of the four positions within two
+    // consecutive bytes. The shift amount is then a per-register constant for each of the four
+    // positions, and we can unpack the k-mers from the pair of bytes using these shifts.
 
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
     unsigned const k32 = static_cast<unsigned>(k);

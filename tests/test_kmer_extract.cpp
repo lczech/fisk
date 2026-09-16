@@ -100,14 +100,14 @@ static std::vector<std::uint64_t> collect_reextract(std::string const& seq, std:
 static std::vector<std::uint64_t> collect_simd(std::string const& seq, std::size_t k)
 {
     std::vector<std::uint64_t> out;
-    for_each_kmer_simd(seq, k, [&](std::uint64_t kmer) { out.push_back(kmer); });
+    for_each_kmer_simd(seq, k, [&](KmerAcgtMsb kmer) { out.push_back(kmer_value(kmer)); });
     return out;
 }
 
 static std::vector<std::uint64_t> collect_simd_scalar(std::string const& seq, std::size_t k)
 {
     std::vector<std::uint64_t> out;
-    for_each_kmer_simd_scalar(seq, k, [&](std::uint64_t kmer) { out.push_back(kmer); });
+    for_each_kmer_simd_scalar(seq, k, [&](KmerAcgtMsb kmer) { out.push_back(kmer_value(kmer)); });
     return out;
 }
 
@@ -238,7 +238,7 @@ TEST(KmerExtract, ConvenienceWrapperMatchesRolling)
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
             std::vector<std::uint64_t> got;
-            for_each_kmer(seq, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
+            for_each_kmer(seq, k, [&](KmerAcgtMsb kmer) { got.push_back(kmer_value(kmer)); });
             check_kmers(got, seq, k, code_acgt);
         }
     }
@@ -248,13 +248,13 @@ TEST(KmerExtract, ConvenienceWrapperMatchesRolling)
     for (auto const& seq : invalid_seqs) {
         for (auto const k : invalid_ks) {
             std::vector<std::uint64_t> got;
-            for_each_kmer(seq, k, [&](std::uint64_t kmer) { got.push_back(kmer); });
+            for_each_kmer(seq, k, [&](KmerAcgtMsb kmer) { got.push_back(kmer_value(kmer)); });
             check_kmers(got, seq, k, code_acgt);
         }
     }
 
-    EXPECT_ANY_THROW(for_each_kmer("ACGT", 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer("ACGT", 33, [](std::uint64_t) {}));
+    EXPECT_ANY_THROW(for_each_kmer("ACGT", 0, [](KmerAcgtMsb) {}));
+    EXPECT_ANY_THROW(for_each_kmer("ACGT", 33, [](KmerAcgtMsb) {}));
 }
 
 // =================================================================================================
@@ -268,10 +268,10 @@ TEST(KmerExtract, InvalidKThrows)
     EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 33, char_to_nt_table_acgt, [](std::uint64_t) {}));
     EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 0, char_to_nt_table_acgt, [](std::uint64_t) {}));
     EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 33, char_to_nt_table_acgt, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 33, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_simd_scalar("ACGT", 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_simd_scalar("ACGT", 33, [](std::uint64_t) {}));
+    EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 0, [](KmerAcgtMsb) {}));
+    EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 33, [](KmerAcgtMsb) {}));
+    EXPECT_ANY_THROW(for_each_kmer_simd_scalar("ACGT", 0, [](KmerAcgtMsb) {}));
+    EXPECT_ANY_THROW(for_each_kmer_simd_scalar("ACGT", 33, [](KmerAcgtMsb) {}));
 }
 
 // Empty input, and sequences one shorter than / exactly / one longer than k: zero, one, and two
@@ -484,12 +484,12 @@ TEST(KmerExtract, MixedCase)
 }
 
 // =================================================================================================
-//     decode_kmer_2bit()
+//     kmer_decode()
 // =================================================================================================
 
-// Round-trips decode_kmer_2bit() against the oracle: decoding an oracle-computed k-mer must give
-// back the (uppercased) substring it was extracted from.
-TEST(KmerExtract, DecodeKmer2Bit)
+// Round-trips kmer_decode() against the oracle: decoding an oracle-computed k-mer must give back the
+// (uppercased) substring it was extracted from.
+TEST(KmerExtract, KmerDecode)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
@@ -502,7 +502,8 @@ TEST(KmerExtract, DecodeKmer2Bit)
                 for (auto& c : upper) {
                     c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
                 }
-                EXPECT_EQ(decode_kmer_2bit(kmers[i], k), upper);
+                auto const kmer = kmer_cast<Encoding::kACGT, Layout::kMSB>(kmers[i], k);
+                EXPECT_EQ(kmer_decode(kmer, k), upper);
             }
         }
     }

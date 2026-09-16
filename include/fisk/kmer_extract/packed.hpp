@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "fisk/core/intrinsics.hpp"
+#include "fisk/core/kmer.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 
@@ -23,9 +24,9 @@ namespace fisk {
 //     K-mer Extraction from a PackedSequence
 // =================================================================================================
 
-// ------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 //     Overview
-// ------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 
 // Unlike the functions in kmer_extract.hpp, which take ASCII input and check character validity,
 // the functions here read directly from a PackedSequence (seq_pack.hpp).
@@ -41,14 +42,19 @@ namespace fisk {
 // 2-bit codes around and never depends on which base a code stands for, but keeping it in the
 // type prevents a sequence packed under one encoding from reaching code that expects another.
 //
+// Both conventions are handed on to the callback, which receives a Kmer<E, L> (core/kmer.hpp)
+// rather than a bare word, so a k-mer cannot be read under conventions other than those it was
+// produced with. The loops themselves compute in raw std::uint64_t throughout and only adopt the
+// type at the point of emission, so that tagging costs no instructions.
+//
 // Two public functions cover the full documented k in [1, 32]: for_each_kmer_packed_aligned()
 // (the fast path) and for_each_kmer_packed_rolling() (a simpler reference baseline, not
 // recommended for production). Both internally specialize for k <= 29 (where a single
 // 64-bit accumulator suffices) vs k > 29 (needing an extra byte for spilling).
 
-// ------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 //     Details
-// ------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 
 // Precondition-check throws are routed through the shared throw_invalid_kmer_k_() (kmer_extract.hpp)
 // rather than thrown directly, trying to keep these functions small enough for the
@@ -159,10 +165,10 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         do_not_optimize(v1);
         do_not_optimize(v2);
         do_not_optimize(v3);
-        func(v0);
-        func(v1);
-        func(v2);
-        func(v3);
+        func(kmer_cast<E, L>(v0, k));
+        func(kmer_cast<E, L>(v1, k));
+        func(kmer_cast<E, L>(v2, k));
+        func(kmer_cast<E, L>(v3, k));
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -170,7 +176,7 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
-        func(tail_vals[i]);
+        func(kmer_cast<E, L>(tail_vals[i], k));
     }
 }
 
@@ -238,10 +244,10 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
         do_not_optimize(v2);
         do_not_optimize(v3);
 
-        func(v0);
-        func(v1);
-        func(v2);
-        func(v3);
+        func(kmer_cast<E, L>(v0, K));
+        func(kmer_cast<E, L>(v1, K));
+        func(kmer_cast<E, L>(v2, K));
+        func(kmer_cast<E, L>(v3, K));
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -249,7 +255,7 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
         seq, 4 * fast_bytes, p_max, K, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
-        func(tail_vals[i]);
+        func(kmer_cast<E, L>(tail_vals[i], K));
     }
 }
 
@@ -336,7 +342,7 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
             } else {
                 shift = 64 - 2 * static_cast<unsigned>(k) - s;
             }
-            func((acc >> shift) & mask);
+            func(kmer_cast<E, L>((acc >> shift) & mask, k));
         }
     }
 }
@@ -416,7 +422,7 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
             if (e + 1 < k) {
                 continue;
             }
-            func(window_(plans[local]));
+            func(kmer_cast<E, L>(window_(plans[local]), k));
         }
     }
 }

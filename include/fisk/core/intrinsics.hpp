@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <cstdint>
+#include <type_traits>
 
 #include "fisk/core/platform.hpp"
 
@@ -63,7 +64,9 @@ namespace fisk {
 //   1) std::byteswap (C++23; we currently use C++20, so this only activates once building
 //      with a standard library that has shipped it, tracked via the __cpp_lib_byteswap
 //      feature-test macro rather than checking the language mode directly).
-//   2) The MSVC/GCC/Clang compiler builtins.
+//   2) The MSVC/GCC/Clang compiler builtins. MSVC's are not constexpr, so that branch routes
+//      constant evaluation through the portable form instead, via std::is_constant_evaluated().
+//      That keeps all three tiers usable in constant expressions.
 //   3) A fully portable hand-rolled shift-mask-or fallback. This only collapses to a single
 //      instruction once the optimizer's idiom-recognition kicks in (reliably the case for GCC,
 //      Clang, and MSVC at -O2/-O3), kept as last resort.
@@ -86,18 +89,32 @@ namespace fisk {
 
 #elif defined(_MSC_VER)
 
-    inline std::uint16_t byte_swap_16(std::uint16_t x) noexcept
+    inline constexpr std::uint16_t byte_swap_16(std::uint16_t x) noexcept
     {
+        if (std::is_constant_evaluated()) {
+            return static_cast<std::uint16_t>((x << 8) | (x >> 8));
+        }
         return _byteswap_ushort(x);
     }
 
-    inline std::uint32_t byte_swap_32(std::uint32_t x) noexcept
+    inline constexpr std::uint32_t byte_swap_32(std::uint32_t x) noexcept
     {
+        if (std::is_constant_evaluated()) {
+            x = ((x & 0x0000FFFFu) << 16) | ((x & 0xFFFF0000u) >> 16);
+            x = ((x & 0x00FF00FFu) <<  8) | ((x & 0xFF00FF00u) >>  8);
+            return x;
+        }
         return _byteswap_ulong(x);
     }
 
-    inline std::uint64_t byte_swap_64(std::uint64_t x) noexcept
+    inline constexpr std::uint64_t byte_swap_64(std::uint64_t x) noexcept
     {
+        if (std::is_constant_evaluated()) {
+            x = ((x & 0x00000000FFFFFFFFULL) << 32) | ((x & 0xFFFFFFFF00000000ULL) >> 32);
+            x = ((x & 0x0000FFFF0000FFFFULL) << 16) | ((x & 0xFFFF0000FFFF0000ULL) >> 16);
+            x = ((x & 0x00FF00FF00FF00FFULL) <<  8) | ((x & 0xFF00FF00FF00FF00ULL) >>  8);
+            return x;
+        }
         return _byteswap_uint64(x);
     }
 

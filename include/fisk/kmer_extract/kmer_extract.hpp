@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <cstddef>
 #include <stdexcept>
-#include <utility>
 
+#include "fisk/core/kmer.hpp"
 #include "fisk/core/seq_enc.hpp"
 
 namespace fisk {
@@ -150,35 +150,21 @@ inline void for_each_kmer_reextract(
  * techniques offered here. Call for_each_kmer_rolling() directly instead to plug in a different
  * encoder or ordering.
  *
+ * The callback receives a Kmer<Encoding::kACGT, Layout::kMSB> (see core/kmer.hpp), so the
+ * conventions it was produced under travel with it. Use kmer_decode() to turn one back into a string,
+ * and convert() to move it to different conventions.
+ *
  * @tparam Func Callback function to be called for each valid k-mer.
  */
 template<typename Func>
 inline void for_each_kmer(std::string_view seq, std::size_t k, Func&& func)
 {
-    for_each_kmer_rolling(seq, k, char_to_nt_table_acgt, std::forward<Func>(func));
-}
-
-// =================================================================================================
-//     k-mer to string
-// =================================================================================================
-
-/**
- * @brief Get the string representation of a k-mer, as a sequence of `ACGT` characters.
- */
-inline std::string decode_kmer_2bit( std::uint64_t kmer, std::size_t k )
-{
-    static const char lut[4] = {'A','C','G','T'};
-
-    std::string s;
-    s.resize(k);
-
-    for (std::size_t i = 0; i < k; ++i) {
-        std::size_t shift = 2 * (k - 1 - i);
-        std::uint64_t code = (kmer >> shift) & 0x3ULL;
-        s[i] = lut[code];
-    }
-
-    return s;
+    // for_each_kmer_rolling() below still emits bare words, because it cannot know which encoding
+    // an arbitrary caller-supplied encoder implements. Here the encoder is fixed, so both
+    // conventions are known and are attached as the k-mers leave.
+    for_each_kmer_rolling(seq, k, char_to_nt_table_acgt, [&func, k](std::uint64_t word) {
+        func(kmer_cast<Encoding::kACGT, Layout::kMSB>(word, k));
+    });
 }
 
 } // namespace fisk

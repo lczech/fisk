@@ -110,7 +110,9 @@ static void check_aligned_variant(
         auto const packed = pack_sequence(seq, encoder);
         for (std::size_t k = 1; k <= max_k; ++k) {
             std::vector<std::uint64_t> got;
-            extract(packed, k, [&](std::uint64_t v) { got.push_back(v); });
+            extract(packed, k, [&](kmer_type_of<decltype(packed)> kmer) {
+                got.push_back(kmer_value(kmer));
+            });
             check_kmers(got, seq, k, oracle);
         }
     };
@@ -131,7 +133,10 @@ static void check_aligned_variant(
     for (std::size_t length : {std::size_t{0}, std::size_t{129}}) {
         auto const packed = pack_sequence(std::string(length, 'T'), encoder);
         for (std::size_t k : {std::size_t{0}, max_k + 1, std::numeric_limits<std::size_t>::max()}) {
-            EXPECT_THROW(extract(packed, k, [](std::uint64_t) {}), std::runtime_error);
+            EXPECT_THROW(
+                extract(packed, k, [](kmer_type_of<decltype(packed)>) {}),
+                std::runtime_error
+            );
         }
     }
 }
@@ -148,7 +153,7 @@ TEST(KmerExtractPacked, RollingMsb)
         for (auto const k : test_ks()) {
             std::vector<std::uint64_t> got;
             for_each_kmer_packed_rolling(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
+                packed, k, [&](KmerAcgtMsb kmer) { got.push_back(kmer_value(kmer)); }
             );
             check_kmers(got, seq, k, oracle_msb);
         }
@@ -163,7 +168,7 @@ TEST(KmerExtractPacked, RollingLsb)
         for (auto const k : test_ks()) {
             std::vector<std::uint64_t> got;
             for_each_kmer_packed_rolling(
-                packed, k, [&](std::uint64_t kmer) { got.push_back(kmer); }
+                packed, k, [&](KmerAcgtLsb kmer) { got.push_back(kmer_value(kmer)); }
             );
             check_kmers(got, seq, k, oracle_lsb);
         }
@@ -177,8 +182,8 @@ TEST(KmerExtractPacked, RollingLsb)
 TEST(KmerExtractPacked, InvalidKThrows)
 {
     PackedSequence<Encoding::kACGT, Layout::kMSB> empty;
-    EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 0, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 33, [](std::uint64_t) {}));
+    EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 0, [](KmerAcgtMsb) {}));
+    EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 33, [](KmerAcgtMsb) {}));
 }
 
 // for_each_kmer_packed_aligned(): compare the complete ordered output, not merely a benchmark sum,

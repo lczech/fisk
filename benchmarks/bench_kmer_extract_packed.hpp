@@ -34,7 +34,10 @@ struct PackedScalarSum
 {
     std::uint64_t value = 0;
 
-    void operator()(std::uint64_t v) noexcept { value += v; }
+    // Templated on the k-mer type rather than fixed to one convention, so that the same named
+    // callback serves every PackedSequence instantiation benchmarked below.
+    template <KmerType K>
+    void operator()(K kmer) noexcept { value += kmer_value(kmer); }
 };
 
 template <Encoding E, Layout L>

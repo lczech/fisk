@@ -160,6 +160,7 @@ if(FISK_BUILD_TESTS)
         tests/test_seq_enc.cpp
         tests/test_bit_extract.cpp
         tests/test_seq_pack.cpp
+        tests/test_kmer.cpp
         tests/test_kmer_extract.cpp
         tests/test_kmer_extract_packed.cpp
         tests/test_kmer_extract_packed_simd.cpp
@@ -173,6 +174,14 @@ if(FISK_BUILD_TESTS)
         # suite only, so that the library itself stays portable.
         target_compile_options(fisk_tests PRIVATE
             -march=native
+        )
+
+        # Keep assert() live regardless of build type. CMAKE_BUILD_TYPE defaults to Release, which
+        # carries -DNDEBUG, so without this the library's preconditions -- including the k-mer
+        # convention checks in kmer_cast() -- would be compiled out of the very suite meant to
+        # exercise them. target_compile_options land last on the command line, so this wins.
+        target_compile_options(fisk_tests PRIVATE
+            -UNDEBUG
         )
 
         target_compile_options(fisk_tests PRIVATE

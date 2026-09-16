@@ -7,6 +7,7 @@
 // Core
 #include "fisk/core/platform.hpp"
 #include "fisk/core/intrinsics.hpp"
+#include "fisk/core/kmer.hpp"
 #include "fisk/core/cpu_runtime.hpp"
 #include "fisk/core/random.hpp"
 #include "fisk/core/seq_enc.hpp"

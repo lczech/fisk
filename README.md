@@ -109,7 +109,7 @@ The repository separates the library (bit extraction and k-mer functionality, fo
 
 Overview of the library headers (in `include/fisk/`), and their most important functions and algorithms:
 
- - `core/`: Shared building blocks. `seq_enc.hpp` for nucleotide-to-2-bit encoding; `types.hpp` for the shared `Encoding`/`Layout` conventions and `PackedSequence`; `platform.hpp` for the host assumptions fisk asserts, such as little-endianness; `intrinsics.hpp`/`cpu_runtime.hpp` for compile-time and runtime CPU feature detection; `random.hpp` for a fast PRNG used internally by the adaptive/selector algorithms.
+ - `core/`: Shared building blocks. `seq_enc.hpp` for nucleotide-to-2-bit encoding; `types.hpp` for the shared `Encoding`/`Layout` conventions and `PackedSequence`; `kmer.hpp` for the `Kmer` type that carries those conventions, and its decoding, reverse-complement, canonicalization, conversion and hashing operations; `platform.hpp` for the host assumptions fisk asserts, such as little-endianness; `intrinsics.hpp`/`cpu_runtime.hpp` for compile-time and runtime CPU feature detection; `random.hpp` for a fast PRNG used internally by the adaptive/selector algorithms.
  - `bit_extract/bit_extract.hpp`: Main bit extraction functions. This is probably the most relevant part, containing the core algorithms.
  - `bit_extract/simd.hpp`: SIMD implementations of the bit extract algorithms.
  - `bit_extract/selector.hpp`: Helper that runs a quick benchmark to find the most performant bit extraction algorithm for a given mask.

@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "fisk/bit_extract/simd.hpp"
+#include "fisk/core/kmer.hpp"
 #include "fisk/core/seq_enc.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
@@ -109,7 +110,7 @@ inline void consume_valid_run(
         }
 
         // The last character processed above just completed the first valid k-mer.
-        func(kmer);
+        func(kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k));
 
         // Saturate valid so we do not keep incrementing a counter that is only used
         // as a threshold predicate.
@@ -119,7 +120,7 @@ inline void consume_valid_run(
     // Fully warm: every additional valid code yields one k-mer.
     for (; idx < len; ++idx) {
         kmer = ((kmer << 2) & mask) | codes[idx];
-        func(kmer);
+        func(kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k));
     }
 }
 
@@ -223,7 +224,7 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
             valid = (valid < k) ? (valid + 1) : k;
 
             if (valid >= k) {
-                func(kmer);
+                func(kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k));
             }
         } else {
             valid = 0;
@@ -324,7 +325,7 @@ inline void for_each_kmer_simd_scalar(
 
         ++seen;
         if (seen >= kk && valid == valid_mask) {
-            func(kmer);
+            func(kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, kk));
         }
     };
 
