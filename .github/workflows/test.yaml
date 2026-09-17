@@ -99,9 +99,7 @@ jobs:
           # -------------------------------
 
           - { os: windows-2022, compiler: msvc }
-          # windows-latest (VS2026) hits a suspected MSVC mangling bug (LNK1179 duplicate COMDAT
-          # on kmer_convert's overloads) -- disabled until that matures.
-          # - { os: windows-latest, compiler: msvc }
+          - { os: windows-latest, compiler: msvc }
 
     runs-on: ${{ matrix.os }}
 

@@ -560,8 +560,13 @@ inline constexpr std::uint64_t relayout_(std::uint64_t value, std::size_t width)
  * @brief Convert a k-mer to a different encoding, keeping its layout.
  *
  * Self-inverse, since the only re-coding between the two encodings is its own inverse.
+ *
+ * The unused, always-defaulted third parameter works around an MSVC linker bug (LNK1179
+ * "duplicate COMDAT") where this overload's mangled name can collide with the Layout overload
+ * below when the two enum values happen to share their underlying integer (e.g. both 0):
+ * giving each overload a genuinely different type here keeps their mangled names apart.
  */
-template <Encoding E2, KmerType K>
+template <Encoding E2, KmerType K, typename = Encoding>
 [[nodiscard]] inline constexpr typename K::template rebind<E2, K::layout> kmer_convert(
     K kmer, [[maybe_unused]] std::size_t width
 ) noexcept {
@@ -573,8 +578,10 @@ template <Encoding E2, KmerType K>
  * @brief Convert a k-mer to a different layout, keeping its encoding.
  *
  * Self-inverse, since the only re-ordering between the two layouts is its own inverse.
+ *
+ * See the matching third-parameter comment on the Encoding overload above for why it's here.
  */
-template <Layout L2, KmerType K>
+template <Layout L2, KmerType K, typename = Layout>
 [[nodiscard]] inline constexpr typename K::template rebind<K::encoding, L2> kmer_convert(
     K kmer, std::size_t width
 ) noexcept {

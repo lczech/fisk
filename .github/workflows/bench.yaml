@@ -27,9 +27,8 @@ jobs:
             compiler: clang
             cc: clang
             cxx: clang++
-          # Windows: MSVC. windows-latest (VS2026) hits a suspected MSVC mangling bug (LNK1179
-          # duplicate COMDAT on kmer_convert's overloads), so pinned to windows-2022 for now.
-          - os: windows-2022
+          # Windows: MSVC
+          - os: windows-latest
             compiler: msvc
 
     runs-on: ${{ matrix.os }}
