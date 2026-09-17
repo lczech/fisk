@@ -396,8 +396,14 @@ template <KmerType K>
  * longer than 32 bases, or any character that is not a nucleotide. Loud failure is the right
  * trade for a function used to construct known inputs, where a silently wrong k-mer would
  * undermine whatever is being checked with it. Upper and lower case are both accepted.
+ *
+ * The unused, always-defaulted third parameter works around an MSVC linker bug (LNK1179
+ * "duplicate COMDAT"), the same one worked around on kmer_convert() above: this overload's
+ * mangled name can collide with the Layout-first overload below when both calls happen to
+ * supply the same pair of underlying enum values (e.g. both 0, or both 1). A genuinely different
+ * type here keeps the two overloads' mangled names apart.
  */
-template <Encoding E = Encoding::kACGT, Layout L = Layout::kMSB>
+template <Encoding E = Encoding::kACGT, Layout L = Layout::kMSB, typename = Encoding>
 [[nodiscard]] inline constexpr Kmer<E, L> kmer_encode(std::string_view seq)
 {
     if (seq.empty() || seq.size() > 32) {
@@ -429,8 +435,10 @@ template <Encoding E = Encoding::kACGT, Layout L = Layout::kMSB>
  * overload whose parameters are declared in the order it supplies them, so this coexists with the
  * Encoding-first overload above without ambiguity. `E` is given a default here too, which is what
  * lets this single overload also cover the Layout-only call.
+ *
+ * See the matching third-parameter comment on the Encoding-first overload above for why it's here.
  */
-template <Layout L, Encoding E = Encoding::kACGT>
+template <Layout L, Encoding E = Encoding::kACGT, typename = Layout>
 [[nodiscard]] inline constexpr Kmer<E, L> kmer_encode(std::string_view seq)
 {
     return kmer_encode<E, L>(seq);
