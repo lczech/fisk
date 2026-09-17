@@ -14,7 +14,7 @@
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 
 using namespace fisk;
 
@@ -436,7 +436,9 @@ inline std::uint64_t clark_improved(
     std::uint64_t kmer_word  = 0;
     std::uint64_t valid_bits = 0;
     for( std::size_t i = 0; i < seq_len; ++i ) {
-        std::uint8_t const code = static_cast<std::uint8_t>(char_to_nt_table_acgt(data[i]));
+        std::uint8_t const code = static_cast<std::uint8_t>(
+            CharEncoderTable<Encoding::kACGT>{}(data[i])
+        );
 
         // Shift in the base. For invalid bases, the low 2 bits are irrelevant,
         // because validity is tested separately before emission.

@@ -16,7 +16,7 @@ using namespace fisk;
 /**
  * @brief Simple order-insensitive checksum over a PackedSequence.
  *
- * Sufficient for cross-validation within one encoding/bit-order group (bit match expected), and to
+ * Sufficient for cross-validation within one encoding/layout group (bit match expected), and to
  * keep the compiler from optimizing calls away. This is deliberately not order-sensitive:
  * that would mean adding a multiply or the like into the hot loop; too expensive.
  */
@@ -31,11 +31,11 @@ inline std::uint64_t pack_sequence_sink(PackedSequence<E, L> const& s)
 }
 
 /**
- * @brief Benchmark pack_sequence() across all four encoding x bit-order combinations.
+ * @brief Benchmark pack_sequence() across all four encoding x layout combinations.
  *
  * Each combination (encoding=actg/acgt, layout=lsb/msb) runs as its own Microbench suite, never
  * mixed with another: within one suite, PEXT and butterfly-table candidates are supposed to agree
- * bit-for-bit (same encoding, same bit order), which is exactly what the sink cross-validation
+ * bit-for-bit (same encoding, same layout), which is exactly what the sink cross-validation
  * checks.
  *
  * One PackedSequence per group is constructed outside the timed calls and reused across all
@@ -65,39 +65,39 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
             sequences,
             #if defined(FISK_HAS_BMI2)
             bench("pext", [&](std::string const& seq) {
-                pack_sequence(seq, EncodeAcgt8PextLsb{}, out);
+                pack_sequence(seq, WordEncoderPext<Encoding::kACGT, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             }),
             #endif
             bench("butterfly", [&](std::string const& seq) {
-                pack_sequence(seq, EncodeAcgt8ButterflyLsb{}, out);
+                pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #if defined(FISK_HAS_SSE2)
             ,
             bench("butterfly_sse2", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeAcgtButterflySse2Lsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflySSE2<Encoding::kACGT, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_AVX2)
             ,
             bench("butterfly_avx2", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeAcgtButterflyAvx2Lsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyAVX2<Encoding::kACGT, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_AVX512)
             ,
             bench("butterfly_avx512", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeAcgtButterflyAvx512Lsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyAVX512<Encoding::kACGT, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_NEON)
             ,
             bench("butterfly_neon", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeAcgtButterflyNeonLsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyNEON<Encoding::kACGT, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
@@ -118,39 +118,39 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
             sequences,
             #if defined(FISK_HAS_BMI2)
             bench("pext", [&](std::string const& seq) {
-                pack_sequence(seq, EncodeAcgt8PextMsb{}, out);
+                pack_sequence(seq, WordEncoderPext<Encoding::kACGT, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             }),
             #endif
             bench("butterfly", [&](std::string const& seq) {
-                pack_sequence(seq, EncodeAcgt8ButterflyMsb{}, out);
+                pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #if defined(FISK_HAS_SSE2)
             ,
             bench("butterfly_sse2", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeAcgtButterflySse2Msb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflySSE2<Encoding::kACGT, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_AVX2)
             ,
             bench("butterfly_avx2", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeAcgtButterflyAvx2Msb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyAVX2<Encoding::kACGT, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_AVX512)
             ,
             bench("butterfly_avx512", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeAcgtButterflyAvx512Msb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyAVX512<Encoding::kACGT, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_NEON)
             ,
             bench("butterfly_neon", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeAcgtButterflyNeonMsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyNEON<Encoding::kACGT, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
@@ -171,39 +171,39 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
             sequences,
             #if defined(FISK_HAS_BMI2)
             bench("pext", [&](std::string const& seq) {
-                pack_sequence(seq, EncodeActg8PextLsb{}, out);
+                pack_sequence(seq, WordEncoderPext<Encoding::kACTG, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             }),
             #endif
             bench("butterfly", [&](std::string const& seq) {
-                pack_sequence(seq, EncodeActg8ButterflyLsb{}, out);
+                pack_sequence(seq, WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #if defined(FISK_HAS_SSE2)
             ,
             bench("butterfly_sse2", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeActgButterflySse2Lsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflySSE2<Encoding::kACTG, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_AVX2)
             ,
             bench("butterfly_avx2", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeActgButterflyAvx2Lsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyAVX2<Encoding::kACTG, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_AVX512)
             ,
             bench("butterfly_avx512", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeActgButterflyAvx512Lsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyAVX512<Encoding::kACTG, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_NEON)
             ,
             bench("butterfly_neon", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeActgButterflyNeonLsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyNEON<Encoding::kACTG, Layout::kLSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
@@ -224,39 +224,39 @@ inline void bench_seq_pack(std::vector<std::string> const& sequences, std::ostre
             sequences,
             #if defined(FISK_HAS_BMI2)
             bench("pext", [&](std::string const& seq) {
-                pack_sequence(seq, EncodeActg8PextMsb{}, out);
+                pack_sequence(seq, WordEncoderPext<Encoding::kACTG, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             }),
             #endif
             bench("butterfly", [&](std::string const& seq) {
-                pack_sequence(seq, EncodeActg8ButterflyMsb{}, out);
+                pack_sequence(seq, WordEncoderButterfly<Encoding::kACTG, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #if defined(FISK_HAS_SSE2)
             ,
             bench("butterfly_sse2", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeActgButterflySse2Msb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflySSE2<Encoding::kACTG, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_AVX2)
             ,
             bench("butterfly_avx2", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeActgButterflyAvx2Msb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyAVX2<Encoding::kACTG, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_AVX512)
             ,
             bench("butterfly_avx512", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeActgButterflyAvx512Msb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyAVX512<Encoding::kACTG, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif
             #if defined(FISK_HAS_NEON)
             ,
             bench("butterfly_neon", [&](std::string const& seq) {
-                pack_sequence_simd(seq, EncodeActgButterflyNeonMsb{}, out);
+                pack_sequence_simd(seq, WordEncoderButterflyNEON<Encoding::kACTG, Layout::kMSB>{}, out);
                 return pack_sequence_sink(out);
             })
             #endif

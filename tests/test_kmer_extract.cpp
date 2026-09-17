@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "fisk/core/random.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/simd.hpp"
 #include "testing.hpp"
@@ -84,16 +84,18 @@ static void check_kmers(
 template <typename Enc>
 static std::vector<std::uint64_t> collect_rolling(std::string const& seq, std::size_t k, Enc&& enc)
 {
+    using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
     std::vector<std::uint64_t> out;
-    for_each_kmer_rolling(seq, k, enc, [&](std::uint64_t kmer) { out.push_back(kmer); });
+    for_each_kmer_rolling(seq, k, enc, [&](Emitted kmer) { out.push_back(kmer_value(kmer)); });
     return out;
 }
 
 template <typename Enc>
 static std::vector<std::uint64_t> collect_reextract(std::string const& seq, std::size_t k, Enc&& enc)
 {
+    using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
     std::vector<std::uint64_t> out;
-    for_each_kmer_reextract(seq, k, enc, [&](std::uint64_t kmer) { out.push_back(kmer); });
+    for_each_kmer_reextract(seq, k, enc, [&](Emitted kmer) { out.push_back(kmer_value(kmer)); });
     return out;
 }
 
@@ -116,8 +118,8 @@ static std::vector<std::uint64_t> collect_simd_scalar(std::string const& seq, st
 // scope, since both hardcode ACGT-ascii encoding and cannot be checked against any other ordering.
 static void check_all_impls_acgt(std::string const& seq, std::size_t k)
 {
-    check_kmers(collect_rolling(seq, k, char_to_nt_table_acgt), seq, k, code_acgt);
-    check_kmers(collect_reextract(seq, k, char_to_nt_table_acgt), seq, k, code_acgt);
+    check_kmers(collect_rolling(seq, k, CharEncoderTable<Encoding::kACGT>{}), seq, k, code_acgt);
+    check_kmers(collect_reextract(seq, k, CharEncoderTable<Encoding::kACGT>{}), seq, k, code_acgt);
     check_kmers(collect_simd(seq, k), seq, k, code_acgt);
     check_kmers(collect_simd_scalar(seq, k), seq, k, code_acgt);
 }
@@ -219,8 +221,8 @@ TEST(KmerExtract, OracleActgTable)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            check_kmers(collect_rolling(seq, k, char_to_nt_table_actg), seq, k, code_actg);
-            check_kmers(collect_reextract(seq, k, char_to_nt_table_actg), seq, k, code_actg);
+            check_kmers(collect_rolling(seq, k, CharEncoderTable<Encoding::kACTG>{}), seq, k, code_actg);
+            check_kmers(collect_reextract(seq, k, CharEncoderTable<Encoding::kACTG>{}), seq, k, code_actg);
         }
     }
 }
@@ -264,10 +266,11 @@ TEST(KmerExtract, ConvenienceWrapperMatchesRolling)
 // k must be in [1, 32]; k == 0 or k > 32 is a documented precondition violation for every variant.
 TEST(KmerExtract, InvalidKThrows)
 {
-    EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 0, char_to_nt_table_acgt, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 33, char_to_nt_table_acgt, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 0, char_to_nt_table_acgt, [](std::uint64_t) {}));
-    EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 33, char_to_nt_table_acgt, [](std::uint64_t) {}));
+    CharEncoderTable<Encoding::kACGT> const table;
+    EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 0, table, [](KmerAcgtMsb) {}));
+    EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 33, table, [](KmerAcgtMsb) {}));
+    EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 0, table, [](KmerAcgtMsb) {}));
+    EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 33, table, [](KmerAcgtMsb) {}));
     EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 0, [](KmerAcgtMsb) {}));
     EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 33, [](KmerAcgtMsb) {}));
     EXPECT_ANY_THROW(for_each_kmer_simd_scalar("ACGT", 0, [](KmerAcgtMsb) {}));
@@ -325,14 +328,39 @@ TEST(KmerExtract, InvalidCharacterPlacement)
     }
 }
 
+// A user-defined encoder has to state which Encoding its codes are in, so that the loops can tag the
+// k-mers they build from them. A bare callable carries no such statement, and must be rejected at
+// compile time rather than silently producing k-mers of an assumed convention.
+namespace {
+
+template <typename Enc>
+concept RollingAccepts = requires(Enc enc) {
+    for_each_kmer_rolling(std::string_view{}, std::size_t{1}, enc, [](auto) {});
+};
+
+using UntaggedEncoder = decltype([](char) -> std::uint8_t { return 0; });
+
+} // namespace
+
+static_assert( RollingAccepts<CharEncoderTable<Encoding::kACGT>>);
+static_assert( RollingAccepts<CharEncoderAscii<Encoding::kACTG>>);
+static_assert(!RollingAccepts<UntaggedEncoder>);
+static_assert(!RollingAccepts<std::uint8_t(*)(char)>);
+
 // Custom encoder whose invalid sentinel is not exactly 4 (255 here, and lowercase bases are
 // deliberately "invalid" under it), checking that for_each_kmer_rolling()/for_each_kmer_reextract()
 // honor the documented ">= 4 is invalid" contract rather than special-casing the value 4. Only
 // applies to these two, since neither for_each_kmer_simd()/for_each_kmer_simd_scalar() nor the
-// for_each_kmer() convenience wrapper take a custom encoder.
-TEST(KmerExtract, InvalidSentinelNotFour)
+// for_each_kmer() convenience wrapper take a custom encoder. Also shows the shape a user-defined
+// encoder takes: a functor that states its encoding.
+namespace {
+
+struct SentinelNotFourEncoder
 {
-    auto const enc = [](char c) -> std::uint8_t {
+    static constexpr Encoding encoding = Encoding::kACGT;
+
+    constexpr std::uint8_t operator()(char c) const noexcept
+    {
         switch (c) {
             case 'A': return 0;
             case 'C': return 1;
@@ -340,7 +368,14 @@ TEST(KmerExtract, InvalidSentinelNotFour)
             case 'T': return 3;
             default:  return 255;
         }
-    };
+    }
+};
+
+} // namespace
+
+TEST(KmerExtract, InvalidSentinelNotFour)
+{
+    SentinelNotFourEncoder const enc;
     auto const code_of = [](char c) -> int {
         switch (c) {
             case 'A': return 0;
@@ -455,8 +490,8 @@ TEST(KmerExtract, DifferentialAllImplementationsAgree)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            auto const core        = collect_rolling(seq, k, char_to_nt_table_acgt);
-            auto const reextract   = collect_reextract(seq, k, char_to_nt_table_acgt);
+            auto const core        = collect_rolling(seq, k, CharEncoderTable<Encoding::kACGT>{});
+            auto const reextract   = collect_reextract(seq, k, CharEncoderTable<Encoding::kACGT>{});
             auto const simd        = collect_simd(seq, k);
             auto const simd_scalar = collect_simd_scalar(seq, k);
 
@@ -472,7 +507,7 @@ TEST(KmerExtract, DifferentialAllImplementationsAgree)
 // =================================================================================================
 
 // A single deterministic, easy-to-eyeball mixed-case sequence, checked end-to-end through every
-// implementation. Per-character case handling is already exhaustively covered in test_seq_enc.cpp;
+// implementation. Per-character case handling is already exhaustively covered in test_char_encoder.cpp;
 // this just confirms it survives all the way through k-mer assembly.
 TEST(KmerExtract, MixedCase)
 {

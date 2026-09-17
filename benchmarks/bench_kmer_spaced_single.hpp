@@ -12,7 +12,7 @@
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
 #include "fisk/kmer_spaced/simd.hpp"
 #include "fisk/kmer_spaced/selector.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 #include "microbench.hpp"
 #include "fisk/core/intrinsics.hpp"
 
@@ -118,13 +118,13 @@ inline void bench_kmer_spaced_single(
                 }
             ),
 
-            // char_to_nt_table_acgt
+            // CharEncoderTable<Encoding::kACGT>
             #if defined(FISK_HAS_BMI2)
             bench(
                 "pext",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, BitExtractMask(bit_ext_mask), char_to_nt_table_acgt, bit_extract_pext
+                        seq, k, BitExtractMask(bit_ext_mask), CharEncoderTable<Encoding::kACGT>{}, bit_extract_pext
                     );
                 }
             ),
@@ -133,7 +133,7 @@ inline void bench_kmer_spaced_single(
                 "bitloop",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, BitExtractMask(bit_ext_mask), char_to_nt_table_acgt, bit_extract_bitloop
+                        seq, k, BitExtractMask(bit_ext_mask), CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop
                     );
                 }
             ),
@@ -141,7 +141,7 @@ inline void bench_kmer_spaced_single(
                 "byte_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, BitExtractMask(bit_ext_mask), char_to_nt_table_acgt, bit_extract_byte_table
+                        seq, k, BitExtractMask(bit_ext_mask), CharEncoderTable<Encoding::kACGT>{}, bit_extract_byte_table
                     );
                 }
             ),
@@ -149,7 +149,7 @@ inline void bench_kmer_spaced_single(
                 "block_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_mask, char_to_nt_table_acgt, bit_extract_block_table
+                        seq, k, bit_ext_block_mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_block_table
                     );
                 }
             ),
@@ -157,7 +157,7 @@ inline void bench_kmer_spaced_single(
                 "block_table_unrolled2",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_mask, char_to_nt_table_acgt, bit_extract_block_table_unrolled<2>
+                        seq, k, bit_ext_block_mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_block_table_unrolled<2>
                     );
                 }
             ),
@@ -165,7 +165,7 @@ inline void bench_kmer_spaced_single(
                 "block_table_unrolled4",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_mask, char_to_nt_table_acgt, bit_extract_block_table_unrolled<4>
+                        seq, k, bit_ext_block_mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_block_table_unrolled<4>
                     );
                 }
             ),
@@ -173,7 +173,7 @@ inline void bench_kmer_spaced_single(
                 "block_table_unrolled8",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_block_mask, char_to_nt_table_acgt, bit_extract_block_table_unrolled<8>
+                        seq, k, bit_ext_block_mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_block_table_unrolled<8>
                     );
                 }
             ),
@@ -181,7 +181,7 @@ inline void bench_kmer_spaced_single(
                 "butterfly_table",
                 [&](std::string const& seq){
                     return compute_spaced_kmer_hash(
-                        seq, k, bit_ext_butterfly_table, char_to_nt_table_acgt, bit_extract_butterfly_table
+                        seq, k, bit_ext_butterfly_table, CharEncoderTable<Encoding::kACGT>{}, bit_extract_butterfly_table
                     );
                 }
             ),
@@ -286,74 +286,74 @@ inline void bench_kmer_spaced_single(
                 }
             )
 
-            // char_to_nt_switch_acgt
+            // CharEncoderSwitch<Encoding::kACGT>
             // #if defined(FISK_HAS_BMI2)
             // bench(
-            //     "pext_char_to_nt_switch",
+            //     "pext_switch",
             //     [&](std::string const& seq){
             //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_switch_acgt, bit_extract_pext
+            //             seq, k, bit_ext_mask, CharEncoderSwitch<Encoding::kACGT>, bit_extract_pext
             //         );
             //     }
             // ),
             // #endif
             // bench(
-            //     "bitloop_char_to_nt_switch",
+            //     "bitloop_switch",
             //     [&](std::string const& seq){
             //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_switch_acgt, bit_extract_bitloop
+            //             seq, k, bit_ext_mask, CharEncoderSwitch<Encoding::kACGT>, bit_extract_bitloop
             //         );
             //     }
             // ),
             // bench(
-            //     "byte_table_char_to_nt_switch",
+            //     "byte_table_switch",
             //     [&](std::string const& seq){
             //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_switch_acgt, bit_extract_byte_table
+            //             seq, k, bit_ext_mask, CharEncoderSwitch<Encoding::kACGT>, bit_extract_byte_table
             //         );
             //     }
             // ),
             // bench(
-            //     "block_table_char_to_nt_switch",
+            //     "block_table_switch",
             //     [&](std::string const& seq){
             //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_block_mask, char_to_nt_switch_acgt, bit_extract_block_table
+            //             seq, k, bit_ext_block_mask, CharEncoderSwitch<Encoding::kACGT>, bit_extract_block_table
             //         );
             //     }
             // ),
 
-            // char_to_nt_ascii_acgt
+            // CharEncoderAscii<Encoding::kACGT>
             // #if defined(FISK_HAS_BMI2)
             // bench(
-            //     "pext_char_to_nt_ascii",
+            //     "pext_ascii",
             //     [&](std::string const& seq){
             //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_ascii_acgt, bit_extract_pext
+            //             seq, k, bit_ext_mask, CharEncoderAscii<Encoding::kACGT>, bit_extract_pext
             //         );
             //     }
             // ),
             // #endif
             // bench(
-            //     "bitloop_char_to_nt_ascii",
+            //     "bitloop_ascii",
             //     [&](std::string const& seq){
             //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_ascii_acgt, bit_extract_bitloop
+            //             seq, k, bit_ext_mask, CharEncoderAscii<Encoding::kACGT>, bit_extract_bitloop
             //         );
             //     }
             // ),
             // bench(
-            //     "byte_table_char_to_nt_ascii",
+            //     "byte_table_ascii",
             //     [&](std::string const& seq){
             //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_mask, char_to_nt_ascii_acgt, bit_extract_byte_table
+            //             seq, k, bit_ext_mask, CharEncoderAscii<Encoding::kACGT>, bit_extract_byte_table
             //         );
             //     }
             // ),
             // bench(
-            //     "block_table_char_to_nt_ascii",
+            //     "block_table_ascii",
             //     [&](std::string const& seq){
             //         return compute_spaced_kmer_hash(
-            //             seq, k, bit_ext_block_mask, char_to_nt_ascii_acgt, bit_extract_block_table
+            //             seq, k, bit_ext_block_mask, CharEncoderAscii<Encoding::kACGT>, bit_extract_block_table
             //         );
             //     }
             // )

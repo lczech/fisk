@@ -11,7 +11,7 @@
 #include "utils.hpp"
 #include "kmer_clark.hpp"
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 #include "microbench.hpp"
 
 using namespace fisk;

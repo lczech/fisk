@@ -147,7 +147,7 @@ static void check_aligned_variant(
 
 TEST(KmerExtractPacked, RollingMsb)
 {
-    EncodeAcgt8ButterflyMsb ex;
+    WordEncoderButterfly<Encoding::kACGT, Layout::kMSB> ex;
     for (auto const& seq : test_sequences()) {
         auto const packed = pack_sequence(seq, ex);
         for (auto const k : test_ks()) {
@@ -162,7 +162,7 @@ TEST(KmerExtractPacked, RollingMsb)
 
 TEST(KmerExtractPacked, RollingLsb)
 {
-    EncodeAcgt8ButterflyLsb ex;
+    WordEncoderButterfly<Encoding::kACGT, Layout::kLSB> ex;
     for (auto const& seq : test_sequences()) {
         auto const packed = pack_sequence(seq, ex);
         for (auto const k : test_ks()) {
@@ -195,7 +195,7 @@ TEST(KmerExtractPacked, AlignedMsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_aligned(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
     );
 }
 
@@ -205,6 +205,6 @@ TEST(KmerExtractPacked, AlignedLsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_aligned(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
     );
 }

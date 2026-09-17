@@ -5,9 +5,11 @@
 #include <cstdint>
 #include <cstddef>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 #include "fisk/core/kmer.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 
 namespace fisk {
 
@@ -43,13 +45,19 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
  * Any k-mer overlapping an invalid symbol is skipped.
  *
  * This is the generic, encoder-parameterized building block behind for_each_kmer() below; most
- * callers should use that instead. Call this directly only to plug in a specific encoder or
- * ordering, e.g. for benchmarking different encoders against each other.
+ * callers should use that instead. Call this directly only to plug in a specific encoder,
+ * e.g., for benchmarking different encoders against each other.
  *
- * @tparam Enc  Encoding function to turn characters into two-bit encoding.
+ * The callback receives a Kmer (core/kmer.hpp) tagged with the encoder's own Encoding, and with
+ * Layout::kMSB, which is what this loop's `(kmer << 2) | code` recurrence produces. The encoder
+ * therefore has to state its encoding, which is what the CharEncoder concept requires: a
+ * bare function carries no such statement, and so cannot be passed here.
+ *
+ * @tparam Enc  Encoder turning characters into two-bit codes, see CharEncoder.
  * @tparam Func Callback function to be called for each valid k-mer.
  */
 template<typename Enc, typename Func>
+    requires CharEncoder<std::remove_cvref_t<Enc>>
 inline void for_each_kmer_rolling(
     std::string_view seq, std::size_t k, Enc&& enc, Func&& func
 ) {
@@ -90,7 +98,7 @@ inline void for_each_kmer_rolling(
         // We can emit once we have seen at least k characters, and the current
         // k-mer window does not overlap the most recent invalid character.
         if( valid >= k ) {
-            func(kmer);
+            func(kmer_cast<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(kmer, k));
         }
     }
 }
@@ -104,6 +112,7 @@ inline void for_each_kmer_rolling(
  * it here for benchmarking.
  */
 template<typename Enc, typename Func>
+    requires CharEncoder<std::remove_cvref_t<Enc>>
 inline void for_each_kmer_reextract(
     std::string_view seq, std::size_t k, Enc&& enc, Func&& func
 ) {
@@ -135,7 +144,7 @@ inline void for_each_kmer_reextract(
         }
 
         if (valid) {
-            func(kmer);
+            func(kmer_cast<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(kmer, k));
         }
     }
 }
@@ -145,10 +154,10 @@ inline void for_each_kmer_reextract(
  * each k-mer.
  *
  * Convenience entry point for callers who do not need to choose an encoder or extraction
- * technique themselves: fixes the encoder to the ACGT lookup table (char_to_nt_table_acgt(), see
- * core/seq_enc.hpp) and forwards to for_each_kmer_rolling(), the fastest of the extraction
+ * technique themselves: fixes the encoder to the ACGT lookup table (CharEncoderTable, see
+ * core/char_encoder.hpp) and forwards to for_each_kmer_rolling(), the fastest of the extraction
  * techniques offered here. Call for_each_kmer_rolling() directly instead to plug in a different
- * encoder or ordering.
+ * encoder.
  *
  * The callback receives a Kmer<Encoding::kACGT, Layout::kMSB> (see core/kmer.hpp), so the
  * conventions it was produced under travel with it. Use kmer_decode() to turn one back into a string,
@@ -159,12 +168,7 @@ inline void for_each_kmer_reextract(
 template<typename Func>
 inline void for_each_kmer(std::string_view seq, std::size_t k, Func&& func)
 {
-    // for_each_kmer_rolling() below still emits bare words, because it cannot know which encoding
-    // an arbitrary caller-supplied encoder implements. Here the encoder is fixed, so both
-    // conventions are known and are attached as the k-mers leave.
-    for_each_kmer_rolling(seq, k, char_to_nt_table_acgt, [&func, k](std::uint64_t word) {
-        func(kmer_cast<Encoding::kACGT, Layout::kMSB>(word, k));
-    });
+    for_each_kmer_rolling(seq, k, CharEncoderTable<Encoding::kACGT>{}, std::forward<Func>(func));
 }
 
 } // namespace fisk

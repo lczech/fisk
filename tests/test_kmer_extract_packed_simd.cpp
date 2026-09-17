@@ -205,13 +205,13 @@ TEST(KmerExtractPackedSimd, DispatcherSse2)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_sse2(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
     );
     check_simd_variant<2>(
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_sse2(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
     );
 }
 
@@ -229,7 +229,7 @@ TEST(KmerExtractPackedSimd, NarrowNeonMsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_narrow_neon_(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 29
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 29
     );
 }
 
@@ -239,7 +239,7 @@ TEST(KmerExtractPackedSimd, NarrowNeonLsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_narrow_neon_(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 29
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 29
     );
 }
 
@@ -249,7 +249,7 @@ TEST(KmerExtractPackedSimd, WideNeonMsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_wide_neon_(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
     );
 }
 
@@ -259,7 +259,7 @@ TEST(KmerExtractPackedSimd, WideNeonLsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_wide_neon_(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
     );
 }
 
@@ -269,13 +269,13 @@ TEST(KmerExtractPackedSimd, DispatcherNeon)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_neon(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
     );
     check_simd_variant<2>(
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_neon(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
     );
 }
 
@@ -293,7 +293,7 @@ TEST(KmerExtractPackedSimd, NarrowAvx2Msb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_narrow_avx2_(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 29
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 29
     );
 }
 
@@ -303,7 +303,7 @@ TEST(KmerExtractPackedSimd, NarrowAvx2Lsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_narrow_avx2_(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 29
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 29
     );
 }
 
@@ -313,7 +313,7 @@ TEST(KmerExtractPackedSimd, WideAvx2Msb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_wide_avx2_(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
     );
 }
 
@@ -323,7 +323,7 @@ TEST(KmerExtractPackedSimd, WideAvx2Lsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_wide_avx2_(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
     );
 }
 
@@ -333,13 +333,13 @@ TEST(KmerExtractPackedSimd, DispatcherAvx2)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_avx2(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
     );
     check_simd_variant<4>(
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_avx2(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
     );
 }
 
@@ -357,7 +357,7 @@ TEST(KmerExtractPackedSimd, NarrowAvx512Msb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_narrow_avx512_(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 29
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 29
     );
 }
 
@@ -367,7 +367,7 @@ TEST(KmerExtractPackedSimd, NarrowAvx512Lsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_narrow_avx512_(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 29
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 29
     );
 }
 
@@ -377,7 +377,7 @@ TEST(KmerExtractPackedSimd, WideAvx512Msb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_wide_avx512_(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
     );
 }
 
@@ -387,7 +387,7 @@ TEST(KmerExtractPackedSimd, WideAvx512Lsb)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_wide_avx512_(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
     );
 }
 
@@ -397,13 +397,13 @@ TEST(KmerExtractPackedSimd, DispatcherAvx512)
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_avx512(seq, k, func);
         },
-        EncodeAcgt8ButterflyMsb{}, oracle_msb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
     );
     check_simd_variant<8>(
         [](auto const& seq, std::size_t k, auto func) {
             for_each_kmer_packed_simd_avx512(seq, k, func);
         },
-        EncodeAcgt8ButterflyLsb{}, oracle_lsb, 32
+        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
     );
 }
 

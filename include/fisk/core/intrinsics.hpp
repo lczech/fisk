@@ -58,7 +58,7 @@ namespace fisk {
 //     Byte Swap
 // =================================================================================================
 
-// Needed e.g. to convert between the two PackedSequence bit orders (see core/types.hpp).
+// Needed e.g. to convert between the two PackedSequence layouts (see core/types.hpp).
 //
 // Tiered fallback, fastest/most standard first:
 //   1) std::byteswap (C++23; we currently use C++20, so this only activates once building

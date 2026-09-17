@@ -63,7 +63,7 @@ from plot_common import *
 TITLE_FROM_FILENAME = {
     "bit_extract_weights.csv": "Bit extract with different mask weights",
     "bit_extract_blocks.csv":  "Bit extract with different block sizes in the mask",
-    "seq_enc.csv":             "Sequence encoding from char to two-bit codes",
+    "char_encoder.csv":        "Character encoding to two-bit codes",
     "kmer_extract.csv":        "Extraction from sequence to two-bit coded k-mers",
     "kmer_extract_packed.csv": "Extraction from a packed two-bit sequence to k-mers",
     "kmer_spaced_multi.csv":   "Extraction from sequence to spaced k-mers with multiple masks",

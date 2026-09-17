@@ -9,7 +9,7 @@
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/random.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "testing.hpp"
 
@@ -599,18 +599,21 @@ TEST(Kmer, EncodeDefaultsMatchForEachKmer)
 }
 
 // The char-to-code table inside kmer_encode() is a deliberate duplication of the encoders in
-// core/seq_enc.hpp (see char_to_code_() in core/kmer.hpp for why). This is what keeps the two
+// core/char_encoder.hpp (see char_to_code_() in core/kmer.hpp for why). This is what keeps the two
 // from silently drifting apart: every code kmer_encode() assigns must be the one the ACGT/ACTG
 // lookup tables would assign to the same character, upper and lower case alike.
 TEST(Kmer, EncodeAgreesWithSeqEnc)
 {
     for (char c = 0; c < 127; ++c) {
         std::string const seq(1, c);
-        bool const is_acgt = char_to_nt_table_acgt(c) < 4;
-        bool const is_actg = char_to_nt_table_actg(c) < 4;
+        bool const is_acgt = CharEncoderTable<Encoding::kACGT>{}(c) < 4;
+        bool const is_actg = CharEncoderTable<Encoding::kACTG>{}(c) < 4;
 
         if (is_acgt) {
-            EXPECT_EQ(kmer_value(kmer_encode(seq)), std::uint64_t{char_to_nt_table_acgt(c)});
+            EXPECT_EQ(
+                kmer_value(kmer_encode(seq)),
+                std::uint64_t{CharEncoderTable<Encoding::kACGT>{}(c)}
+            );
         } else {
             EXPECT_ANY_THROW((void) kmer_encode(seq));
         }
@@ -618,7 +621,7 @@ TEST(Kmer, EncodeAgreesWithSeqEnc)
         if (is_actg) {
             EXPECT_EQ(
                 kmer_value((kmer_encode<Encoding::kACTG>(seq))),
-                std::uint64_t{char_to_nt_table_actg(c)}
+                std::uint64_t{CharEncoderTable<Encoding::kACTG>{}(c)}
             );
         } else {
             EXPECT_ANY_THROW((void) (kmer_encode<Encoding::kACTG>(seq)));

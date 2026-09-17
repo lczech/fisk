@@ -62,7 +62,11 @@ namespace fisk {
 
 // do_not_optimize barriers on the k-mer emission in some of the functions below force each value
 // to at least be manifested in a register, so a benchmark summing them cannot be proven reducible
-// by the compiler. They emit no instructions on GCC/Clang, but their register requirements might still slightly affect regular callers.
+// by the compiler. They emit no instructions on GCC/Clang, but their register requirements might
+// still slightly affect regular callers. For benchmarking, they _need_ to stay inside those
+// functions, so that the compiler can reorder instructions within the function. If we were to add
+// those barriers in the benchmark itself, the compiler would be forced to serialize the output,
+// severely messing with the scheduling and benchmarks.
 
 // We experimented with several variations of the basic algorithm here, in order to find a solution
 // that compiles to optimal code across most compilers and platforms. Some of the more promising

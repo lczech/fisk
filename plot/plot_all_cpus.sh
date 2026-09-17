@@ -73,7 +73,7 @@ build_file_args() {
 CSV_FILES=(
   "bit_extract_weights.csv"
   "bit_extract_blocks.csv"
-  # "seq_enc.csv"
+  # "char_encoder.csv"
   "kmer_extract.csv"
   "kmer_spaced_multi.csv"
   "kmer_spaced_single.csv"

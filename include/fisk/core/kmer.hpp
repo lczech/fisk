@@ -139,12 +139,8 @@ using kmer_type_of = Kmer<Tagged::encoding, Tagged::layout>;
 // helpers here, so that adding a third Encoding or Layout later fails to compile in exactly these
 // spots instead of silently falling into whichever branch happened to be the `else`.
 //
-// Each chain therefore ends in a static_assert rather than an unguarded `else`. It has to be made
-// dependent on the template parameter: a plain `static_assert(false)` in a discarded if-constexpr
-// branch is ill-formed in C++20 (only C++23 fixed that), and would fire even when never taken.
-
-template <auto V>
-inline constexpr bool dependent_false_v = false;
+// Each chain therefore ends in a static_assert on dependent_false_v (core/types.hpp) rather than
+// an unguarded `else`.
 
 /**
  * @brief Mask of the lowest `2 * width` bits, i.e. the bits a k-mer of that width may occupy.

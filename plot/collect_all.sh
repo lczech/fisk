@@ -14,7 +14,7 @@ cd `git rev-parse --show-toplevel`
 BENCHMARKS=(
     "bit_extract_weights"
     "bit_extract_blocks"
-    # "seq_enc"
+    # "char_encoder"
     "kmer_extract"
     "kmer_extract_packed"
     "kmer_spaced_multi_bars"

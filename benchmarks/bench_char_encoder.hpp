@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 #include "microbench.hpp"
 
 using namespace fisk;
@@ -16,15 +16,18 @@ using namespace fisk;
  *
  * The hash obtained here is not a good one, as it is simply the sum of all two-bit encodings
  * of the characters. But it is enough to check that all the above functions give the same result,
- * and sufficient to force the compiler to actually run the encoding.
+ * and sufficient to force the compiler to actually run the loop. In its current form, the compiler
+ * is however still free to vectorize loops, which might or might not reflect actual usage.
+ * Needs to be extended to two separate benchmarks, measuring both per-character and potentially
+ * vectorized compilations.
  */
-template <typename EncodeFunc>
-inline std::uint64_t sequence_encode_hash(std::string_view seq, EncodeFunc&& encode)
+template <typename Encoder>
+inline std::uint64_t sequence_encode_hash(std::string_view seq, Encoder&& encoder)
 {
     std::uint64_t h = 0;
     for (char c : seq) {
-        // h = (h << 2) | encode(c);
-        h += encode(c);
+        // h = (h << 2) | encoder(c);
+        h += encoder(c);
     }
     return h;
 }
@@ -40,14 +43,14 @@ inline std::uint64_t sequence_encode_hash(std::string_view seq, EncodeFunc&& enc
  * compiler to emit different code, and in particular not be able to inline those functions.
  * Hence, we benchmark them all here, to see the effects of this.
  */
-inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostream& csv_os)
+inline void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream& csv_os)
 {
     std::size_t const rounds = 8;
     std::size_t const repeats = 16;
 
     // User output
-    std::string const suite_title = "seq_encode";
-    std::cout << "\n=== sequence encode ===\n";
+    std::string const suite_title = "char_encoder";
+    std::cout << "\n=== char encoder ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     Microbench<std::string> suite(suite_title);
@@ -63,27 +66,27 @@ inline void bench_seq_enc(std::vector<std::string> const& sequences, std::ostrea
         sequences, // vector<std::string>
 
         bench(
-            "char_to_nt_ifs_acgt",
-            [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_ifs_acgt);
+            "ifs",
+            [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderIfs<Encoding::kACGT>{});
         }),
         bench(
-            "char_to_nt_switch_acgt",
-            [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_switch_acgt);
+            "switch",
+            [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderSwitch<Encoding::kACGT>{});
         }),
         bench(
-            "char_to_nt_table_acgt",
-            [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_table_acgt);
+            "table",
+            [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderTable<Encoding::kACGT>{});
         }),
         bench(
-            "char_to_nt_ascii_acgt",
-            [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_ascii_acgt);
+            "ascii",
+            [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderAscii<Encoding::kACGT>{});
         })
 
         // The unchecked ascii encoder is the fastest, but only valid if it is guaranteed
         // that the input only consists of ACGT characters.
         // bench(
-        //     "char_to_nt_ascii_unchecked_acgt",
-        //     [&](std::string const& seq){ return sequence_encode_hash(seq, char_to_nt_ascii_unchecked_acgt);
+        //     "ascii_unchecked",
+        //     [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderAsciiUnchecked<Encoding::kACGT>);
         // })
     );
 

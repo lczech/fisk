@@ -6,11 +6,12 @@
 #include <cstdint>
 #include <cstddef>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 
 namespace fisk {
 
@@ -68,7 +69,7 @@ inline std::uint64_t compute_spaced_kmer_missh(
     for( size_t i = 0; i < mask.size(); ++i ) {
         // Comin et al use a switch statement for the encoding, which is slow.
         auto const c = static_cast<std::uint64_t>(
-            char_to_nt_switch_acgt( seq[start_pos + mask[i]] )
+            CharEncoderSwitch<Encoding::kACGT>{}( seq[start_pos + mask[i]] )
         );
         valid &= (c < 4);
 
@@ -90,14 +91,16 @@ inline std::uint64_t compute_spaced_kmer_naive(
     std::string_view seq, std::vector<size_t> const& mask, size_t start_pos
 ) {
     // This is the same as the above compute_spaced_kmer_missh() function, with the only
-    // difference being the use of the char_to_nt_table_acgt() function instead of the switch statement.
+    // difference being the use of the CharEncoderTable encoder instead of CharEncoderSwitch.
     // As the char encoding is called k times for each k-mer, this is significantly faster.
 
     // Compute a single spaced kmer at the given position
     std::uint64_t result = 0;
     bool valid = true;
     for( auto p : mask ) {
-        auto const c = static_cast<std::uint64_t>( char_to_nt_table_acgt( seq[start_pos + p] ));
+        auto const c = static_cast<std::uint64_t>(
+            CharEncoderTable<Encoding::kACGT>{}( seq[start_pos + p] )
+        );
         valid &= (c < 4);
         result <<= 2;
         result |= c;
@@ -283,20 +286,22 @@ inline void for_each_mask(std::vector<Mask, Alloc> const& masks, F&& f)
  * The mask is assumed to use two-bit encoding, i.e., as 00 and 11 per position, and must have set
  * the first and last position of the span (the beginning and end of spaced k-mer are always kept).
  *
- * @tparam Enc      Encoding function: returns 0..3 for valid bases, >=4 for invalid.
+ * @tparam Enc      Encoder turning characters into two-bit codes, see CharEncoder.
+ *                  Its Encoding is not yet attached to the spaced k-mers emitted here.
  * @tparam Callback Callback function called with each extracted spaced k-mer.
  *
- * @param seq      Input sequence.
- * @param span_k   Full span length of the spaced seed, must be in [1, 32].
- * @param masks    Two-bit mask over the packed span: kept positions have
- *                 both bits set (0b11), skipped positions have 0b00.
- *                 Can also be a related BitExtract instance such as
- *                 BitExtractBlockTable or BitExtractButterflyTable.
- * @param enc      Encoder functor.
- * @param bit_ext  Bit extraction functor.
- * @param callback Callback functor, takes the extracted spaced k-mer.
+ * @param seq       Input sequence.
+ * @param span_k    Full span length of the spaced seed, must be in [1, 32].
+ * @param masks     Two-bit mask over the packed span: kept positions have
+ *                  both bits set (0b11), skipped positions have 0b00.
+ *                  Can also be a related BitExtract instance such as
+ *                  BitExtractBlockTable or BitExtractButterflyTable.
+ * @param enc       Encoder functor.
+ * @param bit_ext   Bit extraction functor.
+ * @param callback  Callback functor, takes the extracted spaced k-mer.
  */
 template<typename MaskOrMasks, typename Enc, typename BitExtract, typename Callback>
+    requires CharEncoder<std::remove_cvref_t<Enc>>
 inline void for_each_spaced_kmer(
     std::string_view seq,
     std::size_t const span_k,

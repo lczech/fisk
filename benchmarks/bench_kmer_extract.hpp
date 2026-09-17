@@ -10,7 +10,7 @@
 #include "utils.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/simd.hpp"
-#include "fisk/core/seq_enc.hpp"
+#include "fisk/core/char_encoder.hpp"
 #include "microbench.hpp"
 
 using namespace fisk;
@@ -25,16 +25,13 @@ using namespace fisk;
 // checked against the same aggregate. Not library functionality, hence living here rather than in
 // those headers; see bench_kmer_extract_packed.hpp's compute_kmer_hash_packed_*() for the same
 // pattern applied to the packed extractors.
-//
-// Note that the two sinks below taking an `enc` still receive bare words: for_each_kmer_rolling()
-// and for_each_kmer_reextract() cannot tag what they emit until their encoders carry an Encoding
-// themselves. The other two receive Kmer values (see core/kmer.hpp) and sum `.value`.
+
 
 template<typename Enc>
 inline std::uint64_t compute_kmer_hash(std::string_view seq, std::size_t k, Enc&& enc)
 {
     std::uint64_t hash = 0;
-    for_each_kmer_rolling(seq, k, enc, [&](std::uint64_t kmer_word) { hash += kmer_word; });
+    for_each_kmer_rolling(seq, k, enc, [&](auto kmer) { hash += kmer_value(kmer); });
     return hash;
 }
 
@@ -42,7 +39,7 @@ template<typename Enc>
 inline std::uint64_t compute_kmer_hash_reextract(std::string_view seq, std::size_t k, Enc&& enc)
 {
     std::uint64_t hash = 0;
-    for_each_kmer_reextract(seq, k, enc, [&](std::uint64_t kmer_word) { hash += kmer_word; });
+    for_each_kmer_reextract(seq, k, enc, [&](auto kmer) { hash += kmer_value(kmer); });
     return hash;
 }
 
@@ -114,65 +111,65 @@ inline void bench_kmer_extract(
 
             // Full re-extract
             bench(
-                "char_to_nt_ifs_re",
+                "ifs_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ifs_acgt);
+                    return compute_kmer_hash_reextract(seq, k, CharEncoderIfs<Encoding::kACGT>{});
                 }
             ),
             bench(
-                "char_to_nt_switch_re",
+                "switch_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_switch_acgt);
+                    return compute_kmer_hash_reextract(seq, k, CharEncoderSwitch<Encoding::kACGT>{});
                 }
             ),
             bench(
-                "char_to_nt_table_re",
+                "table_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_table_acgt);
+                    return compute_kmer_hash_reextract(seq, k, CharEncoderTable<Encoding::kACGT>{});
                 }
             ),
             bench(
-                "char_to_nt_ascii_re",
+                "ascii_re",
                 [&](std::string const& seq){
-                    return compute_kmer_hash_reextract(seq, k, char_to_nt_ascii_acgt);
+                    return compute_kmer_hash_reextract(seq, k, CharEncoderAscii<Encoding::kACGT>{});
                 }
             ),
 
             // Shift bits
             bench(
-                "char_to_nt_ifs_shift",
+                "ifs_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_ifs_acgt);
+                    return compute_kmer_hash(seq, k, CharEncoderIfs<Encoding::kACGT>{});
                 }
             ),
             bench(
-                "char_to_nt_switch_shift",
+                "switch_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_switch_acgt);
+                    return compute_kmer_hash(seq, k, CharEncoderSwitch<Encoding::kACGT>{});
                 }
             ),
             bench(
-                "char_to_nt_table_shift",
+                "table_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_table_acgt);
+                    return compute_kmer_hash(seq, k, CharEncoderTable<Encoding::kACGT>{});
                 }
             ),
             bench(
-                "char_to_nt_ascii_shift",
+                "ascii_shift",
                 [&](std::string const& seq){
-                    return compute_kmer_hash(seq, k, char_to_nt_ascii_acgt);
+                    return compute_kmer_hash(seq, k, CharEncoderAscii<Encoding::kACGT>{});
                 }
             ),
 
             // SIMD, currently only AVX2 and scalar, for testing
             bench(
-                "char_to_nt_simd_avx2",
+                "simd_avx2",
                 [&](std::string const& seq){
                     return compute_kmer_hash_simd(seq, k);
                 }
             ),
             bench(
-                "char_to_nt_simd_scalar",
+                "simd_scalar",
                 [&](std::string const& seq){
                     return compute_kmer_hash_simd_scalar(seq, k);
                 }

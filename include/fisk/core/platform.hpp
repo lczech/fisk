@@ -9,7 +9,7 @@ namespace fisk {
 // =================================================================================================
 
 // What fisk assumes about the host it is built for, asserted once here instead of in every
-// header that depends on it. Included by the core headers (intrinsics.hpp, seq_enc.hpp and
+// header that depends on it. Included by the core headers (intrinsics.hpp, char_encoder.hpp and
 // types.hpp), so that every other header picks these up transitively, whether it needs SIMD
 // intrinsics or is purely scalar.
 

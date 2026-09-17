@@ -297,7 +297,7 @@ inline void bench_kmer_extract_packed(
 
     write_csv_header(csv_os);
 
-    // Every sequence here is packed with an ACGT extractor; only the bit order varies.
+    // Every sequence here is packed with an ACGT word encoder; only the layout varies.
     using PackedMsb = PackedSequence<Encoding::kACGT, Layout::kMSB>;
     using PackedLsb = PackedSequence<Encoding::kACGT, Layout::kLSB>;
 
@@ -306,8 +306,8 @@ inline void bench_kmer_extract_packed(
     packed_msb.reserve(sequences.size());
     packed_lsb.reserve(sequences.size());
     for (auto const& seq : sequences) {
-        packed_msb.push_back(pack_sequence(seq, EncodeAcgt8ButterflyMsb{}));
-        packed_lsb.push_back(pack_sequence(seq, EncodeAcgt8ButterflyLsb{}));
+        packed_msb.push_back(pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}));
+        packed_lsb.push_back(pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}));
     }
 
     std::size_t const narrow_k_max = std::min<std::size_t>(k_max, 29);

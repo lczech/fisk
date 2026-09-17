@@ -157,7 +157,7 @@ if(FISK_BUILD_TESTS)
     add_executable(fisk_tests
         tests/main.cpp
         tests/test_core.cpp
-        tests/test_seq_enc.cpp
+        tests/test_char_encoder.cpp
         tests/test_bit_extract.cpp
         tests/test_seq_pack.cpp
         tests/test_kmer.cpp

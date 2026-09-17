@@ -130,14 +130,14 @@ BENCHMARKS_KEEP_EXTENDED = [
     "compute_spaced_kmer_hash_simd_bt_scalar",
 
     # Extract / seq enc
-    "char_to_nt_ascii_re",
-    "char_to_nt_ascii_shift",
-    "char_to_nt_ifs_re",
-    "char_to_nt_ifs_shift",
-    "char_to_nt_switch_re",
-    "char_to_nt_switch_shift",
-    "char_to_nt_table_re",
-    "char_to_nt_table_shift",
+    "ascii_re",
+    "ascii_shift",
+    "ifs_re",
+    "ifs_shift",
+    "switch_re",
+    "switch_shift",
+    "table_re",
+    "table_shift",
 
     # Kmer spaced
     "simd_butterfly_table_sse2",
@@ -180,14 +180,14 @@ BENCHMARKS_KEEP = [
     # "compute_spaced_kmer_hash_simd_bt_scalar",
 
     # Extract / seq enc
-    "char_to_nt_ascii_re",
-    "char_to_nt_ascii_shift",
-    "char_to_nt_ifs_re",
-    "char_to_nt_ifs_shift",
-    "char_to_nt_switch_re",
-    "char_to_nt_switch_shift",
-    "char_to_nt_table_re",
-    "char_to_nt_table_shift",
+    "ascii_re",
+    "ascii_shift",
+    "ifs_re",
+    "ifs_shift",
+    "switch_re",
+    "switch_shift",
+    "table_re",
+    "table_shift",
 
     # Kmer spaced
     "simd_butterfly_table_sse2",
@@ -244,14 +244,14 @@ BENCHMARKS_KEEP_REDUCED = [
     "compute_spaced_kmer_hash_simd_bt_scalar",
 
     # Extract / seq enc
-    "char_to_nt_ascii_re",
-    "char_to_nt_ascii_shift",
-    "char_to_nt_ifs_re",
-    "char_to_nt_ifs_shift",
-    "char_to_nt_switch_re",
-    "char_to_nt_switch_shift",
-    "char_to_nt_table_re",
-    "char_to_nt_table_shift",
+    "ascii_re",
+    "ascii_shift",
+    "ifs_re",
+    "ifs_shift",
+    "switch_re",
+    "switch_shift",
+    "table_re",
+    "table_shift",
 
     # Kmer spaced
     "simd_butterfly_table_sse2",
@@ -284,14 +284,14 @@ BENCHMARK_RENAMES = {
     "zp7"                   : "ZP7",
 
     # Extract / seq enc
-    "char_to_nt_ascii_re"         : "ASCII re",
-    "char_to_nt_ascii_shift"      : "ASCII shift",
-    "char_to_nt_ifs_re"           : "'if' re",
-    "char_to_nt_ifs_shift"        : "'if' shift",
-    "char_to_nt_switch_re"        : "'switch' re",
-    "char_to_nt_switch_shift"     : "'switch' shift",
-    "char_to_nt_table_re"         : "Lookup table re",
-    "char_to_nt_table_shift"      : "Lookup table shift",
+    "ascii_re"         : "ASCII re",
+    "ascii_shift"      : "ASCII shift",
+    "ifs_re"           : "'if' re",
+    "ifs_shift"        : "'if' shift",
+    "switch_re"        : "'switch' re",
+    "switch_shift"     : "'switch' shift",
+    "table_re"         : "Lookup table re",
+    "table_shift"      : "Lookup table shift",
 
     # Kmer spaced
     "simd_butterfly_table_sse2"   : "SIMD Butterfly Table SSE2",
@@ -360,14 +360,14 @@ BENCHMARK_COLORS = {
     "instlatx"              : "#000000",
     "zp7"                   : "#000000",
 
-    "char_to_nt_ascii_re"       : "#3C5BBE",
-    "char_to_nt_ascii_shift"    : "#3C5BBE",
-    "char_to_nt_ifs_re"         : "#E9C256",
-    "char_to_nt_ifs_shift"      : "#E9C256",
-    "char_to_nt_switch_re"      : "#C53939",
-    "char_to_nt_switch_shift"   : "#C53939",
-    "char_to_nt_table_re"       : "#6AC459",
-    "char_to_nt_table_shift"    : "#6AC459",
+    "ascii_re"       : "#3C5BBE",
+    "ascii_shift"    : "#3C5BBE",
+    "ifs_re"         : "#E9C256",
+    "ifs_shift"      : "#E9C256",
+    "switch_re"      : "#C53939",
+    "switch_shift"   : "#C53939",
+    "table_re"       : "#6AC459",
+    "table_shift"    : "#6AC459",
 
 
     # Kmer spaced
@@ -386,32 +386,32 @@ BENCHMARK_COLORS = {
 
 BENCHMARK_LINESTYLES = {
     # Extract / seq enc
-    "char_to_nt_ascii_re"       : "dashed",
-    "char_to_nt_ascii_shift"    : "solid",
-    "char_to_nt_ifs_re"         : "dashed",
-    "char_to_nt_ifs_shift"      : "solid",
-    "char_to_nt_switch_re"      : "dashed",
-    "char_to_nt_switch_shift"   : "solid",
-    "char_to_nt_table_re"       : "dashed",
-    "char_to_nt_table_shift"    : "solid",
+    "ascii_re"       : "dashed",
+    "ascii_shift"    : "solid",
+    "ifs_re"         : "dashed",
+    "ifs_shift"      : "solid",
+    "switch_re"      : "dashed",
+    "switch_shift"   : "solid",
+    "table_re"       : "dashed",
+    "table_shift"    : "solid",
 }
 
 # Stable line order for plot consistency
 BENCHMARK_ORDER = [
 
     # Extract / seq enc
-    "char_to_nt_ifs_re",
-    "char_to_nt_ifs_shift",
-    "char_to_nt_switch_re",
-    "char_to_nt_switch_shift",
-    "char_to_nt_ascii_re",
-    "char_to_nt_ascii_shift",
-    "char_to_nt_table_re",
-    "char_to_nt_table_shift",
-    "char_to_nt_ifs",
-    "char_to_nt_switch",
-    "char_to_nt_ascii",
-    "char_to_nt_table",
+    "ifs_re",
+    "ifs_shift",
+    "switch_re",
+    "switch_shift",
+    "ascii_re",
+    "ascii_shift",
+    "table_re",
+    "table_shift",
+    "ifs",
+    "switch",
+    "ascii",
+    "table",
 
     # Kmer spaced, also used for bit extract order
     "naive",
