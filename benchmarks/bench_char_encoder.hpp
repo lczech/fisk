@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "fisk/core/char_encoder.hpp"
+#include "fisk/core/intrinsics.hpp"
 #include "microbench.hpp"
 
 using namespace fisk;
@@ -16,18 +17,24 @@ using namespace fisk;
  *
  * The hash obtained here is not a good one, as it is simply the sum of all two-bit encodings
  * of the characters. But it is enough to check that all the above functions give the same result,
- * and sufficient to force the compiler to actually run the loop. In its current form, the compiler
- * is however still free to vectorize loops, which might or might not reflect actual usage.
- * Needs to be extended to two separate benchmarks, measuring both per-character and potentially
- * vectorized compilations.
+ * and sufficient to force the compiler to actually run the loop.
+ *
+ * With `Barrier == false` (the default), the compiler is still free to vectorize the loop, which
+ * might or might not reflect actual usage. With `Barrier == true`, each character's freshly
+ * encoded value is forced into a register via do_not_optimize() before being folded into the
+ * hash, blocking that vectorization and isolating the true per-character scalar cost of `encoder`.
  */
-template <typename Encoder>
+template <bool Barrier = false, typename Encoder>
 inline std::uint64_t sequence_encode_hash(std::string_view seq, Encoder&& encoder)
 {
     std::uint64_t h = 0;
     for (char c : seq) {
-        // h = (h << 2) | encoder(c);
-        h += encoder(c);
+        auto const code = encoder(c);
+        if constexpr (Barrier) {
+            do_not_optimize(code);
+        }
+        // h = (h << 2) | code;
+        h += code;
     }
     return h;
 }
@@ -36,12 +43,16 @@ inline std::uint64_t sequence_encode_hash(std::string_view seq, Encoder&& encode
  * @brief Benchmark different implementations for encoding ASCII chars into the two bit encoding.
  *
  * This tests both variants of the implementations, those that check that the character is valid
- * in `ACGT`, and those that assume it is. The former will usually be more important in practice
- * on input data, while the latter might be used internally after parsing has already been done.
+ * in the encoding, and those that assume it is. The former will usually be more important in
+ * practice on input data, while the latter might be used internally after parsing has already
+ * been done.
  *
  * The idea to test both is that the extra check as well as the exception thrown might cause the
  * compiler to emit different code, and in particular not be able to inline those functions.
- * Hence, we benchmark them all here, to see the effects of this.
+ * Hence, we benchmark them all here, to see the effects of this. Each technique is also
+ * benchmarked with a do_not_optimize barrier (see sequence_encode_hash()) to isolate its true
+ * scalar per-character cost from whatever the compiler manages to auto-vectorize away, and for
+ * both encodings (ACGT and ACTG), one suite each.
  */
 inline void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream& csv_os)
 {
@@ -53,44 +64,107 @@ inline void bench_char_encoder(std::vector<std::string> const& sequences, std::o
     std::cout << "\n=== char encoder ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
-    Microbench<std::string> suite(suite_title);
-    suite
-        .rounds(rounds)
-        .repeats(repeats)
-        .units_fn([](std::string const& in) {
-            // 1 unit per base
-            return static_cast<double>(in.size());
-        });
-
-    auto results = suite.run(
-        sequences, // vector<std::string>
-
-        bench(
-            "ifs",
-            [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderIfs<Encoding::kACGT>{});
-        }),
-        bench(
-            "switch",
-            [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderSwitch<Encoding::kACGT>{});
-        }),
-        bench(
-            "table",
-            [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderTable<Encoding::kACGT>{});
-        }),
-        bench(
-            "ascii",
-            [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderAscii<Encoding::kACGT>{});
-        })
-
-        // The unchecked ascii encoder is the fastest, but only valid if it is guaranteed
-        // that the input only consists of ACGT characters.
-        // bench(
-        //     "ascii_unchecked",
-        //     [&](std::string const& seq){ return sequence_encode_hash(seq, CharEncoderAsciiUnchecked<Encoding::kACGT>);
-        // })
-    );
-
-    std::string const case_label = "n/a";
     write_csv_header(csv_os);
-    write_csv_rows(csv_os, suite_title, case_label, results);
+
+    // -----------------------------------------------------------------------
+    //     encoding=acgt
+    // -----------------------------------------------------------------------
+    {
+        Microbench<std::string> suite(suite_title);
+        suite
+            .rounds(rounds)
+            .repeats(repeats)
+            .units_fn([](std::string const& in) {
+                // 1 unit per base
+                return static_cast<double>(in.size());
+            });
+
+        auto results = suite.run(
+            sequences, // vector<std::string>
+
+            bench("ifs", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderIfs<Encoding::kACGT>{});
+            }),
+            bench("ifs_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderIfs<Encoding::kACGT>{});
+            }),
+            bench("switch", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderSwitch<Encoding::kACGT>{});
+            }),
+            bench("switch_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderSwitch<Encoding::kACGT>{});
+            }),
+            bench("table", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderTable<Encoding::kACGT>{});
+            }),
+            bench("table_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderTable<Encoding::kACGT>{});
+            }),
+            bench("ascii", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderAscii<Encoding::kACGT>{});
+            }),
+            bench("ascii_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderAscii<Encoding::kACGT>{});
+            }),
+            // Only valid if it is guaranteed that the input only consists of valid characters.
+            bench("ascii_unchecked", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderAsciiUnchecked<Encoding::kACGT>{});
+            }),
+            bench("ascii_unchecked_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderAsciiUnchecked<Encoding::kACGT>{});
+            })
+        );
+        write_csv_rows(csv_os, suite_title, "encoding=acgt", results);
+    }
+
+    // -----------------------------------------------------------------------
+    //     encoding=actg
+    // -----------------------------------------------------------------------
+    {
+        Microbench<std::string> suite(suite_title);
+        suite
+            .rounds(rounds)
+            .repeats(repeats)
+            .units_fn([](std::string const& in) {
+                // 1 unit per base
+                return static_cast<double>(in.size());
+            });
+
+        auto results = suite.run(
+            sequences, // vector<std::string>
+
+            bench("ifs", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderIfs<Encoding::kACTG>{});
+            }),
+            bench("ifs_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderIfs<Encoding::kACTG>{});
+            }),
+            bench("switch", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderSwitch<Encoding::kACTG>{});
+            }),
+            bench("switch_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderSwitch<Encoding::kACTG>{});
+            }),
+            bench("table", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderTable<Encoding::kACTG>{});
+            }),
+            bench("table_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderTable<Encoding::kACTG>{});
+            }),
+            bench("ascii", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderAscii<Encoding::kACTG>{});
+            }),
+            bench("ascii_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderAscii<Encoding::kACTG>{});
+            }),
+            // Only valid if it is guaranteed that the input only consists of valid characters.
+            bench("ascii_unchecked", [&](std::string const& seq) {
+                return sequence_encode_hash(seq, CharEncoderAsciiUnchecked<Encoding::kACTG>{});
+            }),
+            bench("ascii_unchecked_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(seq, CharEncoderAsciiUnchecked<Encoding::kACTG>{});
+            })
+        );
+        write_csv_rows(csv_os, suite_title, "encoding=actg", results);
+    }
 }

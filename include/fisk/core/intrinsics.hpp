@@ -163,12 +163,46 @@ namespace fisk {
 //     Compiler Optimization Barrier
 // =================================================================================================
 
-/**
- * @brief Forces a value into a register (not into memory necessarily).
- *
- * Used to keep microbenchmarks honest: without it, a compiler might be able to prove a branch-free
- * computation to be reducible and silently skip real work, skewing the benchmark.
- */
+// Memory barriers that force a value into a register (not into memory necessarily).
+// Used to keep microbenchmarks honest: without it, a compiler might be able to prove a branch-free
+// computation to be reducible and silently skip real work, skewing the benchmark.
+// Offered for all integer widths, so that a value already held in a sub-register (e.g. the
+// single-byte result of a char encoder) does not need a zero-extend just to fit the uint64_t
+// overload; the "r" constraint binds directly to a register of the argument's own width.
+
+[[gnu::always_inline]]
+inline void do_not_optimize(std::uint8_t v)
+{
+    #if defined(__GNUC__) || defined(__clang__)
+        asm volatile("" : : "r"(v));
+    #else
+        volatile std::uint8_t sink = v;
+        (void) sink;
+    #endif
+}
+
+[[gnu::always_inline]]
+inline void do_not_optimize(std::uint16_t v)
+{
+    #if defined(__GNUC__) || defined(__clang__)
+        asm volatile("" : : "r"(v));
+    #else
+        volatile std::uint16_t sink = v;
+        (void) sink;
+    #endif
+}
+
+[[gnu::always_inline]]
+inline void do_not_optimize(std::uint32_t v)
+{
+    #if defined(__GNUC__) || defined(__clang__)
+        asm volatile("" : : "r"(v));
+    #else
+        volatile std::uint32_t sink = v;
+        (void) sink;
+    #endif
+}
+
 [[gnu::always_inline]]
 inline void do_not_optimize(std::uint64_t v)
 {
