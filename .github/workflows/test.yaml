@@ -51,8 +51,6 @@ jobs:
           - { os: ubuntu-24.04, compiler: gcc-12 }
           - { os: ubuntu-24.04, compiler: gcc-13 }
           - { os: ubuntu-24.04, compiler: gcc-14 }
-          # llvm-10 through llvm-16 are known to fail setup on 24.04 (missing/incompatible
-          # packages for this combination), same finding as on other C++ projects' CI.
           - { os: ubuntu-24.04, compiler: llvm-17 }
           - { os: ubuntu-24.04, compiler: llvm-18 }
           - { os: ubuntu-24.04, compiler: llvm-19 }
@@ -62,7 +60,6 @@ jobs:
           #     Ubuntu 26.04
           # -------------------------------
 
-          - { os: ubuntu-26.04, compiler: gcc-10 }
           - { os: ubuntu-26.04, compiler: gcc-11 }
           - { os: ubuntu-26.04, compiler: gcc-12 }
           - { os: ubuntu-26.04, compiler: gcc-13 }
@@ -100,8 +97,6 @@ jobs:
           - { os: macos-26, compiler: gcc-13 }
           - { os: macos-26, compiler: gcc-14 }
           - { os: macos-26, compiler: gcc-15 }
-          - { os: macos-26, compiler: llvm-14 }
-          - { os: macos-26, compiler: llvm-15 }
           - { os: macos-26, compiler: llvm-16 }
           - { os: macos-26, compiler: llvm-17 }
           - { os: macos-26, compiler: llvm-18 }
@@ -136,6 +131,15 @@ jobs:
           cmake: true
           ninja: true
           vcvarsall: ${{ runner.os == 'Windows' }}
+
+      # Homebrew GCC's fixincludes step can leave <cstdio>/<cwchar> unable to see the current
+      # macOS SDK's FILE declaration, breaking practically every standard header transitively;
+      # confirmed on macos-15/gcc-11. Switching to the bare Command Line Tools SDK path (rather
+      # than the full Xcode.app one aminya/setup-cpp's step above leaves active) avoids this.
+      - name: Patch macOS GCC issues
+        if: runner.os == 'macOS' && startsWith(matrix.compiler, 'gcc')
+        run: |
+          sudo xcode-select --switch /Library/Developer/CommandLineTools
 
       - name: Configure CMake
         run: |

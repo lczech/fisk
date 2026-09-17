@@ -5,8 +5,13 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
-#include <unistd.h>  // isatty, fileno
 #include <vector>
+
+#if defined(_MSC_VER)
+    #include <io.h>  // _isatty, _fileno
+#else
+    #include <unistd.h>  // isatty, fileno
+#endif
 
 // =================================================================================================
 //     File System
@@ -105,5 +110,9 @@ inline std::ofstream get_ofstream( std::filesystem::path path, std::string filen
  */
 inline bool stdout_is_terminal()
 {
-    return isatty(fileno(stdout));
+    #if defined(_MSC_VER)
+        return _isatty(_fileno(stdout)) != 0;
+    #else
+        return isatty(fileno(stdout));
+    #endif
 }

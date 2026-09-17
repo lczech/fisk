@@ -74,6 +74,15 @@ include(CheckCXXCompilerFlag)
 # than failing the whole build on hosts where it doesn't.
 check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
 
+# The AVX10 case above needs its own separate handling: the trivial program the check above
+# compiles doesn't reach whatever code path trips the "invalid feature combination" diagnostic,
+# so COMPILER_SUPPORTS_MARCH_NATIVE alone doesn't catch it; it only shows up compiling the real
+# sources. Silence just this one diagnostic (rather than weakening -Werror overall) where the
+# compiler recognizes it at all.
+check_cxx_compiler_flag(
+    "-Wno-error=invalid-feature-combination" COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION
+)
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     check_cxx_compiler_flag("/arch:AVX2"   COMPILER_SUPPORTS_AVX2)
     check_cxx_compiler_flag("/arch:AVX512" COMPILER_SUPPORTS_AVX512)
@@ -186,6 +195,11 @@ if(FISK_BUILD_BENCHMARKS)
             -Wdouble-promotion
             -Werror
         )
+        if (COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION)
+            target_compile_options(fisk_benchmarks PRIVATE
+                -Wno-error=invalid-feature-combination
+            )
+        endif()
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk_benchmarks PRIVATE
             /W4
@@ -196,6 +210,10 @@ if(FISK_BUILD_BENCHMARKS)
             # for_each_kmer_packed_aligned_narrow_impl_() in kmer_extract/packed.hpp); MSVC
             # declining should stay a silent no-op rather than fail the /WX build.
             /wd4714
+            # C4324: struct padded due to an alignas specifier. Expected and harmless for the
+            # SIMD kernel structs (bit_extract/simd.hpp), which need natural alignment for their
+            # vector register members. GCC/Clang don't warn on this at all.
+            /wd4324
         )
     endif()
 endif()
@@ -255,6 +273,11 @@ if(FISK_BUILD_TESTS)
             -Wdouble-promotion
             -Werror
         )
+        if (COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION)
+            target_compile_options(fisk_tests PRIVATE
+                -Wno-error=invalid-feature-combination
+            )
+        endif()
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         # Same rationale as the GCC/Clang -UNDEBUG above: keep assert() live in the default
         # Release build type, so the test suite still exercises the library's preconditions.
@@ -262,8 +285,9 @@ if(FISK_BUILD_TESTS)
             /UNDEBUG
             /W4
             /WX
-            # See the matching /wd4714 on fisk_benchmarks above for why.
+            # See the matching /wd4714 and /wd4324 on fisk_benchmarks above for why.
             /wd4714
+            /wd4324
         )
     endif()
 
