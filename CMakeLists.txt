@@ -221,6 +221,11 @@ if(FISK_BUILD_BENCHMARKS)
             # warn on either.
             /wd4146
             /wd4334
+            # C4127: conditional expression is constant. Fires in benchmarks/kmer_clark.hpp on a
+            # boundary check (`if (k == 0 || k > 32)`) mirroring this project's own precondition
+            # style, where here `k` happens to be a hardcoded local rather than a runtime
+            # parameter -- harmless, and GCC/Clang don't warn on it either.
+            /wd4127
         )
     endif()
 endif()
