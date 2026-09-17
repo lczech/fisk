@@ -14,11 +14,13 @@
 #include "bench_kmer_clark.hpp"
 #include "bench_bit_extract_blocks.hpp"
 #include "bench_bit_extract_weights.hpp"
-#include "bench_seq_enc.hpp"
+#include "bench_char_encoder.hpp"
 #include "bench_seq_pack.hpp"
 #include "utils.hpp"
 #include "seq_data.hpp"
 #include "fisk/core/cpu_runtime.hpp"
+
+using namespace fisk;
 
 struct Options
 {
@@ -218,8 +220,8 @@ int main(int argc, char **argv)
 
     // Seq Encoding
     {
-        auto os_seq_enc = get_ofstream(out_dir, "seq_enc.csv" );
-        bench_seq_enc( sequences, os_seq_enc );
+        auto os_char_encoder = get_ofstream(out_dir, "char_encoder.csv" );
+        bench_char_encoder( sequences, os_char_encoder );
     }
 
     // Seq Packing (whole-sequence ASCII to 2-bit)
@@ -239,7 +241,7 @@ int main(int argc, char **argv)
         }
     }
 
-    // Kmer extract, directly from a packed TwoBitSequence
+    // Kmer extract, directly from a PackedSequence
     {
         auto os_kmer_extract_packed = get_ofstream(out_dir, "kmer_extract_packed.csv" );
         if( k == 0 ) {
