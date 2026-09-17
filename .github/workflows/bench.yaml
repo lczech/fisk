@@ -27,6 +27,9 @@ jobs:
             compiler: clang
             cc: clang
             cxx: clang++
+          # Windows: MSVC
+          - os: windows-latest
+            compiler: msvc
 
     runs-on: ${{ matrix.os }}
 
@@ -59,11 +62,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build
 
+      # MSVC isn't picked via CC/CXX env vars the way GCC/Clang are, and needs the Visual
+      # Studio developer environment (vcvarsall) set up first, so it gets its own setup step
+      # instead of using the system-installed compiler the other rows rely on.
+      - name: Setup C++ (Windows MSVC)
+        if: matrix.compiler == 'msvc'
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: msvc
+          cmake: true
+          ninja: true
+          vcvarsall: true
+
       - name: Configure CMake
         run: |
-          export CC="${{ matrix.cc }}"
-          export CXX="${{ matrix.cxx }}"
-          cmake -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+          if [[ "${{ matrix.compiler }}" == "msvc" ]]; then
+            cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+          else
+            export CC="${{ matrix.cc }}"
+            export CXX="${{ matrix.cxx }}"
+            cmake -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+          fi
 
       - name: Build
         run: |

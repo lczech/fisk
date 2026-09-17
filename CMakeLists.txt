@@ -51,14 +51,34 @@ target_compile_features(fisk INTERFACE cxx_std_20)
 # define. The best way to get "everything this build machine actually has" is -march=native, which
 # only ever enables extensions the CPU building reports. Those predefine the compiler flags such as
 #  __AVX2__/__BMI2__/etc., which core/intrinsics.hpp checks.
+#
+# MSVC has no per-extension flags the way GCC/Clang do -- only /arch: tiers that bundle several
+# extensions together, so the checks and the flags applied below differ for it:
+#   - SSE2 is the x64 baseline (always present), so it needs no flag and no check.
+#   - PCLMUL has no gating flag on MSVC at all; the intrinsic header is available unconditionally,
+#     so it is treated as always "supported" here and relies purely on FISK_ENABLE_PCLMUL's own
+#     opt-in warning, same trust model the option already documents for every compiler.
+#   - BMI2 has no standalone tier either -- only /arch:AVX2 enables it. So FISK_ENABLE_BMI2 alone
+#     (without FISK_ENABLE_AVX2) still applies /arch:AVX2, but only defines FISK_HAS_BMI2: the
+#     library's AVX2 code paths stay off unless FISK_ENABLE_AVX2 was separately requested.
+#   - AVX512F and AVX512BW are not independently selectable either; both come from /arch:AVX512.
 include(CheckCXXCompilerFlag)
 
-check_cxx_compiler_flag("-mbmi2"    COMPILER_SUPPORTS_BMI2)
-check_cxx_compiler_flag("-mpclmul"  COMPILER_SUPPORTS_PCLMUL)
-check_cxx_compiler_flag("-msse2"    COMPILER_SUPPORTS_SSE2)
-check_cxx_compiler_flag("-mavx2"    COMPILER_SUPPORTS_AVX2)
-check_cxx_compiler_flag("-mavx512f"  COMPILER_SUPPORTS_AVX512)
-check_cxx_compiler_flag("-mavx512bw" COMPILER_SUPPORTS_AVX512BW)
+if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    check_cxx_compiler_flag("/arch:AVX2"   COMPILER_SUPPORTS_AVX2)
+    check_cxx_compiler_flag("/arch:AVX512" COMPILER_SUPPORTS_AVX512)
+    set(COMPILER_SUPPORTS_BMI2 ${COMPILER_SUPPORTS_AVX2})
+    set(COMPILER_SUPPORTS_SSE2 TRUE)
+    set(COMPILER_SUPPORTS_PCLMUL TRUE)
+    set(COMPILER_SUPPORTS_AVX512BW ${COMPILER_SUPPORTS_AVX512})
+else()
+    check_cxx_compiler_flag("-mbmi2"     COMPILER_SUPPORTS_BMI2)
+    check_cxx_compiler_flag("-mpclmul"   COMPILER_SUPPORTS_PCLMUL)
+    check_cxx_compiler_flag("-msse2"     COMPILER_SUPPORTS_SSE2)
+    check_cxx_compiler_flag("-mavx2"     COMPILER_SUPPORTS_AVX2)
+    check_cxx_compiler_flag("-mavx512f"  COMPILER_SUPPORTS_AVX512)
+    check_cxx_compiler_flag("-mavx512bw" COMPILER_SUPPORTS_AVX512BW)
+endif()
 
 option(FISK_ENABLE_BMI2   "Force-enable fisk's BMI2-accelerated code paths (PEXT); only safe if the deployment target actually has BMI2" OFF)
 option(FISK_ENABLE_PCLMUL "Force-enable fisk's PCLMUL-accelerated code paths; only safe if the deployment target actually has PCLMUL" OFF)
@@ -68,22 +88,34 @@ option(FISK_ENABLE_AVX512 "Force-enable fisk's AVX512-accelerated code paths; on
 option(FISK_ENABLE_NEON   "Force-enable fisk's NEON-accelerated code paths (ARM64); only safe if the deployment target actually has NEON" OFF)
 
 if (FISK_ENABLE_BMI2 AND COMPILER_SUPPORTS_BMI2)
-    target_compile_options(fisk INTERFACE "-mbmi2")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(fisk INTERFACE "/arch:AVX2")
+    else()
+        target_compile_options(fisk INTERFACE "-mbmi2")
+    endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_BMI2=1)
 endif()
 
 if (FISK_ENABLE_PCLMUL AND COMPILER_SUPPORTS_PCLMUL)
-    target_compile_options(fisk INTERFACE "-mpclmul")
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(fisk INTERFACE "-mpclmul")
+    endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_CLMUL=1)
 endif()
 
 if (FISK_ENABLE_SSE2 AND COMPILER_SUPPORTS_SSE2)
-    target_compile_options(fisk INTERFACE "-msse2")
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(fisk INTERFACE "-msse2")
+    endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_SSE2=1)
 endif()
 
 if (FISK_ENABLE_AVX2 AND COMPILER_SUPPORTS_AVX2)
-    target_compile_options(fisk INTERFACE "-mavx2")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(fisk INTERFACE "/arch:AVX2")
+    else()
+        target_compile_options(fisk INTERFACE "-mavx2")
+    endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_AVX2=1)
 endif()
 
@@ -92,7 +124,11 @@ endif()
 # Lake -- only the earliest, now-obsolete Xeon Phi "Knights Landing" parts are F-only -- so this is
 # folded into the single FISK_ENABLE_AVX512 option rather than a separate opt-in tier.
 if (FISK_ENABLE_AVX512 AND COMPILER_SUPPORTS_AVX512 AND COMPILER_SUPPORTS_AVX512BW)
-    target_compile_options(fisk INTERFACE "-mavx512f" "-mavx512bw")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(fisk INTERFACE "/arch:AVX512")
+    else()
+        target_compile_options(fisk INTERFACE "-mavx512f" "-mavx512bw")
+    endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_AVX512=1)
 endif()
 
@@ -139,6 +175,12 @@ if(FISK_BUILD_BENCHMARKS)
         target_compile_options(fisk_benchmarks PRIVATE
             /W4
             /WX
+            # C4714: function marked as [[msvc::forceinline]]/__forceinline not inlined. Some of
+            # the for_each_kmer_*() loops (see FISK_ALWAYS_INLINE_FOR_EACH, core/intrinsics.hpp)
+            # are already known to sometimes decline this on GCC/Clang too (see the comment on
+            # for_each_kmer_packed_aligned_narrow_impl_() in kmer_extract/packed.hpp); MSVC
+            # declining should stay a silent no-op rather than fail the /WX build.
+            /wd4714
         )
     endif()
 endif()
@@ -196,9 +238,14 @@ if(FISK_BUILD_TESTS)
             -Werror
         )
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        # Same rationale as the GCC/Clang -UNDEBUG above: keep assert() live in the default
+        # Release build type, so the test suite still exercises the library's preconditions.
         target_compile_options(fisk_tests PRIVATE
+            /UNDEBUG
             /W4
             /WX
+            # See the matching /wd4714 on fisk_benchmarks above for why.
+            /wd4714
         )
     endif()
 

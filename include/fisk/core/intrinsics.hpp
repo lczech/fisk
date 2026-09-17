@@ -52,11 +52,17 @@
     #include <intrin.h>
 #endif
 
-// Compiler attribute macros, centralized so that a fallback for non-GNU-compatible compilers
-// (e.g. MSVC's __forceinline) only ever needs to be added in one place. Left unconditional for
-// now: an attribute in an unrecognized vendor namespace is required to be silently ignored per
-// the standard, so plain [[gnu::...]] is already safe as-is on e.g. MSVC, just without effect.
-#define FISK_ALWAYS_INLINE [[gnu::always_inline]]
+// Compiler attribute macros, centralized so that each is spelled out exactly once. Both
+// [[gnu::...]] and [[msvc::...]] are standard attribute syntax (unlike __forceinline /
+// __declspec(noinline), they need no special placement relative to `inline`), so branching the
+// macro definition alone is enough -- no call site needs to change per compiler.
+#if defined(_MSC_VER)
+    #define FISK_ALWAYS_INLINE [[msvc::forceinline]]
+#elif defined(__GNUC__) || defined(__clang__)
+    #define FISK_ALWAYS_INLINE [[gnu::always_inline]]
+#else
+    #define FISK_ALWAYS_INLINE
+#endif
 
 // Alias for FISK_ALWAYS_INLINE, applied to the for_each_kmer_*/for_each_spaced_kmer_* driver
 // loops specifically. Distinguishes "always-inlined because it's one of the hot per-sequence
@@ -65,8 +71,15 @@
 #define FISK_ALWAYS_INLINE_FOR_EACH FISK_ALWAYS_INLINE
 
 // For rare/cold-path helpers (precondition checks that throw, tail-case loops) that should stay
-// out of a hot path's inlined body and icache footprint.
-#define FISK_NOINLINE_COLD [[gnu::noinline, gnu::cold]]
+// out of a hot path's inlined body and icache footprint. MSVC has no "cold" hint to pair with
+// noinline, so it only gets the noinline half.
+#if defined(_MSC_VER)
+    #define FISK_NOINLINE_COLD [[msvc::noinline]]
+#elif defined(__GNUC__) || defined(__clang__)
+    #define FISK_NOINLINE_COLD [[gnu::noinline, gnu::cold]]
+#else
+    #define FISK_NOINLINE_COLD
+#endif
 
 namespace fisk {
 

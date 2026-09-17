@@ -1,0 +1,150 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+
+      # Instead of a matrix cross-product (which would include combinations that don't exist,
+      # e.g. old GCC versions on new Ubuntu releases), we list the exact combinations we want.
+      #
+      # Exact per-(os, compiler-version) availability drifts over time as GitHub retires images
+      # and package repositories drop old toolchain versions; this list will need updating then.
+
+      matrix:
+        # Dummy entries so the matrix variables exist; every real combination is in `include`.
+        os: [ ubuntu-latest ]
+        compiler: [ gcc ]
+
+        include:
+
+          # -------------------------------
+          #     Ubuntu 22.04
+          # -------------------------------
+
+          - { os: ubuntu-22.04, compiler: gcc-10 }
+          - { os: ubuntu-22.04, compiler: gcc-11 }
+          - { os: ubuntu-22.04, compiler: gcc-12 }
+          - { os: ubuntu-22.04, compiler: gcc-13 }
+          - { os: ubuntu-22.04, compiler: gcc-14 }
+          - { os: ubuntu-22.04, compiler: llvm-13 }
+          - { os: ubuntu-22.04, compiler: llvm-14 }
+          - { os: ubuntu-22.04, compiler: llvm-15 }
+          - { os: ubuntu-22.04, compiler: llvm-16 }
+          - { os: ubuntu-22.04, compiler: llvm-17 }
+          - { os: ubuntu-22.04, compiler: llvm-18 }
+          - { os: ubuntu-22.04, compiler: llvm-19 }
+          - { os: ubuntu-22.04, compiler: llvm-20 }
+
+          # -------------------------------
+          #     Ubuntu 24.04
+          # -------------------------------
+
+          - { os: ubuntu-24.04, compiler: gcc-10 }
+          - { os: ubuntu-24.04, compiler: gcc-11 }
+          - { os: ubuntu-24.04, compiler: gcc-12 }
+          - { os: ubuntu-24.04, compiler: gcc-13 }
+          - { os: ubuntu-24.04, compiler: gcc-14 }
+          # llvm-10 through llvm-16 are known to fail setup on 24.04 (missing/incompatible
+          # packages for this combination), same finding as on other C++ projects' CI.
+          - { os: ubuntu-24.04, compiler: llvm-17 }
+          - { os: ubuntu-24.04, compiler: llvm-18 }
+          - { os: ubuntu-24.04, compiler: llvm-19 }
+          - { os: ubuntu-24.04, compiler: llvm-20 }
+
+          # -------------------------------
+          #     Ubuntu 26.04
+          # -------------------------------
+
+          - { os: ubuntu-26.04, compiler: gcc-10 }
+          - { os: ubuntu-26.04, compiler: gcc-11 }
+          - { os: ubuntu-26.04, compiler: gcc-12 }
+          - { os: ubuntu-26.04, compiler: gcc-13 }
+          - { os: ubuntu-26.04, compiler: gcc-14 }
+          - { os: ubuntu-26.04, compiler: gcc-15 }
+          - { os: ubuntu-26.04, compiler: llvm-17 }
+          - { os: ubuntu-26.04, compiler: llvm-18 }
+          - { os: ubuntu-26.04, compiler: llvm-19 }
+          - { os: ubuntu-26.04, compiler: llvm-20 }
+
+          # -------------------------------
+          #     macOS 15
+          # -------------------------------
+
+          - { os: macos-15, compiler: gcc-11 }
+          - { os: macos-15, compiler: gcc-12 }
+          - { os: macos-15, compiler: gcc-13 }
+          - { os: macos-15, compiler: gcc-14 }
+          - { os: macos-15, compiler: gcc-15 }
+          - { os: macos-15, compiler: llvm-14 }
+          - { os: macos-15, compiler: llvm-15 }
+          - { os: macos-15, compiler: llvm-16 }
+          - { os: macos-15, compiler: llvm-17 }
+          - { os: macos-15, compiler: llvm-18 }
+          - { os: macos-15, compiler: llvm-19 }
+          - { os: macos-15, compiler: llvm-20 }
+          - { os: macos-15, compiler: apple-clang }
+
+          # -------------------------------
+          #     macOS 26
+          # -------------------------------
+
+          - { os: macos-26, compiler: gcc-11 }
+          - { os: macos-26, compiler: gcc-12 }
+          - { os: macos-26, compiler: gcc-13 }
+          - { os: macos-26, compiler: gcc-14 }
+          - { os: macos-26, compiler: gcc-15 }
+          - { os: macos-26, compiler: llvm-14 }
+          - { os: macos-26, compiler: llvm-15 }
+          - { os: macos-26, compiler: llvm-16 }
+          - { os: macos-26, compiler: llvm-17 }
+          - { os: macos-26, compiler: llvm-18 }
+          - { os: macos-26, compiler: llvm-19 }
+          - { os: macos-26, compiler: llvm-20 }
+          - { os: macos-26, compiler: apple-clang }
+
+          # -------------------------------
+          #     Windows (MSVC)
+          # -------------------------------
+
+          - { os: windows-2022, compiler: msvc }
+          - { os: windows-latest, compiler: msvc }
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      BUILD_TYPE: Release
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup C++
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: ${{ matrix.compiler }}
+          cmake: true
+          ninja: true
+          vcvarsall: ${{ runner.os == 'Windows' }}
+
+      - name: Configure CMake
+        run: |
+          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+
+      - name: Build
+        run: |
+          cmake --build build -- -j 4
+
+      - name: Run tests
+        run: |
+          ctest --test-dir build --output-on-failure
