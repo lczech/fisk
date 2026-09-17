@@ -214,6 +214,13 @@ if(FISK_BUILD_BENCHMARKS)
             # SIMD kernel structs (bit_extract/simd.hpp), which need natural alignment for their
             # vector register members. GCC/Clang don't warn on this at all.
             /wd4324
+            # C4146/C4334: unary minus on an unsigned type, and a 32-bit shift result implicitly
+            # widened to 64 bits. Both fire in benchmarks/bit_extract_zp7.hpp, vendored third-party
+            # code (see the file's header comment) reproduced as-is; the patterns are intentional
+            # bit tricks in the original, not something we should rewrite here. GCC/Clang don't
+            # warn on either.
+            /wd4146
+            /wd4334
         )
     endif()
 endif()

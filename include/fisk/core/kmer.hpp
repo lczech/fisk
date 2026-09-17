@@ -364,8 +364,12 @@ template <KmerType K>
  * The inverse of kmer_encode().
  */
 template <KmerType K>
-[[nodiscard]] inline constexpr std::string kmer_decode(K kmer, std::size_t width)
+[[nodiscard]] inline std::string kmer_decode(K kmer, std::size_t width)
 {
+    // Not constexpr: some libc++ versions we still support (e.g. LLVM 14's bundled libc++ on macOS)
+    // predate full support for constexpr std::string (P0980), which makes std::string not a literal
+    // type there, and a constexpr function's return type must be a literal type. No caller needs
+    // compile-time evaluation here anyway.
     assert(width >= 1 && width <= 32);
 
     std::string str;
