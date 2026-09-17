@@ -128,11 +128,14 @@ BitExtractMode bit_extract_selector(
     std::vector<CandidateResult> results;
     auto benchmark_candidate_ = [&](BitExtractMode mode, auto&& func)
     {
-        // Warmup. We use a volatile to ensure the compiler cant optimize out the loop below,
-        // which would create invalid benchmarks.
-        volatile std::uint64_t sink_out = 0;
+        // Warmup. do_not_optimize() forces each result into a register, so the compiler cannot
+        // prove the loop reducible and optimize it out, which would create invalid benchmarks.
+        // (A volatile accumulator used to serve this purpose here, but compound assignment on a
+        // volatile-qualified type is deprecated as of C++20.)
+        std::uint64_t sink_out = 0;
         for (auto const x : data) {
             sink_out += func(x);
+            do_not_optimize(sink_out);
         }
 
         // Timed runs. Take best-of-N to reduce scheduler noise.

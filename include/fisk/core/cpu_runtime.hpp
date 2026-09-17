@@ -178,7 +178,7 @@ inline std::string info_compiler_version()
     #if defined(__clang__)
         return __clang_version__;
     #elif defined(__ICC) || defined(__INTEL_COMPILER)
-        return __INTEL_COMPILER;
+        return std::to_string(__INTEL_COMPILER);
     #elif defined(__GNUC__) || defined(__GNUG__)
         return
             std::to_string(__GNUC__)            + "." +
@@ -188,13 +188,13 @@ inline std::string info_compiler_version()
     #elif defined(__HP_cc) || defined(__HP_aCC)
         return "";
     #elif defined(__IBMCPP__)
-        return __IBMCPP__;
+        return std::to_string(__IBMCPP__);
     #elif defined(_MSC_VER)
-        return _MSC_VER;
+        return std::to_string(_MSC_VER);
     #elif defined(__PGI)
-        return __PGI;
+        return std::to_string(__PGI);
     #elif defined(__SUNPRO_CC)
-        return __SUNPRO_CC;
+        return std::to_string(__SUNPRO_CC);
     #else
         return "unknown";
     #endif

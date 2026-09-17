@@ -64,6 +64,16 @@ target_compile_features(fisk INTERFACE cxx_std_20)
 #   - AVX512F and AVX512BW are not independently selectable either; both come from /arch:AVX512.
 include(CheckCXXCompilerFlag)
 
+# -march=native is used below (fisk_tests, fisk_benchmarks) to activate whatever ISA extensions
+# the build machine actually has. It is not universally reliable, though: some older Clang
+# versions don't support it on AArch64 at all, some older GCC versions on Apple Silicon resolve
+# it to a CPU name their own backend doesn't recognize (e.g. "apple-m1"), and on some very new
+# CPU/compiler combinations it can expand to a feature combination the compiler itself rejects
+# under -Werror (e.g. Clang's AVX10 promotion warning). Checked once here and applied only where
+# it actually works, falling back to no flag (i.e. whatever ISA the compiler defaults to) rather
+# than failing the whole build on hosts where it doesn't.
+check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+
 if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     check_cxx_compiler_flag("/arch:AVX2"   COMPILER_SUPPORTS_AVX2)
     check_cxx_compiler_flag("/arch:AVX512" COMPILER_SUPPORTS_AVX512)
@@ -157,8 +167,13 @@ if(FISK_BUILD_BENCHMARKS)
     # to anything that links fisk::fisk.
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
         target_compile_options(fisk_benchmarks PRIVATE
-            $<$<CONFIG:Release>:-O3 -march=native>
+            $<$<CONFIG:Release>:-O3>
         )
+        if (COMPILER_SUPPORTS_MARCH_NATIVE)
+            target_compile_options(fisk_benchmarks PRIVATE
+                $<$<CONFIG:Release>:-march=native>
+            )
+        endif()
 
         target_compile_options(fisk_benchmarks PRIVATE
             -Wall
@@ -213,10 +228,13 @@ if(FISK_BUILD_TESTS)
     # Same rationale as fisk_benchmarks above: build-quality choices private to this binary.
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
         # Activate whatever ISA extensions this build machine actually has, for the test
-        # suite only, so that the library itself stays portable.
-        target_compile_options(fisk_tests PRIVATE
-            -march=native
-        )
+        # suite only, so that the library itself stays portable. Skipped where unsupported
+        # (see COMPILER_SUPPORTS_MARCH_NATIVE above) rather than failing the build.
+        if (COMPILER_SUPPORTS_MARCH_NATIVE)
+            target_compile_options(fisk_tests PRIVATE
+                -march=native
+            )
+        endif()
 
         # Keep assert() live regardless of build type. CMAKE_BUILD_TYPE defaults to Release, which
         # carries -DNDEBUG, so without this the library's preconditions -- including the k-mer
