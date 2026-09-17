@@ -12,6 +12,7 @@
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/char_encoder.hpp"
+#include "fisk/core/intrinsics.hpp"
 
 namespace fisk {
 
@@ -259,6 +260,7 @@ inline std::string bit_extract_mask_to_spaced_kmer_mask_string( std::uint64_t ma
  * @brief Helper function to "iterate" a single mask, and apply a function.
  */
 template<typename Mask, typename F>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_mask(Mask const& mask, F&& f)
 {
     f(mask);
@@ -268,6 +270,7 @@ inline void for_each_mask(Mask const& mask, F&& f)
  * @brief Helper function to iterate over a vector of masks, and apply a function.
  */
 template<typename Mask, typename Alloc, typename F>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_mask(std::vector<Mask, Alloc> const& masks, F&& f)
 {
     for (auto const& mask : masks) {
@@ -302,6 +305,7 @@ inline void for_each_mask(std::vector<Mask, Alloc> const& masks, F&& f)
  */
 template<typename MaskOrMasks, typename Enc, typename BitExtract, typename Callback>
     requires CharEncoder<std::remove_cvref_t<Enc>>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer(
     std::string_view seq,
     std::size_t const span_k,

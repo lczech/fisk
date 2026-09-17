@@ -66,7 +66,7 @@ inline void emit_tail_packed_(
  * starting bytes.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_narrow_sse2_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -167,7 +167,7 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
  * Builds boundary-spanning windows from adjacent 64-bit words before applying the SSE2 shifts.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_wide_sse2_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -288,7 +288,7 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
  * yielding k-mers directly in SIMD vectors.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_sse2(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -316,7 +316,7 @@ inline void for_each_kmer_packed_simd_sse2(
  * AVX2's per-lane variable shift maps one byte's four local positions directly onto the lanes.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_narrow_avx2_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -384,7 +384,7 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
  * Three per-lane shifts combine the two words that may contain a k-mer.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_wide_avx2_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -461,7 +461,7 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
  * yielding k-mers directly in SIMD vectors.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_avx2(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -491,7 +491,7 @@ inline void for_each_kmer_packed_simd_avx2(
  * Two adjacent starting bytes are replicated into the register's two four-lane halves.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_narrow_avx512_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -574,7 +574,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
  * Two adjacent 128-bit windows are combined with three per-lane shifts.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_wide_avx512_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -677,7 +677,7 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
  * 12, yielding k-mers directly in SIMD vectors.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_avx512(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -703,7 +703,7 @@ inline void for_each_kmer_packed_simd_avx512(
  * @brief Extracts k in [1, 29] as two k-mers per uint64x2_t register.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_narrow_neon_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -779,7 +779,7 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
  *
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_wide_neon_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -875,7 +875,7 @@ inline void for_each_kmer_packed_simd_wide_neon_(
  * yielding k-mers directly in SIMD vectors.
  */
 template <Encoding E, Layout L, typename Func>
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_neon(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {

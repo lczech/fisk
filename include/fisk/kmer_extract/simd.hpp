@@ -82,6 +82,7 @@ inline std::uint32_t encode_32_nts_avx2(char const* data, std::uint8_t* codes) n
  * @brief Consume a contiguous run of valid two-bit codes.
  */
 template<typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void consume_valid_run(
     std::uint8_t const* codes,
     std::size_t len,
@@ -147,6 +148,7 @@ inline unsigned ctz32(std::uint32_t x) noexcept
  * Invalid characters reset the valid-window state and suppress any overlapping k-mers.
  */
 template<typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 {
     if (k == 0 || k > 32) {
@@ -240,6 +242,7 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 // It is not as fast as the AVX above, or just the lookup table... But kept here for reference.
 
 template<typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_simd_scalar(
     std::string_view seq,
     std::size_t k,

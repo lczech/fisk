@@ -84,7 +84,7 @@ namespace fisk {
 // after the fast path. The callback function is never passed in directly, as that would prevent
 // compiler optimizations; instead, values are returned to the caller.
 template <Encoding E, Layout L>
-[[gnu::noinline, gnu::cold]]
+FISK_NOINLINE_COLD
 std::size_t for_each_kmer_packed_tail_(
     PackedSequence<E, L> const& seq, std::size_t start_pos, std::size_t p_max,
     unsigned k32, std::array<std::uint64_t, 64>& out
@@ -128,11 +128,14 @@ std::size_t for_each_kmer_packed_tail_(
 // [30, 32] by passing `func` to a separate callee, some compilers keep `func` addressable for the
 // whole function rather than proving the narrow loop below never needs that, which can push its
 // captured state out of a register even though this loop alone never requires it. Neither
-// `[[gnu::always_inline]]` nor moving the k in [30, 32] cases into their own out-of-line function
-// avoided this -- it appears to be an inherent cost of one function covering both ranges, not an
-// inlining decision we can override. Measured up to ~1.5x on some platforms; not measurable on
-// others. Kept as a known trade-off for for_each_kmer_packed_aligned()'s simpler single-name API.
+// FISK_ALWAYS_INLINE_FOR_EACH nor moving the k in [30, 32] cases into their own out-of-line
+// function avoided this -- it appears to be an inherent cost of one function covering both
+// ranges, not an inlining decision we can override. Measured up to ~1.5x on some platforms; not
+// measurable on others. Kept as a known trade-off for for_each_kmer_packed_aligned()'s simpler
+// single-name API. FISK_ALWAYS_INLINE_FOR_EACH is still applied below for consistency with the
+// other for_each_kmer_packed_*() loops, even though it does not resolve this particular cost.
 template <Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_aligned_narrow_impl_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -210,6 +213,7 @@ inline std::uint64_t aligned_boundary_window_(
 }
 
 template <Encoding E, Layout L, unsigned K, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& seq, Func&& func)
 {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
@@ -273,6 +277,7 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
  * whose shifts are all compile-time constants via its own K template parameter.
  */
 template <Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_aligned(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -310,6 +315,7 @@ inline void for_each_kmer_packed_aligned(
 // depends serially on the previous one, as opposed to the above independent loads.
 // That serial dependency chain is what makes this version slower.
 template <Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_rolling_narrow_impl_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -355,6 +361,7 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
 // of narrow's single 64-bit `acc`; correct for any k in [1, 32], just with more bookkeeping per
 // byte, which is why the narrow impl above still exists as the faster choice for k <= 29.
 template <Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_rolling_wide_impl_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
@@ -443,6 +450,7 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
  * instead, since a single 64-bit accumulator no longer fits.
  */
 template <Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_rolling(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {

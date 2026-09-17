@@ -8,8 +8,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "fisk/core/kmer.hpp"
 #include "fisk/core/char_encoder.hpp"
+#include "fisk/core/intrinsics.hpp"
+#include "fisk/core/kmer.hpp"
 
 namespace fisk {
 
@@ -24,7 +25,7 @@ namespace fisk {
  * This helper is kept separate from the hot loop so the performance-critical extractor
  * can remain branch-free and avoid the runtime overhead of an inlined exception path.
  */
-[[gnu::noinline, gnu::cold]]
+FISK_NOINLINE_COLD
 inline void throw_invalid_kmer_k_(std::size_t k_max)
 {
     // Keep the validity check out of the hot path: throwing here avoids a cold branch/landing pad
@@ -58,6 +59,7 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
  */
 template<typename Enc, typename Func>
     requires CharEncoder<std::remove_cvref_t<Enc>>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_rolling(
     std::string_view seq, std::size_t k, Enc&& enc, Func&& func
 ) {
@@ -113,6 +115,7 @@ inline void for_each_kmer_rolling(
  */
 template<typename Enc, typename Func>
     requires CharEncoder<std::remove_cvref_t<Enc>>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_reextract(
     std::string_view seq, std::size_t k, Enc&& enc, Func&& func
 ) {
@@ -166,6 +169,7 @@ inline void for_each_kmer_reextract(
  * @tparam Func Callback function to be called for each valid k-mer.
  */
 template<typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer(std::string_view seq, std::size_t k, Func&& func)
 {
     for_each_kmer_rolling(seq, k, CharEncoderTable<Encoding::kACGT>{}, std::forward<Func>(func));

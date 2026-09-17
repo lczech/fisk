@@ -52,6 +52,22 @@
     #include <intrin.h>
 #endif
 
+// Compiler attribute macros, centralized so that a fallback for non-GNU-compatible compilers
+// (e.g. MSVC's __forceinline) only ever needs to be added in one place. Left unconditional for
+// now: an attribute in an unrecognized vendor namespace is required to be silently ignored per
+// the standard, so plain [[gnu::...]] is already safe as-is on e.g. MSVC, just without effect.
+#define FISK_ALWAYS_INLINE [[gnu::always_inline]]
+
+// Alias for FISK_ALWAYS_INLINE, applied to the for_each_kmer_*/for_each_spaced_kmer_* driver
+// loops specifically. Distinguishes "always-inlined because it's one of the hot per-sequence
+// loops" from any other reason a function might carry FISK_ALWAYS_INLINE, and gives that family
+// a single place to pick up something more (e.g. [[gnu::flatten]]) later, if ever needed.
+#define FISK_ALWAYS_INLINE_FOR_EACH FISK_ALWAYS_INLINE
+
+// For rare/cold-path helpers (precondition checks that throw, tail-case loops) that should stay
+// out of a hot path's inlined body and icache footprint.
+#define FISK_NOINLINE_COLD [[gnu::noinline, gnu::cold]]
+
 namespace fisk {
 
 // =================================================================================================
@@ -170,7 +186,7 @@ namespace fisk {
 // single-byte result of a char encoder) does not need a zero-extend just to fit the uint64_t
 // overload; the "r" constraint binds directly to a register of the argument's own width.
 
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE
 inline void do_not_optimize(std::uint8_t v)
 {
     #if defined(__GNUC__) || defined(__clang__)
@@ -181,7 +197,7 @@ inline void do_not_optimize(std::uint8_t v)
     #endif
 }
 
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE
 inline void do_not_optimize(std::uint16_t v)
 {
     #if defined(__GNUC__) || defined(__clang__)
@@ -192,7 +208,7 @@ inline void do_not_optimize(std::uint16_t v)
     #endif
 }
 
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE
 inline void do_not_optimize(std::uint32_t v)
 {
     #if defined(__GNUC__) || defined(__clang__)
@@ -203,7 +219,7 @@ inline void do_not_optimize(std::uint32_t v)
     #endif
 }
 
-[[gnu::always_inline]]
+FISK_ALWAYS_INLINE
 inline void do_not_optimize(std::uint64_t v)
 {
     #if defined(__GNUC__) || defined(__clang__)
@@ -220,7 +236,7 @@ inline void do_not_optimize(std::uint64_t v)
 // constraint class), so this is an overload set rather than a template. Guarded by the same
 // FISK_HAS_* macros as the types themselves, so each overload only exists where its type does.
 #if defined(FISK_HAS_SSE2)
-    [[gnu::always_inline]]
+    FISK_ALWAYS_INLINE
     inline void do_not_optimize(__m128i v)
     {
         #if defined(__GNUC__) || defined(__clang__)
@@ -233,7 +249,7 @@ inline void do_not_optimize(std::uint64_t v)
 #endif
 
 #if defined(FISK_HAS_AVX2)
-    [[gnu::always_inline]]
+    FISK_ALWAYS_INLINE
     inline void do_not_optimize(__m256i v)
     {
         #if defined(__GNUC__) || defined(__clang__)
@@ -246,7 +262,7 @@ inline void do_not_optimize(std::uint64_t v)
 #endif
 
 #if defined(FISK_HAS_AVX512)
-    [[gnu::always_inline]]
+    FISK_ALWAYS_INLINE
     inline void do_not_optimize(__m512i v)
     {
         #if defined(__GNUC__) || defined(__clang__)
@@ -261,7 +277,7 @@ inline void do_not_optimize(std::uint64_t v)
 #endif
 
 #if defined(FISK_HAS_NEON)
-    [[gnu::always_inline]]
+    FISK_ALWAYS_INLINE
     inline void do_not_optimize(uint64x2_t v)
     {
         #if defined(__GNUC__) || defined(__clang__)

@@ -28,6 +28,7 @@ namespace fisk {
  * spaced k-mer only contains valid characters, and only then emits it to the callback.
  */
 template<std::size_t L, typename Callback>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void emit_simd_lanes_spaced_kmers(
     std::uint64_t const* kmers,
     std::uint64_t const* valid_pos,
@@ -64,6 +65,7 @@ inline void emit_simd_lanes_spaced_kmers(
  * @tparam Callback  Callback functor, called as callback(mask_idx, pos, spaced_kmer).
  */
 template<typename Kernel, std::size_t NMasks, typename Enc, typename Callback>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_simd(
     std::string_view seq,
     std::size_t const span_k,
@@ -214,6 +216,7 @@ inline void for_each_spaced_kmer_simd(
  * @tparam Callback  Callback functor, called as callback(pos, value).
  */
 template<typename Kernel, typename Enc, typename Callback>
+FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_simd(
     std::string_view seq,
     std::size_t const span_k,
