@@ -63,7 +63,7 @@ static void check_encoder()
 static_assert(CharEncoderIfs<Encoding::kACTG>::encoding == Encoding::kACTG);
 static_assert(CharEncoderSwitch<Encoding::kACGT>::encoding == Encoding::kACGT);
 static_assert(CharEncoderAscii<Encoding::kACTG>::encoding == Encoding::kACTG);
-static_assert(CharEncoderAsciiUnchecked<Encoding::kACGT>::encoding == Encoding::kACGT);
+static_assert(CharEncoderAscii<Encoding::kACGT, InputValidity::kAssumeValid>::encoding == Encoding::kACGT);
 static_assert(CharEncoderTable<Encoding::kACTG>::encoding == Encoding::kACTG);
 
 // Encoders are usable at compile time, and the two encodings genuinely differ where they should:
@@ -98,28 +98,35 @@ TEST(CharEncoder, Switch)
     check_encoder<CharEncoderSwitch>();
 }
 
-TEST(CharEncoder, Ascii)
-{
-    check_encoder<CharEncoderAscii>();
-}
-
 TEST(CharEncoder, Table)
 {
     check_encoder<CharEncoderTable>();
 }
 
-// The unchecked variant is unspecified for non-ACGT input, so only check that it agrees with the
-// checked variant on the characters it actually supports.
-TEST(CharEncoder, AsciiUnchecked)
+// CharEncoderAscii takes a second, defaulted InputValidity parameter (for kAssumeValid, see
+// core/char_encoder.hpp), so it does not have the single-parameter shape check_encoder()'s
+// template-template-parameter expects. This alias fixes V at its default (kValidate) to restore
+// that shape exactly, rather than relying on compilers to accept a defaulted trailing parameter.
+template <Encoding E>
+using CharEncoderAsciiValidating = CharEncoderAscii<E, InputValidity::kValidate>;
+
+TEST(CharEncoder, Ascii)
+{
+    check_encoder<CharEncoderAsciiValidating>();
+}
+
+// The kAssumeValid variant is unspecified for non-ACGT input, so only check that it agrees with
+// the (default, kValidate) checked variant on the characters it actually supports.
+TEST(CharEncoder, AsciiAssumeValid)
 {
     char const valid[] = {'A', 'C', 'G', 'T', 'a', 'c', 'g', 't'};
     for (char c : valid) {
         EXPECT_EQ(
-            static_cast<int>(CharEncoderAsciiUnchecked<Encoding::kACGT>{}(c)),
+            static_cast<int>((CharEncoderAscii<Encoding::kACGT, InputValidity::kAssumeValid>{}(c))),
             static_cast<int>(CharEncoderAscii<Encoding::kACGT>{}(c))
         );
         EXPECT_EQ(
-            static_cast<int>(CharEncoderAsciiUnchecked<Encoding::kACTG>{}(c)),
+            static_cast<int>((CharEncoderAscii<Encoding::kACTG, InputValidity::kAssumeValid>{}(c))),
             static_cast<int>(CharEncoderAscii<Encoding::kACTG>{}(c))
         );
     }

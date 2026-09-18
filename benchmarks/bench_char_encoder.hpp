@@ -109,24 +109,28 @@ inline void bench_char_encoder(std::vector<std::string> const& sequences, std::o
         );
         write_csv_rows(csv_os, suite_title, "encoding=acgt", results);
 
-        // ascii_unchecked runs in its own suite.run() call, not alongside the checked encoders
+        // ascii_assume_valid runs in its own suite.run() call, not alongside the checked encoders
         // above: Microbench::run() cross-validates that every bench in the same call produces
-        // the same sink, but ascii_unchecked has no validity check by design (that's its whole
+        // the same sink, but ascii_assume_valid has no validity check by design (that's its whole
         // speed advantage) and so does not agree with the others on invalid characters -- and
         // `sequences` here may contain a small fraction of those (see --n-prob in main.cpp).
         // Splitting it off still benchmarks it and still cross-validates barrier vs. non-barrier
         // against each other, just not against the checked techniques' different handling of
         // invalid input.
-        auto const results_unchecked = suite.run(
+        auto const results_assume_valid = suite.run(
             sequences,
-            bench("ascii_unchecked", [&](std::string const& seq) {
-                return sequence_encode_hash(seq, CharEncoderAsciiUnchecked<Encoding::kACGT>{});
+            bench("ascii_assume_valid", [&](std::string const& seq) {
+                return sequence_encode_hash(
+                    seq, CharEncoderAscii<Encoding::kACGT, InputValidity::kAssumeValid>{}
+                );
             }),
-            bench("ascii_unchecked_barrier", [&](std::string const& seq) {
-                return sequence_encode_hash<true>(seq, CharEncoderAsciiUnchecked<Encoding::kACGT>{});
+            bench("ascii_assume_valid_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(
+                    seq, CharEncoderAscii<Encoding::kACGT, InputValidity::kAssumeValid>{}
+                );
             })
         );
-        write_csv_rows(csv_os, suite_title, "encoding=acgt", results_unchecked);
+        write_csv_rows(csv_os, suite_title, "encoding=acgt", results_assume_valid);
     }
 
     // -----------------------------------------------------------------------
@@ -172,17 +176,21 @@ inline void bench_char_encoder(std::vector<std::string> const& sequences, std::o
         );
         write_csv_rows(csv_os, suite_title, "encoding=actg", results);
 
-        // See the matching comment in the encoding=acgt block above for why ascii_unchecked
+        // See the matching comment in the encoding=acgt block above for why ascii_assume_valid
         // runs in its own suite.run() call rather than alongside the checked encoders.
-        auto const results_unchecked = suite.run(
+        auto const results_assume_valid = suite.run(
             sequences,
-            bench("ascii_unchecked", [&](std::string const& seq) {
-                return sequence_encode_hash(seq, CharEncoderAsciiUnchecked<Encoding::kACTG>{});
+            bench("ascii_assume_valid", [&](std::string const& seq) {
+                return sequence_encode_hash(
+                    seq, CharEncoderAscii<Encoding::kACTG, InputValidity::kAssumeValid>{}
+                );
             }),
-            bench("ascii_unchecked_barrier", [&](std::string const& seq) {
-                return sequence_encode_hash<true>(seq, CharEncoderAsciiUnchecked<Encoding::kACTG>{});
+            bench("ascii_assume_valid_barrier", [&](std::string const& seq) {
+                return sequence_encode_hash<true>(
+                    seq, CharEncoderAscii<Encoding::kACTG, InputValidity::kAssumeValid>{}
+                );
             })
         );
-        write_csv_rows(csv_os, suite_title, "encoding=actg", results_unchecked);
+        write_csv_rows(csv_os, suite_title, "encoding=actg", results_assume_valid);
     }
 }

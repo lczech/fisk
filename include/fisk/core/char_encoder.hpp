@@ -43,7 +43,9 @@ namespace fisk {
 // convention on to its consumer. What distinguishes them from each other is only the
 // technique used to get there; we provide several so that they can be benchmarked against
 // each other. All of them return 0-3 for a valid nucleotide and a value >= kInvalidNucleotide
-// otherwise, for both upper and lower case.
+// otherwise, for both upper and lower case, except CharEncoderAscii<E, InputValidity::kAssumeValid>,
+// which trusts the caller instead of checking, and so returns a valid-looking 0-3 code even for
+// input that is not actually a nucleotide; see InputValidity below.
 
 // Every encoder below relies on the ASCII code points of the nucleotide characters, whether
 // through the lookup tables or the bit tricks. Assert once here that the host character set
@@ -60,6 +62,22 @@ static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
 // -----------------------------------------------------------------------------
 //     Shared
 // -----------------------------------------------------------------------------
+
+/**
+ * @brief Whether a per-character encoder checks its input, or trusts the caller to have done so.
+ */
+enum class InputValidity
+{
+    /**
+     * @brief Check every character, returning kInvalidNucleotide for anything not a nucleotide.
+     */
+    kValidate,
+
+    /**
+     * @brief Trust the caller that every character is already a valid nucleotide; skip the check.
+     */
+    kAssumeValid
+};
 
 /**
  * @brief Code returned for any character that is not a nucleotide.
@@ -210,56 +228,46 @@ inline constexpr std::uint8_t ascii_bits_to_code_(std::uint8_t value) noexcept
 
 /**
  * @brief Get the two-bit encoding of a char, using bit twiddling to utilize a coincidence in the
- * ASCII code, returning kInvalidNucleotide if the char is not in `ACGT`.
+ * ASCII code.
  *
- * See ascii_bits_to_code_() for how the bit trick works. Note that the validity check here is
- * more expensive than the encoding itself; use CharEncoderAsciiUnchecked instead where the input is
- * known to be valid.
+ * See ascii_bits_to_code_() for how the bit trick works. `V` selects whether this actually checks
+ * validity (`kValidate`, returning kInvalidNucleotide if the char is not in `ACGT`) or trusts the
+ * caller and skips the check entirely (`kAssumeValid`, the fastest of the encoders offered here;
+ * invalid characters then silently produce one of the four valid codes instead of
+ * kInvalidNucleotide). Only use `kAssumeValid` where it is clear that the input is in `ACGT`.
  */
-template <Encoding E>
+template <Encoding E, InputValidity V = InputValidity::kValidate>
 struct CharEncoderAscii
 {
     static constexpr Encoding encoding = E;
 
     inline constexpr std::uint8_t operator()(char c) const noexcept
     {
-        // Fold to lowercase: 'A'..'Z' -> 'a'..'z', ASCII only.
-        std::uint8_t const value = static_cast<std::uint8_t>(c) | 0x20u;
+        if constexpr (V == InputValidity::kAssumeValid) {
+            // No case fold needed: the bits the trick reads are unaffected by the case bit.
+            return ascii_bits_to_code_<E>(static_cast<std::uint8_t>(c));
+        } else if constexpr (V == InputValidity::kValidate) {
+            // Fold to lowercase: 'A'..'Z' -> 'a'..'z', ASCII only.
+            std::uint8_t const value = static_cast<std::uint8_t>(c) | 0x20u;
 
-        // Extract the relevant bits to get two-bit code.
-        std::uint8_t const encoded = ascii_bits_to_code_<E>(value);
+            // Extract the relevant bits to get two-bit code.
+            std::uint8_t const encoded = ascii_bits_to_code_<E>(value);
 
-        // Use a bitset validator to check for correct char;
-        // should be faster than actual character comparisons. Independent of the encoding,
-        // as which characters are valid does not depend on which codes they map to.
-        // a & 31 = 1
-        // c & 31 = 3
-        // g & 31 = 7
-        // t & 31 = 20
-        std::uint32_t constexpr valid_mask = (1u << 1) | (1u << 3) | (1u << 7) | (1u << 20);
-        std::uint32_t const     low5_valid = ((valid_mask >> (value & 31u)) & 1u);
-        std::uint32_t const     hig3_valid = ((value & 0xE0u) == 0x60u);
-        std::uint32_t const     is_valid   = low5_valid & hig3_valid;
-        return is_valid ? encoded : kInvalidNucleotide;
-    }
-};
-
-/**
- * @brief Get the two-bit encoding of a char via the ASCII exploit, skipping the validity check.
- *
- * See CharEncoderAscii for details. Only use when it is clear that the input is in `ACGT`; invalid
- * characters silently produce one of the four valid codes rather than kInvalidNucleotide. This is
- * the fastest of the encoders offered here.
- */
-template <Encoding E>
-struct CharEncoderAsciiUnchecked
-{
-    static constexpr Encoding encoding = E;
-
-    inline constexpr std::uint8_t operator()(char c) const noexcept
-    {
-        // No case fold needed: the bits the trick reads are unaffected by the case bit.
-        return ascii_bits_to_code_<E>(static_cast<std::uint8_t>(c));
+            // Use a bitset validator to check for correct char;
+            // should be faster than actual character comparisons. Independent of the encoding,
+            // as which characters are valid does not depend on which codes they map to.
+            // a & 31 = 1
+            // c & 31 = 3
+            // g & 31 = 7
+            // t & 31 = 20
+            std::uint32_t constexpr valid_mask = (1u << 1) | (1u << 3) | (1u << 7) | (1u << 20);
+            std::uint32_t const     low5_valid = ((valid_mask >> (value & 31u)) & 1u);
+            std::uint32_t const     hig3_valid = ((value & 0xE0u) == 0x60u);
+            std::uint32_t const     is_valid   = low5_valid & hig3_valid;
+            return is_valid ? encoded : kInvalidNucleotide;
+        } else {
+            static_assert(dependent_false_v<V>, "Unhandled InputValidity in CharEncoderAscii");
+        }
     }
 };
 
@@ -341,8 +349,8 @@ static_assert(CharEncoder<CharEncoderSwitch<Encoding::kACGT>>);
 static_assert(CharEncoder<CharEncoderSwitch<Encoding::kACTG>>);
 static_assert(CharEncoder<CharEncoderAscii<Encoding::kACGT>>);
 static_assert(CharEncoder<CharEncoderAscii<Encoding::kACTG>>);
-static_assert(CharEncoder<CharEncoderAsciiUnchecked<Encoding::kACGT>>);
-static_assert(CharEncoder<CharEncoderAsciiUnchecked<Encoding::kACTG>>);
+static_assert(CharEncoder<CharEncoderAscii<Encoding::kACGT, InputValidity::kAssumeValid>>);
+static_assert(CharEncoder<CharEncoderAscii<Encoding::kACTG, InputValidity::kAssumeValid>>);
 static_assert(CharEncoder<CharEncoderTable<Encoding::kACGT>>);
 static_assert(CharEncoder<CharEncoderTable<Encoding::kACTG>>);
 
