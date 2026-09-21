@@ -19,6 +19,13 @@
 
 using namespace fisk;
 
+// AdaptiveBitExtract and bit_extract_selector() each run their own internal self-tuning
+// benchmark on every construction/call. We reduce their sample size here (from the defaults of
+// 2^17 and 2^14, respectively) since these calls happen for every generated input on every
+// repeat of this suite, and their results here are only used for informational mode counts,
+// not for any of the benched implementations.
+static constexpr std::size_t kTuneNumVals = 4096;
+
 /**
  * @brief Helper to store a value and a mask (plus its software helpers) for testing.
  *
@@ -77,10 +84,14 @@ static inline std::vector<BitExtractInput> make_inputs(
             BitExtractMask(mask),
             bit_extract_block_table_preprocess( mask ),
             bit_extract_butterfly_table_preprocess( mask ),
-            AdaptiveBitExtract( mask )
+            // Adaptive and selector both run an internal self-tuning benchmark on construction,
+            // for every element, on every repeat. We use a reduced sample size here (still
+            // enough for a reliable relative ranking of the candidate implementations) to keep
+            // this benchmark suite's runtime in check; see benchmark_efficiency notes.
+            AdaptiveBitExtract( mask, AdaptiveBitExtract::ExtractMode::kAutomatic, kTuneNumVals )
         });
         ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
-        ++selector_counts[static_cast<size_t>( bit_extract_selector(mask) )];
+        ++selector_counts[static_cast<size_t>( bit_extract_selector(mask, kTuneNumVals) )];
         // std::cout << v.back().adaptive_bit_extract.mode_name() << "\n";
     }
     return v;

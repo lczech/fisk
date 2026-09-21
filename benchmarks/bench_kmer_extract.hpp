@@ -80,7 +80,7 @@ inline void bench_kmer_extract(
         throw std::runtime_error( "Invalid k_min > k_max" );
     }
 
-    std::size_t const rounds = 8;
+    std::size_t const rounds = 2;
     std::size_t const repeats = 8;
 
     // User output

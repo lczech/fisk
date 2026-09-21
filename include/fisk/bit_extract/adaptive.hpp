@@ -90,8 +90,16 @@ public:
      *
      * This sets the mask and the mode, by default using auto-tuning to the fastest bit extract
      * implementation, by running a small benchmark internally.
+     *
+     * @param tune_num_vals Number of random values to use for the internal auto-tuning benchmark,
+     * if @p mode is `kAutomatic`. Larger values yield a more reliable tuning decision, at the cost
+     * of a longer construction time.
      */
-    AdaptiveBitExtract( std::uint64_t mask, ExtractMode mode = ExtractMode::kAutomatic )
+    AdaptiveBitExtract(
+        std::uint64_t mask,
+        ExtractMode mode = ExtractMode::kAutomatic,
+        std::size_t tune_num_vals = ( 2 << 16 )
+    )
         : mode_(mode)
         , mask_(mask)
     {
@@ -103,7 +111,7 @@ public:
 
         // Find the fastest mode if requested, or hard-set the extractor function.
         if( mode_ == ExtractMode::kAutomatic ) {
-            tune_to_fastest_mode_();
+            tune_to_fastest_mode_(tune_num_vals);
         } else {
             set_bit_extr_func_( mode_ );
         }
@@ -211,12 +219,11 @@ public:
 
 private:
 
-    void tune_to_fastest_mode_()
+    void tune_to_fastest_mode_( std::size_t n )
     {
         // Prepare some random data that is long enough for a meaningful test,
         // but does usually not exceed cache space, to avoid testing ram speed
         // instead of actual algorithm performance.
-        size_t const n = ( 2 << 16 );
         std::vector<std::uint64_t> data;
         data.reserve(n);
         Splitmix64 rng{};

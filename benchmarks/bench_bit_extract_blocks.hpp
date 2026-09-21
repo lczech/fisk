@@ -253,10 +253,15 @@ inline std::vector<BitExtractInput> make_input_blocks(
             BitExtractMask(mask),
             bit_extract_block_table_preprocess( mask ),
             bit_extract_butterfly_table_preprocess( mask ),
-            AdaptiveBitExtract( mask )
+            // Adaptive and selector both run an internal self-tuning benchmark on construction,
+            // for every element, on every repeat. We use a reduced sample size here (still
+            // enough for a reliable relative ranking of the candidate implementations) to keep
+            // this benchmark suite's runtime in check; see kTuneNumVals in
+            // bench_bit_extract_weights.hpp.
+            AdaptiveBitExtract( mask, AdaptiveBitExtract::ExtractMode::kAutomatic, kTuneNumVals )
         });
         ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
-        ++selector_counts[static_cast<size_t>( bit_extract_selector(v.back().mask) )];
+        ++selector_counts[static_cast<size_t>( bit_extract_selector(v.back().mask, kTuneNumVals) )];
         // std::cout << v.back().adaptive_bit_extract.mode_name() << "\n";
     }
     return v;
