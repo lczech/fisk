@@ -117,7 +117,6 @@ BENCHMARKS_KEEP_EXTENDED = [
     "block_table_unrolled4",
     "block_table_unrolled8",
     "butterfly_table",
-    # "adaptive",
     # "instlatx",
     # "zp7",
 
@@ -167,7 +166,6 @@ BENCHMARKS_KEEP = [
     "block_table_unrolled4",
     "block_table_unrolled8",
     "butterfly_table",
-    # "adaptive",
     # "instlatx",
     # "zp7",
 
@@ -231,7 +229,6 @@ BENCHMARKS_KEEP_REDUCED = [
     # "block_table_unrolled4",
     # "block_table_unrolled8",
     "butterfly_table",
-    # "adaptive",
     # "instlatx",
     # "zp7",
 
@@ -279,7 +276,6 @@ BENCHMARK_RENAMES = {
     "block_table_unrolled4" : "Block Table (4x unrolled)",
     "block_table_unrolled8" : "Block Table (8x unrolled)",
     "butterfly_table"       : "Butterfly Table",
-    "adaptive"              : "Adaptive",
     "instlatx"              : "InstLatX",
     "zp7"                   : "ZP7",
 
@@ -356,7 +352,6 @@ BENCHMARK_COLORS = {
     "block_table_unrolled4" : "#31a354",
     "block_table_unrolled8" : "#006d2c",
     "butterfly_table"       : "#BB2F98",
-    "adaptive"              : "#DB5B1F",
     "instlatx"              : "#000000",
     "zp7"                   : "#000000",
 
@@ -425,7 +420,6 @@ BENCHMARK_ORDER = [
     "block_table_unrolled2",
     "block_table_unrolled4",
     "block_table_unrolled8",
-    "adaptive",
     # "instlatx",
     # "zp7",
 

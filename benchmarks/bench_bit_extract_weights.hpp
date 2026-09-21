@@ -13,16 +13,14 @@
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "bit_extract_zp7.hpp"
 #include "bit_extract_instlatx64.hpp"
-#include "fisk/bit_extract/adaptive.hpp"
 #include "fisk/bit_extract/selector.hpp"
 #include "fisk/core/intrinsics.hpp"
 
 using namespace fisk;
 
-// AdaptiveBitExtract and bit_extract_selector() each run their own internal self-tuning
-// benchmark on every construction/call. We reduce their sample size here (from the defaults of
-// 2^17 and 2^14, respectively) since these calls happen for every generated input on every
-// repeat of this suite, and their results here are only used for informational mode counts,
+// bit_extract_selector() runs its own internal self-tuning benchmark on every call. We reduce
+// its sample size here (from the default of 2^14) since it is called for every generated input
+// on every repeat of this suite, and its result here is only used for informational mode counts,
 // not for any of the benched implementations.
 static constexpr std::size_t kTuneNumVals = 4096;
 
@@ -40,10 +38,6 @@ struct BitExtractInput
     // For the preprocessed implementations, we also pre-compute their tables
     BitExtractBlockTable block_table;
     BitExtractButterflyTable butterfly_table;
-
-    // We also need to store an instance of the adaptive bit extract here, which evaluates
-    // the fastest algorithm to use for the given mask - which is mask-dependent.
-    AdaptiveBitExtract adaptive_bit_extract;
 };
 
 /**
@@ -67,7 +61,6 @@ inline std::uint64_t random_mask_with_popcount(std::mt19937_64& rng, int popcnt)
  */
 static inline std::vector<BitExtractInput> make_inputs(
     std::size_t n, int popcnt, std::uint64_t seed,
-    std::vector<size_t>& adaptive_counts,
     std::vector<size_t>& selector_counts
 ) {
     std::mt19937_64 rng(seed);
@@ -83,16 +76,9 @@ static inline std::vector<BitExtractInput> make_inputs(
             value,
             BitExtractMask(mask),
             bit_extract_block_table_preprocess( mask ),
-            bit_extract_butterfly_table_preprocess( mask ),
-            // Adaptive and selector both run an internal self-tuning benchmark on construction,
-            // for every element, on every repeat. We use a reduced sample size here (still
-            // enough for a reliable relative ranking of the candidate implementations) to keep
-            // this benchmark suite's runtime in check; see benchmark_efficiency notes.
-            AdaptiveBitExtract( mask, AdaptiveBitExtract::ExtractMode::kAutomatic, kTuneNumVals )
+            bit_extract_butterfly_table_preprocess( mask )
         });
-        ++adaptive_counts[static_cast<size_t>( v.back().adaptive_bit_extract.mode())];
         ++selector_counts[static_cast<size_t>( bit_extract_selector(mask, kTuneNumVals) )];
-        // std::cout << v.back().adaptive_bit_extract.mode_name() << "\n";
     }
     return v;
 }
@@ -117,10 +103,8 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
     // Prepare csv output file with benchmark results
     write_csv_header(csv_os);
 
-    // Collect which adaptive/selector mode was chosen how often.
+    // Collect which selector mode was chosen how often.
     // This is not really important, but we are curious to see this.
-    // We test both the deprecated `adaptive`, and the recommended `selector` variants here.
-    auto adaptive_counts = std::vector<size_t>( AdaptiveBitExtract::mode_count(), 0 );
     auto selector_counts = std::vector<size_t>( 6, 0 );
 
     // Run a benchmark for each weight of the mask.
@@ -136,10 +120,10 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
         }
 
         // Helper to generate fresh input for each repetition
-        auto make_inputs_rep = [w, &adaptive_counts, &selector_counts]()
+        auto make_inputs_rep = [w, &selector_counts]()
         {
             auto seed = static_cast<std::uint64_t>(0xC0FFEEULL) ^ static_cast<std::uint64_t>(w);
-            return make_inputs( n, w, seed, adaptive_counts, selector_counts );
+            return make_inputs( n, w, seed, selector_counts );
         };
 
         Microbench<BitExtractInput> suite(suite_title);
@@ -189,10 +173,6 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
                 "butterfly_table",
                 [](BitExtractInput const& in){ return bit_extract_butterfly_table(in.value, in.butterfly_table);
             }),
-            bench(
-                "adaptive",
-                [](BitExtractInput const& in){ return in.adaptive_bit_extract(in.value);
-            }),
             #if defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)
             bench(
                 "instlatx",
@@ -210,13 +190,6 @@ inline void bench_bit_extract_weights(std::ostream& csv_os)
     if( stdout_is_terminal() ) {
         std::cout << "\n";
     }
-
-    // Print adative bit extract counts
-    std::cout << "adaptive bit extract counts:\n";
-    for( size_t i = 0; i < adaptive_counts.size(); ++i ) {
-        std::cout << "  " << adaptive_counts[i] << " <== " << AdaptiveBitExtract::mode_name(static_cast<AdaptiveBitExtract::ExtractMode>(i)) << "\n";
-    }
-    std::cout << "\n";
 
     std::cout << "selector bit extract counts:\n";
     for( size_t i = 0; i < selector_counts.size(); ++i ) {
