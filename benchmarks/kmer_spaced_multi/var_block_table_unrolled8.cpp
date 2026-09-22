@@ -11,7 +11,12 @@ using namespace fisk;
 
 std::uint64_t run_var_block_table_unrolled8(std::string const& seq, std::size_t k, std::vector<BitExtractBlockTable> const& masks)
 {
-    return compute_spaced_kmer_hash(
-        seq, k, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_block_table_unrolled<8>
+    std::uint64_t hash = 0;
+    for_each_spaced_kmer(
+        std::string_view(seq), k, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_block_table_unrolled<8>,
+        [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t spaced_kmer) {
+            hash += spaced_kmer;
+        }
     );
+    return hash;
 }

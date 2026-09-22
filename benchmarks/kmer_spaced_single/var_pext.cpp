@@ -12,7 +12,14 @@ using namespace fisk;
 
 std::uint64_t run_var_pext(std::string const& seq, std::size_t k, BitExtractMask const& mask)
 {
-    return compute_spaced_kmer_hash(seq, k, mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_pext);
+    std::uint64_t hash = 0;
+    for_each_spaced_kmer(
+        std::string_view(seq), k, mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_pext,
+        [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t spaced_kmer) {
+            hash += spaced_kmer;
+        }
+    );
+    return hash;
 }
 
 #endif // FISK_HAS_BMI2

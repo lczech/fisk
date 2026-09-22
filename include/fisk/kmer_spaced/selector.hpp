@@ -124,6 +124,29 @@ inline SpacedKmerMode spaced_kmer_selector(
     // SIMD kernel constructors also preprocess internally, once per candidate.
     auto const butterfly_table = bit_extract_butterfly_table_preprocess(mask.mask);
 
+    // Sums all spaced k-mers extracted from `seq`, so that the benchmark below has some work
+    // to time, and a value to cross-check candidates against.
+    auto sum_spaced_kmers_ = [&](auto&& bit_ext) -> std::uint64_t {
+        std::uint64_t hash = 0;
+        for_each_spaced_kmer(
+            std::string_view(seq), span_k, mask, CharEncoderTable<Encoding::kACGT>{}, bit_ext,
+            [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t spaced_kmer) {
+                hash += spaced_kmer;
+            }
+        );
+        return hash;
+    };
+    auto sum_spaced_kmers_simd_ = [&](auto const& kernel) -> std::uint64_t {
+        std::uint64_t hash = 0;
+        for_each_spaced_kmer_simd(
+            std::string_view(seq), span_k, kernel, CharEncoderTable<Encoding::kACGT>{},
+            [&](std::size_t /*pos*/, std::uint64_t wmer) {
+                hash += wmer;
+            }
+        );
+        return hash;
+    };
+
     // ------------------------------------------------------------
     //     Benchmark helper
     // ------------------------------------------------------------
@@ -176,11 +199,7 @@ inline SpacedKmerMode spaced_kmer_selector(
         benchmark_candidate_(
             SpacedKmerMode::kPext,
             [&]() -> std::uint64_t {
-                return compute_spaced_kmer_hash(
-                    seq,
-                    span_k,
-                    mask,
-                    CharEncoderTable<Encoding::kACGT>{},
+                return sum_spaced_kmers_(
                     [&](std::uint64_t x, BitExtractMask const& m) noexcept {
                         return bit_extract_pext(x, m);
                     }
@@ -193,11 +212,7 @@ inline SpacedKmerMode spaced_kmer_selector(
     benchmark_candidate_(
         SpacedKmerMode::kButterflyTable,
         [&]() -> std::uint64_t {
-            return compute_spaced_kmer_hash(
-                seq,
-                span_k,
-                mask,
-                CharEncoderTable<Encoding::kACGT>{},
+            return sum_spaced_kmers_(
                 [&](std::uint64_t x, BitExtractMask const&) noexcept {
                     return bit_extract_butterfly_table(x, butterfly_table);
                 }
@@ -209,11 +224,7 @@ inline SpacedKmerMode spaced_kmer_selector(
     benchmark_candidate_(
         SpacedKmerMode::kButterflyTableSSE2,
         [&]() -> std::uint64_t {
-            return compute_spaced_kmer_hash_simd(
-                seq,
-                span_k,
-                BitExtractKernelButterflySSE2(mask.mask)
-            );
+            return sum_spaced_kmers_simd_(BitExtractKernelButterflySSE2(mask.mask));
         }
     );
     #endif
@@ -222,11 +233,7 @@ inline SpacedKmerMode spaced_kmer_selector(
     benchmark_candidate_(
         SpacedKmerMode::kButterflyTableAVX2,
         [&]() -> std::uint64_t {
-            return compute_spaced_kmer_hash_simd(
-                seq,
-                span_k,
-                BitExtractKernelButterflyAVX2(mask.mask)
-            );
+            return sum_spaced_kmers_simd_(BitExtractKernelButterflyAVX2(mask.mask));
         }
     );
     #endif
@@ -235,11 +242,7 @@ inline SpacedKmerMode spaced_kmer_selector(
     benchmark_candidate_(
         SpacedKmerMode::kButterflyTableAVX512,
         [&]() -> std::uint64_t {
-            return compute_spaced_kmer_hash_simd(
-                seq,
-                span_k,
-                BitExtractKernelButterflyAVX512(mask.mask)
-            );
+            return sum_spaced_kmers_simd_(BitExtractKernelButterflyAVX512(mask.mask));
         }
     );
     #endif
@@ -248,11 +251,7 @@ inline SpacedKmerMode spaced_kmer_selector(
     benchmark_candidate_(
         SpacedKmerMode::kButterflyTableNeon,
         [&]() -> std::uint64_t {
-            return compute_spaced_kmer_hash_simd(
-                seq,
-                span_k,
-                BitExtractKernelButterflyNEON(mask.mask)
-            );
+            return sum_spaced_kmers_simd_(BitExtractKernelButterflyNEON(mask.mask));
         }
     );
     #endif

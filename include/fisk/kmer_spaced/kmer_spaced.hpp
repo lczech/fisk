@@ -109,44 +109,6 @@ inline std::uint64_t compute_spaced_kmer_naive(
     return valid ? result : 0;
 }
 
-/**
- * @brief Compute a simple hash for a sequence, by simply summing all spaced k-mers.
- *
- * Only meant for benchmarking, to measure the speed of the implementation.
- */
-template<typename Comp>
-inline std::uint64_t compute_spaced_kmer_hash_naive(
-    std::string const& seq, size_t k, std::vector<size_t> const& mask, Comp&& comp
-) {
-    // Compute all spaced kmers across the sequence, and sum their hashes, for our checking.
-    std::uint64_t hash = 0;
-
-    // Slide the window over the sequence.
-    const std::size_t stop = seq.size() - k;
-    for (std::size_t i = 0; i <= stop; ++i) {
-        hash += comp( std::string_view(seq), mask, i );
-    }
-    return hash;
-}
-
-/**
- * @brief Compute a simple hash for a sequence, by simply summing all spaced k-mers across all masks.
- */
-template<typename Comp>
-inline std::uint64_t compute_spaced_kmer_hash_naive(
-    std::string const& seq, size_t k, std::vector<std::vector<size_t>> const& masks, Comp&& comp
-) {
-    // Same as above, but applying all masks.
-    std::uint64_t hash = 0;
-    const std::size_t stop = seq.size() - k;
-    for (std::size_t i = 0; i <= stop; ++i) {
-        for( auto const& mask : masks ) {
-            hash += comp( std::string_view(seq), mask, i );
-        }
-    }
-    return hash;
-}
-
 // =================================================================================================
 //     Bit Extraction
 // =================================================================================================
@@ -373,62 +335,6 @@ inline void for_each_spaced_kmer(
             ++mask_idx;
         });
     }
-}
-
-// =================================================================================================
-//     Sum Hashing
-// =================================================================================================
-
-/**
- * @brief Compute a simple "hash" of a sequence by summing all spaced k-mers in the sequence.
- *
- * This is just for benchmarking, to ensure that the values are actually used (and thus the
- * compuation cannot be omitted by the compiler), as well as to ensure consistent results
- * between different implementations.
- */
-template<typename Mask, typename Enc, typename BitExtract>
-inline std::uint64_t compute_spaced_kmer_hash(
-    std::string const& seq, size_t const k, Mask const& mask, Enc&& enc, BitExtract&& bit_ext
-) {
-    // Compute all spaced kmers across the sequence, and sum their hashes, for our checking.
-    std::uint64_t hash = 0;
-
-    for_each_spaced_kmer(
-        std::string_view(seq),
-        k, mask, enc, bit_ext,
-        [&](std::size_t /* mask_idx */, std::size_t /* pos */, std::uint64_t spaced_kmer) {
-            // Extract the spaced k-mer, and combine it into the hash.
-            hash += spaced_kmer;
-        }
-    );
-    return hash;
-}
-
-/**
- * @brief Compute a simple "hash" of a sequence by summing all spaced k-mers in the sequence,
- * across a set of masks.
- *
- * This is just for benchmarking, to ensure that the values are actually used (and thus the
- * compuation cannot be omitted by the compiler), as well as to ensure consistent results
- * between different implementations.
- */
-template<typename Mask, typename Enc, typename BitExtract>
-inline std::uint64_t compute_spaced_kmer_hash(
-    std::string const& seq, size_t const k, std::vector<Mask> const& masks,
-    Enc&& enc, BitExtract&& bit_ext
-) {
-    // Compute all spaced kmers across the sequence, and sum their hashes, for our checking.
-    std::uint64_t hash = 0;
-
-    for_each_spaced_kmer(
-        std::string_view(seq),
-        k, masks, enc, bit_ext,
-        [&](std::size_t /* mask_idx */, std::size_t /* pos */, std::uint64_t spaced_kmer) {
-            // Extract the spaced k-mer, and combine it into the hash.
-            hash += spaced_kmer;
-        }
-    );
-    return hash;
 }
 
 } // namespace fisk
