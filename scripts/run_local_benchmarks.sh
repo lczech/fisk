@@ -12,7 +12,7 @@ set -uo pipefail
 #
 #     ./scripts/run_local_benchmarks.sh
 #
-# Results land in results/<CPU label>, <Compiler> <version>/, feeding into 
+# Results land in results/<CPU label>, <Compiler> <version>/, feeding into
 # plot_all_cpus.sh without renaming.
 
 # ------------------------------------------------------------------------
@@ -67,7 +67,7 @@ run_compiler() {
   (
     set -e
     make clean
-    CC="$cc" CXX="$cxx" make
+    CC="$cc" CXX="$cxx" make -j 16
     ./bin/fisk_benchmarks --output-dir "${resultdir}"
   ) || rc=$?
 

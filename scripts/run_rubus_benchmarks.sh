@@ -132,7 +132,7 @@ run_combo() {
       export CC='${cc}'
       export CXX='${cxx}'
       cd '${workdir}'
-      make
+      make -j 16
       ./bin/fisk_benchmarks --output-dir '../${resultdir}'
     " >> "$logfile" 2>&1
   local rc=$?

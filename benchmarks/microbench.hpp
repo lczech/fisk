@@ -191,6 +191,17 @@ public:
         return *this;
     }
 
+    // Optional: compute a bench's sink once, after its timed rounds finish, instead of using the
+    // accumulation of its per-call return values. For a "write" style bench (result left in some
+    // shared state rather than returned per call), this keeps reducing that state out of the timed
+    // region. Shared across every bench() passed to run(), called once per bench right after its
+    // own timed loop -- safe as long as those benches run sequentially and don't overlap the state
+    // this reads, which Microbench guarantees.
+    Microbench& finalize(std::function<std::uint64_t()> fn) {
+        finalize_ = std::move(fn);
+        return *this;
+    }
+
     // Convenience: create a Bench for this Microbench
     template <class F>
     static BenchT<std::decay_t<F>> make_bench(std::string_view name, F&& fn) {
@@ -314,7 +325,8 @@ private:
         double total_units = units_per_run * static_cast<double>(rounds_);
         double ns_per_unit = (secs * 1e9) / total_units;
 
-        return Result{b.name, ns_per_unit, acc};
+        std::uint64_t const sink = finalize_ ? finalize_() : acc;
+        return Result{b.name, ns_per_unit, sink};
     }
 
     template <class... Benches>
@@ -360,4 +372,6 @@ private:
 
     bool check_sinks_   = true;
     bool print_results_ = false;
+
+    std::function<std::uint64_t()> finalize_{};
 };

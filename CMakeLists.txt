@@ -167,7 +167,19 @@ endif()
 option(FISK_BUILD_BENCHMARKS "Build the fisk benchmark suite" ${FISK_IS_TOP_LEVEL_DEFAULT})
 
 if(FISK_BUILD_BENCHMARKS)
-    add_executable(fisk_benchmarks benchmarks/main.cpp)
+    # Each benchmarked implementation variant lives in its own translation unit (var_*.cpp under
+    # benchmarks/<suite>/), so that compiler codegen decisions for one variant cannot be perturbed
+    # by unrelated code sharing a TU. CONFIGURE_DEPENDS re-runs this glob on the next build after
+    # files are added/removed/renamed, so a new variant doesn't require editing this file.
+    file(GLOB_RECURSE FISK_BENCHMARK_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/*.cpp
+    )
+    add_executable(fisk_benchmarks ${FISK_BENCHMARK_SOURCES})
+
+    # Interprocedural optimization must stay off here: it would let the linker re-fuse every
+    # variant's TU back into one optimization unit at link time, defeating the isolation above.
+    set_target_properties(fisk_benchmarks PROPERTIES INTERPROCEDURAL_OPTIMIZATION OFF)
+
     target_include_directories(fisk_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
     target_link_libraries(fisk_benchmarks PRIVATE fisk::fisk)
 
@@ -215,13 +227,13 @@ if(FISK_BUILD_BENCHMARKS)
             # vector register members. GCC/Clang don't warn on this at all.
             /wd4324
             # C4146/C4334: unary minus on an unsigned type, and a 32-bit shift result implicitly
-            # widened to 64 bits. Both fire in benchmarks/bit_extract_zp7.hpp, vendored third-party
+            # widened to 64 bits. Both fire in benchmarks/external/zp7.hpp, vendored third-party
             # code (see the file's header comment) reproduced as-is; the patterns are intentional
             # bit tricks in the original, not something we should rewrite here. GCC/Clang don't
             # warn on either.
             /wd4146
             /wd4334
-            # C4127: conditional expression is constant. Fires in benchmarks/kmer_clark.hpp on a
+            # C4127: conditional expression is constant. Fires in benchmarks/external/clark.hpp on a
             # boundary check (`if (k == 0 || k > 32)`) mirroring this project's own precondition
             # style, where here `k` happens to be a hardcoded local rather than a runtime
             # parameter -- harmless, and GCC/Clang don't warn on it either.
@@ -241,17 +253,10 @@ option(FISK_BUILD_TESTS "Build the fisk test suite" ${FISK_IS_TOP_LEVEL_DEFAULT}
 if(FISK_BUILD_TESTS)
     enable_testing()
 
-    add_executable(fisk_tests
-        tests/main.cpp
-        tests/test_core.cpp
-        tests/test_char_encoder.cpp
-        tests/test_bit_extract.cpp
-        tests/test_seq_pack.cpp
-        tests/test_kmer.cpp
-        tests/test_kmer_extract.cpp
-        tests/test_kmer_extract_packed.cpp
-        tests/test_kmer_extract_packed_simd.cpp
+    file(GLOB_RECURSE FISK_TEST_SOURCES CONFIGURE_DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp
     )
+    add_executable(fisk_tests ${FISK_TEST_SOURCES})
     target_include_directories(fisk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     target_link_libraries(fisk_tests PRIVATE fisk::fisk)
 

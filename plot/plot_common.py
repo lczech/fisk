@@ -357,6 +357,8 @@ BENCHMARK_COLORS = {
 
     "ascii_re"       : "#3C5BBE",
     "ascii_shift"    : "#3C5BBE",
+    "ascii_validate"      : "#3C5BBE",
+    "ascii_assume_valid"  : "#3C5BBE",
     "ifs_re"         : "#E9C256",
     "ifs_shift"      : "#E9C256",
     "switch_re"      : "#C53939",
@@ -383,6 +385,8 @@ BENCHMARK_LINESTYLES = {
     # Extract / seq enc
     "ascii_re"       : "dashed",
     "ascii_shift"    : "solid",
+    "ascii_validate"      : "dashed",
+    "ascii_assume_valid"  : "solid",
     "ifs_re"         : "dashed",
     "ifs_shift"      : "solid",
     "switch_re"      : "dashed",
@@ -405,7 +409,8 @@ BENCHMARK_ORDER = [
     "table_shift",
     "ifs",
     "switch",
-    "ascii",
+    "ascii_validate",
+    "ascii_assume_valid",
     "table",
 
     # Kmer spaced, also used for bit extract order

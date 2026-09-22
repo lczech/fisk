@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <bit>
 #include <cstdint>
 #include <type_traits>
@@ -302,5 +303,27 @@ inline void do_not_optimize(std::uint64_t v)
         #endif
     }
 #endif
+
+// Barrier on memory rather than on a value: tells the compiler that everything reachable through
+// memory may have been read and written here. Any value loaded before this point has to be loaded
+// again afterwards, and so any computation derived from such a load has to be redone.
+//
+// This is what do_not_optimize() above cannot do: that one only demands that *a* value ends up in
+// a register, and says nothing about how the value was derived, so a computation the compiler can
+// prove is repeated with unchanged inputs may still be done once and reused. Benchmarking a kernel
+// over the same buffer repeatedly needs this stronger guarantee to keep every repetition real.
+//
+// The pointer operand does not restrict the barrier: The "memory" clobber is global either way,
+// it just names the buffer the caller means, so the intent is readable at the call site.
+FISK_ALWAYS_INLINE
+inline void clobber_memory(void const* ptr)
+{
+    #if defined(__GNUC__) || defined(__clang__)
+        asm volatile("" : : "g"(ptr) : "memory");
+    #else
+        (void) ptr;
+        std::atomic_signal_fence(std::memory_order_acq_rel);
+    #endif
+}
 
 } // namespace fisk

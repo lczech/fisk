@@ -51,7 +51,7 @@ enum class BitExtractMode : int
 /**
  * @brief Get a bit extract mode as a printable string, e.g., for user output.
  */
-std::string bit_extract_mode_name( BitExtractMode mode )
+inline std::string bit_extract_mode_name( BitExtractMode mode )
 {
     switch(mode) {
         case BitExtractMode::kPext:                return "PEXT";
@@ -96,7 +96,7 @@ std::string bit_extract_mode_name( BitExtractMode mode )
  * @param num_vals The number of random values to test on, randomly generated (default: 2^14).
  * @return The most performant bit extraction mode.
  */
-BitExtractMode bit_extract_selector(
+inline BitExtractMode bit_extract_selector(
     BitExtractMask const mask,
     std::size_t const num_vals = ( 1 << 14 )
 ) {
@@ -238,7 +238,7 @@ BitExtractMode bit_extract_selector(
  *
  * Same as the overload, but takes the mask as an 64-bit unsigned int.
  */
-BitExtractMode bit_extract_selector(
+inline BitExtractMode bit_extract_selector(
     std::uint64_t const mask,
     std::size_t const num_vals = ( 1 << 14 )
 ) {
@@ -249,7 +249,7 @@ BitExtractMode bit_extract_selector(
 //     Exemplary usage
 // =================================================================================================
 
-void switch_bit_extract_mode( std::uint64_t const mask )
+inline void switch_bit_extract_mode( std::uint64_t const mask )
 {
     auto const mode = bit_extract_selector(mask);
     switch (mode) {
