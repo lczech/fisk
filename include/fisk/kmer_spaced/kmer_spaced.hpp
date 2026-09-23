@@ -17,13 +17,16 @@
 namespace fisk {
 
 // =================================================================================================
-//     Naive mask preparation
+//     Position Mask
 // =================================================================================================
 
 /**
- * @brief Prepare a naive mask, consisting of the positions of the '1' bits.
+ * @brief Take a k-mer spaced mask string and turn it into a list of the positions of its '1' bits.
+ *
+ * This is the position-list counterpart to prepare_spaced_kmer_bit_extract_mask() below, which
+ * instead packs the same mask into a single 2-bit-per-position bitmask.
  */
-inline std::vector<size_t> prepare_naive_mask( std::string const& mask )
+inline std::vector<size_t> prepare_spaced_kmer_position_mask( std::string const& mask )
 {
     if( mask.size() == 0 || mask.size() > 32 ) {
         throw std::invalid_argument( "Invalid mask size not in [1,32]" );
@@ -42,15 +45,16 @@ inline std::vector<size_t> prepare_naive_mask( std::string const& mask )
 }
 
 /**
- * @brief For a set of masks, prepare all their naive masks, i.e., the positions of the '1' bits.
+ * @brief For a set of masks, prepare all their position masks, i.e., the positions of their
+ * '1' bits.
  */
-inline std::vector<std::vector<size_t>> prepare_naive_masks(
+inline std::vector<std::vector<size_t>> prepare_spaced_kmer_position_masks(
     std::vector<std::string> const& masks
 ) {
     std::vector<std::vector<size_t>> result;
     result.reserve( masks.size() );
     for( auto const& mask : masks ) {
-        result.push_back( prepare_naive_mask( mask ));
+        result.push_back( prepare_spaced_kmer_position_mask( mask ));
     }
     return result;
 }

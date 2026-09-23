@@ -75,7 +75,7 @@ void bench_kmer_spaced_multi(
         std::vector<BitExtractButterflyTable> bit_ext_butterfly_tables;
         for (auto const& mask : multi_masks[m]) {
             raw_masks.push_back(prepare_spaced_kmer_bit_extract_mask(mask));
-            naive_masks.push_back(prepare_naive_mask(mask));
+            naive_masks.push_back(prepare_spaced_kmer_position_mask(mask));
             bit_ext_masks.push_back(BitExtractMask(raw_masks.back()));
             bit_ext_block_masks.push_back(bit_extract_block_table_preprocess(raw_masks.back()));
             bit_ext_butterfly_tables.push_back(
