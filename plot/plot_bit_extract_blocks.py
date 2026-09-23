@@ -25,6 +25,7 @@ def main():
                         help="Plot title")
     parser.add_argument("--out", default=None,
                         help="Output image file (e.g. pext.png). If omitted, show interactively.")
+    add_unit_scale_args(parser)
     args = parser.parse_args()
 
     # -------------------------------------------------------------------------
@@ -33,6 +34,7 @@ def main():
 
     df = pd.read_csv(args.csv)
     cpu = platform_from_csv_path(args.csv)
+    suite = df["suite"].iloc[0] if not df.empty else None
 
     # Subset to the benchmarks we want to plot
     df = df[df["benchmark"].isin(BENCHMARKS_KEEP_EXTENDED)]
@@ -43,11 +45,16 @@ def main():
     # Extract mask weight from "case" column, which looks like "popcount=17"
     df["weight"] = df["case"].str.split("=").str[1].astype(int)
 
+    # Convert to the requested display unit once, up front -- no aggregation happens in this
+    # script (each row is already one (benchmark, block-count) point), so there's no ordering
+    # concern between conversion and aggregation here.
+    df["display_value"] = convert_for_display(df["ns_per_op"], args.unit)
+
     # -------------------------------------------------------------------------
     # Plot
     # -------------------------------------------------------------------------
 
-    plt.figure(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 5))
 
     # for name, g in df.groupby("benchmark"):
     #     g = g.sort_values("weight")
@@ -59,9 +66,9 @@ def main():
             continue
         g = g.sort_values("weight")
         color = BENCHMARK_COLORS.get(name, "black")
-        plt.plot(
+        ax.plot(
             g["weight"],
-            g["ns_per_op"],
+            g["display_value"],
             marker=".",
             label=_label_for_benchmark(name, BENCHMARK_RENAMES),
             color=color,
@@ -70,31 +77,36 @@ def main():
 
     # If pext is missing, insert an invisible placeholder at the front
     # so the 2-column legend keeps the same visual grouping.
-    handles, labels = plt.gca().get_legend_handles_labels()
+    handles, labels = ax.get_legend_handles_labels()
     if "pext" not in set(df["benchmark"]):
         handles = [Line2D([], [], linestyle="none", marker=None, alpha=0)] + handles
         labels = [""] + labels
 
-    plt.xlabel("Number of blocks (runs of 1s)")
-    plt.ylabel("Time per operation [ns]")
-    plt.title(cpu.replace("_", " "))
-    # plt.title(args.title)
+    ax.set_xlabel("Number of blocks (runs of 1s)")
+    ax.set_ylabel(ylabel_for_unit(args.unit, suite))
+    ax.set_title(cpu.replace("_", " "))
+    # ax.set_title(args.title)
 
-    plt.xlim(0, 32)
-    # plt.ylim(0, 16)
-    plt.ylim(0, 40)
-    # plt.ylim(0, 25)
-    plt.grid(True, which="both", linestyle="--", alpha=0.5)
-    # plt.legend(title="Implementation")
-    # plt.legend(ncol=2)
-    # plt.legend()
-    plt.legend(handles, labels, ncol=2, loc="upper right")
+    ax.set_xlim(0, 32)
+    apply_yscale(ax, args.scale)
+    y_min, y_max = compute_axis_limits(df["display_value"], args.scale)
+    if args.y_min is not None:
+        y_min = args.y_min
+    if args.y_max is not None:
+        y_max = args.y_max
+    ax.set_ylim(y_min, y_max)
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    # ax.legend(title="Implementation")
+    # ax.legend(ncol=2)
+    # ax.legend()
+    ax.legend(handles, labels, ncol=2, loc="upper right")
 
-    plt.tight_layout()
+    fig.tight_layout()
 
-    if args.out:
-        plt.savefig(args.out, dpi=300)
-        print(f"Wrote {args.out}")
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    if out:
+        fig.savefig(out, dpi=300)
+        print(f"Wrote {out}")
     else:
         plt.show()
 

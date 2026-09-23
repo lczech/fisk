@@ -149,7 +149,7 @@ def nice_tick_step(ymax: float, target_ticks: int = 10) -> float:
     """
     Pick a "nice" step (1/2/5 times a power of ten) giving roughly `target_ticks` ticks between 0
     and `ymax`. Reproduces the previous hardcoded step=1 for the y-axis ranges already in use
-    (YLIM 6, 10) while still giving a sensible number of ticks for a much smaller --y-lim (e.g.
+    (YLIM 6, 10) while still giving a sensible number of ticks for a much smaller --y-max (e.g.
     0.7) instead of collapsing to just "0" and "1" the way a fixed integer step did.
     """
     if ymax <= 0:
@@ -254,11 +254,7 @@ def main() -> None:
         default=None,
         help="Plot title override.",
     )
-    ap.add_argument(
-        "--y-lim",
-        type=float,
-        help="Y-axis max limit.",
-    )
+    add_unit_scale_args(ap)
     ap.add_argument(
         "--out",
         default=None,
@@ -307,17 +303,21 @@ def main() -> None:
     if df.empty:
         raise SystemExit(f"No rows left after --case-filter {args.case_filter}")
 
-    # Aggregate: mean over cases for each (benchmark, platform, compiler)
+    # Aggregate: mean over cases for each (benchmark, platform, compiler), in ns/op space --
+    # converting to the display unit happens after, on the aggregated means only. Converting each
+    # row to throughput first and then averaging would be a different, non-equivalent statistic
+    # (see convert_for_display()'s docstring).
     agg = (
         df.groupby(["benchmark", "platform", "compiler"], as_index=False)["ns_per_op"]
           .mean()
           .rename(columns={"ns_per_op": "mean_ns_per_op"})
     )
+    agg["display_value"] = convert_for_display(agg["mean_ns_per_op"], args.unit)
 
     agg["series"] = agg["platform"] + " | " + agg["compiler"]
 
     # Pivot for plotting: rows=benchmark, columns=series
-    pivot = agg.pivot(index="benchmark", columns="series", values="mean_ns_per_op")
+    pivot = agg.pivot(index="benchmark", columns="series", values="display_value")
 
     # Stable benchmark order
     benchmark_order = [b for b in BENCHMARK_ORDER if b in pivot.index]
@@ -334,12 +334,23 @@ def main() -> None:
     #      Generate the plot
     # --------------------------------------
 
-    if args.y_lim is not None:
-        YLIM = args.y_lim
+    # Auto-scale from this plot's own data unless explicitly overridden -- --y-max is also what
+    # sets a shared ceiling across a family of separate per-CPU/per-suite invocations (driven from
+    # the shell wrapper scripts), which is when the truncation ("torn bar") mechanism below can
+    # actually fire; by default nothing exceeds its own auto-computed ceiling so it stays dormant.
+    default_y_min, default_y_max = compute_axis_limits(pivot.values.flatten(), args.scale)
+    YMIN = args.y_min if args.y_min is not None else default_y_min
+    if args.y_max is not None:
+        YLIM = args.y_max
+        # Reserve headroom above YMAX for the truncated-bar annotation text (see below); tuned
+        # originally for the ns/op scale (an explicit YLIM ~10) and kept proportional to YLIM so
+        # it degrades gracefully at other scales/units. Only reserved for an explicit --y-max: the
+        # auto-computed default already includes its own headroom (compute_axis_limits()) and
+        # nothing in the data exceeds it, so shrinking YMAX further here would truncate the
+        # tallest bar even though no ceiling was actually requested.
+        YMAX = 0.88 * YLIM if YLIM <= 20 else YLIM
     else:
-        YLIM = 10.0
-    YMAX = 0.88 * YLIM
-    if YLIM > 20:
+        YLIM = default_y_max
         YMAX = YLIM
 
     x = np.arange(len(benchmarks))
@@ -363,18 +374,19 @@ def main() -> None:
     #         linewidth=0.8,
     #     )
 
-    # We want to print the minimum per platform, as that's the fastest algorithm.
+    # We want to print the best (fastest) implementation per platform: lowest time for --unit ns,
+    # highest throughput for --unit ops (inverting time flips which end of the range is "best").
     best_impl = []
+    best_idx_fn = np.nanargmax if args.unit == "ops" else np.nanargmin
 
     # Plot all bars, manually for full control
     for j, s in enumerate(series):
         vals = pivot[s].values
         platform, compiler = s.split(" | ", 1)
 
-        # Find the minimum for this platform
         # print(legend_label(s), str(vals))
-        min_idx = np.nanargmin(vals)
-        best_impl.append([legend_label(s), min_idx, vals[min_idx]])
+        best_idx = best_idx_fn(vals)
+        best_impl.append([legend_label(s), best_idx, vals[best_idx]])
 
         xpos = x + (j - (len(series) - 1) / 2.0) * bar_w
         plot_vals = [min(v, YMAX) for v in vals]
@@ -390,7 +402,11 @@ def main() -> None:
             linewidth=0.0,
         )
 
-        # Mark truncated bars and annotate true values
+        # Mark truncated bars and annotate true values. The cut geometry below (depth, slope,
+        # amplitude) is expressed as a fraction of YMAX rather than fixed absolute numbers, so it
+        # keeps the same proportions it was originally tuned at (YMAX ~= 10, in ns/op) at whatever
+        # scale/unit the axis ends up at.
+        cut_scale = YMAX / 10.0
         for xi, shown_v, true_v, bar in zip(xpos, plot_vals, vals, bars):
             if pd.notna(true_v) and true_v > YMAX:
                 x_left = bar.get_x()
@@ -398,11 +414,11 @@ def main() -> None:
                 width = x_right - x_left
 
                 # Place the cut near the top of the visible bar
-                # y_bottom_left = YMAX - 0.92
-                # y_top_left    = YMAX - 0.62
-                y_bottom_left = YMAX - 0.2
+                # y_bottom_left = YMAX - 0.92 * cut_scale
+                # y_top_left    = YMAX - 0.62 * cut_scale
+                y_bottom_left = YMAX - 0.2 * cut_scale
                 y_top_left    = YMAX
-                slope = 0.16
+                slope = 0.16 * cut_scale
 
                 # Make the white patch slightly wider so it visually reaches the bar outline
                 overhang = width * 0.01
@@ -412,7 +428,7 @@ def main() -> None:
                 # Three zig-zags across the width
                 n_zigs = 3
                 step = (xr - xl) / n_zigs
-                amp = 0.07  # zig-zag amplitude in y-direction
+                amp = 0.07 * cut_scale  # zig-zag amplitude in y-direction
 
                 def zigzag_points(y_left):
                     pts = []
@@ -468,7 +484,7 @@ def main() -> None:
                 label = f"{true_v:.0f}" if float(true_v).is_integer() else f"{true_v:.1f}"
                 ax.text(
                     xi,
-                    YMAX + 0.10,
+                    YMAX + 0.10 * cut_scale,
                     label,
                     ha="center",
                     va="bottom",
@@ -490,7 +506,7 @@ def main() -> None:
         )
 
     ax.set_title(title)
-    ax.set_ylabel("Time per operation [ns]")
+    ax.set_ylabel(ylabel_for_unit(args.unit, suite))
     ax.set_xticks(x)
     labels = [BENCHMARK_RENAMES.get(b, b) for b in benchmarks]
     if args.reduced:
@@ -498,8 +514,9 @@ def main() -> None:
 
     ax.set_xticklabels(labels, rotation=45, ha="right")
 
-    ax.set_ylim(0, YLIM)
-    if YLIM <= 20:
+    apply_yscale(ax, args.scale)
+    ax.set_ylim(YMIN, YLIM)
+    if args.scale == "linear" and YLIM <= 20:
         step = nice_tick_step(YMAX)
         ax.set_yticks(np.arange(0, YMAX + step / 2, step))
 
@@ -525,13 +542,13 @@ def main() -> None:
         ax.set_xlim(-0.5, len(benchmarks) - 0.5)
 
     if args.out:
-        out = args.out
+        out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
 
         # print best implementation for each arch
         # print(title)
         root, ext = os.path.splitext(out)
         with open(f"{root}.csv", 'w') as f:
-            f.write(f"platform,best_impl,best_time\n")
+            f.write(f"platform,best_impl,best_{args.unit}\n")
             for impl in best_impl:
                 f.write(f"{impl[0]},{labels[impl[1]]},{impl[2]}\n")
                 # name = impl[0]

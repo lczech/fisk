@@ -3,6 +3,8 @@
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+import numpy as np
 import os
 from pathlib import Path
 import matplotlib as mpl
@@ -505,4 +507,147 @@ BENCHMARK_ORDER += PACKED_KMER_VARIANT_ORDER
 BENCHMARKS_KEEP += PACKED_KMER_VARIANT_ORDER
 BENCHMARKS_KEEP_EXTENDED += PACKED_KMER_VARIANT_ORDER
 BENCHMARKS_KEEP_REDUCED += PACKED_KMER_VARIANT_ORDER_REDUCED
+
+
+# -----------------------------------------------------------------------------
+#     Display unit: throughput (default) vs legacy ns/op
+# -----------------------------------------------------------------------------
+
+# Which "thing" one unit of ns_per_op actually measures, per benchmark suite (see each suite's
+# .units_fn() in benchmarks/*/bench.cpp) -- used to build a correct throughput axis label. Suites
+# not listed here (e.g. an old CSV from a removed suite, or a script that combines multiple
+# suites) fall back to the generic "ops" noun in unit_noun_for_suite() below.
+SUITE_UNIT_NOUN = {
+    "kmer_extract"        : "k-mers",
+    "kmer_extract_packed" : "k-mers",
+    "kmer_clark"          : "k-mers",
+    "kmer_spaced_single"  : "k-mers",
+    "kmer_spaced_multi"   : "k-mers",
+    "char_encoder"        : "bases",
+    "seq_pack"            : "bases",
+    "bit_extract_weights" : "ops",
+    "bit_extract_blocks"  : "ops",
+}
+
+# Fixed divisor for throughput display: always giga-<unit>/s, even for the couple of suites whose
+# peak throughput doesn't quite reach 1e9, so every plot in the paper reads on the same scale.
+THROUGHPUT_SCALE = 1e9
+THROUGHPUT_PREFIX = "G"
+
+
+def unit_noun_for_suite(suite: str | None) -> str:
+    """Return the throughput noun (e.g. "k-mers", "bases", "ops") for a suite name, falling back
+    to the generic "ops" for anything not in SUITE_UNIT_NOUN (unknown/missing suite)."""
+    if suite is None:
+        return "ops"
+    return SUITE_UNIT_NOUN.get(suite, "ops")
+
+
+def ns_per_op_to_throughput(ns_per_op):
+    """Convert ns/op (scalar, Series, or ndarray) to throughput in THROUGHPUT_PREFIX-units/s."""
+    return (1e9 / ns_per_op) / THROUGHPUT_SCALE
+
+
+def convert_for_display(ns_per_op, unit: str):
+    """Convert a ns_per_op scalar/Series/ndarray to the requested --unit ("ns": identity, "ops":
+    throughput via ns_per_op_to_throughput()). Aggregation (mean/min/max) must already be done in
+    ns/op space before calling this -- inverting first and aggregating after is a different,
+    non-equivalent statistic (harmonic- vs. arithmetic-mean-like behavior)."""
+    if unit == "ns":
+        return ns_per_op
+    return ns_per_op_to_throughput(ns_per_op)
+
+
+def ylabel_for_unit(unit: str, suite: str | None = None) -> str:
+    """Y-axis label for the selected --unit: "Time per operation [ns]" for "ns", or a suite-aware
+    "Throughput [G <noun>/s]" for "ops"."""
+    if unit == "ns":
+        return "Time per operation [ns]"
+    noun = unit_noun_for_suite(suite)
+    return f"Throughput [{THROUGHPUT_PREFIX} {noun}/s]"
+
+
+def compute_axis_limits(values, scale: str, headroom: float = 1.05) -> tuple[float, float]:
+    """
+    Data-driven (y_min, y_max) for an axis showing `values` (already converted to display units)
+    on the given `scale` ("linear" or "log"):
+    - linear: floor at 0, ceiling at max(values) * headroom.
+    - log: floor and ceiling both get the same proportional headroom below/above the data's real
+      (positive) min/max. The limits themselves need not land on a round power of ten --
+      Matplotlib's log tick locator (see apply_yscale()) still places major ticks at the enclosing
+      powers of ten regardless, leaving a little blank space near the axis edges.
+    Non-finite values are dropped (and non-positive ones too, for "log", since they're undefined
+    on a log axis); an all-filtered/empty input falls back to a fixed placeholder range rather
+    than raising, so a caller can still render an (empty) plot instead of crashing.
+    """
+    arr = np.asarray(values, dtype=float)
+    arr = arr[np.isfinite(arr)]
+    if scale == "log":
+        arr = arr[arr > 0]
+
+    if arr.size == 0:
+        return (0.0, 1.0) if scale == "linear" else (0.1, 1.0)
+
+    vmax = float(arr.max())
+    if scale == "linear":
+        return 0.0, vmax * headroom
+
+    vmin = float(arr.min())
+    return vmin / headroom, vmax * headroom
+
+
+def _log_tick_formatter(value: float, _pos=None) -> str:
+    """Render a log-axis tick as a plain decimal (e.g. "0.1", "10") instead of Matplotlib's
+    default scientific "10^-1" style -- values here are already pre-scaled by THROUGHPUT_SCALE, so
+    the natural range is small, easy-to-read decimals/integers rather than large exponents."""
+    if value == 0:
+        return "0"
+    return f"{value:g}"
+
+
+def apply_yscale(ax, scale: str) -> None:
+    """Apply the requested y-axis scale ("linear" or "log") to `ax`. For "log", major ticks land
+    at 1/2/5 times each power of ten (not just bare decades) with a plain-decimal formatter (e.g.
+    "0.2", "1", "5" rather than "10^-1"/only "1","10") -- most plots here span less than 2 decades,
+    where a bare-decade locator would often produce only zero or one labeled tick."""
+    if scale == "log":
+        ax.set_yscale("log")
+        ax.yaxis.set_major_locator(mticker.LogLocator(base=10.0, subs=(1.0, 2.0, 5.0)))
+        ax.yaxis.set_minor_locator(mticker.LogLocator(base=10.0, subs=(3, 4, 6, 7, 8, 9)))
+        ax.yaxis.set_major_formatter(mticker.FuncFormatter(_log_tick_formatter))
+        ax.yaxis.set_minor_formatter(mticker.NullFormatter())
+    else:
+        ax.set_yscale("linear")
+
+
+def add_unit_scale_args(parser: argparse.ArgumentParser) -> None:
+    """Add the --unit/--scale/--y-max/--y-min flags shared by every ns_per_op plotting script, so
+    names/defaults/help text can't drift between scripts."""
+    parser.add_argument(
+        "--unit", choices=["ops", "ns"], default="ops",
+        help='Display unit: "ops" for throughput (default), "ns" for legacy time-per-operation.',
+    )
+    parser.add_argument(
+        "--scale", choices=["log", "linear"], default="log",
+        help="Y-axis scale (default: log).",
+    )
+    parser.add_argument(
+        "--y-max", type=float, default=None,
+        help="Fixed y-axis upper limit, in the selected --unit (default: auto-scaled from the data).",
+    )
+    parser.add_argument(
+        "--y-min", type=float, default=None,
+        help="Fixed y-axis lower limit, in the selected --unit (default: 0 for --scale linear, "
+             "auto-scaled from the data for --scale log).",
+    )
+
+
+def apply_unit_scale_suffix(path: str | None, unit: str, scale: str) -> str | None:
+    """Insert an unconditional "_<unit>_<scale>" suffix before a path's extension (e.g.
+    "foo.png" -> "foo_ops_log.png"), so runs with different --unit/--scale never silently
+    overwrite each other's output. No-op for path=None (interactive display)."""
+    if path is None:
+        return None
+    root, ext = os.path.splitext(path)
+    return f"{root}_{unit}_{scale}{ext}"
 BENCHMARK_COLORS.update(PACKED_KMER_VARIANT_COLORS)

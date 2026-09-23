@@ -50,6 +50,7 @@ def main():
                         help="Plot title")
     parser.add_argument("--out", default=None,
                         help="Output image file (e.g. kmer_extract.png). If omitted, show interactively.")
+    add_unit_scale_args(parser)
     args = parser.parse_args()
 
     # -------------------------------------------------------------------------
@@ -58,6 +59,7 @@ def main():
 
     df = pd.read_csv(args.csv)
     cpu = platform_from_csv_path(args.csv)
+    suite = df["suite"].iloc[0] if not df.empty else None
 
     # Expect columns:
     #   suite, case, benchmark, ns_per_op
@@ -75,11 +77,16 @@ def main():
             f"in CSV file {args.csv!r}"
         )
 
+    # Convert to the requested display unit once, up front -- no aggregation happens in this
+    # script (each row is already one (benchmark, k) point), so there's no ordering concern
+    # between conversion and aggregation here.
+    df["display_value"] = convert_for_display(df["ns_per_op"], args.unit)
+
     # -------------------------------------------------------------------------
     # Plot
     # -------------------------------------------------------------------------
 
-    plt.figure(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 5))
 
     # Determine plotting order for lines/legend
     present = df["benchmark"].drop_duplicates().tolist()
@@ -111,24 +118,31 @@ def main():
         if linestyle is not None:
             plot_kwargs["linestyle"] = linestyle
 
-        plt.plot(g["k"], g["ns_per_op"], **plot_kwargs)
+        ax.plot(g["k"], g["display_value"], **plot_kwargs)
 
-    plt.xlabel("k-mer size (k)")
-    plt.ylabel("Time per operation [ns]")
-    plt.title(cpu.replace("_", " "))
-    # plt.title(args.title)
+    ax.set_xlabel("k-mer size (k)")
+    ax.set_ylabel(ylabel_for_unit(args.unit, suite))
+    ax.set_title(cpu.replace("_", " "))
+    # ax.set_title(args.title)
 
-    plt.xlim(1, 32)
-    plt.ylim(0, 210)
-    plt.grid(True, which="both", linestyle="--", alpha=0.5)
-    # plt.legend(title="Implementation")
-    plt.legend(loc="upper left", handlelength=2.75)
+    ax.set_xlim(1, 32)
+    apply_yscale(ax, args.scale)
+    y_min, y_max = compute_axis_limits(df["display_value"], args.scale)
+    if args.y_min is not None:
+        y_min = args.y_min
+    if args.y_max is not None:
+        y_max = args.y_max
+    ax.set_ylim(y_min, y_max)
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    # ax.legend(title="Implementation")
+    ax.legend(loc="upper left", handlelength=2.75)
 
-    plt.tight_layout()
+    fig.tight_layout()
 
-    if args.out:
-        plt.savefig(args.out, dpi=300)
-        print(f"Wrote {args.out}")
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    if out:
+        fig.savefig(out, dpi=300)
+        print(f"Wrote {out}")
     else:
         plt.show()
 

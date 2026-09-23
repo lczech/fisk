@@ -66,7 +66,7 @@ def _plot_panel(ax, df, layout_value, plot_order, colors, linestyle_map):
             continue
         ax.plot(
             g["k"],
-            g["ns_per_op"],
+            g["display_value"],
             marker=".",
             linewidth=2,
             color=colors[name],
@@ -95,10 +95,7 @@ def main():
         action="store_true",
         help="Also show the rolling reference implementation (hidden by default)",
     )
-    parser.add_argument(
-        "--y-lim", type=float, default=None,
-        help="Fixed y-axis upper limit in ns/op (default: auto-scaled from the data)",
-    )
+    add_unit_scale_args(parser)
     args = parser.parse_args()
 
     # -------------------------------------------------------------------------
@@ -107,6 +104,7 @@ def main():
 
     df = pd.read_csv(args.csv)
     cpu = platform_from_csv_path(args.csv)
+    suite = df["suite"].iloc[0] if not df.empty else None
 
     # Expect columns:
     #   suite, case, benchmark, ns_per_op
@@ -117,6 +115,11 @@ def main():
 
     if df.empty:
         raise ValueError(f"No rows found in CSV file {args.csv!r}")
+
+    # Convert to the requested display unit once, up front -- no aggregation happens in this
+    # script (each row is already one (benchmark, layout, k) point), so there's no ordering
+    # concern between conversion and aggregation here.
+    df["display_value"] = convert_for_display(df["ns_per_op"], args.unit)
 
     # -------------------------------------------------------------------------
     # Plot
@@ -147,9 +150,15 @@ def main():
     _plot_panel(ax_msb, df, "msb", plot_order, colors, BENCHMARK_LINESTYLES)
     _plot_panel(ax_lsb, df, "lsb", plot_order, colors, BENCHMARK_LINESTYLES)
 
-    ax_msb.set_ylabel("Time per operation [ns]")
-    ymax = args.y_lim if args.y_lim is not None else float(df["ns_per_op"].max()) * 1.05
-    ax_msb.set_ylim(0, ymax)
+    ax_msb.set_ylabel(ylabel_for_unit(args.unit, suite))
+    apply_yscale(ax_msb, args.scale)
+    apply_yscale(ax_lsb, args.scale)
+    y_min, y_max = compute_axis_limits(df["display_value"], args.scale)
+    if args.y_min is not None:
+        y_min = args.y_min
+    if args.y_max is not None:
+        y_max = args.y_max
+    ax_msb.set_ylim(y_min, y_max)
 
     fig.suptitle(args.title or cpu.replace("_", " "))
 
@@ -166,9 +175,10 @@ def main():
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.24)
 
-    if args.out:
-        fig.savefig(args.out, dpi=300)
-        print(f"Wrote {args.out}")
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    if out:
+        fig.savefig(out, dpi=300)
+        print(f"Wrote {out}")
     else:
         plt.show()
 
