@@ -34,8 +34,14 @@ void bench_kmer_clark(
     // Run the benchmark for all algorithms
     auto results = suite.run(
         sequences, // vector<std::string>
-        bench("clark_original", run_var_original),
-        bench("clark_improved", run_var_improved)
+        bench(
+            "clark_original",
+            run_var_original
+        ),
+        bench(
+            "clark_improved",
+            run_var_improved
+        )
     );
 
     std::string case_label = "n/a";

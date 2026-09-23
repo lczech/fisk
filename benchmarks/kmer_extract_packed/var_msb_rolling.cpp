@@ -1,14 +1,18 @@
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "fisk/kmer_extract/packed.hpp"
 #include "kmer_extract_packed/bench.hpp"
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_rolling(PackedMsb const& seq, std::size_t k)
-{
-    std::uint64_t hash = 0;
-    for_each_kmer_packed_rolling(seq, k, [&](auto kmer) { hash += kmer_value(kmer); });
-    return hash;
+std::uint64_t run_var_msb_rolling(
+    PackedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
+    for_each_kmer_packed_rolling(seq, k, [&](auto kmer) { sink.consume(kmer_value(kmer)); });
+    return sink.finalize();
 }

@@ -8,8 +8,10 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_actg_lsb_butterfly_neon(std::string const& seq, PackedSequence<Encoding::kACTG, Layout::kLSB>& out)
-{
+std::uint64_t run_var_actg_lsb_butterfly_neon(
+    std::string const& seq,
+    PackedSequence<Encoding::kACTG, Layout::kLSB>& out
+) {
     pack_sequence_simd(seq, WordEncoderButterflyNEON<Encoding::kACTG, Layout::kLSB>{}, out);
     return 0;
 }

@@ -63,10 +63,12 @@ namespace fisk {
 // do_not_optimize barriers on the k-mer emission in some of the functions below force each value
 // to at least be manifested in a register, so a benchmark summing them cannot be proven reducible
 // by the compiler. They emit no instructions on GCC/Clang, but their register requirements might
-// still slightly affect regular callers. For benchmarking, they _need_ to stay inside those
-// functions, so that the compiler can reorder instructions within the function. If we were to add
-// those barriers in the benchmark itself, the compiler would be forced to serialize the output,
-// severely messing with the scheduling and benchmarks.
+// still slightly affect regular callers -- so they only compile in when FISK_BENCHMARK_SINK_MODE
+// is defined (see benchmarks/sink.hpp and CMakeLists.txt's fisk_benchmarks target), i.e. only for
+// the benchmark suite itself, never for regular library consumers. For benchmarking, they _need_
+// to stay inside those functions, so that the compiler can reorder instructions within the
+// function. If we were to add those barriers in the benchmark itself, the compiler would be
+// forced to serialize the output, severely messing with the scheduling and benchmarks.
 
 // We experimented with several variations of the basic algorithm here, in order to find a solution
 // that compiles to optimal code across most compilers and platforms. Some of the more promising
@@ -168,10 +170,19 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
             v3 = (word >> 6) & mask;
         }
 
+        // Prevent the compiler from optimizing away the values in the benchmarks,
+        // as otherwise the compiler can reduce the sum sink computation too much,
+        // leaving us with no true measurement. We need the barriers here instead
+        // of in the benchmark itself, so that the compiler can reorder instructions
+        // within the function; otherwise, we'd nuke benchmark performance too much,
+        // leaving us with an unrealistically bad measurement.
+        #if defined(FISK_BENCHMARK_SINK_MODE)
         do_not_optimize(v0);
         do_not_optimize(v1);
         do_not_optimize(v2);
         do_not_optimize(v3);
+        #endif
+
         func(kmer_cast<E, L>(v0, k));
         func(kmer_cast<E, L>(v1, k));
         func(kmer_cast<E, L>(v2, k));
@@ -247,10 +258,12 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
         auto const v2 = aligned_boundary_window_<L, K>(hi, lo, 2, mask);
         auto const v3 = aligned_boundary_window_<L, K>(hi, lo, 3, mask);
 
+        #if defined(FISK_BENCHMARK_SINK_MODE)
         do_not_optimize(v0);
         do_not_optimize(v1);
         do_not_optimize(v2);
         do_not_optimize(v3);
+        #endif
 
         func(kmer_cast<E, L>(v0, K));
         func(kmer_cast<E, L>(v1, K));

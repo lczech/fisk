@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <bit>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -33,6 +35,20 @@ void bench_kmer_extract(
     // Prepare csv output file with benchmark results
     write_csv_header(csv_os);
 
+    // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
+    // benchmarked (rounded up to a power of two) so that no call here ever wraps it. Different
+    // techniques here could in principle differ in how many k-mers they actually emit (e.g. one
+    // skipping windows a differently-behaved one still emits for), which would make a wrapped
+    // buffer's leftover contents depend on which technique last touched each slot; never wrapping
+    // sidesteps that regardless of whether it would in fact occur.
+    std::size_t max_seq_len = 0;
+    for (auto const& seq : sequences) {
+        max_seq_len = std::max(max_seq_len, seq.size());
+    }
+    std::vector<std::uint64_t> sink_buffer(
+        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
+    );
+
     // Run a benchmark for each valid k.
     for( std::size_t k = k_min; k <= k_max; ++k) {
         if( stdout_is_terminal() ) {
@@ -54,72 +70,72 @@ void bench_kmer_extract(
             // Full re-extract
             bench(
                 "ifs_re",
-                [k](std::string const& seq){
-                    return run_var_ifs_re(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_ifs_re(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "switch_re",
-                [k](std::string const& seq){
-                    return run_var_switch_re(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_switch_re(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "table_re",
-                [k](std::string const& seq){
-                    return run_var_table_re(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_table_re(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "ascii_re",
-                [k](std::string const& seq){
-                    return run_var_ascii_re(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_ascii_re(seq, k, sink_buffer);
                 }
             ),
 
             // Shift bits
             bench(
                 "ifs_shift",
-                [k](std::string const& seq){
-                    return run_var_ifs_shift(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_ifs_shift(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "switch_shift",
-                [k](std::string const& seq){
-                    return run_var_switch_shift(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_switch_shift(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "table_shift",
-                [k](std::string const& seq){
-                    return run_var_table_shift(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_table_shift(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "ascii_shift",
-                [k](std::string const& seq){
-                    return run_var_ascii_shift(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_ascii_shift(seq, k, sink_buffer);
                 }
             ),
 
             // SIMD, currently only AVX2 and scalar, for testing
             bench(
                 "simd_avx2",
-                [k](std::string const& seq){
-                    return run_var_simd_avx2(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_simd_avx2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_scalar",
-                [k](std::string const& seq){
-                    return run_var_simd_scalar(seq, k);
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_simd_scalar(seq, k, sink_buffer);
                 }
             )
         );
 
         std::string case_label = "k=" + std::to_string(k);
-        write_csv_rows(csv_os, suite_title, case_label, results);
+        write_csv_rows(csv_os, suite_title, case_label, results, kSinkName);
     }
     if( stdout_is_terminal() ) {
         std::cout << "\n";

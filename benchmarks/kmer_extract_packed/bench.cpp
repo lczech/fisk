@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <bit>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -38,9 +39,29 @@ void bench_kmer_extract_packed(
     packed_msb.reserve(sequences.size());
     packed_lsb.reserve(sequences.size());
     for (auto const& seq : sequences) {
-        packed_msb.push_back(pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}));
-        packed_lsb.push_back(pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}));
+        packed_msb.push_back(
+            pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{})
+        );
+        packed_lsb.push_back(
+            pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{})
+        );
     }
+
+    // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
+    // benchmarked (rounded up to a power of two) so that no call here ever wraps it. That matters
+    // more here than in most suites: the SIMD variants write whole registers at a time (2/4/8
+    // k-mers per call) while aligned/rolling write one, and a wrap's residual contents depend on
+    // that stride -- a register-width write and a scalar write that touched the same k-mers in a
+    // wrapped buffer can legitimately leave different values behind in the slots that were
+    // overwritten more than once, which would make finalize() disagree between them despite both
+    // being correct. Never wrapping sidesteps that entirely, rather than trying to reconcile it.
+    std::size_t max_seq_len = 0;
+    for (auto const& seq : sequences) {
+        max_seq_len = std::max(max_seq_len, seq.size());
+    }
+    std::vector<std::uint64_t> sink_buffer(
+        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
+    );
 
     std::size_t const narrow_k_max = std::min<std::size_t>(k_max, 29);
 
@@ -60,97 +81,99 @@ void bench_kmer_extract_packed(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "simd_narrow_sse2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_narrow_sse2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_narrow_sse2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_wide_sse2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_wide_sse2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_wide_sse2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_sse2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_sse2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_sse2(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
                 "simd_narrow_avx2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_narrow_avx2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_narrow_avx2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_wide_avx2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_wide_avx2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_wide_avx2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_avx2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_avx2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_avx2(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
             bench(
                 "simd_narrow_avx512",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_narrow_avx512(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_narrow_avx512(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_wide_avx512",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_wide_avx512(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_wide_avx512(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_avx512",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_avx512(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_avx512(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
                 "simd_narrow_neon",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_narrow_neon(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_narrow_neon(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_wide_neon",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_wide_neon(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_wide_neon(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_neon",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_neon(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_neon(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
                 "aligned",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_aligned(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_aligned(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "rolling",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_rolling(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_rolling(seq, k, sink_buffer);
                 }
             )
         );
-        write_csv_rows(csv_os, suite_title, "layout=msb;k=" + std::to_string(k), results);
+        write_csv_rows(
+            csv_os, suite_title, "layout=msb;k=" + std::to_string(k), results, kSinkName
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -169,73 +192,75 @@ void bench_kmer_extract_packed(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "simd_wide_sse2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_wide_sse2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_wide_sse2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_sse2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_sse2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_sse2(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
                 "simd_wide_avx2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_wide_avx2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_wide_avx2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_avx2",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_avx2(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_avx2(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
             bench(
                 "simd_wide_avx512",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_wide_avx512(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_wide_avx512(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_avx512",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_avx512(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_avx512(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
                 "simd_wide_neon",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_wide_neon(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_wide_neon(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_neon",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_simd_neon(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_simd_neon(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
                 "aligned",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_aligned(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_aligned(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "rolling",
-                [k](PackedMsb const& seq) {
-                    return run_var_msb_rolling(seq, k);
+                [k, &sink_buffer](PackedMsb const& seq) {
+                    return run_var_msb_rolling(seq, k, sink_buffer);
                 }
             )
         );
-        write_csv_rows(csv_os, suite_title, "layout=msb;k=" + std::to_string(k), results);
+        write_csv_rows(
+            csv_os, suite_title, "layout=msb;k=" + std::to_string(k), results, kSinkName
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -254,97 +279,99 @@ void bench_kmer_extract_packed(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "simd_narrow_sse2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_narrow_sse2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_narrow_sse2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_wide_sse2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_wide_sse2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_wide_sse2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_sse2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_sse2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_sse2(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
                 "simd_narrow_avx2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_narrow_avx2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_narrow_avx2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_wide_avx2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_wide_avx2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_wide_avx2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_avx2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_avx2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_avx2(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
             bench(
                 "simd_narrow_avx512",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_narrow_avx512(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_narrow_avx512(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_wide_avx512",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_wide_avx512(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_wide_avx512(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_avx512",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_avx512(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_avx512(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
                 "simd_narrow_neon",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_narrow_neon(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_narrow_neon(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_wide_neon",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_wide_neon(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_wide_neon(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_neon",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_neon(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_neon(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
                 "aligned",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_aligned(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_aligned(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "rolling",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_rolling(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_rolling(seq, k, sink_buffer);
                 }
             )
         );
-        write_csv_rows(csv_os, suite_title, "layout=lsb;k=" + std::to_string(k), results);
+        write_csv_rows(
+            csv_os, suite_title, "layout=lsb;k=" + std::to_string(k), results, kSinkName
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -363,73 +390,75 @@ void bench_kmer_extract_packed(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "simd_wide_sse2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_wide_sse2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_wide_sse2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_sse2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_sse2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_sse2(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
                 "simd_wide_avx2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_wide_avx2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_wide_avx2(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_avx2",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_avx2(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_avx2(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
             bench(
                 "simd_wide_avx512",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_wide_avx512(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_wide_avx512(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_avx512",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_avx512(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_avx512(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
                 "simd_wide_neon",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_wide_neon(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_wide_neon(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "simd_neon",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_simd_neon(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_simd_neon(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
                 "aligned",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_aligned(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_aligned(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "rolling",
-                [k](PackedLsb const& seq) {
-                    return run_var_lsb_rolling(seq, k);
+                [k, &sink_buffer](PackedLsb const& seq) {
+                    return run_var_lsb_rolling(seq, k, sink_buffer);
                 }
             )
         );
-        write_csv_rows(csv_os, suite_title, "layout=lsb;k=" + std::to_string(k), results);
+        write_csv_rows(
+            csv_os, suite_title, "layout=lsb;k=" + std::to_string(k), results, kSinkName
+        );
     }
 
     if (stdout_is_terminal()) {

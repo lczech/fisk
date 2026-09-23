@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/intrinsics.hpp"
@@ -10,17 +11,19 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_instlatx(BitExtractBlocksBatch const& batch, std::size_t rounds)
-{
-    std::uint64_t hash = 0;
+std::uint64_t run_var_instlatx(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
     for (std::size_t r = 0; r < rounds; ++r) {
         clobber_memory(batch.values.data());
         for (std::size_t i = 0; i < batch.values.size(); ++i) {
-            hash += pext64_emu(batch.values[i], batch.masks[i].mask);
+            sink.consume(pext64_emu(batch.values[i], batch.masks[i].mask));
         }
-        do_not_optimize(hash);
     }
-    return hash;
+    return sink.finalize();
 }
 
 #endif // defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)

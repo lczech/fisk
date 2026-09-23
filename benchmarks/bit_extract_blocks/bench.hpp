@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
+#include "sink.hpp"
 
 /**
  * @brief Test data for one measurement, as parallel arrays.
@@ -45,26 +46,82 @@ void bench_bit_extract_blocks(std::ostream& csv_os);
 //
 // Repeating the same passes needs clobber_memory() between them: the inputs do not change across
 // rounds, so without it the compiler is free to keep the first round's loads and results and hand
-// them back for the rest. Guarded to match the ISA availability of the implementation each one
-// benchmarks (see fisk/core/intrinsics.hpp).
+// them back for the rest.
+//
+// Each one constructs its own local Sink (see sink.hpp) via make_sink(sink_buffer), rather than
+// receiving one built elsewhere: a Sink held only through a local variable is what lets Sum's
+// accumulation still auto-vectorize the way plain `hash += ...` did before -- passing an already-
+// built Sink in by reference measurably defeats that (confirmed by disassembly), since the
+// compiler can no longer prove the accumulator doesn't alias anything else the loop touches.
+// sink_buffer itself is still an ordinary reference parameter -- only live for the Write strategy,
+// harmlessly unused by Sum and Barrier's make_sink(). Guarded to match the ISA availability of the
+// implementation each one benchmarks (see fisk/core/intrinsics.hpp).
 #if defined(FISK_HAS_BMI2)
-std::uint64_t run_var_pext(BitExtractBlocksBatch const& batch, std::size_t rounds);
+std::uint64_t run_var_pext(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
 #endif
 
-std::uint64_t run_var_bitloop(BitExtractBlocksBatch const& batch, std::size_t rounds);
-std::uint64_t run_var_split32(BitExtractBlocksBatch const& batch, std::size_t rounds);
-std::uint64_t run_var_byte_table(BitExtractBlocksBatch const& batch, std::size_t rounds);
+std::uint64_t run_var_bitloop(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_split32(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_byte_table(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
 
-std::uint64_t run_var_block_table(BitExtractBlocksBatch const& batch, std::size_t rounds);
-std::uint64_t run_var_block_table_unrolled1(BitExtractBlocksBatch const& batch, std::size_t rounds);
-std::uint64_t run_var_block_table_unrolled2(BitExtractBlocksBatch const& batch, std::size_t rounds);
-std::uint64_t run_var_block_table_unrolled4(BitExtractBlocksBatch const& batch, std::size_t rounds);
-std::uint64_t run_var_block_table_unrolled8(BitExtractBlocksBatch const& batch, std::size_t rounds);
+std::uint64_t run_var_block_table(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_block_table_unrolled1(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_block_table_unrolled2(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_block_table_unrolled4(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_block_table_unrolled8(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
 
-std::uint64_t run_var_butterfly_table(BitExtractBlocksBatch const& batch, std::size_t rounds);
+std::uint64_t run_var_butterfly_table(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
 
 #if defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)
-std::uint64_t run_var_instlatx(BitExtractBlocksBatch const& batch, std::size_t rounds);
+std::uint64_t run_var_instlatx(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);
 #endif
 
-std::uint64_t run_var_zp7(BitExtractBlocksBatch const& batch, std::size_t rounds);
+std::uint64_t run_var_zp7(
+    BitExtractBlocksBatch const& batch,
+    std::size_t rounds,
+    std::vector<std::uint64_t>& sink_buffer
+);

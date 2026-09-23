@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "sink.hpp"
+
 /**
  * @brief Benchmark different implementations to extract and iterate all k-mers in a sequence.
  *
@@ -28,14 +30,58 @@ void bench_kmer_extract(
     std::ostream& csv_os
 );
 
-// Kernels compared above, each defined in its own translation unit (var_*.cpp).
-std::uint64_t run_var_ifs_re(std::string const& seq, std::size_t k);
-std::uint64_t run_var_switch_re(std::string const& seq, std::size_t k);
-std::uint64_t run_var_table_re(std::string const& seq, std::size_t k);
-std::uint64_t run_var_ascii_re(std::string const& seq, std::size_t k);
-std::uint64_t run_var_ifs_shift(std::string const& seq, std::size_t k);
-std::uint64_t run_var_switch_shift(std::string const& seq, std::size_t k);
-std::uint64_t run_var_table_shift(std::string const& seq, std::size_t k);
-std::uint64_t run_var_ascii_shift(std::string const& seq, std::size_t k);
-std::uint64_t run_var_simd_avx2(std::string const& seq, std::size_t k);
-std::uint64_t run_var_simd_scalar(std::string const& seq, std::size_t k);
+// Kernels compared above, each defined in its own translation unit (var_*.cpp). Each one
+// constructs its own local Sink (see sink.hpp) via make_sink(sink_buffer), so that Sum's
+// accumulation can still auto-vectorize the way plain `hash += kmer_value(kmer)` did before -- see
+// the matching comment in bit_extract_weights/bench.hpp for why a Sink built elsewhere and passed
+// in by reference would defeat that.
+std::uint64_t run_var_ifs_re(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_switch_re(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_table_re(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_ascii_re(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_ifs_shift(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_switch_shift(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_table_shift(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_ascii_shift(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_avx2(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_scalar(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);

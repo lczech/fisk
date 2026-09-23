@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "fisk/kmer_extract/packed_simd.hpp"
 #include "kmer_extract_packed/bench.hpp"
@@ -8,15 +9,16 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_simd_wide_avx512(PackedMsb const& seq, std::size_t k)
-{
-    __m512i acc = _mm512_setzero_si512();
+std::uint64_t run_var_msb_simd_wide_avx512(
+    PackedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_simd_wide_avx512_(seq, k, [&](__m512i v, std::size_t) noexcept {
-        acc = _mm512_add_epi64(acc, v);
+        sink.consume(v);
     });
-    alignas(64) std::uint64_t buf[8];
-    _mm512_storeu_si512(buf, acc);
-    return buf[0] + buf[1] + buf[2] + buf[3] + buf[4] + buf[5] + buf[6] + buf[7];
+    return sink.finalize();
 }
 
 #endif // FISK_HAS_AVX512

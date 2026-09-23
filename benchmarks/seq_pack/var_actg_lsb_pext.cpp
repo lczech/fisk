@@ -8,8 +8,10 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_actg_lsb_pext(std::string const& seq, PackedSequence<Encoding::kACTG, Layout::kLSB>& out)
-{
+std::uint64_t run_var_actg_lsb_pext(
+    std::string const& seq,
+    PackedSequence<Encoding::kACTG, Layout::kLSB>& out
+) {
     pack_sequence(seq, WordEncoderPext<Encoding::kACTG, Layout::kLSB>{}, out);
     return 0;
 }

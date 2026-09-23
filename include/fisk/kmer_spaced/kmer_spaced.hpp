@@ -17,11 +17,8 @@
 namespace fisk {
 
 // =================================================================================================
-//     Naive and MISSH implementations
+//     Naive mask preparation
 // =================================================================================================
-
-// The below is a re-implementation of parts of https://github.com/CominLab/MISSH
-// where we losely follow their code, in order to get a baseline for comparison.
 
 /**
  * @brief Prepare a naive mask, consisting of the positions of the '1' bits.
@@ -56,57 +53,6 @@ inline std::vector<std::vector<size_t>> prepare_naive_masks(
         result.push_back( prepare_naive_mask( mask ));
     }
     return result;
-}
-
-/**
- * @brief Reimplementation of the MISSH spaced k-mer extraction.
- */
-inline std::uint64_t compute_spaced_kmer_missh(
-    std::string_view seq, std::vector<size_t> const& mask, size_t start_pos
-) {
-    // Compute a single spaced kmer at the given position
-    std::uint64_t result = 0;
-    bool valid = true;
-    for( size_t i = 0; i < mask.size(); ++i ) {
-        // Comin et al use a switch statement for the encoding, which is slow.
-        auto const c = static_cast<std::uint64_t>(
-            CharEncoderSwitch<Encoding::kACGT>{}( seq[start_pos + mask[i]] )
-        );
-        valid &= (c < 4);
-
-        // The original code builds the kmer backwards, with the last base at the highest bits.
-        // result |= (c << (2 * i));
-
-        // We instead keep it in order, so that sorting of kmers etc works as expected.
-        // The speed of this is not significantly different from the above, in our tests.
-        result <<= 2;
-        result |= c;
-    }
-    return valid ? result : 0;
-}
-
-/**
- * @brief Improvement on the MISSH implementation, by using a faster char encoding function.
- */
-inline std::uint64_t compute_spaced_kmer_naive(
-    std::string_view seq, std::vector<size_t> const& mask, size_t start_pos
-) {
-    // This is the same as the above compute_spaced_kmer_missh() function, with the only
-    // difference being the use of the CharEncoderTable encoder instead of CharEncoderSwitch.
-    // As the char encoding is called k times for each k-mer, this is significantly faster.
-
-    // Compute a single spaced kmer at the given position
-    std::uint64_t result = 0;
-    bool valid = true;
-    for( auto p : mask ) {
-        auto const c = static_cast<std::uint64_t>(
-            CharEncoderTable<Encoding::kACGT>{}( seq[start_pos + p] )
-        );
-        valid &= (c < 4);
-        result <<= 2;
-        result |= c;
-    }
-    return valid ? result : 0;
 }
 
 // =================================================================================================

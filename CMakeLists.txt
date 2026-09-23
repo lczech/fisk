@@ -180,6 +180,18 @@ if(FISK_BUILD_BENCHMARKS)
     # variant's TU back into one optimization unit at link time, defeating the isolation above.
     set_target_properties(fisk_benchmarks PROPERTIES INTERPROCEDURAL_OPTIMIZATION OFF)
 
+    # Select the benchmark sink per-call measurement strategy (Sum/Barrier/Write; see that file)
+    # for every benchmark variant. It is never defined for the fisk::fisk library target: a couple
+    # of headers under include/ check for it being defined at all (not its value) to enable
+    # otherwise-benchmark-only correctness barriers, see e.g. kmer_extract/packed.hpp.
+    set(FISK_BENCHMARK_SINK_MODE "FISK_BENCHMARK_SINK_SUM" CACHE STRING
+        "Benchmark sink measurement mode:
+        FISK_BENCHMARK_SINK_SUM, FISK_BENCHMARK_SINK_BARRIER, or FISK_BENCHMARK_SINK_WRITE"
+    )
+    target_compile_definitions(fisk_benchmarks PRIVATE
+        FISK_BENCHMARK_SINK_MODE=${FISK_BENCHMARK_SINK_MODE}
+    )
+
     target_include_directories(fisk_benchmarks PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks)
     target_link_libraries(fisk_benchmarks PRIVATE fisk::fisk)
 

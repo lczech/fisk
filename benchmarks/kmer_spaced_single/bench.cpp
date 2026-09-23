@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <bit>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -23,6 +25,21 @@ void bench_kmer_spaced_single(
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     write_csv_header(csv_os);
+
+    // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence
+    // actually benchmarked (rounded up to a power of two) so that no call here ever wraps
+    // it. Different techniques here could in principle differ in how many spaced k-mers
+    // they actually emit (e.g. one skipping windows a differently-behaved one still emits
+    // for), which would make a wrapped buffer's leftover contents depend on which technique
+    // last touched each slot; never wrapping sidesteps that regardless of whether it would
+    // in fact occur.
+    std::size_t max_seq_len = 0;
+    for (auto const& seq : sequences) {
+        max_seq_len = std::max(max_seq_len, seq.size());
+    }
+    std::vector<std::uint64_t> sink_buffer(
+        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
+    );
 
     // Run a benchmark for each mask
     for (std::size_t m = 0; m < masks.size(); ++m) {
@@ -84,13 +101,13 @@ void bench_kmer_spaced_single(
             bench(
                 "missh",
                 [&, k](std::string const& seq) {
-                    return run_var_missh(seq, k, naive_mask);
+                    return run_var_missh(seq, k, naive_mask, sink_buffer);
                 }
             ),
             bench(
                 "naive",
                 [&, k](std::string const& seq) {
-                    return run_var_naive(seq, k, naive_mask);
+                    return run_var_naive(seq, k, naive_mask, sink_buffer);
                 }
             ),
 
@@ -99,50 +116,50 @@ void bench_kmer_spaced_single(
             bench(
                 "pext",
                 [&, k](std::string const& seq) {
-                    return run_var_pext(seq, k, bit_ext_mask);
+                    return run_var_pext(seq, k, bit_ext_mask, sink_buffer);
                 }
             ),
             #endif
             bench(
                 "bitloop",
                 [&, k](std::string const& seq) {
-                    return run_var_bitloop(seq, k, bit_ext_mask);
+                    return run_var_bitloop(seq, k, bit_ext_mask, sink_buffer);
                 }
             ),
             bench(
                 "byte_table",
                 [&, k](std::string const& seq) {
-                    return run_var_byte_table(seq, k, bit_ext_mask);
+                    return run_var_byte_table(seq, k, bit_ext_mask, sink_buffer);
                 }
             ),
             bench(
                 "block_table",
                 [&, k](std::string const& seq) {
-                    return run_var_block_table(seq, k, bit_ext_block_mask);
+                    return run_var_block_table(seq, k, bit_ext_block_mask, sink_buffer);
                 }
             ),
             bench(
                 "block_table_unrolled2",
                 [&, k](std::string const& seq) {
-                    return run_var_block_table_unrolled2(seq, k, bit_ext_block_mask);
+                    return run_var_block_table_unrolled2(seq, k, bit_ext_block_mask, sink_buffer);
                 }
             ),
             bench(
                 "block_table_unrolled4",
                 [&, k](std::string const& seq) {
-                    return run_var_block_table_unrolled4(seq, k, bit_ext_block_mask);
+                    return run_var_block_table_unrolled4(seq, k, bit_ext_block_mask, sink_buffer);
                 }
             ),
             bench(
                 "block_table_unrolled8",
                 [&, k](std::string const& seq) {
-                    return run_var_block_table_unrolled8(seq, k, bit_ext_block_mask);
+                    return run_var_block_table_unrolled8(seq, k, bit_ext_block_mask, sink_buffer);
                 }
             ),
             bench(
                 "butterfly_table",
                 [&, k](std::string const& seq) {
-                    return run_var_butterfly_table(seq, k, bit_ext_butterfly_table);
+                    return run_var_butterfly_table(seq, k, bit_ext_butterfly_table, sink_buffer);
                 }
             ),
 
@@ -151,13 +168,15 @@ void bench_kmer_spaced_single(
             bench(
                 "simd_butterfly_table_sse2",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_sse2(seq, k, simd_bf_sse2_kernel);
+                    return run_var_simd_butterfly_table_sse2(
+                        seq, k, simd_bf_sse2_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_sse2",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_sse2(seq, k, simd_bt_sse2_kernel);
+                    return run_var_simd_block_table_sse2(seq, k, simd_bt_sse2_kernel, sink_buffer);
                 }
             ),
             #endif
@@ -165,13 +184,15 @@ void bench_kmer_spaced_single(
             bench(
                 "simd_butterfly_table_avx2",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_avx2(seq, k, simd_bf_avx2_kernel);
+                    return run_var_simd_butterfly_table_avx2(
+                        seq, k, simd_bf_avx2_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_avx2",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_avx2(seq, k, simd_bt_avx2_kernel);
+                    return run_var_simd_block_table_avx2(seq, k, simd_bt_avx2_kernel, sink_buffer);
                 }
             ),
             #endif
@@ -179,13 +200,17 @@ void bench_kmer_spaced_single(
             bench(
                 "simd_butterfly_table_avx512",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_avx512(seq, k, simd_bf_avx512_kernel);
+                    return run_var_simd_butterfly_table_avx512(
+                        seq, k, simd_bf_avx512_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_avx512",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_avx512(seq, k, simd_bt_avx512_kernel);
+                    return run_var_simd_block_table_avx512(
+                        seq, k, simd_bt_avx512_kernel, sink_buffer
+                    );
                 }
             ),
             #endif
@@ -193,13 +218,15 @@ void bench_kmer_spaced_single(
             bench(
                 "simd_butterfly_table_neon",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_neon(seq, k, simd_bf_neon_kernel);
+                    return run_var_simd_butterfly_table_neon(
+                        seq, k, simd_bf_neon_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_neon",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_neon(seq, k, simd_bt_neon_kernel);
+                    return run_var_simd_block_table_neon(seq, k, simd_bt_neon_kernel, sink_buffer);
                 }
             ),
             #endif
@@ -207,26 +234,30 @@ void bench_kmer_spaced_single(
             bench(
                 "simd_pext",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_pext(seq, k, simd_pext_kernel);
+                    return run_var_simd_pext(seq, k, simd_pext_kernel, sink_buffer);
                 }
             ),
             #endif
             bench(
                 "simd_butterfly_table_scalar",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_scalar(seq, k, simd_bf_scalar_kernel);
+                    return run_var_simd_butterfly_table_scalar(
+                        seq, k, simd_bf_scalar_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_scalar",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_scalar(seq, k, simd_bt_scalar_kernel);
+                    return run_var_simd_block_table_scalar(
+                        seq, k, simd_bt_scalar_kernel, sink_buffer
+                    );
                 }
             )
         );
 
         std::string case_label = "mask=" + std::to_string(m);
-        write_csv_rows(csv_os, suite_title, case_label, results);
+        write_csv_rows(csv_os, suite_title, case_label, results, kSinkName);
     }
     if (stdout_is_terminal()) {
         std::cout << "\n";

@@ -9,14 +9,22 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_block_table(std::string const& seq, std::size_t k, std::vector<BitExtractBlockTable> const& masks)
-{
-    std::uint64_t hash = 0;
+std::uint64_t run_var_block_table(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<BitExtractBlockTable> const& masks,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer(
-        std::string_view(seq), k, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_block_table,
+        std::string_view(seq),
+        k,
+        masks,
+        CharEncoderTable<Encoding::kACGT>{},
+        bit_extract_block_table,
         [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t spaced_kmer) {
-            hash += spaced_kmer;
+            sink.consume(spaced_kmer);
         }
     );
-    return hash;
+    return sink.finalize();
 }

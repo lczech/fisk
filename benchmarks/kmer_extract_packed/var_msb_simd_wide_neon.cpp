@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "fisk/kmer_extract/packed_simd.hpp"
 #include "kmer_extract_packed/bench.hpp"
@@ -8,13 +9,16 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_simd_wide_neon(PackedMsb const& seq, std::size_t k)
-{
-    uint64x2_t acc = vdupq_n_u64(0);
+std::uint64_t run_var_msb_simd_wide_neon(
+    PackedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_simd_wide_neon_(seq, k, [&](uint64x2_t v, std::size_t) noexcept {
-        acc = vaddq_u64(acc, v);
+        sink.consume(v);
     });
-    return vgetq_lane_u64(acc, 0) + vgetq_lane_u64(acc, 1);
+    return sink.finalize();
 }
 
 #endif // FISK_HAS_NEON

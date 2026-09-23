@@ -1,3 +1,23 @@
+// =================================================================================================
+//     Benchmark Suite Structure
+// =================================================================================================
+//
+// Each compared implementation variant lives in its own translation unit: benchmarks/<suite>/
+// var_<name>.cpp defines exactly one run_var_<name>() and nothing else that could pull unrelated
+// code into the same TU. This keeps one variant's compiler codegen (inlining, register
+// allocation, layout) from being perturbed by changes to a completely unrelated variant that just
+// happens to share a file with it.
+//
+// This isolation is set up and enforced at the build level, not by convention alone: see
+// CMakeLists.txt's `fisk_benchmarks` target, which globs every benchmarks/*.cpp file into one
+// executable (so a new var_*.cpp needs no manual registration) and explicitly turns
+// INTERPROCEDURAL_OPTIMIZATION off (LTO/IPO would otherwise let the linker re-fuse all those TUs
+// back into one optimization unit, silently defeating the point). There is currently no automated
+// check that a var_*.cpp only ever defines one run_var_*().
+//
+// See sink.hpp for the separate (complementary) per-call measurement strategy (Sum/Barrier/Write)
+// that every run_var_*() reduces its result through.
+
 #include <iostream>
 #include <string>
 #include <string_view>

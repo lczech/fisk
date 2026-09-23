@@ -54,7 +54,8 @@ inline void print(std::vector<Result> const& rs)
     for (auto const& r : rs) {
         std::cout
             << "  " << std::left  << std::setw(static_cast<int>(name_w)) << r.name
-            << " : " << std::right << std::setw(ns_w) << std::fixed << std::setprecision(prec) << r.ns_per_op
+            << " : " << std::right << std::setw(ns_w) << std::fixed << std::setprecision(prec)
+            << r.ns_per_op
             << " ns/op"
             << "   sink=" << r.sink
             << "\n";
@@ -71,14 +72,19 @@ inline void print(std::vector<Result> const& rs)
 
 inline void write_csv_header(std::ostream& os)
 {
-    os << "suite,case,benchmark,ns_per_op\n";
+    os << "suite,case,benchmark,sink,ns_per_op\n";
 }
 
+// sink_name identifies which Sink strategy (see sink.hpp) produced every row of this call: the
+// same one for all of them, since it is chosen once per binary at compile time. Suites that don't
+// use the Sink abstraction yet fall back to the default "sum", which already describes their
+// plain accumulation.
 inline void write_csv_rows(
     std::ostream& os,
     std::string_view suite,
     std::string_view case_label,
     std::vector<Result> const& results,
+    std::string_view sink_name = "sum",
     int precision = 6
 ) {
     os << std::fixed << std::setprecision(precision);
@@ -86,6 +92,7 @@ inline void write_csv_rows(
         os << suite << ","
            << case_label << ","
            << r.name << ","
+           << sink_name << ","
            << r.ns_per_op
            << "\n";
     }
@@ -291,7 +298,9 @@ private:
                 total += units_fn_(in);
             }
             if (total <= 0.0) {
-                throw std::runtime_error("Microbench::compute_units_per_run: total work units must be > 0");
+                throw std::runtime_error(
+                    "Microbench::compute_units_per_run: total work units must be > 0"
+                );
             }
             return total;
         }

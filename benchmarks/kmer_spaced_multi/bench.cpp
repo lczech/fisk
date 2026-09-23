@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <bit>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -38,6 +40,25 @@ void bench_kmer_spaced_multi(
 
     write_csv_header(csv_os);
 
+    // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
+    // benchmarked, times the largest mask set (every position is touched once per mask in the
+    // set), rounded up to a power of two so that no call here ever wraps it. Different techniques
+    // here could in principle differ in how many spaced k-mers they actually emit (e.g. one
+    // skipping windows a differently-behaved one still emits for), which would make a wrapped
+    // buffer's leftover contents depend on which technique last touched each slot; never wrapping
+    // sidesteps that regardless of whether it would in fact occur.
+    std::size_t max_seq_len = 0;
+    for (auto const& seq : sequences) {
+        max_seq_len = std::max(max_seq_len, seq.size());
+    }
+    std::size_t max_masks = 1;
+    for (auto const& masks : multi_masks) {
+        max_masks = std::max(max_masks, masks.size());
+    }
+    std::vector<std::uint64_t> sink_buffer(
+        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1) * max_masks), 0
+    );
+
     // Run a benchmark for each mask set
     for (std::size_t m = 0; m < multi_masks.size(); ++m) {
         if (stdout_is_terminal()) {
@@ -57,7 +78,9 @@ void bench_kmer_spaced_multi(
             naive_masks.push_back(prepare_naive_mask(mask));
             bit_ext_masks.push_back(BitExtractMask(raw_masks.back()));
             bit_ext_block_masks.push_back(bit_extract_block_table_preprocess(raw_masks.back()));
-            bit_ext_butterfly_tables.push_back(bit_extract_butterfly_table_preprocess(raw_masks.back()));
+            bit_ext_butterfly_tables.push_back(
+                bit_extract_butterfly_table_preprocess(raw_masks.back())
+            );
 
             // Just to test the selector implementation
             std::cout << "fastest mode: ";
@@ -65,23 +88,25 @@ void bench_kmer_spaced_multi(
         }
 
         // simd kernels
-        BitExtractKernelDispatcher<BitExtractKernelButterflyScalar> simd_bf_scalar_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractKernelBlockScalar<>>   simd_bt_scalar_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflyScalar>
+            simd_bf_scalar_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockScalar<>> simd_bt_scalar_kernel(raw_masks);
         #if defined(FISK_HAS_SSE2)
-        BitExtractKernelDispatcher<BitExtractKernelButterflySSE2>   simd_bf_sse2_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractKernelBlockSSE2<>>     simd_bt_sse2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflySSE2> simd_bf_sse2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockSSE2<>> simd_bt_sse2_kernel(raw_masks);
         #endif
         #if defined(FISK_HAS_AVX2)
-        BitExtractKernelDispatcher<BitExtractKernelButterflyAVX2>   simd_bf_avx2_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractKernelBlockAVX2<>>     simd_bt_avx2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflyAVX2> simd_bf_avx2_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockAVX2<>> simd_bt_avx2_kernel(raw_masks);
         #endif
         #if defined(FISK_HAS_AVX512)
-        BitExtractKernelDispatcher<BitExtractKernelButterflyAVX512> simd_bf_avx512_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractKernelBlockAVX512<>>   simd_bt_avx512_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflyAVX512>
+            simd_bf_avx512_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockAVX512<>> simd_bt_avx512_kernel(raw_masks);
         #endif
         #if defined(FISK_HAS_NEON)
-        BitExtractKernelDispatcher<BitExtractKernelButterflyNEON>   simd_bf_neon_kernel(raw_masks);
-        BitExtractKernelDispatcher<BitExtractKernelBlockNEON<>>     simd_bt_neon_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelButterflyNEON> simd_bf_neon_kernel(raw_masks);
+        BitExtractKernelDispatcher<BitExtractKernelBlockNEON<>> simd_bt_neon_kernel(raw_masks);
         #endif
         #if defined(FISK_HAS_BMI2)
         BitExtractKernelDispatcher<BitExtractKernelPEXT<>>          simd_pext_kernel(raw_masks);
@@ -107,7 +132,7 @@ void bench_kmer_spaced_multi(
             bench(
                 "naive",
                 [&, k](std::string const& seq) {
-                    return run_var_naive(seq, k, naive_masks);
+                    return run_var_naive(seq, k, naive_masks, sink_buffer);
                 }
             ),
 
@@ -116,50 +141,50 @@ void bench_kmer_spaced_multi(
             bench(
                 "pext",
                 [&, k](std::string const& seq) {
-                    return run_var_pext(seq, k, bit_ext_masks);
+                    return run_var_pext(seq, k, bit_ext_masks, sink_buffer);
                 }
             ),
             #endif
             bench(
                 "bitloop",
                 [&, k](std::string const& seq) {
-                    return run_var_bitloop(seq, k, bit_ext_masks);
+                    return run_var_bitloop(seq, k, bit_ext_masks, sink_buffer);
                 }
             ),
             bench(
                 "byte_table",
                 [&, k](std::string const& seq) {
-                    return run_var_byte_table(seq, k, bit_ext_masks);
+                    return run_var_byte_table(seq, k, bit_ext_masks, sink_buffer);
                 }
             ),
             bench(
                 "block_table",
                 [&, k](std::string const& seq) {
-                    return run_var_block_table(seq, k, bit_ext_block_masks);
+                    return run_var_block_table(seq, k, bit_ext_block_masks, sink_buffer);
                 }
             ),
             bench(
                 "block_table_unrolled2",
                 [&, k](std::string const& seq) {
-                    return run_var_block_table_unrolled2(seq, k, bit_ext_block_masks);
+                    return run_var_block_table_unrolled2(seq, k, bit_ext_block_masks, sink_buffer);
                 }
             ),
             bench(
                 "block_table_unrolled4",
                 [&, k](std::string const& seq) {
-                    return run_var_block_table_unrolled4(seq, k, bit_ext_block_masks);
+                    return run_var_block_table_unrolled4(seq, k, bit_ext_block_masks, sink_buffer);
                 }
             ),
             bench(
                 "block_table_unrolled8",
                 [&, k](std::string const& seq) {
-                    return run_var_block_table_unrolled8(seq, k, bit_ext_block_masks);
+                    return run_var_block_table_unrolled8(seq, k, bit_ext_block_masks, sink_buffer);
                 }
             ),
             bench(
                 "butterfly_table",
                 [&, k](std::string const& seq) {
-                    return run_var_butterfly_table(seq, k, bit_ext_butterfly_tables);
+                    return run_var_butterfly_table(seq, k, bit_ext_butterfly_tables, sink_buffer);
                 }
             ),
 
@@ -168,13 +193,15 @@ void bench_kmer_spaced_multi(
             bench(
                 "simd_butterfly_table_sse2",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_sse2(seq, k, simd_bf_sse2_kernel);
+                    return run_var_simd_butterfly_table_sse2(
+                        seq, k, simd_bf_sse2_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_sse2",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_sse2(seq, k, simd_bt_sse2_kernel);
+                    return run_var_simd_block_table_sse2(seq, k, simd_bt_sse2_kernel, sink_buffer);
                 }
             ),
             #endif
@@ -182,13 +209,15 @@ void bench_kmer_spaced_multi(
             bench(
                 "simd_butterfly_table_avx2",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_avx2(seq, k, simd_bf_avx2_kernel);
+                    return run_var_simd_butterfly_table_avx2(
+                        seq, k, simd_bf_avx2_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_avx2",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_avx2(seq, k, simd_bt_avx2_kernel);
+                    return run_var_simd_block_table_avx2(seq, k, simd_bt_avx2_kernel, sink_buffer);
                 }
             ),
             #endif
@@ -196,13 +225,17 @@ void bench_kmer_spaced_multi(
             bench(
                 "simd_butterfly_table_avx512",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_avx512(seq, k, simd_bf_avx512_kernel);
+                    return run_var_simd_butterfly_table_avx512(
+                        seq, k, simd_bf_avx512_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_avx512",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_avx512(seq, k, simd_bt_avx512_kernel);
+                    return run_var_simd_block_table_avx512(
+                        seq, k, simd_bt_avx512_kernel, sink_buffer
+                    );
                 }
             ),
             #endif
@@ -210,13 +243,15 @@ void bench_kmer_spaced_multi(
             bench(
                 "simd_butterfly_table_neon",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_neon(seq, k, simd_bf_neon_kernel);
+                    return run_var_simd_butterfly_table_neon(
+                        seq, k, simd_bf_neon_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_neon",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_neon(seq, k, simd_bt_neon_kernel);
+                    return run_var_simd_block_table_neon(seq, k, simd_bt_neon_kernel, sink_buffer);
                 }
             ),
             #endif
@@ -224,26 +259,30 @@ void bench_kmer_spaced_multi(
             bench(
                 "simd_pext",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_pext(seq, k, simd_pext_kernel);
+                    return run_var_simd_pext(seq, k, simd_pext_kernel, sink_buffer);
                 }
             ),
             #endif
             bench(
                 "simd_butterfly_table_scalar",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_scalar(seq, k, simd_bf_scalar_kernel);
+                    return run_var_simd_butterfly_table_scalar(
+                        seq, k, simd_bf_scalar_kernel, sink_buffer
+                    );
                 }
             ),
             bench(
                 "simd_block_table_scalar",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_scalar(seq, k, simd_bt_scalar_kernel);
+                    return run_var_simd_block_table_scalar(
+                        seq, k, simd_bt_scalar_kernel, sink_buffer
+                    );
                 }
             )
         );
 
         std::string case_label = "mask_set=" + std::to_string(m);
-        write_csv_rows(csv_os, suite_title, case_label, results);
+        write_csv_rows(csv_os, suite_title, case_label, results, kSinkName);
     }
     if (stdout_is_terminal()) {
         std::cout << "\n";

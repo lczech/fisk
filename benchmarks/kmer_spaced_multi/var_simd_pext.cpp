@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "fisk/kmer_spaced/simd.hpp"
 #include "kmer_spaced_multi/bench.hpp"
@@ -9,18 +10,22 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_simd_pext(std::string const& seq, std::size_t k, BitExtractKernelDispatcher<BitExtractKernelPEXT<>> const& kernel)
-{
-    std::uint64_t hash = 0;
+std::uint64_t run_var_simd_pext(
+    std::string const& seq,
+    std::size_t k,
+    BitExtractKernelDispatcher<BitExtractKernelPEXT<>> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
     kernel.run([&](auto const& kernels_arr) {
         for_each_spaced_kmer_simd(
             std::string_view(seq), k, kernels_arr, CharEncoderTable<Encoding::kACGT>{},
             [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t wmer) {
-                hash += wmer;
+                sink.consume(wmer);
             }
         );
     });
-    return hash;
+    return sink.finalize();
 }
 
 #endif // FISK_HAS_BMI2

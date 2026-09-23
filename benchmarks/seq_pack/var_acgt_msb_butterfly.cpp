@@ -6,8 +6,10 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_acgt_msb_butterfly(std::string const& seq, PackedSequence<Encoding::kACGT, Layout::kMSB>& out)
-{
+std::uint64_t run_var_acgt_msb_butterfly(
+    std::string const& seq,
+    PackedSequence<Encoding::kACGT, Layout::kMSB>& out
+) {
     pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, out);
     return 0;
 }
