@@ -32,6 +32,11 @@ inline std::vector<size_t> prepare_spaced_kmer_position_mask( std::string const&
     if( mask.size() == 0 || mask.size() > 32 ) {
         throw std::invalid_argument( "Invalid mask size not in [1,32]" );
     }
+    if( mask.front() != '1' || mask.back() != '1' ) {
+        throw std::invalid_argument(
+            "Invalid spaced k-mer mask: first and last position must be set"
+        );
+    }
     std::vector<size_t> result;
     for( size_t i = 0; i < mask.size(); ++i ) {
         if( mask[i] == '0' || mask[i] == '*' ) {
@@ -131,7 +136,8 @@ inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k 
     }
 
     // Mask should not have any bits set beyond the 2*k range.
-    if ((mask >> (2 * k)) != 0) {
+    // For k == 32 the whole uint64_t is within the span; shifting it by 64 is undefined.
+    if (k < 32 && (mask >> (2 * k)) != 0) {
         return false;
     }
 
