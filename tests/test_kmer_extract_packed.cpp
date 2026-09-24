@@ -135,7 +135,7 @@ static void check_aligned_variant(
         for (std::size_t k : {std::size_t{0}, max_k + 1, std::numeric_limits<std::size_t>::max()}) {
             EXPECT_THROW(
                 extract(packed, k, [](kmer_type_of<decltype(packed)>) {}),
-                std::runtime_error
+                std::invalid_argument
             );
         }
     }

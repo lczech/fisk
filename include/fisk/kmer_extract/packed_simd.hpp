@@ -10,6 +10,7 @@
 
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
+#include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/packed.hpp"
@@ -21,8 +22,10 @@ namespace fisk {
 // =================================================================================================
 
 // Per-ISA extractors for PackedSequence values. Each public dispatcher accepts k in [1, 32]
-// and calls `func(vec, valid_count)` with consecutive k-mers in the ISA's native integer vector.
-// Full vectors have `valid_count == lane_count`; the final vector may be zero-padded in high lanes.
+// and calls `func(pos, vec, valid_count)` or `func(vec, valid_count)` with consecutive k-mers in
+// the ISA's native integer vector, see invoke_kmer_vector_callback(): `pos` is the start position
+// of the k-mer in lane 0, and lane `j` holds the one starting at `pos + j`. Full vectors have
+// `valid_count == lane_count`; the final vector may be zero-padded in high lanes.
 // The suffixed narrow/wide functions are internal helpers used by the dispatchers.
 //
 // Unlike the scalar extractors in packed.hpp, these hand out raw vectors rather than Kmer values
@@ -36,10 +39,11 @@ namespace fisk {
 //     Shared tail packing
 // =================================================================================================
 
-// Packs scalar tail k-mers into native-width vectors, zero-padding the last vector.
+// Packs scalar tail k-mers into native-width vectors, zero-padding the last vector. `vals[0]` is
+// the k-mer starting at sequence position `base`, and the following ones are consecutive.
 template <std::size_t Lanes, typename LoadFn, typename Func>
 inline void emit_tail_packed_(
-    std::uint64_t const* vals, std::size_t n, LoadFn&& load, Func&& func
+    std::uint64_t const* vals, std::size_t n, std::size_t base, LoadFn&& load, Func&& func
 ) {
     std::size_t i = 0;
     while (i < n) {
@@ -48,7 +52,7 @@ inline void emit_tail_packed_(
         for (std::size_t j = 0; j < chunk; ++j) {
             buf[j] = vals[i + j];
         }
-        func(load(buf), chunk);
+        invoke_kmer_vector_callback(func, base + i, load(buf), chunk);
         i += chunk;
     }
 }
@@ -137,11 +141,12 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
 
         // Transpose from "lane = which byte, grouped by local" back to "lane = which local,
         // grouped by byte", so k-mers are still emitted in strict sequence-position order despite
-        // the byte-paired computation above. In-register shuffles only, no cross-lane traffic.
-        func(_mm_unpacklo_epi64(r0, r1), std::size_t{2}); // byte b,   locals 0,1
-        func(_mm_unpacklo_epi64(r2, r3), std::size_t{2}); // byte b,   locals 2,3
-        func(_mm_unpackhi_epi64(r0, r1), std::size_t{2}); // byte b+1, locals 0,1
-        func(_mm_unpackhi_epi64(r2, r3), std::size_t{2}); // byte b+1, locals 2,3
+        // the byte-paired computation above: byte b locals 0,1 and 2,3, then byte b+1 locals 0,1
+        // and 2,3. In-register shuffles only, no cross-lane traffic.
+        invoke_kmer_vector_callback(func, 4 * b + 0, _mm_unpacklo_epi64(r0, r1), std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 2, _mm_unpacklo_epi64(r2, r3), std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 4, _mm_unpackhi_epi64(r0, r1), std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 6, _mm_unpackhi_epi64(r2, r3), std::size_t{2});
     }
 
     // Any byte excluded purely by the parity rounding above (fast_bytes odd) is still safe to
@@ -151,7 +156,7 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
-        tail_vals.data(), tail_n,
+        tail_vals.data(), tail_n, 4 * paired_fast_bytes,
         [](std::array<std::uint64_t, 2> const& buf) {
             return _mm_set_epi64x(
                 static_cast<std::int64_t>(buf[1]), static_cast<std::int64_t>(buf[0])
@@ -261,10 +266,10 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
         __m128i const r2 = extract(lo_pair, hi_pair, cnt_lo2, cnt_hl2);
         __m128i const r3 = extract(lo_pair, hi_pair, cnt_lo3, cnt_hl3);
 
-        func(_mm_unpacklo_epi64(r0, r1), std::size_t{2});
-        func(_mm_unpacklo_epi64(r2, r3), std::size_t{2});
-        func(_mm_unpackhi_epi64(r0, r1), std::size_t{2});
-        func(_mm_unpackhi_epi64(r2, r3), std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 0, _mm_unpacklo_epi64(r0, r1), std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 2, _mm_unpacklo_epi64(r2, r3), std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 4, _mm_unpackhi_epi64(r0, r1), std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 6, _mm_unpackhi_epi64(r2, r3), std::size_t{2});
     }
 
     // Any odd trailing byte is left to the scalar tail.
@@ -273,7 +278,7 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
-        tail_vals.data(), tail_n,
+        tail_vals.data(), tail_n, 4 * paired_fast_bytes,
         [](std::array<std::uint64_t, 2> const& buf) {
             return _mm_set_epi64x(
                 static_cast<std::int64_t>(buf[1]), static_cast<std::int64_t>(buf[0])
@@ -362,7 +367,7 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
         __m256i const bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(word));
         __m256i const r = _mm256_and_si256(_mm256_srlv_epi64(bcast, shift_v), mask_v);
 
-        func(r, std::size_t{4});
+        invoke_kmer_vector_callback(func, 4 * b, r, std::size_t{4});
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -370,7 +375,7 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<4>(
-        tail_vals.data(), tail_n,
+        tail_vals.data(), tail_n, 4 * fast_bytes,
         [](std::array<std::uint64_t, 4> const& buf) {
             return _mm256_loadu_si256(reinterpret_cast<__m256i const*>(buf.data()));
         },
@@ -440,7 +445,7 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
         );
         __m256i const r = _mm256_and_si256(_mm256_or_si256(lo_contrib, hi_contrib), mask_v);
 
-        func(r, std::size_t{4});
+        invoke_kmer_vector_callback(func, 4 * b, r, std::size_t{4});
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -448,7 +453,7 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<4>(
-        tail_vals.data(), tail_n,
+        tail_vals.data(), tail_n, 4 * fast_bytes,
         [](std::array<std::uint64_t, 4> const& buf) {
             return _mm256_loadu_si256(reinterpret_cast<__m256i const*>(buf.data()));
         },
@@ -552,7 +557,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
         );
         __m512i const r = _mm512_and_si512(_mm512_srlv_epi64(dbcast, shift_v), mask_v);
 
-        func(r, std::size_t{8});
+        invoke_kmer_vector_callback(func, 4 * b, r, std::size_t{8});
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -560,7 +565,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<8>(
-        tail_vals.data(), tail_n,
+        tail_vals.data(), tail_n, 4 * paired_fast_bytes,
         [](std::array<std::uint64_t, 8> const& buf) {
             return _mm512_loadu_si512(buf.data());
         },
@@ -656,7 +661,7 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
 
         __m512i const r = window_avx512_(lo_dbcast, hi_dbcast);
 
-        func(r, std::size_t{8});
+        invoke_kmer_vector_callback(func, 4 * b, r, std::size_t{8});
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -664,7 +669,7 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<8>(
-        tail_vals.data(), tail_n,
+        tail_vals.data(), tail_n, 4 * paired_fast_bytes,
         [](std::array<std::uint64_t, 8> const& buf) {
             return _mm512_loadu_si512(buf.data());
         },
@@ -759,8 +764,8 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
         uint64x2_t const r_lo = vandq_u64(vshlq_u64(bcast, shift_vec_lo), mask_v); // locals 0,1
         uint64x2_t const r_hi = vandq_u64(vshlq_u64(bcast, shift_vec_hi), mask_v); // locals 2,3
 
-        func(r_lo, std::size_t{2});
-        func(r_hi, std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 0, r_lo, std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 2, r_hi, std::size_t{2});
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -768,7 +773,7 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
-        tail_vals.data(), tail_n,
+        tail_vals.data(), tail_n, 4 * fast_bytes,
         [](std::array<std::uint64_t, 2> const& buf) { return vld1q_u64(buf.data()); },
         func
     );
@@ -855,8 +860,8 @@ inline void for_each_kmer_packed_simd_wide_neon_(
             vorrq_u64(vshlq_u64(lo_bcast, lo_cnt_hi), vshlq_u64(hi_bcast, hi_cnt_hi)), mask_v
         );
 
-        func(r_lo, std::size_t{2});
-        func(r_hi, std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 0, r_lo, std::size_t{2});
+        invoke_kmer_vector_callback(func, 4 * b + 2, r_hi, std::size_t{2});
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -864,7 +869,7 @@ inline void for_each_kmer_packed_simd_wide_neon_(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
-        tail_vals.data(), tail_n,
+        tail_vals.data(), tail_n, 4 * fast_bytes,
         [](std::array<std::uint64_t, 2> const& buf) { return vld1q_u64(buf.data()); },
         func
     );

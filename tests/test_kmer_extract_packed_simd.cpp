@@ -187,7 +187,7 @@ static void check_simd_variant(
         auto const packed = pack_sequence(std::string(length, 'T'), encoder);
         for (std::size_t k : {std::size_t{0}, max_k + 1, std::numeric_limits<std::size_t>::max()}) {
             EXPECT_THROW(
-                extract(packed, k, [](auto, std::size_t) {}), std::runtime_error
+                extract(packed, k, [](auto, std::size_t) {}), std::invalid_argument
             );
         }
     }

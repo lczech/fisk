@@ -88,13 +88,25 @@ std::uint64_t run_var_butterfly_table(
     std::vector<std::uint64_t>& sink_buffer
 );
 
-std::uint64_t run_var_simd_butterfly_table_scalar(
+std::uint64_t run_var_simd_butterfly_table_scalar_by_mask(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelButterflyScalar const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_simd_block_table_scalar(
+std::uint64_t run_var_simd_butterfly_table_scalar_by_position(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelButterflyScalar const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_scalar_by_mask(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelBlockScalar<> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_scalar_by_position(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelBlockScalar<> const& kernel,
@@ -102,13 +114,25 @@ std::uint64_t run_var_simd_block_table_scalar(
 );
 
 #if defined(FISK_HAS_SSE2)
-std::uint64_t run_var_simd_butterfly_table_sse2(
+std::uint64_t run_var_simd_butterfly_table_sse2_by_mask(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelButterflySSE2 const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_simd_block_table_sse2(
+std::uint64_t run_var_simd_butterfly_table_sse2_by_position(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelButterflySSE2 const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_sse2_by_mask(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelBlockSSE2<> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_sse2_by_position(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelBlockSSE2<> const& kernel,
@@ -117,13 +141,25 @@ std::uint64_t run_var_simd_block_table_sse2(
 #endif
 
 #if defined(FISK_HAS_AVX2)
-std::uint64_t run_var_simd_butterfly_table_avx2(
+std::uint64_t run_var_simd_butterfly_table_avx2_by_mask(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelButterflyAVX2 const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_simd_block_table_avx2(
+std::uint64_t run_var_simd_butterfly_table_avx2_by_position(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelButterflyAVX2 const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_avx2_by_mask(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelBlockAVX2<> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_avx2_by_position(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelBlockAVX2<> const& kernel,
@@ -132,13 +168,25 @@ std::uint64_t run_var_simd_block_table_avx2(
 #endif
 
 #if defined(FISK_HAS_AVX512)
-std::uint64_t run_var_simd_butterfly_table_avx512(
+std::uint64_t run_var_simd_butterfly_table_avx512_by_mask(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelButterflyAVX512 const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_simd_block_table_avx512(
+std::uint64_t run_var_simd_butterfly_table_avx512_by_position(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelButterflyAVX512 const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_avx512_by_mask(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelBlockAVX512<> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_avx512_by_position(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelBlockAVX512<> const& kernel,
@@ -147,13 +195,25 @@ std::uint64_t run_var_simd_block_table_avx512(
 #endif
 
 #if defined(FISK_HAS_NEON)
-std::uint64_t run_var_simd_butterfly_table_neon(
+std::uint64_t run_var_simd_butterfly_table_neon_by_mask(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelButterflyNEON const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_simd_block_table_neon(
+std::uint64_t run_var_simd_butterfly_table_neon_by_position(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelButterflyNEON const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_neon_by_mask(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelBlockNEON<> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_block_table_neon_by_position(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelBlockNEON<> const& kernel,
@@ -162,7 +222,13 @@ std::uint64_t run_var_simd_block_table_neon(
 #endif
 
 #if defined(FISK_HAS_BMI2)
-std::uint64_t run_var_simd_pext(
+std::uint64_t run_var_simd_pext_by_mask(
+    std::string const& seq,
+    std::size_t k,
+    fisk::BitExtractKernelPEXT<> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_pext_by_position(
     std::string const& seq,
     std::size_t k,
     fisk::BitExtractKernelPEXT<> const& kernel,

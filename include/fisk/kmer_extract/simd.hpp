@@ -14,6 +14,7 @@
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/intrinsics.hpp"
+#include "fisk/core/kmer_callback.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 
 namespace fisk {
@@ -80,12 +81,16 @@ inline std::uint32_t encode_32_nts_avx2(char const* data, std::uint8_t* codes) n
 
 /**
  * @brief Consume a contiguous run of valid two-bit codes.
+ *
+ * `base` is the index into the original sequence of `codes[0]`, used to report the start position
+ * of each emitted k-mer to the callback.
  */
 template<typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void consume_valid_run(
+inline void consume_valid_run_(
     std::uint8_t const* codes,
     std::size_t len,
+    std::size_t base,
     std::size_t k,
     std::uint64_t mask,
     std::uint64_t& kmer,
@@ -110,8 +115,11 @@ inline void consume_valid_run(
             return;
         }
 
-        // The last character processed above just completed the first valid k-mer.
-        func(kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k));
+        // The last character processed above, at index base + idx - 1, just completed the first
+        // valid k-mer, which hence starts at base + idx - k.
+        invoke_kmer_callback(
+            func, base + idx - k, kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k)
+        );
 
         // Saturate valid so we do not keep incrementing a counter that is only used
         // as a threshold predicate.
@@ -121,7 +129,9 @@ inline void consume_valid_run(
     // Fully warm: every additional valid code yields one k-mer.
     for (; idx < len; ++idx) {
         kmer = ((kmer << 2) & mask) | codes[idx];
-        func(kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k));
+        invoke_kmer_callback(
+            func, base + idx + 1 - k, kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k)
+        );
     }
 }
 
@@ -146,6 +156,8 @@ inline unsigned ctz32(std::uint32_t x) noexcept
  * of 32 characters, then consumes contiguous valid runs with a tight inner loop.
  *
  * Invalid characters reset the valid-window state and suppress any overlapping k-mers.
+ *
+ * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, see for_each_kmer_rolling().
  */
 template<typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
@@ -178,8 +190,8 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 
         // Fast path: whole block valid.
         if (valid_bits == 0xFFFFFFFFu) {
-            consume_valid_run(
-                codes.data(), 32, k, mask, kmer, valid, std::forward<Func>(func)
+            consume_valid_run_(
+                codes.data(), 32, i, k, mask, kmer, valid, std::forward<Func>(func)
             );
             continue;
         }
@@ -208,8 +220,8 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
             // Number of leading 1-bits in tail, computed as ctz(~tail).
             // This works because the right shift fills upper bits with zero.
             unsigned const run_len = ctz32(~tail);
-            consume_valid_run(
-                codes.data() + j, run_len, k, mask, kmer, valid, std::forward<Func>(func)
+            consume_valid_run_(
+                codes.data() + j, run_len, i + j, k, mask, kmer, valid, std::forward<Func>(func)
             );
             j += run_len;
         }
@@ -226,7 +238,9 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
             valid = (valid < k) ? (valid + 1) : k;
 
             if (valid >= k) {
-                func(kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k));
+                invoke_kmer_callback(
+                    func, i + 1 - k, kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k)
+                );
             }
         } else {
             valid = 0;
@@ -240,6 +254,7 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 
 // Alternative implementation, using only 64 bit scalar operations to do SIMD within a register.
 // It is not as fast as the AVX above, or just the lookup table... But kept here for reference.
+// Func may be called either as `func(pos, kmer)` or as `func(kmer)`, see for_each_kmer_rolling().
 
 template<typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
@@ -326,9 +341,13 @@ inline void for_each_kmer_simd_scalar(
         kmer  = ((kmer  << 2u) & kmer_mask)  | std::uint64_t{code};
         valid = ((valid << 1u) & valid_mask) | std::uint64_t{is_valid};
 
+        // `seen` counts every character processed so far, so the k-mer ending here starts at
+        // seen - kk.
         ++seen;
         if (seen >= kk && valid == valid_mask) {
-            func(kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, kk));
+            invoke_kmer_callback(
+                func, seen - kk, kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, kk)
+            );
         }
     };
 

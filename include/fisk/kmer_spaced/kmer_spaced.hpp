@@ -13,6 +13,7 @@
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/intrinsics.hpp"
+#include "fisk/core/kmer_callback.hpp"
 
 namespace fisk {
 
@@ -113,7 +114,7 @@ inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k 
     bool const last_kept  = (mask & 0x3u) == 0x3u;
     if (!first_kept || !last_kept) {
         return false;
-        // throw std::runtime_error(
+        // throw std::invalid_argument(
         //     "Invalid spaced k-mer mask: first and last position must be kept"
         // );
     }
@@ -123,7 +124,7 @@ inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k 
         const std::uint64_t lane = (mask >> (2 * i)) & 0x3u;
         if (lane != 0x0u && lane != 0x3u) {
             return false;
-            // throw std::runtime_error(
+            // throw std::invalid_argument(
             //     "Invalid spaced k-mer mask: each selected position must use both bits"
             // );
         }
@@ -191,34 +192,16 @@ inline void for_each_mask(std::vector<Mask, Alloc> const& masks, F&& f)
 }
 
 /**
- * @brief Iterate a sequence, extract all valid spaced k-mers from it,
- * and call a callback on each spaced k-mer.
+ * @brief Shared implementation behind both for_each_spaced_kmer() overloads below.
  *
- * A spaced k-mer is emitted iff all kept positions are valid, i.e.
- *
- *     (valid_positions & mask) == mask
- *
- * The mask is assumed to use two-bit encoding, i.e., as 00 and 11 per position, and must have set
- * the first and last position of the span (the beginning and end of spaced k-mer are always kept).
- *
- * @tparam Enc      Encoder turning characters into two-bit codes, see CharEncoder.
- *                  Its Encoding is not yet attached to the spaced k-mers emitted here.
- * @tparam Callback Callback function called with each extracted spaced k-mer.
- *
- * @param seq       Input sequence.
- * @param span_k    Full span length of the spaced seed, must be in [1, 32].
- * @param masks     Two-bit mask over the packed span: kept positions have
- *                  both bits set (0b11), skipped positions have 0b00.
- *                  Can also be a related BitExtract instance such as
- *                  BitExtractBlockTable or BitExtractButterflyTable.
- * @param enc       Encoder functor.
- * @param bit_ext   Bit extraction functor.
- * @param callback  Callback functor, takes the extracted spaced k-mer.
+ * `SingleMask` is set by each overload, mirroring the single mask vs std::vector<Mask> distinction
+ * that for_each_mask() above is overloaded on.
  */
-template<typename MaskOrMasks, typename Enc, typename BitExtract, typename Callback>
-    requires CharEncoder<std::remove_cvref_t<Enc>>
+template<
+    bool SingleMask, typename MaskOrMasks, typename Enc, typename BitExtract, typename Callback
+>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer(
+inline void for_each_spaced_kmer_impl_(
     std::string_view seq,
     std::size_t const span_k,
     MaskOrMasks const& masks,
@@ -226,14 +209,9 @@ inline void for_each_spaced_kmer(
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    static_assert(
-        std::is_invocable_v<Callback, std::size_t, std::size_t, std::uint64_t>,
-        "Callback must be callable as callback(mask_idx, pos, spaced_kmer)."
-    );
-
     // Input boundary checks
     if (span_k == 0 || span_k > 32) {
-        throw std::runtime_error(
+        throw std::invalid_argument(
             "Invalid call to spaced k-mer extraction with k not in [1, 32]"
         );
     }
@@ -276,15 +254,91 @@ inline void for_each_spaced_kmer(
             | (static_cast<std::uint64_t>(code < 4) * 0x03u)
         ;
 
+        // Start position of the spaced k-mer. This underflows while i < span_k - 1, but is never
+        // used then, as no mask can be satisfied before span_k characters have been shifted in,
+        // see above.
+        std::size_t const pos = i + 1 - span_k;
+
         // Apply the callback for all masks that are satisfied at this position.
         std::size_t mask_idx = 0;
         for_each_mask(masks, [&](auto const& mask) {
             if ((valid_bits & mask.mask) == mask.mask) {
-                callback(mask_idx, i, bit_ext(kmer_bits, mask));
+                invoke_spaced_kmer_callback<SingleMask>(
+                    callback, mask_idx, pos, bit_ext(kmer_bits, mask)
+                );
             }
             ++mask_idx;
         });
     }
+}
+
+/**
+ * @brief Iterate a sequence, extract all valid spaced k-mers from it,
+ * and call a callback on each spaced k-mer, for a single mask.
+ *
+ * A spaced k-mer is emitted iff all kept positions are valid, i.e.
+ *
+ *     (valid_positions & mask) == mask
+ *
+ * The mask is assumed to use two-bit encoding, i.e., as 00 and 11 per position, and must have set
+ * the first and last position of the span (the beginning and end of spaced k-mer are always kept).
+ *
+ * @tparam Enc      Encoder turning characters into two-bit codes, see CharEncoder.
+ *                  Its Encoding is not yet attached to the spaced k-mers emitted here.
+ * @tparam Callback Callback function called with each extracted spaced k-mer.
+ *
+ * @param seq       Input sequence.
+ * @param span_k    Full span length of the spaced seed, must be in [1, 32].
+ * @param mask      Two-bit mask over the packed span: kept positions have
+ *                  both bits set (0b11), skipped positions have 0b00.
+ *                  Can also be a related BitExtract instance such as
+ *                  BitExtractBlockTable or BitExtractButterflyTable.
+ * @param enc       Encoder functor.
+ * @param bit_ext   Bit extraction functor.
+ * @param callback  Callback functor, called as callback(pos, mask_idx, spaced_kmer), or as
+ *                  callback(pos, spaced_kmer). `pos` is the start index of the spaced k-mer's
+ *                  span (into `seq`). See invoke_spaced_kmer_callback().
+ */
+template<typename Mask, typename Enc, typename BitExtract, typename Callback>
+    requires CharEncoder<std::remove_cvref_t<Enc>>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_spaced_kmer(
+    std::string_view seq,
+    std::size_t const span_k,
+    Mask const& mask,
+    Enc&& enc,
+    BitExtract&& bit_ext,
+    Callback&& callback
+) {
+    for_each_spaced_kmer_impl_<true>(
+        seq, span_k, mask, std::forward<Enc>(enc), std::forward<BitExtract>(bit_ext),
+        std::forward<Callback>(callback)
+    );
+}
+
+/**
+ * @brief Iterate a sequence, extract all valid spaced k-mers from it,
+ * and call a callback on each spaced k-mer, across a set of masks.
+ *
+ * Same as the single-mask overload above, but for a std::vector of masks. The callback must be
+ * callable as callback(pos, mask_idx, spaced_kmer); the shorthand callback(pos, spaced_kmer) is
+ * only available for a single mask. See invoke_spaced_kmer_callback().
+ */
+template<typename Mask, typename Alloc, typename Enc, typename BitExtract, typename Callback>
+    requires CharEncoder<std::remove_cvref_t<Enc>>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_spaced_kmer(
+    std::string_view seq,
+    std::size_t const span_k,
+    std::vector<Mask, Alloc> const& masks,
+    Enc&& enc,
+    BitExtract&& bit_ext,
+    Callback&& callback
+) {
+    for_each_spaced_kmer_impl_<false>(
+        seq, span_k, masks, std::forward<Enc>(enc), std::forward<BitExtract>(bit_ext),
+        std::forward<Callback>(callback)
+    );
 }
 
 } // namespace fisk

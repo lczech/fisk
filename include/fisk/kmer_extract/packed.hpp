@@ -11,6 +11,7 @@
 
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
+#include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 
@@ -183,10 +184,10 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         do_not_optimize(v3);
         #endif
 
-        func(kmer_cast<E, L>(v0, k));
-        func(kmer_cast<E, L>(v1, k));
-        func(kmer_cast<E, L>(v2, k));
-        func(kmer_cast<E, L>(v3, k));
+        invoke_kmer_callback(func, 4 * b + 0, kmer_cast<E, L>(v0, k));
+        invoke_kmer_callback(func, 4 * b + 1, kmer_cast<E, L>(v1, k));
+        invoke_kmer_callback(func, 4 * b + 2, kmer_cast<E, L>(v2, k));
+        invoke_kmer_callback(func, 4 * b + 3, kmer_cast<E, L>(v3, k));
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -194,7 +195,7 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
-        func(kmer_cast<E, L>(tail_vals[i], k));
+        invoke_kmer_callback(func, 4 * fast_bytes + i, kmer_cast<E, L>(tail_vals[i], k));
     }
 }
 
@@ -265,10 +266,10 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
         do_not_optimize(v3);
         #endif
 
-        func(kmer_cast<E, L>(v0, K));
-        func(kmer_cast<E, L>(v1, K));
-        func(kmer_cast<E, L>(v2, K));
-        func(kmer_cast<E, L>(v3, K));
+        invoke_kmer_callback(func, 4 * b + 0, kmer_cast<E, L>(v0, K));
+        invoke_kmer_callback(func, 4 * b + 1, kmer_cast<E, L>(v1, K));
+        invoke_kmer_callback(func, 4 * b + 2, kmer_cast<E, L>(v2, K));
+        invoke_kmer_callback(func, 4 * b + 3, kmer_cast<E, L>(v3, K));
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -276,7 +277,7 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
         seq, 4 * fast_bytes, p_max, K, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
-        func(kmer_cast<E, L>(tail_vals[i], K));
+        invoke_kmer_callback(func, 4 * fast_bytes + i, kmer_cast<E, L>(tail_vals[i], K));
     }
 }
 
@@ -288,6 +289,9 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
  * an extra margin byte breaks that trick's single hoisted shift, dispatches directly (a 3-way
  * switch, not a function-pointer table) to for_each_kmer_packed_aligned_wide_impl_() instead,
  * whose shifts are all compile-time constants via its own K template parameter.
+ *
+ * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
+ * position of the k-mer in the sequence. See invoke_kmer_callback().
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
@@ -365,7 +369,7 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
             } else {
                 shift = 64 - 2 * static_cast<unsigned>(k) - s;
             }
-            func(kmer_cast<E, L>((acc >> shift) & mask, k));
+            invoke_kmer_callback(func, e + 1 - k, kmer_cast<E, L>((acc >> shift) & mask, k));
         }
     }
 }
@@ -446,7 +450,7 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
             if (e + 1 < k) {
                 continue;
             }
-            func(kmer_cast<E, L>(window_(plans[local]), k));
+            invoke_kmer_callback(func, e + 1 - k, kmer_cast<E, L>(window_(plans[local]), k));
         }
     }
 }
@@ -461,6 +465,9 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
  * For k <= 29, delegates to for_each_kmer_packed_rolling_narrow_impl_() (single 64-bit
  * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_wide_impl_() (hi:lo pair)
  * instead, since a single 64-bit accumulator no longer fits.
+ *
+ * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
+ * position of the k-mer in the sequence. See invoke_kmer_callback().
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH

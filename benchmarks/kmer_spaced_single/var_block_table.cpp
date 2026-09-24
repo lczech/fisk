@@ -22,7 +22,7 @@ std::uint64_t run_var_block_table(
         mask,
         CharEncoderTable<Encoding::kACGT>{},
         bit_extract_block_table,
-        [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t spaced_kmer) {
+        [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, std::uint64_t spaced_kmer) {
             sink.consume(spaced_kmer);
         }
     );

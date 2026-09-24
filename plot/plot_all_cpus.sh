@@ -170,6 +170,37 @@ done
 #     --file "results/Intel_Xeon_8568Y/kmer_extract.csv"
 
 # ------------------------------------------------------------
+# Kmer spaced: by mask vs. by position, one panel per CPU
+# ------------------------------------------------------------
+
+# Not in the generic CSV_FILES loop above: a different plot script, which compares the two SIMD
+# emission orders (by_mask/by_position) side by side, instead of the platforms per benchmark.
+echo "Plotting kmer_spaced axis comparison"
+for csv in "kmer_spaced_single.csv" "kmer_spaced_multi.csv"; do
+  build_file_args "$csv" || exit 1
+
+  for EXT in "${FORMATS[@]}"; do
+    for combo in "${COMBOS[@]}"; do
+      UNIT="${combo%%:*}"
+      SCALE="${combo##*:}"
+
+      run_job python ./plot/plot_kmer_spaced_axis_per_cpu.py "${args[@]}" \
+        --unit "$UNIT" --scale "$SCALE" \
+        --out "${OUT}/${csv%.csv}_axis_per_cpu.${EXT}"
+    done
+  done
+  wait # every plot for this csv is on disk before converting svg -> pdf below
+
+  for combo in "${COMBOS[@]}"; do
+    UNIT="${combo%%:*}"
+    SCALE="${combo##*:}"
+
+    svg="${OUT}/${csv%.csv}_axis_per_cpu_${UNIT}_${SCALE}.svg"
+    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+  done
+done
+
+# ------------------------------------------------------------
 # Kmer extract packed: detailed cross-platform comparison
 # ------------------------------------------------------------
 

@@ -191,49 +191,101 @@ void bench_kmer_spaced_multi(
             // simd kernels
             #if defined(FISK_HAS_SSE2)
             bench(
-                "simd_butterfly_table_sse2",
+                "simd_butterfly_table_sse2_by_mask",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_sse2(
+                    return run_var_simd_butterfly_table_sse2_by_mask(
                         seq, k, simd_bf_sse2_kernel, sink_buffer
                     );
                 }
             ),
             bench(
-                "simd_block_table_sse2",
+                "simd_butterfly_table_sse2_by_position",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_sse2(seq, k, simd_bt_sse2_kernel, sink_buffer);
+                    return run_var_simd_butterfly_table_sse2_by_position(
+                        seq, k, simd_bf_sse2_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_sse2_by_mask",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_sse2_by_mask(
+                        seq, k, simd_bt_sse2_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_sse2_by_position",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_sse2_by_position(
+                        seq, k, simd_bt_sse2_kernel, sink_buffer
+                    );
                 }
             ),
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
-                "simd_butterfly_table_avx2",
+                "simd_butterfly_table_avx2_by_mask",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_avx2(
+                    return run_var_simd_butterfly_table_avx2_by_mask(
                         seq, k, simd_bf_avx2_kernel, sink_buffer
                     );
                 }
             ),
             bench(
-                "simd_block_table_avx2",
+                "simd_butterfly_table_avx2_by_position",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_avx2(seq, k, simd_bt_avx2_kernel, sink_buffer);
+                    return run_var_simd_butterfly_table_avx2_by_position(
+                        seq, k, simd_bf_avx2_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_avx2_by_mask",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_avx2_by_mask(
+                        seq, k, simd_bt_avx2_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_avx2_by_position",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_avx2_by_position(
+                        seq, k, simd_bt_avx2_kernel, sink_buffer
+                    );
                 }
             ),
             #endif
             #if defined(FISK_HAS_AVX512)
             bench(
-                "simd_butterfly_table_avx512",
+                "simd_butterfly_table_avx512_by_mask",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_avx512(
+                    return run_var_simd_butterfly_table_avx512_by_mask(
                         seq, k, simd_bf_avx512_kernel, sink_buffer
                     );
                 }
             ),
             bench(
-                "simd_block_table_avx512",
+                "simd_butterfly_table_avx512_by_position",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_avx512(
+                    return run_var_simd_butterfly_table_avx512_by_position(
+                        seq, k, simd_bf_avx512_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_avx512_by_mask",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_avx512_by_mask(
+                        seq, k, simd_bt_avx512_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_avx512_by_position",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_avx512_by_position(
                         seq, k, simd_bt_avx512_kernel, sink_buffer
                     );
                 }
@@ -241,40 +293,80 @@ void bench_kmer_spaced_multi(
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
-                "simd_butterfly_table_neon",
+                "simd_butterfly_table_neon_by_mask",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_neon(
+                    return run_var_simd_butterfly_table_neon_by_mask(
                         seq, k, simd_bf_neon_kernel, sink_buffer
                     );
                 }
             ),
             bench(
-                "simd_block_table_neon",
+                "simd_butterfly_table_neon_by_position",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_neon(seq, k, simd_bt_neon_kernel, sink_buffer);
+                    return run_var_simd_butterfly_table_neon_by_position(
+                        seq, k, simd_bf_neon_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_neon_by_mask",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_neon_by_mask(
+                        seq, k, simd_bt_neon_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_neon_by_position",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_neon_by_position(
+                        seq, k, simd_bt_neon_kernel, sink_buffer
+                    );
                 }
             ),
             #endif
             #if defined(FISK_HAS_BMI2)
             bench(
-                "simd_pext",
+                "simd_pext_by_mask",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_pext(seq, k, simd_pext_kernel, sink_buffer);
+                    return run_var_simd_pext_by_mask(seq, k, simd_pext_kernel, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_pext_by_position",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_pext_by_position(seq, k, simd_pext_kernel, sink_buffer);
                 }
             ),
             #endif
             bench(
-                "simd_butterfly_table_scalar",
+                "simd_butterfly_table_scalar_by_mask",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_butterfly_table_scalar(
+                    return run_var_simd_butterfly_table_scalar_by_mask(
                         seq, k, simd_bf_scalar_kernel, sink_buffer
                     );
                 }
             ),
             bench(
-                "simd_block_table_scalar",
+                "simd_butterfly_table_scalar_by_position",
                 [&, k](std::string const& seq) {
-                    return run_var_simd_block_table_scalar(
+                    return run_var_simd_butterfly_table_scalar_by_position(
+                        seq, k, simd_bf_scalar_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_scalar_by_mask",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_scalar_by_mask(
+                        seq, k, simd_bt_scalar_kernel, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "simd_block_table_scalar_by_position",
+                [&, k](std::string const& seq) {
+                    return run_var_simd_block_table_scalar_by_position(
                         seq, k, simd_bt_scalar_kernel, sink_buffer
                     );
                 }

@@ -123,6 +123,11 @@ for EXT in png svg ; do
       --unit "$UNIT" --scale "$SCALE" \
       --out "${DIR}/kmer_spaced_single.${EXT}"
 
+    run_plot "$CSV" python ./plot/plot_kmer_spaced_axis_per_cpu.py \
+      --file "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_single_axis.${EXT}"
+
     run_plot "$CSV" python ./plot/plot_case_summary.py \
       "$CSV" \
       --unit "$UNIT" --scale "$SCALE" \
@@ -149,6 +154,11 @@ for EXT in png svg ; do
       "$CSV" \
       --unit "$UNIT" --scale "$SCALE" \
       --out "${DIR}/kmer_spaced_multi.${EXT}"
+
+    run_plot "$CSV" python ./plot/plot_kmer_spaced_axis_per_cpu.py \
+      --file "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_multi_axis.${EXT}"
 
     run_plot "$CSV" python ./plot/plot_case_summary.py \
       "$CSV" \

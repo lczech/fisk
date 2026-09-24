@@ -889,8 +889,8 @@ private:
  * BitExtractKernelDispatcher<MyKernel> dispatcher(masks);
  *
  * dispatcher.run([&](auto const& kernels) {
- *     for_each_spaced_kmer_simd(seq, span_k, kernels,
- *         [&](size_t mask_idx, size_t pos, uint64_t value) {
+ *     for_each_spaced_kmer_simd_by_mask(seq, span_k, kernels,
+ *         [&](size_t pos, size_t mask_idx, uint64_t value) {
  *             // consume spaced k-mer
  *         }
  *     );

@@ -11,6 +11,7 @@
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
+#include "fisk/core/kmer_callback.hpp"
 
 namespace fisk {
 
@@ -30,7 +31,7 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
 {
     // Keep the validity check out of the hot path: throwing here avoids a cold branch/landing pad
     // in otherwise branch-free extractors, which could prevent their inlining.
-    throw std::runtime_error(
+    throw std::invalid_argument(
         "Invalid call to k-mer extraction with k not in [1, " + std::to_string(k_max) + "]"
     );
 }
@@ -53,6 +54,9 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
  * Layout::kMSB, which is what this loop's `(kmer << 2) | code` recurrence produces. The encoder
  * therefore has to state its encoding, which is what the CharEncoder concept requires: a
  * bare function carries no such statement, and so cannot be passed here.
+ *
+ * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
+ * position of the k-mer in `seq`. See invoke_kmer_callback().
  *
  * @tparam Enc  Encoder turning characters into two-bit codes, see CharEncoder.
  * @tparam Func Callback function to be called for each valid k-mer.
@@ -100,7 +104,11 @@ inline void for_each_kmer_rolling(
         // We can emit once we have seen at least k characters, and the current
         // k-mer window does not overlap the most recent invalid character.
         if( valid >= k ) {
-            func(kmer_cast<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(kmer, k));
+            // valid >= k implies i >= k - 1, so the start position `i + 1 - k` does not underflow.
+            invoke_kmer_callback(
+                func, i + 1 - k,
+                kmer_cast<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(kmer, k)
+            );
         }
     }
 }
@@ -112,6 +120,8 @@ inline void for_each_kmer_rolling(
  * This is the same as for_each_kmer_rolling(), but re-extract the k-mer each time from the input
  * characters. This is of course slower, but apparently used in practice. We hence implement
  * it here for benchmarking.
+ *
+ * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, see for_each_kmer_rolling().
  */
 template<typename Enc, typename Func>
     requires CharEncoder<std::remove_cvref_t<Enc>>
@@ -147,7 +157,11 @@ inline void for_each_kmer_reextract(
         }
 
         if (valid) {
-            func(kmer_cast<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(kmer, k));
+            // Here, i is already the start position of the k-mer.
+            invoke_kmer_callback(
+                func, i,
+                kmer_cast<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(kmer, k)
+            );
         }
     }
 }

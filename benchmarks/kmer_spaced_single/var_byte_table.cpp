@@ -18,7 +18,7 @@ std::uint64_t run_var_byte_table(
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer(
         std::string_view(seq), k, mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_byte_table,
-        [&](std::size_t /*mask_idx*/, std::size_t /*pos*/, std::uint64_t spaced_kmer) {
+        [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, std::uint64_t spaced_kmer) {
             sink.consume(spaced_kmer);
         }
     );

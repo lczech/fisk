@@ -66,6 +66,28 @@ static std::vector<std::uint64_t> oracle_kmers(std::string const& seq, std::size
     return out;
 }
 
+// Ground truth window-start positions, parallel to oracle_kmers() above: for each emitted k-mer,
+// the index into `seq` where its k-length window starts.
+template <typename CodeFn>
+static std::vector<std::size_t> oracle_positions(
+    std::string const& seq, std::size_t k, CodeFn&& code_of
+) {
+    std::vector<std::size_t> out;
+    if (seq.size() < k) {
+        return out;
+    }
+
+    std::size_t valid = 0;
+    for (std::size_t i = 0; i < seq.size(); ++i) {
+        int const c = code_of(seq[i]);
+        valid = (c >= 0) ? (valid + 1) : 0;
+        if (valid >= k) {
+            out.push_back(i + 1 - k);
+        }
+    }
+    return out;
+}
+
 // Checks `got` (one extractor's emitted k-mers) against the oracle, in both count and content.
 template <typename CodeFn>
 static void check_kmers(
@@ -96,6 +118,32 @@ static std::vector<std::uint64_t> collect_reextract(std::string const& seq, std:
     using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
     std::vector<std::uint64_t> out;
     for_each_kmer_reextract(seq, k, enc, [&](Emitted kmer) { out.push_back(kmer_value(kmer)); });
+    return out;
+}
+
+// Same as collect_rolling()/collect_reextract(), but exercising the optional leading `pos`
+// parameter of the callback, and collecting positions instead of k-mer values.
+template <typename Enc>
+static std::vector<std::size_t> collect_rolling_positions(
+    std::string const& seq, std::size_t k, Enc&& enc
+) {
+    using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
+    std::vector<std::size_t> out;
+    for_each_kmer_rolling(
+        seq, k, enc, [&](std::size_t pos, Emitted) { out.push_back(pos); }
+    );
+    return out;
+}
+
+template <typename Enc>
+static std::vector<std::size_t> collect_reextract_positions(
+    std::string const& seq, std::size_t k, Enc&& enc
+) {
+    using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
+    std::vector<std::size_t> out;
+    for_each_kmer_reextract(
+        seq, k, enc, [&](std::size_t pos, Emitted) { out.push_back(pos); }
+    );
     return out;
 }
 
@@ -223,6 +271,29 @@ TEST(KmerExtract, OracleActgTable)
         for (auto const k : test_ks()) {
             check_kmers(collect_rolling(seq, k, CharEncoderTable<Encoding::kACTG>{}), seq, k, code_actg);
             check_kmers(collect_reextract(seq, k, CharEncoderTable<Encoding::kACTG>{}), seq, k, code_actg);
+        }
+    }
+}
+
+// =================================================================================================
+//     Position Callback
+// =================================================================================================
+
+// for_each_kmer_rolling()/for_each_kmer_reextract() accept a callback of either `(pos, kmer)` or
+// `(kmer)`, resolved via invoke_kmer_callback() (core/kmer_callback.hpp). The 1-arg form is
+// already exhaustively covered above (collect_rolling()/collect_reextract() both use it); this
+// checks the 2-arg form's `pos` against an independent oracle, for both encoders.
+TEST(KmerExtract, PositionMatchesOracle)
+{
+    for (auto const& seq : valid_sequences()) {
+        for (auto const k : test_ks()) {
+            auto const exp_acgt = oracle_positions(seq, k, code_acgt);
+            EXPECT_EQ(collect_rolling_positions(seq, k, CharEncoderTable<Encoding::kACGT>{}), exp_acgt);
+            EXPECT_EQ(collect_reextract_positions(seq, k, CharEncoderTable<Encoding::kACGT>{}), exp_acgt);
+
+            auto const exp_actg = oracle_positions(seq, k, code_actg);
+            EXPECT_EQ(collect_rolling_positions(seq, k, CharEncoderTable<Encoding::kACTG>{}), exp_actg);
+            EXPECT_EQ(collect_reextract_positions(seq, k, CharEncoderTable<Encoding::kACTG>{}), exp_actg);
         }
     }
 }
