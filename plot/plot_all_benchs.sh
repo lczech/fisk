@@ -16,6 +16,11 @@ cd `git rev-parse --show-toplevel`
 # Silence some warnings
 export QT_QPA_PLATFORM=xcb
 
+usage() {
+  echo "Usage: $0 [results_dir]  (default: results)" >&2
+  exit 1
+}
+
 if [[ $# -gt 1 ]]; then
   usage
 fi
@@ -52,7 +57,18 @@ COMBOS=(
 # state), so we run them concurrently, capped at MAX_JOBS, instead of one at
 # a time -- run_plot backgrounds each call and "wait" at the very end blocks
 # until they've all finished.
-MAX_JOBS="${MAX_JOBS:-$(nproc)}"
+# nproc is GNU-only (missing on macOS); getconf covers macOS/BSD.
+MAX_JOBS="${MAX_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+
+# Block until a job slot frees up. "wait -n" needs bash >= 4.3; the stock
+# macOS bash (3.2) lacks it, so there we drain the whole batch instead.
+wait_any() {
+  if (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 3) )); then
+    wait -n
+  else
+    wait
+  fi
+}
 
 # Run a plotting script for a given CSV, skipping gracefully (rather than
 # crashing) if that benchmark hasn't been run for this CPU/compiler yet.
@@ -63,7 +79,7 @@ run_plot() {
     return 0
   fi
   while (( $(jobs -rp | wc -l) >= MAX_JOBS )); do
-    wait -n
+    wait_any
   done
   "$@" &
 }

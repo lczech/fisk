@@ -64,11 +64,22 @@ COMBOS=(
 # some later step depends on (an inkscape SVG->PDF conversion, or the next
 # section's own plots) is followed by a bare "wait" so those files are
 # guaranteed to exist before anything reads them.
-MAX_JOBS="${MAX_JOBS:-$(nproc)}"
+# nproc is GNU-only (missing on macOS); getconf covers macOS/BSD.
+MAX_JOBS="${MAX_JOBS:-$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
+
+# Block until a job slot frees up. "wait -n" needs bash >= 4.3; the stock
+# macOS bash (3.2) lacks it, so there we drain the whole batch instead.
+wait_any() {
+  if (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 3) )); then
+    wait -n
+  else
+    wait
+  fi
+}
 
 run_job() {
   while (( $(jobs -rp | wc -l) >= MAX_JOBS )); do
-    wait -n
+    wait_any
   done
   "$@" &
 }
