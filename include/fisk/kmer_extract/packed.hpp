@@ -126,25 +126,18 @@ std::size_t for_each_kmer_packed_tail_(
 // a byte we are starting with. This "narrow" case can thus be optimized compared to the "wide"
 // case below (k <= 32), which needs to read an extra byte.
 //
-// On some compiler/CPU combinations, calling this indirectly through for_each_kmer_packed_aligned()
-// below costs a bit more than calling it directly: once that function also has to support k in
-// [30, 32] by passing `func` to a separate callee, some compilers keep `func` addressable for the
-// whole function rather than proving the narrow loop below never needs that, which can push its
-// captured state out of a register even though this loop alone never requires it. Neither
-// FISK_ALWAYS_INLINE_FOR_EACH nor moving the k in [30, 32] cases into their own out-of-line
-// function avoided this -- it appears to be an inherent cost of one function covering both
-// ranges, not an inlining decision we can override. Measured up to ~1.5x on some platforms; not
-// measurable on others. Kept as a known trade-off for for_each_kmer_packed_aligned()'s simpler
-// single-name API. FISK_ALWAYS_INLINE_FOR_EACH is still applied below for consistency with the
-// other for_each_kmer_packed_*() loops, even though it does not resolve this particular cost.
-template <Encoding E, Layout L, typename Func>
+// K is a template parameter, so that all shifts and masks are compile-time constants regardless of
+// the call site; with a runtime k, this was measured up to ~1.25x slower on Clang (about the same
+// on GCC). The cost is one instantiation per K in for_each_kmer_packed_aligned()'s dispatch.
+template <Encoding E, Layout L, unsigned K, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_aligned_narrow_impl_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, Func&& func
 ) {
-    unsigned const k32 = static_cast<unsigned>(k);
-    std::uint64_t const mask = (std::uint64_t{1} << (2 * k32)) - 1u;
-    std::size_t const p_max = seq.length - k;
+    static_assert(K >= 1 && K <= 29, "K must be in [1, 29]");
+
+    std::uint64_t const mask = (std::uint64_t{1} << (2 * K)) - 1u;
+    std::size_t const p_max = seq.length - K;
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes = (seq.length + 3) / 4;
     std::size_t const fast_bytes = std::min(
@@ -155,8 +148,8 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         std::uint64_t word;
         std::memcpy(&word, &seq.data[b], 8);
         if constexpr (L == Layout::kMSB) {
-            // 58-2k is in [0,56]; adding the local shift recovers 64-2k-2*local.
-            word = byte_swap_64(word) >> (58 - 2 * k32);
+            // 58-2K is in [0,56]; adding the local shift recovers 64-2K-2*local.
+            word = byte_swap_64(word) >> (58 - 2 * K);
         }
         std::uint64_t v0, v1, v2, v3;
         if constexpr (L == Layout::kMSB) {
@@ -184,18 +177,18 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         do_not_optimize(v3);
         #endif
 
-        invoke_kmer_callback(func, 4 * b + 0, kmer_cast<E, L>(v0, k));
-        invoke_kmer_callback(func, 4 * b + 1, kmer_cast<E, L>(v1, k));
-        invoke_kmer_callback(func, 4 * b + 2, kmer_cast<E, L>(v2, k));
-        invoke_kmer_callback(func, 4 * b + 3, kmer_cast<E, L>(v3, k));
+        invoke_kmer_callback(func, 4 * b + 0, kmer_cast<E, L>(v0, K));
+        invoke_kmer_callback(func, 4 * b + 1, kmer_cast<E, L>(v1, K));
+        invoke_kmer_callback(func, 4 * b + 2, kmer_cast<E, L>(v2, K));
+        invoke_kmer_callback(func, 4 * b + 3, kmer_cast<E, L>(v3, K));
     }
 
     std::array<std::uint64_t, 64> tail_vals;
     std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
-        seq, 4 * fast_bytes, p_max, k32, tail_vals
+        seq, 4 * fast_bytes, p_max, K, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
-        invoke_kmer_callback(func, 4 * fast_bytes + i, kmer_cast<E, L>(tail_vals[i], k));
+        invoke_kmer_callback(func, 4 * fast_bytes + i, kmer_cast<E, L>(tail_vals[i], K));
     }
 }
 
@@ -285,10 +278,8 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
  * @brief Extract all k-mers for k in [1, 32] directly from a PackedSequence, and call a
  * callback on each. The recommended, fastest variant in this file.
  *
- * For k <= 29, delegates to for_each_kmer_packed_aligned_narrow_impl_(). For k in [30, 32], where
- * an extra margin byte breaks that trick's single hoisted shift, dispatches directly (a 3-way
- * switch, not a function-pointer table) to for_each_kmer_packed_aligned_wide_impl_() instead,
- * whose shifts are all compile-time constants via its own K template parameter.
+ * Internally dispatches to a separate implementation for each k, so that the extraction loop is
+ * fully specialized for whichever k is used at runtime.
  *
  * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
  * position of the k-mer in the sequence. See invoke_kmer_callback().
@@ -304,7 +295,44 @@ inline void for_each_kmer_packed_aligned(
     if (seq.length < k) {
         return;
     }
+
+    // Local X-macro, undefined right below: the 29 narrow cases are otherwise identical aside
+    // from their K, and spelling each out longhand would bury that in repetition.
+    #define FISK_PACKED_ALIGNED_NARROW_CASE_(K_) \
+        case K_: \
+            for_each_kmer_packed_aligned_narrow_impl_<E, L, K_>(seq, std::forward<Func>(func)); \
+            break;
+
     switch (k) {
+        FISK_PACKED_ALIGNED_NARROW_CASE_(1)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(2)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(3)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(4)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(5)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(6)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(7)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(8)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(9)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(10)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(11)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(12)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(13)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(14)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(15)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(16)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(17)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(18)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(19)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(20)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(21)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(22)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(23)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(24)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(25)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(26)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(27)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(28)
+        FISK_PACKED_ALIGNED_NARROW_CASE_(29)
         case 30: {
             for_each_kmer_packed_aligned_wide_impl_<E, L, 30>(seq, std::forward<Func>(func));
             break;
@@ -317,11 +345,9 @@ inline void for_each_kmer_packed_aligned(
             for_each_kmer_packed_aligned_wide_impl_<E, L, 32>(seq, std::forward<Func>(func));
             break;
         }
-        default: {
-            for_each_kmer_packed_aligned_narrow_impl_(seq, k, std::forward<Func>(func));
-            break;
-        }
     }
+
+    #undef FISK_PACKED_ALIGNED_NARROW_CASE_
 }
 
 // =================================================================================================
