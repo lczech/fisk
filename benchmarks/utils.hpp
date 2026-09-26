@@ -3,9 +3,12 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#include "sink.hpp"
 
 #if defined(_MSC_VER)
     #include <io.h>  // _isatty, _fileno
@@ -115,4 +118,23 @@ inline bool stdout_is_terminal()
     #else
         return isatty(fileno(stdout));
     #endif
+}
+
+// =================================================================================================
+//     Build Info
+// =================================================================================================
+
+/**
+ * @brief Print the benchmark-specific build settings that affect results, complementing the
+ * platform and compiler info from fisk/core/cpu_runtime.hpp.
+ */
+inline void info_print_benchmark_build(std::ostream& os)
+{
+    os << "Benchmark build:\n";
+    #if defined(FISK_BENCHMARK_ALIGN_CODE)
+    os << "  code align : 64 (-falign-functions=64 -falign-loops=64)\n";
+    #else
+    os << "  code align : compiler default\n";
+    #endif
+    os << "  sink mode  : " << kSinkName << "\n";
 }

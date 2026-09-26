@@ -222,6 +222,7 @@ int main(int argc, char **argv)
         info_print_cpu(os_info);
         info_print_compiler(os_info);
         info_print_intrinsics(os_info);
+        info_print_benchmark_build(os_info);
     }
 
     // Run the benchmarks

@@ -208,6 +208,20 @@ if(FISK_BUILD_BENCHMARKS)
             )
         endif()
 
+        # Pins every function and loop to a 64-byte boundary, so that a hot loop's placement
+        # relative to instruction fetch/uop-cache boundaries no longer depends on the incidental
+        # layout of whatever else got linked in. Without this, some kernels were measured to
+        # differ by up to 2x between builds that did not change their code. This is not
+        # necessarily the fastest placement for every kernel, but it is a reproducible one.
+        option(FISK_BENCHMARK_ALIGN_CODE "Align benchmark functions and loops to 64 bytes" ON)
+        if (FISK_BENCHMARK_ALIGN_CODE)
+            target_compile_options(fisk_benchmarks PRIVATE
+                -falign-functions=64
+                -falign-loops=64
+            )
+            target_compile_definitions(fisk_benchmarks PRIVATE FISK_BENCHMARK_ALIGN_CODE)
+        endif()
+
         target_compile_options(fisk_benchmarks PRIVATE
             -Wall
             -Wextra
@@ -230,9 +244,8 @@ if(FISK_BUILD_BENCHMARKS)
             /WX
             # C4714: function marked as [[msvc::forceinline]]/__forceinline not inlined. Some of
             # the for_each_kmer_*() loops (see FISK_ALWAYS_INLINE_FOR_EACH, core/intrinsics.hpp)
-            # are already known to sometimes decline this on GCC/Clang too (see the comment on
-            # for_each_kmer_packed_aligned_narrow_impl_() in kmer_extract/packed.hpp); MSVC
-            # declining should stay a silent no-op rather than fail the /WX build.
+            # are large enough that compilers may decline to inline them; MSVC declining should
+            # stay a silent no-op rather than fail the /WX build.
             /wd4714
             # C4324: struct padded due to an alignas specifier. Expected and harmless for the
             # SIMD kernel structs (bit_extract/simd.hpp), which need natural alignment for their
