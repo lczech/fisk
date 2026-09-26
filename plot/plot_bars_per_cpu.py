@@ -163,17 +163,29 @@ def nice_tick_step(ymax: float, target_ticks: int = 10) -> float:
     return 10 * magnitude
 
 
-def apply_case_filters(df: pd.DataFrame, filters: list[str]) -> pd.DataFrame:
+def apply_case_filters(
+    df: pd.DataFrame, filters: list[str], defaults: list[str] | None = None
+) -> pd.DataFrame:
     """
     Filter rows by fields parsed out of the "case" column (e.g. "layout=msb;k=17" -> fields
     "layout"="msb", "k"="17"), so a caller can restrict a chart to e.g. one Layout or one k-range
     without the CSV needing a dedicated column for it. Each filter is "key<op>value" with op one of
     =, <=, >=, <, > (e.g. "layout=msb", "k<=29"); comparison operators coerce both sides to numbers,
     "=" compares as strings. Multiple filters are ANDed together.
+
+    Each default is "key=value", used for rows whose case lacks that field, e.g. result files from
+    before the field was recorded, so that filtering on it does not drop them.
     """
     if not filters:
         return df
     df = parse_case_fields(df)
+    for d in defaults or []:
+        key, sep, val = d.partition("=")
+        if not sep or not key:
+            raise SystemExit(f"Invalid --case-default {d!r}, expected e.g. 'layout=msb'")
+        if key not in df.columns:
+            df[key] = val
+        df[key] = df[key].fillna(val)
     for f in filters:
         m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\s*(<=|>=|<|>|=)\s*(.+)$', f)
         if not m:
@@ -228,6 +240,13 @@ def main() -> None:
         default=[],
         help="Filter rows by a 'case' field, e.g. 'layout=msb' or 'k<=29'. Can be given multiple "
              "times (ANDed together). See apply_case_filters() for the supported operators.",
+    )
+    ap.add_argument(
+        "--case-default",
+        action="append",
+        default=[],
+        help="Value for a 'case' field in rows that lack it, e.g. 'layout=msb', applied before "
+             "--case-filter. Can be given multiple times.",
     )
     ap.add_argument(
         "--extended",
@@ -299,7 +318,7 @@ def main() -> None:
             available = sorted(set(pd.concat(dfs)["suite"].astype(str)))
             raise SystemExit(f"No rows for suite='{suite}'. Available suites: {available}")
 
-    df = apply_case_filters(df, args.case_filter)
+    df = apply_case_filters(df, args.case_filter, args.case_default)
     if df.empty:
         raise SystemExit(f"No rows left after --case-filter {args.case_filter}")
 

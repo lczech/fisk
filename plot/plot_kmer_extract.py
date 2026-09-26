@@ -50,6 +50,12 @@ def main():
                         help="Plot title")
     parser.add_argument("--out", default=None,
                         help="Output image file (e.g. kmer_extract.png). If omitted, show interactively.")
+    parser.add_argument("--encoding", default="acgt",
+                        help="Which encoding's rows to plot (default: acgt, the only encoding that "
+                             "all variants are run with)")
+    parser.add_argument("--layout", default="msb",
+                        help="Which layout's rows to plot (default: msb, the only layout that all "
+                             "variants are run with)")
     add_unit_scale_args(parser)
     args = parser.parse_args()
 
@@ -64,8 +70,16 @@ def main():
     # Expect columns:
     #   suite, case, benchmark, ns_per_op
     #
-    # Extract k from "case" column, which looks like "k=17"
-    df["k"] = df["case"].str.split("=").str[1].astype(int)
+    # "case" looks like "encoding=acgt;layout=msb;k=17" -- split into one column per field.
+    df = parse_case_fields(df)
+    df["k"] = df["k"].astype(int)
+    # Older result files have plain "k=17" or "layout=msb;k=17" cases; rows without a field are
+    # ACGT and MSB.
+    for field, default in [("encoding", "acgt"), ("layout", "msb")]:
+        if field not in df.columns:
+            df[field] = default
+        df[field] = df[field].fillna(default)
+    df = df[(df["encoding"] == args.encoding) & (df["layout"] == args.layout)]
 
     # Optional: filter benchmarks
     if BENCHMARKS_KEEP is not None:

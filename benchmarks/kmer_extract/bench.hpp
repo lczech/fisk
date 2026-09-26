@@ -6,7 +6,13 @@
 #include <string>
 #include <vector>
 
+#include "fisk/seq_pack/seq_pack.hpp"
 #include "sink.hpp"
+
+using PackedAcgtMsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>;
+using PackedAcgtLsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>;
+using PackedActgMsb = fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>;
+using PackedActgLsb = fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>;
 
 /**
  * @brief Benchmark different implementations to extract and iterate all k-mers in a sequence.
@@ -16,6 +22,12 @@
  * variants (are the characters in `ACGT` - throw an exception if not), as the check adds runtime,
  * and exception handling might also cause the compiler to emit different inlinining. Lastly, we
  * benchmark full re-extraction of each k-mer (slow) vs shifting between iterations.
+ *
+ * Additionally, for input known to be valid: for_each_kmer_ascii_assume_valid(), which packs the
+ * sequence in chunks and extracts from those, against packing the whole sequence first and then
+ * extracting via for_each_kmer_packed_aligned(). Both run for both Encodings and both Layouts, and
+ * pack with the butterfly word encoder. The Encoding only affects the packing step (ACTG needs no
+ * bit fold, unlike ACGT), not the extraction from the packed sequence.
  */
 void bench_kmer_extract(
     std::vector<std::string> const& sequences,
@@ -83,5 +95,52 @@ std::uint64_t run_var_simd_avx2(
 std::uint64_t run_var_simd_scalar(
     std::string const& seq,
     std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+
+// Non-validating variants. pack_then_extract takes its PackedSequence buffer from the caller, so
+// that it is reused across calls rather than reallocated each time.
+std::uint64_t run_var_acgt_msb_chunked_assume_valid(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_acgt_lsb_chunked_assume_valid(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_actg_msb_chunked_assume_valid(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_actg_lsb_chunked_assume_valid(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_acgt_msb_pack_then_extract(
+    std::string const& seq,
+    std::size_t k,
+    PackedAcgtMsb& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_acgt_lsb_pack_then_extract(
+    std::string const& seq,
+    std::size_t k,
+    PackedAcgtLsb& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_actg_msb_pack_then_extract(
+    std::string const& seq,
+    std::size_t k,
+    PackedActgMsb& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_actg_lsb_pack_then_extract(
+    std::string const& seq,
+    std::size_t k,
+    PackedActgLsb& scratch,
     std::vector<std::uint64_t>& sink_buffer
 );

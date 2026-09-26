@@ -120,6 +120,17 @@ echo "Plotting summaries"
 for csv in "${CSV_FILES[@]}"; do
   build_file_args "$csv" || exit 1
 
+  # Some kmer_extract techniques are run for several encodings and layouts; compare all of them
+  # like-for-like at ACGT/MSB here (see the per-combination axis plot below). Older result files
+  # lack these case fields, and are ACGT/MSB.
+  case_args=()
+  if [[ "$csv" == "kmer_extract.csv" ]]; then
+    case_args=(
+      --case-default "encoding=acgt" --case-default "layout=msb"
+      --case-filter "encoding=acgt" --case-filter "layout=msb"
+    )
+  fi
+
   for EXT in "${FORMATS[@]}"; do
     for combo in "${COMBOS[@]}"; do
       UNIT="${combo%%:*}"
@@ -127,17 +138,20 @@ for csv in "${CSV_FILES[@]}"; do
 
       # Regular selection of CPUs and compilers
       run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+        ${case_args[@]+"${case_args[@]}"} \
         --unit "$UNIT" --scale "$SCALE" \
         --out "${OUT}/${csv%.csv}_per_cpu.${EXT}"
 
       # Extended, with all available, for internal checking
       run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+        ${case_args[@]+"${case_args[@]}"} \
         --extended \
         --unit "$UNIT" --scale "$SCALE" \
         --out "${OUT}/${csv%.csv}_per_cpu_ext.${EXT}"
 
       # Reduced set, mostly for the main manuscript
       # run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+      #   ${case_args[@]+"${case_args[@]}"} \
       #   --reduced \
       #   --unit "$UNIT" --scale "$SCALE" \
       #   --out "${OUT}/${csv%.csv}_per_cpu_red.${EXT}"
@@ -195,9 +209,44 @@ for csv in "kmer_spaced_single.csv" "kmer_spaced_multi.csv"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
 
+    # Not produced if no result file has by_mask/by_position rows yet.
     svg="${OUT}/${csv%.csv}_axis_per_cpu_${UNIT}_${SCALE}.svg"
-    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+    if [[ -f "$svg" ]]; then
+      inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+    fi
   done
+done
+
+# ------------------------------------------------------------
+# Kmer extract: per encoding and layout, one panel per CPU
+# ------------------------------------------------------------
+
+# Complements the kmer_extract summary above, which is restricted to ACGT/MSB: compares the
+# (encoding, layout) combinations of each technique that is run with more than one of them.
+echo "Plotting kmer_extract axis comparison"
+build_file_args "kmer_extract.csv" || exit 1
+
+for EXT in "${FORMATS[@]}"; do
+  for combo in "${COMBOS[@]}"; do
+    UNIT="${combo%%:*}"
+    SCALE="${combo##*:}"
+
+    run_job python ./plot/plot_kmer_extract_axis_per_cpu.py "${args[@]}" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${OUT}/kmer_extract_axis_per_cpu.${EXT}"
+  done
+done
+wait # every plot is on disk before converting svg -> pdf below
+
+for combo in "${COMBOS[@]}"; do
+  UNIT="${combo%%:*}"
+  SCALE="${combo##*:}"
+
+  # Not produced if no result file has more than one encoding/layout combination yet.
+  svg="${OUT}/kmer_extract_axis_per_cpu_${UNIT}_${SCALE}.svg"
+  if [[ -f "$svg" ]]; then
+    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+  fi
 done
 
 # ------------------------------------------------------------

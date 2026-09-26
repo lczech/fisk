@@ -27,6 +27,7 @@
 #include "fisk/kmer_extract/simd.hpp"
 #include "fisk/kmer_extract/packed.hpp"
 #include "fisk/kmer_extract/packed_simd.hpp"
+#include "fisk/kmer_extract/ascii_assume_valid.hpp"
 
 // Spaced k-mers
 #include "fisk/kmer_spaced/kmer_spaced.hpp"

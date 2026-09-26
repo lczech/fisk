@@ -139,6 +139,8 @@ BENCHMARKS_KEEP_EXTENDED = [
     "switch_shift",
     "table_re",
     "table_shift",
+    "chunked_assume_valid",
+    "pack_then_extract",
 
     # Kmer spaced
     "simd_butterfly_table_sse2_by_mask",
@@ -199,6 +201,8 @@ BENCHMARKS_KEEP = [
     "switch_shift",
     "table_re",
     "table_shift",
+    "chunked_assume_valid",
+    "pack_then_extract",
 
     # Kmer spaced
     "simd_butterfly_table_sse2_by_mask",
@@ -273,6 +277,8 @@ BENCHMARKS_KEEP_REDUCED = [
     "switch_shift",
     "table_re",
     "table_shift",
+    "chunked_assume_valid",
+    # "pack_then_extract",
 
     # Kmer spaced. Both emission orders, as neither of them is fastest everywhere.
     "simd_butterfly_table_sse2_by_mask",
@@ -301,14 +307,16 @@ BENCHMARK_RENAMES = {
     "zp7"                   : "ZP7",
 
     # Extract / seq enc
-    "ascii_re"         : "ASCII re",
-    "ascii_shift"      : "ASCII shift",
-    "ifs_re"           : "'if' re",
-    "ifs_shift"        : "'if' shift",
-    "switch_re"        : "'switch' re",
-    "switch_shift"     : "'switch' shift",
-    "table_re"         : "Lookup table re",
-    "table_shift"      : "Lookup table shift",
+    "ascii_re"             : "ASCII re",
+    "ascii_shift"          : "ASCII shift",
+    "ifs_re"               : "'if' re",
+    "ifs_shift"            : "'if' shift",
+    "switch_re"            : "'switch' re",
+    "switch_shift"         : "'switch' shift",
+    "table_re"             : "Lookup table re",
+    "table_shift"          : "Lookup table shift",
+    "chunked_assume_valid" : "Chunked packing (assume valid)",
+    "pack_then_extract"    : "Pack, then extract (assume valid)",
 
     # Kmer spaced
     "simd_butterfly_table_sse2_by_mask"       : "SIMD Butterfly Table SSE2 (by mask)",
@@ -353,6 +361,9 @@ BENCHMARK_RENAMES = {
 
 # "Reduced" names for the main manuscript, to keep it simple.
 BENCHMARK_RENAMES_REDUCED = {
+    # Kmer extract
+    "chunked_assume_valid" : "Assume valid",
+
     # Kmer spaced
     "naive"                 : "Naive",
     "pext"                  : "PEXT",
@@ -391,16 +402,18 @@ BENCHMARK_COLORS = {
     "instlatx"              : "#000000",
     "zp7"                   : "#000000",
 
-    "ascii_re"       : "#3C5BBE",
-    "ascii_shift"    : "#3C5BBE",
-    "ascii_validate"      : "#3C5BBE",
-    "ascii_assume_valid"  : "#3C5BBE",
-    "ifs_re"         : "#E9C256",
-    "ifs_shift"      : "#E9C256",
-    "switch_re"      : "#C53939",
-    "switch_shift"   : "#C53939",
-    "table_re"       : "#6AC459",
-    "table_shift"    : "#6AC459",
+    "ascii_re"             : "#3C5BBE",
+    "ascii_shift"          : "#3C5BBE",
+    "ascii_validate"       : "#3C5BBE",
+    "ascii_assume_valid"   : "#3C5BBE",
+    "ifs_re"               : "#E9C256",
+    "ifs_shift"            : "#E9C256",
+    "switch_re"            : "#C53939",
+    "switch_shift"         : "#C53939",
+    "table_re"             : "#6AC459",
+    "table_shift"          : "#6AC459",
+    "chunked_assume_valid" : "#000000",
+    "pack_then_extract"    : "#7F7F7F",
 
 
     # Kmer spaced. by_position uses a lighter tint of the by_mask color.
@@ -430,16 +443,18 @@ BENCHMARK_COLORS = {
 
 BENCHMARK_LINESTYLES = {
     # Extract / seq enc
-    "ascii_re"       : "dashed",
-    "ascii_shift"    : "solid",
-    "ascii_validate"      : "dashed",
-    "ascii_assume_valid"  : "solid",
-    "ifs_re"         : "dashed",
-    "ifs_shift"      : "solid",
-    "switch_re"      : "dashed",
-    "switch_shift"   : "solid",
-    "table_re"       : "dashed",
-    "table_shift"    : "solid",
+    "ascii_re"             : "dashed",
+    "ascii_shift"          : "solid",
+    "ascii_validate"       : "dashed",
+    "ascii_assume_valid"   : "solid",
+    "ifs_re"               : "dashed",
+    "ifs_shift"            : "solid",
+    "switch_re"            : "dashed",
+    "switch_shift"         : "solid",
+    "table_re"             : "dashed",
+    "table_shift"          : "solid",
+    "chunked_assume_valid" : "solid",
+    "pack_then_extract"    : "dashed",
 }
 
 # Stable line order for plot consistency
@@ -454,6 +469,8 @@ BENCHMARK_ORDER = [
     "ascii_shift",
     "table_re",
     "table_shift",
+    "pack_then_extract",
+    "chunked_assume_valid",
     "ifs",
     "switch",
     "ascii_validate",
@@ -708,3 +725,102 @@ def apply_unit_scale_suffix(path: str | None, unit: str, scale: str) -> str | No
     root, ext = os.path.splitext(path)
     return f"{root}_{unit}_{scale}{ext}"
 BENCHMARK_COLORS.update(PACKED_KMER_VARIANT_COLORS)
+
+
+# -------------------------------------------------------------------------------------------------
+#     Axis grid plot
+# -------------------------------------------------------------------------------------------------
+
+def plot_axis_grid(
+    csv_paths, load_pivot, axis_labels, axis_colors, default_title,
+    outpath, unit, scale, y_min, y_max, title=None, xtick_label=lambda t: t,
+):
+    """
+    Grid of grouped bar charts, one panel per CPU/compiler (one CSV each): techniques on the
+    x-axis, one bar per "axis" value within each technique, e.g. two emission orders, or several
+    (encoding, layout) combinations.
+
+    `load_pivot(csv_path, unit)` returns (suite, pivot), with pivot index = technique, columns =
+    axis values in display order, values in the display unit. `axis_labels`/`axis_colors` map each
+    axis value to its legend label and bar color; `xtick_label` maps a technique to its tick label.
+    """
+    entries = [(p, platform_from_csv_path(p)) for p in csv_paths]
+    entries.sort(key=lambda e: platform_compiler_sort_key(e[1]))
+
+    loaded = []
+    for csv_path, label in entries:
+        suite, pivot = load_pivot(csv_path, unit)
+        loaded.append((label, suite, pivot))
+
+    suites = {suite for _, suite, _ in loaded}
+    if len(suites) != 1:
+        raise ValueError(f"All input files must be from the same suite, found {sorted(suites)}")
+    suite = suites.pop()
+
+    # One shared y-range across all panels, so they are directly comparable.
+    all_values = np.concatenate([pivot.values.ravel() for _, _, pivot in loaded])
+    axis_y_min, axis_y_max = compute_axis_limits(all_values, scale)
+    # Extra top headroom for the rotated value labels above each bar, as in plot_kmer_spaced.py.
+    axis_y_max *= 1.3 if scale == "log" else 1.1
+    if y_min is not None:
+        axis_y_min = y_min
+    if y_max is not None:
+        axis_y_max = y_max
+
+    n = len(loaded)
+    ncols = 1 if n == 1 else 2
+    nrows = (n + ncols - 1) // ncols
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(max(8 * ncols, 12), 6 * nrows), squeeze=False, layout="constrained"
+    )
+
+    for idx, (label, _, pivot) in enumerate(loaded):
+        ax = axes[idx // ncols][idx % ncols]
+        apply_yscale(ax, scale)
+
+        techniques = list(pivot.index)
+        x = np.arange(len(techniques))
+        axis_names = list(pivot.columns)
+        bar_width = 0.8 / max(1, len(axis_names))
+        offsets = [(j - (len(axis_names) - 1) / 2.0) * bar_width for j in range(len(axis_names))]
+
+        for j, axis_name in enumerate(axis_names):
+            vals = pivot[axis_name].values
+            bars = ax.bar(
+                x + offsets[j], np.nan_to_num(vals, nan=0.0), width=bar_width,
+                label=axis_labels[axis_name], color=axis_colors[axis_name],
+            )
+            # Multiplicative headroom on "log", additive on "linear", as in plot_kmer_spaced.py.
+            for bar, val in zip(bars, vals):
+                if pd.notna(val):
+                    label_y = (
+                        val * 1.02 if scale == "log"
+                        else val + (axis_y_max - axis_y_min) * 0.01
+                    )
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2.0, label_y, f"{val:.2f}",
+                        ha="center", va="bottom", rotation=90, fontsize=9,
+                    )
+
+        ax.set_title(label)
+        ax.set_ylabel(ylabel_for_unit(unit, suite))
+        ax.set_xticks(x)
+        ax.set_xticklabels([xtick_label(t) for t in techniques], rotation=45, ha="right")
+        ax.set_ylim(axis_y_min, axis_y_max)
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+
+    # Hide unused grid cells, if any.
+    for idx in range(n, nrows * ncols):
+        axes[idx // ncols][idx % ncols].axis("off")
+
+    # One shared legend below all panels, instead of one per panel, where it would cover bar labels.
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    fig.suptitle(title or f"{suite}: {default_title}")
+    fig.legend(handles, labels, loc="outside lower center", ncol=len(labels))
+
+    if outpath:
+        fig.savefig(outpath, dpi=300)
+        print(f"Wrote {outpath}")
+    else:
+        plt.show()
+    plt.close(fig)

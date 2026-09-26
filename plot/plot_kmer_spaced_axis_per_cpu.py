@@ -32,7 +32,6 @@ import sys
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 # Such a cheat to import stuff in python...
 # See https://stackoverflow.com/a/22956038
@@ -70,6 +69,12 @@ AXIS_COLORS = {
 }
 
 
+def has_axis_rows(csv_path):
+    """Whether a CSV has any _by_mask/_by_position rows at all; older result files do not."""
+    benchmarks = pd.read_csv(csv_path)["benchmark"]
+    return bool((benchmarks.str.endswith("_by_mask") | benchmarks.str.endswith("_by_position")).any())
+
+
 def load_technique_axis_pivot(csv_path, unit):
     """
     Load one CSV and return (suite, pivot), with pivot index = technique (axis suffix stripped),
@@ -95,91 +100,6 @@ def load_technique_axis_pivot(csv_path, unit):
     ordered = [t for t in TECHNIQUE_ORDER if t in pivot.index]
     pivot = pivot.reindex(index=ordered, columns=[a for a in AXES if a in pivot.columns])
     return suites[0], pivot
-
-
-def plot_grid(csv_paths, outpath, unit, scale, y_min, y_max, title):
-    entries = [(p, platform_from_csv_path(p)) for p in csv_paths]
-    entries.sort(key=lambda e: platform_compiler_sort_key(e[1]))
-
-    loaded = []
-    for csv_path, label in entries:
-        suite, pivot = load_technique_axis_pivot(csv_path, unit)
-        loaded.append((label, suite, pivot))
-
-    suites = {suite for _, suite, _ in loaded}
-    if len(suites) != 1:
-        raise ValueError(f"All input files must be from the same suite, found {sorted(suites)}")
-    suite = suites.pop()
-
-    # One shared y-range across all panels, so they are directly comparable.
-    all_values = np.concatenate([pivot.values.ravel() for _, _, pivot in loaded])
-    axis_y_min, axis_y_max = compute_axis_limits(all_values, scale)
-    # Extra top headroom for the rotated value labels above each bar, as in plot_kmer_spaced.py.
-    axis_y_max *= 1.3 if scale == "log" else 1.1
-    if y_min is not None:
-        axis_y_min = y_min
-    if y_max is not None:
-        axis_y_max = y_max
-
-    n = len(loaded)
-    ncols = 1 if n == 1 else 2
-    nrows = (n + ncols - 1) // ncols
-    fig, axes = plt.subplots(
-        nrows, ncols, figsize=(max(8 * ncols, 12), 6 * nrows), squeeze=False, layout="constrained"
-    )
-
-    for idx, (label, _, pivot) in enumerate(loaded):
-        ax = axes[idx // ncols][idx % ncols]
-        apply_yscale(ax, scale)
-
-        techniques = list(pivot.index)
-        x = np.arange(len(techniques))
-        axis_names = list(pivot.columns)
-        bar_width = 0.8 / max(1, len(axis_names))
-        offsets = [(j - (len(axis_names) - 1) / 2.0) * bar_width for j in range(len(axis_names))]
-
-        for j, axis_name in enumerate(axis_names):
-            vals = pivot[axis_name].values
-            bars = ax.bar(
-                x + offsets[j], np.nan_to_num(vals, nan=0.0), width=bar_width,
-                label=AXIS_LABELS[axis_name], color=AXIS_COLORS[axis_name],
-            )
-            # Multiplicative headroom on "log", additive on "linear", as in plot_kmer_spaced.py.
-            for bar, val in zip(bars, vals):
-                if pd.notna(val):
-                    label_y = (
-                        val * 1.02 if scale == "log"
-                        else val + (axis_y_max - axis_y_min) * 0.01
-                    )
-                    ax.text(
-                        bar.get_x() + bar.get_width() / 2.0, label_y, f"{val:.2f}",
-                        ha="center", va="bottom", rotation=90, fontsize=9,
-                    )
-
-        ax.set_title(label)
-        ax.set_ylabel(ylabel_for_unit(unit, suite))
-        ax.set_xticks(x)
-        ax.set_xticklabels(
-            [t.removeprefix("simd_") for t in techniques], rotation=45, ha="right"
-        )
-        ax.set_ylim(axis_y_min, axis_y_max)
-        ax.grid(axis="y", linestyle="--", alpha=0.3)
-
-    # Hide unused grid cells, if any.
-    for idx in range(n, nrows * ncols):
-        axes[idx // ncols][idx % ncols].axis("off")
-
-    # One shared legend below all panels, instead of one per panel, where it would cover bar labels.
-    handles, labels = axes[0][0].get_legend_handles_labels()
-    fig.suptitle(title or f"{suite}: SIMD extraction by mask vs. by position")
-    fig.legend(handles, labels, loc="outside lower center", ncol=len(labels))
-
-    if outpath:
-        fig.savefig(outpath, dpi=300)
-        print(f"Wrote {outpath}")
-    else:
-        plt.show()
-    plt.close(fig)
 
 
 def main():
@@ -211,8 +131,24 @@ def main():
     if not files:
         raise SystemExit("No input files. Provide --file ... or --glob ...")
 
+    usable = []
+    for path in files:
+        if has_axis_rows(path):
+            usable.append(path)
+        else:
+            print(f"Skipping {path}: no _by_mask/_by_position rows")
+    # Not an error: expected for result files from before the two emission orders were recorded.
+    if not usable:
+        print("Nothing to plot.")
+        return
+
     out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
-    plot_grid(files, out, args.unit, args.scale, args.y_min, args.y_max, args.title)
+    plot_axis_grid(
+        usable, load_technique_axis_pivot, AXIS_LABELS, AXIS_COLORS,
+        "SIMD extraction by mask vs. by position",
+        out, args.unit, args.scale, args.y_min, args.y_max, args.title,
+        xtick_label=lambda t: t.removeprefix("simd_"),
+    )
 
 
 if __name__ == "__main__":

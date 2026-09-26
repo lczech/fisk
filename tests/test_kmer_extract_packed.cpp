@@ -48,6 +48,36 @@ static std::uint64_t oracle_lsb(std::string const& seq, std::size_t start, std::
     return v;
 }
 
+// Same as above, for the ACTG encoding.
+static int code_actg(char c)
+{
+    switch (c) {
+        case 'A': case 'a': return 0;
+        case 'C': case 'c': return 1;
+        case 'T': case 't': return 2;
+        case 'G': case 'g': return 3;
+        default:            return -1;
+    }
+}
+
+static std::uint64_t oracle_msb_actg(std::string const& seq, std::size_t start, std::size_t k)
+{
+    std::uint64_t v = 0;
+    for (std::size_t i = 0; i < k; ++i) {
+        v = (v << 2) | static_cast<std::uint64_t>(code_actg(seq[start + i]));
+    }
+    return v;
+}
+
+static std::uint64_t oracle_lsb_actg(std::string const& seq, std::size_t start, std::size_t k)
+{
+    std::uint64_t v = 0;
+    for (std::size_t i = 0; i < k; ++i) {
+        v |= static_cast<std::uint64_t>(code_actg(seq[start + i])) << (2 * i);
+    }
+    return v;
+}
+
 // Sequence lengths 0..512, each with random per-position content.
 static std::vector<std::string> const& test_sequences()
 {
@@ -175,6 +205,36 @@ TEST(KmerExtractPacked, RollingLsb)
     }
 }
 
+TEST(KmerExtractPacked, RollingActgMsb)
+{
+    WordEncoderButterfly<Encoding::kACTG, Layout::kMSB> ex;
+    for (auto const& seq : test_sequences()) {
+        auto const packed = pack_sequence(seq, ex);
+        for (auto const k : test_ks()) {
+            std::vector<std::uint64_t> got;
+            for_each_kmer_packed_rolling(
+                packed, k, [&](KmerActgMsb kmer) { got.push_back(kmer_value(kmer)); }
+            );
+            check_kmers(got, seq, k, oracle_msb_actg);
+        }
+    }
+}
+
+TEST(KmerExtractPacked, RollingActgLsb)
+{
+    WordEncoderButterfly<Encoding::kACTG, Layout::kLSB> ex;
+    for (auto const& seq : test_sequences()) {
+        auto const packed = pack_sequence(seq, ex);
+        for (auto const k : test_ks()) {
+            std::vector<std::uint64_t> got;
+            for_each_kmer_packed_rolling(
+                packed, k, [&](KmerActgLsb kmer) { got.push_back(kmer_value(kmer)); }
+            );
+            check_kmers(got, seq, k, oracle_lsb_actg);
+        }
+    }
+}
+
 // =================================================================================================
 //     Error Contract
 // =================================================================================================
@@ -206,5 +266,25 @@ TEST(KmerExtractPacked, AlignedLsb)
             for_each_kmer_packed_aligned(seq, k, func);
         },
         WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
+    );
+}
+
+TEST(KmerExtractPacked, AlignedActgMsb)
+{
+    check_aligned_variant(
+        [](auto const& seq, std::size_t k, auto func) {
+            for_each_kmer_packed_aligned(seq, k, func);
+        },
+        WordEncoderButterfly<Encoding::kACTG, Layout::kMSB>{}, oracle_msb_actg, 32
+    );
+}
+
+TEST(KmerExtractPacked, AlignedActgLsb)
+{
+    check_aligned_variant(
+        [](auto const& seq, std::size_t k, auto func) {
+            for_each_kmer_packed_aligned(seq, k, func);
+        },
+        WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>{}, oracle_lsb_actg, 32
     );
 }

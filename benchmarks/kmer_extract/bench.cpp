@@ -49,6 +49,13 @@ void bench_kmer_extract(
         std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
     );
 
+    // Reused across calls by pack_then_extract, the same way for_each_kmer_ascii_assume_valid()
+    // reuses its own internal buffer, so the two differ only in chunking, not in allocations.
+    PackedAcgtMsb scratch_acgt_msb;
+    PackedAcgtLsb scratch_acgt_lsb;
+    PackedActgMsb scratch_actg_msb;
+    PackedActgLsb scratch_actg_lsb;
+
     // Run a benchmark for each valid k.
     for( std::size_t k = k_min; k <= k_max; ++k) {
         if( stdout_is_terminal() ) {
@@ -134,8 +141,100 @@ void bench_kmer_extract(
             )
         );
 
-        std::string case_label = "k=" + std::to_string(k);
-        write_csv_rows(csv_os, suite_title, case_label, results, kSinkName);
+        std::string const k_label = "k=" + std::to_string(k);
+        write_csv_rows(
+            csv_os, suite_title, "encoding=acgt;layout=msb;" + k_label, results, kSinkName
+        );
+
+        // The non-validating variants run in their own suite.run() calls, not alongside the
+        // validating ones above: Microbench::run() cross-validates that every bench in the same
+        // call produces the same sink, but these encode invalid characters (see --n-prob in
+        // main.cpp) as some valid base instead of skipping the k-mers overlapping them. One call
+        // per Encoding and Layout, as those produce different k-mer values; within each call, both
+        // variants go through the same packing, so they still agree exactly.
+        auto const results_acgt_msb = suite.run(
+            sequences,
+            bench(
+                "chunked_assume_valid",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_msb_chunked_assume_valid(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "pack_then_extract",
+                [k, &scratch_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_msb_pack_then_extract(
+                        seq, k, scratch_acgt_msb, sink_buffer
+                    );
+                }
+            )
+        );
+        write_csv_rows(
+            csv_os, suite_title, "encoding=acgt;layout=msb;" + k_label, results_acgt_msb, kSinkName
+        );
+
+        auto const results_acgt_lsb = suite.run(
+            sequences,
+            bench(
+                "chunked_assume_valid",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_lsb_chunked_assume_valid(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "pack_then_extract",
+                [k, &scratch_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_lsb_pack_then_extract(
+                        seq, k, scratch_acgt_lsb, sink_buffer
+                    );
+                }
+            )
+        );
+        write_csv_rows(
+            csv_os, suite_title, "encoding=acgt;layout=lsb;" + k_label, results_acgt_lsb, kSinkName
+        );
+
+        auto const results_actg_msb = suite.run(
+            sequences,
+            bench(
+                "chunked_assume_valid",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_actg_msb_chunked_assume_valid(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "pack_then_extract",
+                [k, &scratch_actg_msb, &sink_buffer](std::string const& seq){
+                    return run_var_actg_msb_pack_then_extract(
+                        seq, k, scratch_actg_msb, sink_buffer
+                    );
+                }
+            )
+        );
+        write_csv_rows(
+            csv_os, suite_title, "encoding=actg;layout=msb;" + k_label, results_actg_msb, kSinkName
+        );
+
+        auto const results_actg_lsb = suite.run(
+            sequences,
+            bench(
+                "chunked_assume_valid",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_actg_lsb_chunked_assume_valid(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "pack_then_extract",
+                [k, &scratch_actg_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_actg_lsb_pack_then_extract(
+                        seq, k, scratch_actg_lsb, sink_buffer
+                    );
+                }
+            )
+        );
+        write_csv_rows(
+            csv_os, suite_title, "encoding=actg;layout=lsb;" + k_label, results_actg_lsb, kSinkName
+        );
     }
     if( stdout_is_terminal() ) {
         std::cout << "\n";
