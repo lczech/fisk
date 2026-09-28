@@ -83,23 +83,23 @@ enum class SpacedKmerMode : int
 
 inline std::string spaced_kmer_mode_name(SpacedKmerMode mode)
 {
-    using enum SpacedKmerMode;
+    using Mode = SpacedKmerMode;
     switch (mode) {
         // Scalar
-        case kPext:                           return "PEXT";
-        case kButterflyTable:                 return "ButterflyTable";
+        case Mode::kPext:                           return "PEXT";
+        case Mode::kButterflyTable:                 return "ButterflyTable";
 
         // SIMD by mask
-        case kButterflyTableSSE2ByMask:       return "ButterflyTableSSE2ByMask";
-        case kButterflyTableAVX2ByMask:       return "ButterflyTableAVX2ByMask";
-        case kButterflyTableAVX512ByMask:     return "ButterflyTableAVX512ByMask";
-        case kButterflyTableNeonByMask:       return "ButterflyTableNeonByMask";
+        case Mode::kButterflyTableSSE2ByMask:       return "ButterflyTableSSE2ByMask";
+        case Mode::kButterflyTableAVX2ByMask:       return "ButterflyTableAVX2ByMask";
+        case Mode::kButterflyTableAVX512ByMask:     return "ButterflyTableAVX512ByMask";
+        case Mode::kButterflyTableNeonByMask:       return "ButterflyTableNeonByMask";
 
         // SIMD by position
-        case kButterflyTableSSE2ByPosition:   return "ButterflyTableSSE2ByPosition";
-        case kButterflyTableAVX2ByPosition:   return "ButterflyTableAVX2ByPosition";
-        case kButterflyTableAVX512ByPosition: return "ButterflyTableAVX512ByPosition";
-        case kButterflyTableNeonByPosition:   return "ButterflyTableNeonByPosition";
+        case Mode::kButterflyTableSSE2ByPosition:   return "ButterflyTableSSE2ByPosition";
+        case Mode::kButterflyTableAVX2ByPosition:   return "ButterflyTableAVX2ByPosition";
+        case Mode::kButterflyTableAVX512ByPosition: return "ButterflyTableAVX512ByPosition";
+        case Mode::kButterflyTableNeonByPosition:   return "ButterflyTableNeonByPosition";
 
         default: {
             throw std::invalid_argument(

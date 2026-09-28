@@ -217,8 +217,16 @@ if(FISK_BUILD_BENCHMARKS)
         if (FISK_BENCHMARK_ALIGN_CODE)
             target_compile_options(fisk_benchmarks PRIVATE
                 -falign-functions=64
-                -falign-loops=64
             )
+
+            # Clang only supports -falign-loops since version 14; older ones warn and ignore it,
+            # which -Werror turns into a hard error. Loop alignment is skipped there.
+            check_cxx_compiler_flag("-falign-loops=64" COMPILER_SUPPORTS_ALIGN_LOOPS)
+            if (COMPILER_SUPPORTS_ALIGN_LOOPS)
+                target_compile_options(fisk_benchmarks PRIVATE
+                    -falign-loops=64
+                )
+            endif()
             target_compile_definitions(fisk_benchmarks PRIVATE FISK_BENCHMARK_ALIGN_CODE)
         endif()
 

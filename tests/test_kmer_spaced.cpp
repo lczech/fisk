@@ -797,22 +797,22 @@ TEST(KmerSpacedSimd, ActgForwarding)
 
 static bool mode_matches_axis(SpacedKmerMode mode, SpacedKmerAxis axis)
 {
-    using enum SpacedKmerMode;
+    using Mode = SpacedKmerMode;
     switch (mode) {
-        case kPext:
-        case kButterflyTable:
+        case Mode::kPext:
+        case Mode::kButterflyTable:
             return true;
 
-        case kButterflyTableSSE2ByMask:
-        case kButterflyTableAVX2ByMask:
-        case kButterflyTableAVX512ByMask:
-        case kButterflyTableNeonByMask:
+        case Mode::kButterflyTableSSE2ByMask:
+        case Mode::kButterflyTableAVX2ByMask:
+        case Mode::kButterflyTableAVX512ByMask:
+        case Mode::kButterflyTableNeonByMask:
             return axis != SpacedKmerAxis::kByPosition;
 
-        case kButterflyTableSSE2ByPosition:
-        case kButterflyTableAVX2ByPosition:
-        case kButterflyTableAVX512ByPosition:
-        case kButterflyTableNeonByPosition:
+        case Mode::kButterflyTableSSE2ByPosition:
+        case Mode::kButterflyTableAVX2ByPosition:
+        case Mode::kButterflyTableAVX512ByPosition:
+        case Mode::kButterflyTableNeonByPosition:
             return axis != SpacedKmerAxis::kByMask;
     }
     return false;
