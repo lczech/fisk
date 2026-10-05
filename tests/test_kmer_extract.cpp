@@ -9,249 +9,82 @@
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/simd.hpp"
+#include "corpus.hpp"
+#include "oracle.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
 
 // =================================================================================================
-//     Helpers and Oracle
+//     Helpers
 // =================================================================================================
 
-// Ground truth codes, independent of every encoder under test. ACGT ordering.
-static int code_acgt(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'G': case 'g': return 2;
-        case 'T': case 't': return 3;
-        default:            return -1;
-    }
-}
-
-// Same, but ACTG ordering -- used to prove the generic extractors do not hardcode ACGT.
-static int code_actg(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'T': case 't': return 2;
-        case 'G': case 'g': return 3;
-        default:            return -1;
-    }
-}
-
-// Ground truth for for_each_kmer_rolling()'s contract, built from scratch: MSB/left-rolling k-mers,
-// skipping every window that overlaps a symbol `code_of` reports as invalid (< 0), and requiring
-// a full re-accumulation of k valid symbols before emitting again.
-template <typename CodeFn>
-static std::vector<std::uint64_t> oracle_kmers(std::string const& seq, std::size_t k, CodeFn&& code_of)
-{
-    std::vector<std::uint64_t> out;
-    if (seq.size() < k) {
-        return out;
-    }
-
-    std::uint64_t const mask = (k == 32) ? ~std::uint64_t{0} : ((std::uint64_t{1} << (2 * k)) - 1u);
-    std::uint64_t kmer = 0;
-    std::size_t valid = 0;
-    for (std::size_t i = 0; i < seq.size(); ++i) {
-        int const c = code_of(seq[i]);
-        kmer = ((kmer << 2) & mask) | static_cast<std::uint64_t>(c < 0 ? 0 : c);
-        valid = (c >= 0) ? (valid + 1) : 0;
-        if (valid >= k) {
-            out.push_back(kmer);
-        }
-    }
-    return out;
-}
-
-// Ground truth window-start positions, parallel to oracle_kmers() above: for each emitted k-mer,
-// the index into `seq` where its k-length window starts.
-template <typename CodeFn>
-static std::vector<std::size_t> oracle_positions(
-    std::string const& seq, std::size_t k, CodeFn&& code_of
-) {
-    std::vector<std::size_t> out;
-    if (seq.size() < k) {
-        return out;
-    }
-
-    std::size_t valid = 0;
-    for (std::size_t i = 0; i < seq.size(); ++i) {
-        int const c = code_of(seq[i]);
-        valid = (c >= 0) ? (valid + 1) : 0;
-        if (valid >= k) {
-            out.push_back(i + 1 - k);
-        }
-    }
-    return out;
-}
-
-// Checks `got` (one extractor's emitted k-mers) against the oracle, in both count and content.
-template <typename CodeFn>
-static void check_kmers(
-    std::vector<std::uint64_t> const& got, std::string const& seq, std::size_t k, CodeFn&& code_of
-) {
-    auto const exp = oracle_kmers(seq, k, code_of);
-    EXPECT_EQ(got.size(), exp.size());
-    std::size_t const n = std::min(got.size(), exp.size());
-    for (std::size_t i = 0; i < n; ++i) {
-        EXPECT_EQ(got[i], exp[i]);
-    }
-}
-
-// Collectors, one per implementation, so call sites read the same regardless of which extractor
-// is under test.
+// Checks for_each_kmer_rolling() and for_each_kmer_reextract(), the two extractors that take an
+// encoder, against `expected` for one (seq, k), in both callback forms.
 template <typename Enc>
-static std::vector<std::uint64_t> collect_rolling(std::string const& seq, std::size_t k, Enc&& enc)
-{
-    using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
-    std::vector<std::uint64_t> out;
-    for_each_kmer_rolling(seq, k, enc, [&](Emitted kmer) { out.push_back(kmer_value(kmer)); });
-    return out;
-}
-
-template <typename Enc>
-static std::vector<std::uint64_t> collect_reextract(std::string const& seq, std::size_t k, Enc&& enc)
-{
-    using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
-    std::vector<std::uint64_t> out;
-    for_each_kmer_reextract(seq, k, enc, [&](Emitted kmer) { out.push_back(kmer_value(kmer)); });
-    return out;
-}
-
-// Same as collect_rolling()/collect_reextract(), but exercising the optional leading `pos`
-// parameter of the callback, and collecting positions instead of k-mer values.
-template <typename Enc>
-static std::vector<std::size_t> collect_rolling_positions(
-    std::string const& seq, std::size_t k, Enc&& enc
+static void check_encoder_impls(
+    std::string const& seq, std::size_t k, Enc const& enc, std::vector<ExpectedKmer> const& expected
 ) {
-    using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
-    std::vector<std::size_t> out;
-    for_each_kmer_rolling(
-        seq, k, enc, [&](std::size_t pos, Emitted) { out.push_back(pos); }
-    );
-    return out;
+    constexpr auto E = Enc::encoding;
+    check_kmer_callbacks<E, Layout::kMSB>(expected, k, [&](auto const& callback) {
+        for_each_kmer_rolling(seq, k, enc, callback);
+    });
+    check_kmer_callbacks<E, Layout::kMSB>(expected, k, [&](auto const& callback) {
+        for_each_kmer_reextract(seq, k, enc, callback);
+    });
 }
 
-template <typename Enc>
-static std::vector<std::size_t> collect_reextract_positions(
-    std::string const& seq, std::size_t k, Enc&& enc
-) {
-    using Emitted = Kmer<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>;
-    std::vector<std::size_t> out;
-    for_each_kmer_reextract(
-        seq, k, enc, [&](std::size_t pos, Emitted) { out.push_back(pos); }
-    );
-    return out;
-}
-
-static std::vector<std::uint64_t> collect_simd(std::string const& seq, std::size_t k)
-{
-    std::vector<std::uint64_t> out;
-    for_each_kmer_simd(seq, k, [&](KmerAcgtMsb kmer) { out.push_back(kmer_value(kmer)); });
-    return out;
-}
-
-static std::vector<std::uint64_t> collect_simd_scalar(std::string const& seq, std::size_t k)
-{
-    std::vector<std::uint64_t> out;
-    for_each_kmer_simd_scalar(seq, k, [&](KmerAcgtMsb kmer) { out.push_back(kmer_value(kmer)); });
-    return out;
-}
-
-// Checks all four for_each_kmer variants against the oracle for one (seq, k), using ACGT-table
-// encoding throughout. Required whenever for_each_kmer_simd()/for_each_kmer_simd_scalar() are in
-// scope, since both hardcode ACGT-ascii encoding and cannot be checked against any other ordering.
+// Checks all five for_each_kmer variants against the oracle for one (seq, k): exact positions and
+// values, in order, skipping every window that overlaps an invalid character. ACGT-table encoding
+// throughout, since for_each_kmer_simd()/for_each_kmer_simd_scalar() hardcode ACGT-ascii encoding
+// and for_each_kmer() fixes its encoder to the ACGT lookup table, so neither can be checked
+// against any other ordering.
 static void check_all_impls_acgt(std::string const& seq, std::size_t k)
 {
-    check_kmers(collect_rolling(seq, k, CharEncoderTable<Encoding::kACGT>{}), seq, k, code_acgt);
-    check_kmers(collect_reextract(seq, k, CharEncoderTable<Encoding::kACGT>{}), seq, k, code_acgt);
-    check_kmers(collect_simd(seq, k), seq, k, code_acgt);
-    check_kmers(collect_simd_scalar(seq, k), seq, k, code_acgt);
+    auto const expected = oracle_kmers_skipping_invalid<Encoding::kACGT, Layout::kMSB>(seq, k);
+    check_encoder_impls(seq, k, CharEncoderTable<Encoding::kACGT>{}, expected);
+    check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& callback) {
+        for_each_kmer_simd(seq, k, callback);
+    });
+    check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& callback) {
+        for_each_kmer_simd_scalar(seq, k, callback);
+    });
+    check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& callback) {
+        for_each_kmer(seq, k, callback);
+    });
 }
 
 // =================================================================================================
 //     Random Sequences
 // =================================================================================================
 
-// Valid-only sequences (pure ACGT/acgt), shared across the oracle sweep, the cross-implementation
-// differential test, and the invalid-sentinel test below (whose custom encoder repurposes the
-// lowercase half of this alphabet as "invalid"). Lengths 0..70 plus a batch of longer random
-// lengths.
+// Valid-only sequences (pure ACGT/acgt), shared across the oracle sweep and the invalid-sentinel
+// test below (whose custom encoder repurposes the lowercase half of this alphabet as "invalid").
+// Lengths 0..70 plus a batch of longer random lengths.
 static std::vector<std::string> const& valid_sequences()
 {
     static std::vector<std::string> const seqs = [] {
         std::vector<std::string> out;
-        char const bases[] = "ACGTacgt";
         Splitmix64 rng(90210);
-
-        auto random_seq = [&](std::size_t len) {
-            std::string s;
-            s.reserve(len);
-            for (std::size_t i = 0; i < len; ++i) {
-                s += bases[rng.get_uint64() % 8];
-            }
-            return s;
-        };
-
         for (std::size_t len = 0; len <= 70; ++len) {
-            out.push_back(random_seq(len));
+            out.push_back(random_sequence(rng, len));
         }
         for (int i = 0; i < 20; ++i) {
             std::size_t const len = static_cast<std::size_t>(rng.get_uint64() % 300);
-            out.push_back(random_seq(len));
+            out.push_back(random_sequence(rng, len));
         }
         return out;
     }();
     return seqs;
 }
 
-// k values spanning the full supported range [1, 32] shared by every for_each_kmer*() variant.
-static std::vector<std::size_t> const& test_ks()
-{
-    static std::vector<std::size_t> const ks = {
-        1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 27, 28, 29, 30, 31, 32
-    };
-    return ks;
-}
-
-// Sequences with invalid characters injected at a controlled, explicit rate.
-// Used to stress the window-reset logic at different densities.
-static std::vector<std::string> invalid_injected_sequences(double rate, std::uint64_t seed)
-{
-    std::vector<std::string> out;
-    char const bases[] = "ACGTacgt";
-    char const invalid_markers[] = "Nn-.";
-    Splitmix64 rng(seed);
-
-    auto random_seq = [&](std::size_t len) {
-        std::string s;
-        s.reserve(len);
-        for (std::size_t i = 0; i < len; ++i) {
-            if (rng.get_double() < rate) {
-                s += invalid_markers[rng.get_uint64() % 4];
-            } else {
-                s += bases[rng.get_uint64() % 8];
-            }
-        }
-        return s;
-    };
-
-    for (int i = 0; i < 40; ++i) {
-        std::size_t const len = static_cast<std::size_t>(rng.get_uint64() % 150);
-        out.push_back(random_seq(len));
-    }
-    return out;
-}
-
 // =================================================================================================
 //     Oracle Correctness
 // =================================================================================================
 
-// Correct k-mers, correct order, correct MSB encoding, for every length/k combination in the
-// shared sequence set. ACGT-table encoding, checked against all four implementations.
+// Correct k-mers, correct positions, correct order, correct MSB encoding, for every length/k
+// combination in the shared sequence set. ACGT-table encoding, checked against all five
+// implementations.
 TEST(KmerExtract, OracleAcgtTable)
 {
     for (auto const& seq : valid_sequences()) {
@@ -262,72 +95,18 @@ TEST(KmerExtract, OracleAcgtTable)
 }
 
 // Same, but with an ACTG-ordered encoder, to prove for_each_kmer_rolling()/for_each_kmer_reextract()
-// do not hardcode ACGT ordering. for_each_kmer_simd()/for_each_kmer_simd_scalar() cannot be checked
-// here, since they hardcode ACGT-ascii encoding; neither can for_each_kmer(), which fixes its
-// encoder to the ACGT lookup table (see the Convenience Wrapper section below).
+// do not hardcode ACGT ordering. The other three cannot be checked here, since they hardcode ACGT
+// (see check_all_impls_acgt()).
 TEST(KmerExtract, OracleActgTable)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            check_kmers(collect_rolling(seq, k, CharEncoderTable<Encoding::kACTG>{}), seq, k, code_actg);
-            check_kmers(collect_reextract(seq, k, CharEncoderTable<Encoding::kACTG>{}), seq, k, code_actg);
+            check_encoder_impls(
+                seq, k, CharEncoderTable<Encoding::kACTG>{},
+                oracle_kmers_skipping_invalid<Encoding::kACTG, Layout::kMSB>(seq, k)
+            );
         }
     }
-}
-
-// =================================================================================================
-//     Position Callback
-// =================================================================================================
-
-// for_each_kmer_rolling()/for_each_kmer_reextract() accept a callback of either `(pos, kmer)` or
-// `(kmer)`, resolved via invoke_kmer_callback() (core/kmer_callback.hpp). The 1-arg form is
-// already exhaustively covered above (collect_rolling()/collect_reextract() both use it); this
-// checks the 2-arg form's `pos` against an independent oracle, for both encoders.
-TEST(KmerExtract, PositionMatchesOracle)
-{
-    for (auto const& seq : valid_sequences()) {
-        for (auto const k : test_ks()) {
-            auto const exp_acgt = oracle_positions(seq, k, code_acgt);
-            EXPECT_EQ(collect_rolling_positions(seq, k, CharEncoderTable<Encoding::kACGT>{}), exp_acgt);
-            EXPECT_EQ(collect_reextract_positions(seq, k, CharEncoderTable<Encoding::kACGT>{}), exp_acgt);
-
-            auto const exp_actg = oracle_positions(seq, k, code_actg);
-            EXPECT_EQ(collect_rolling_positions(seq, k, CharEncoderTable<Encoding::kACTG>{}), exp_actg);
-            EXPECT_EQ(collect_reextract_positions(seq, k, CharEncoderTable<Encoding::kACTG>{}), exp_actg);
-        }
-    }
-}
-
-// =================================================================================================
-//     Convenience Wrapper (for_each_kmer)
-// =================================================================================================
-
-// for_each_kmer() is a thin forward to for_each_kmer_rolling() with the ACGT lookup-table encoder
-// fixed in; this checks it against the oracle directly (rather than relying purely on the rolling
-// tests above), plus its own k-validity and a couple of invalid-character sanity cases. The
-// underlying skip/reset logic itself is exhaustively covered by the for_each_kmer_rolling() tests.
-TEST(KmerExtract, ConvenienceWrapperMatchesRolling)
-{
-    for (auto const& seq : valid_sequences()) {
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer(seq, k, [&](KmerAcgtMsb kmer) { got.push_back(kmer_value(kmer)); });
-            check_kmers(got, seq, k, code_acgt);
-        }
-    }
-
-    std::vector<std::string> const invalid_seqs = { "NACGTACGT", "ACGTNNNACGT" };
-    std::vector<std::size_t> const invalid_ks = { 1, 4, 8 };
-    for (auto const& seq : invalid_seqs) {
-        for (auto const k : invalid_ks) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer(seq, k, [&](KmerAcgtMsb kmer) { got.push_back(kmer_value(kmer)); });
-            check_kmers(got, seq, k, code_acgt);
-        }
-    }
-
-    EXPECT_ANY_THROW(for_each_kmer("ACGT", 0, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer("ACGT", 33, [](KmerAcgtMsb) {}));
 }
 
 // =================================================================================================
@@ -338,14 +117,21 @@ TEST(KmerExtract, ConvenienceWrapperMatchesRolling)
 TEST(KmerExtract, InvalidKThrows)
 {
     CharEncoderTable<Encoding::kACGT> const table;
-    EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 0, table, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer_rolling("ACGT", 33, table, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 0, table, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer_reextract("ACGT", 33, table, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 0, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer_simd("ACGT", 33, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer_simd_scalar("ACGT", 0, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer_simd_scalar("ACGT", 33, [](KmerAcgtMsb) {}));
+    check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
+        for_each_kmer_rolling(seq, k, table, [](KmerAcgtMsb) {});
+    });
+    check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
+        for_each_kmer_reextract(seq, k, table, [](KmerAcgtMsb) {});
+    });
+    check_invalid_k_throws(32, [](std::string const& seq, std::size_t k) {
+        for_each_kmer_simd(seq, k, [](KmerAcgtMsb) {});
+    });
+    check_invalid_k_throws(32, [](std::string const& seq, std::size_t k) {
+        for_each_kmer_simd_scalar(seq, k, [](KmerAcgtMsb) {});
+    });
+    check_invalid_k_throws(32, [](std::string const& seq, std::size_t k) {
+        for_each_kmer(seq, k, [](KmerAcgtMsb) {});
+    });
 }
 
 // Empty input, and sequences one shorter than / exactly / one longer than k: zero, one, and two
@@ -372,6 +158,8 @@ TEST(KmerExtract, LengthBoundaries)
 // Hand-crafted placements: invalid at the very start/middle/end, a run of several in a row,
 // alternating valid/invalid, and a sequence that is entirely invalid. Every k-mer overlapping an
 // invalid symbol must be suppressed, and the window must fully refill before emitting again.
+// Written with 'N' for readability, and then checked with every hand-picked invalid character in
+// its place.
 TEST(KmerExtract, InvalidCharacterPlacement)
 {
     std::vector<std::string> const seqs = {
@@ -392,9 +180,12 @@ TEST(KmerExtract, InvalidCharacterPlacement)
     };
     std::vector<std::size_t> const ks = { 1, 3, 4, 8, 16, 32 };
 
-    for (auto const& seq : seqs) {
-        for (auto const k : ks) {
-            check_all_impls_acgt(seq, k);
+    for (auto const marker : kHandPickedInvalid) {
+        for (auto seq : seqs) {
+            std::replace(seq.begin(), seq.end(), 'N', marker);
+            for (auto const k : ks) {
+                check_all_impls_acgt(seq, k);
+            }
         }
     }
 }
@@ -447,26 +238,24 @@ struct SentinelNotFourEncoder
 TEST(KmerExtract, InvalidSentinelNotFour)
 {
     SentinelNotFourEncoder const enc;
-    auto const code_of = [](char c) -> int {
-        switch (c) {
-            case 'A': return 0;
-            case 'C': return 1;
-            case 'G': return 2;
-            case 'T': return 3;
-            default:  return -1;
-        }
-    };
-
     for (auto const& seq : valid_sequences()) {
+        // What the encoder sees as invalid, spelled out for the oracle: every lowercase base.
+        std::string as_seen = seq;
+        for (auto& c : as_seen) {
+            if (std::islower(static_cast<unsigned char>(c))) {
+                c = 'N';
+            }
+        }
         for (auto const k : test_ks()) {
-            check_kmers(collect_rolling(seq, k, enc), seq, k, code_of);
-            check_kmers(collect_reextract(seq, k, enc), seq, k, code_of);
+            auto const expected =
+                oracle_kmers_skipping_invalid<Encoding::kACGT, Layout::kMSB>(as_seen, k);
+            check_encoder_impls(seq, k, enc, expected);
         }
     }
 }
 
-// Randomized sequences with invalid characters injected at a controlled rate, swept across
-// sparse, moderate, and heavy regimes.
+// Randomized sequences with invalid characters from the full byte range injected at a controlled
+// rate, swept across sparse, moderate, and heavy regimes.
 TEST(KmerExtract, InvalidInjectionFuzz)
 {
     struct Rate { double p; std::uint64_t seed; };
@@ -477,7 +266,7 @@ TEST(KmerExtract, InvalidInjectionFuzz)
     };
 
     for (auto const& r : rates) {
-        for (auto const& seq : invalid_injected_sequences(r.p, r.seed)) {
+        for (auto const& seq : invalid_injected_sequences(40, 149, r.p, r.seed)) {
             for (auto const k : test_ks()) {
                 check_all_impls_acgt(seq, k);
             }
@@ -497,21 +286,13 @@ TEST(KmerExtract, InvalidInjectionFuzz)
 //
 // For each block size, builds sequences one-under/on/one-over one and two block widths, with an
 // invalid marker at the last character of a block, the first character of the next, or straddling
-// both -- exactly where a block-boundary bug would hide.
+// both -- exactly where a block-boundary bug would hide. The marker cycles through the hand-picked
+// invalid characters from one sequence to the next.
 TEST(KmerExtract, SimdBlockBoundaries)
 {
     std::vector<std::size_t> const block_sizes = { 8, 16, 32, 64 };
     Splitmix64 rng(424242);
-    char const bases[] = "ACGT";
-
-    auto random_valid = [&](std::size_t len) {
-        std::string s;
-        s.reserve(len);
-        for (std::size_t i = 0; i < len; ++i) {
-            s += bases[rng.get_uint64() % 4];
-        }
-        return s;
-    };
+    std::size_t marker_idx = 0;
 
     for (auto const bs : block_sizes) {
         std::vector<std::size_t> const lens = {
@@ -528,14 +309,15 @@ TEST(KmerExtract, SimdBlockBoundaries)
         };
 
         for (auto const len : lens) {
-            std::string const base = random_valid(len);
+            std::string const base = random_sequence(rng, len, "ACGT");
 
             for (auto const& markers : marker_sets) {
                 std::string seq = base;
+                char const marker = kHandPickedInvalid[marker_idx++ % kHandPickedInvalid.size()];
                 bool any_in_range = false;
                 for (auto const pos : markers) {
                     if (pos < seq.size()) {
-                        seq[pos] = 'N';
+                        seq[pos] = marker;
                         any_in_range = true;
                     }
                 }
@@ -547,28 +329,6 @@ TEST(KmerExtract, SimdBlockBoundaries)
                     check_all_impls_acgt(seq, k);
                 }
             }
-        }
-    }
-}
-
-// =================================================================================================
-//     Cross-Implementation Differential
-// =================================================================================================
-
-// All four implementations must emit the exact same k-mer sequence for the same input. ACGT-table
-// encoding throughout, since the SIMD variants hardcode that convention.
-TEST(KmerExtract, DifferentialAllImplementationsAgree)
-{
-    for (auto const& seq : valid_sequences()) {
-        for (auto const k : test_ks()) {
-            auto const core        = collect_rolling(seq, k, CharEncoderTable<Encoding::kACGT>{});
-            auto const reextract   = collect_reextract(seq, k, CharEncoderTable<Encoding::kACGT>{});
-            auto const simd        = collect_simd(seq, k);
-            auto const simd_scalar = collect_simd_scalar(seq, k);
-
-            EXPECT_EQ(reextract, core);
-            EXPECT_EQ(simd, core);
-            EXPECT_EQ(simd_scalar, core);
         }
     }
 }
@@ -599,16 +359,13 @@ TEST(KmerExtract, KmerDecode)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            if (seq.size() < k) {
-                continue;
-            }
-            auto const kmers = oracle_kmers(seq, k, code_acgt);
-            for (std::size_t i = 0; i < kmers.size(); ++i) {
-                std::string upper = seq.substr(i, k);
+            auto const windows = oracle_kmers_all_windows<Encoding::kACGT, Layout::kMSB>(seq, k);
+            for (auto const& window : windows) {
+                std::string upper = seq.substr(window.pos, k);
                 for (auto& c : upper) {
                     c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
                 }
-                auto const kmer = kmer_cast<Encoding::kACGT, Layout::kMSB>(kmers[i], k);
+                auto const kmer = kmer_cast<Encoding::kACGT, Layout::kMSB>(window.value.value(), k);
                 EXPECT_EQ(kmer_decode(kmer, k), upper);
             }
         }

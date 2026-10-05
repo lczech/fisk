@@ -1,48 +1,20 @@
 #include "fisk/core/char_encoder.hpp"
+#include "oracle.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
 
 // =================================================================================================
-//     Helpers and Oracle
+//     Helpers
 // =================================================================================================
-
-// Ground truth for both two-bit encodings, independent of any of the encoders under test below,
-// which are checked against it over all 256 byte values. Ends in a static_assert for the same
-// reason the encoders themselves do: a third Encoding must break the oracle loudly rather than be
-// silently treated as one of the existing two.
-template <Encoding E>
-static int expected_code(unsigned char c)
-{
-    if constexpr (E == Encoding::kACGT) {
-        switch (c) {
-            case 'A': case 'a': return 0;
-            case 'C': case 'c': return 1;
-            case 'G': case 'g': return 2;
-            case 'T': case 't': return 3;
-            default:            return kInvalidNucleotide;
-        }
-    } else if constexpr (E == Encoding::kACTG) {
-        switch (c) {
-            case 'A': case 'a': return 0;
-            case 'C': case 'c': return 1;
-            case 'T': case 't': return 2;
-            case 'G': case 'g': return 3;
-            default:            return kInvalidNucleotide;
-        }
-    } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in the test oracle");
-        return kInvalidNucleotide;
-    }
-}
 
 // Check one encoder against the oracle for every byte value.
 template <template <Encoding> class Encoder, Encoding E>
 static void check_encoder_under()
 {
     for (int i = 0; i < 256; ++i) {
-        auto const c = static_cast<unsigned char>(i);
-        EXPECT_EQ(static_cast<int>(Encoder<E>{}(static_cast<char>(c))), expected_code<E>(c));
+        auto const c = static_cast<char>(i);
+        EXPECT_EQ(static_cast<int>(Encoder<E>{}(c)), static_cast<int>(oracle_code<E>(c)));
     }
 }
 
@@ -115,10 +87,17 @@ TEST(CharEncoder, Ascii)
     check_encoder<CharEncoderAsciiValidating>();
 }
 
-// The kAssumeValid variant is unspecified for non-ACGT input, so only check that it agrees with
-// the (default, kValidate) checked variant on the characters it actually supports.
+// The kAssumeValid variant must agree with the (default, kValidate) checked variant on the
+// characters it actually supports. For any other byte its code is unspecified, but it must still
+// be a valid-looking 0-3 code, as documented in core/char_encoder.hpp.
 TEST(CharEncoder, AsciiAssumeValid)
 {
+    for (int i = 0; i < 256; ++i) {
+        auto const c = static_cast<char>(i);
+        EXPECT_TRUE((CharEncoderAscii<Encoding::kACGT, InputValidity::kAssumeValid>{}(c)) < 4);
+        EXPECT_TRUE((CharEncoderAscii<Encoding::kACTG, InputValidity::kAssumeValid>{}(c)) < 4);
+    }
+
     char const valid[] = {'A', 'C', 'G', 'T', 'a', 'c', 'g', 't'};
     for (char c : valid) {
         EXPECT_EQ(

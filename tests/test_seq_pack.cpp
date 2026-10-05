@@ -10,6 +10,8 @@
 #include "fisk/core/types.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
 #include "fisk/seq_pack/simd.hpp"
+#include "corpus.hpp"
+#include "oracle.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -18,29 +20,8 @@ using namespace fisk;
 //     Helpers and Oracle
 // =================================================================================================
 
-// Ground truth two-bit codes, independent of the encoders under test.
-
-static int expected_acgt(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'G': case 'g': return 2;
-        case 'T': case 't': return 3;
-        default:            return -1;
-    }
-}
-
-static int expected_actg(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'T': case 't': return 2;
-        case 'G': case 'g': return 3;
-        default:            return -1;
-    }
-}
+// Ground truth two-bit codes come from oracle_code() in oracle.hpp, independent of the encoders
+// under test.
 
 // Decode base `i` per PackedSequence's documented contract (see Layout in core/types.hpp),
 // independent of pack_sequence()/pack_sequence_simd()'s internals.
@@ -62,66 +43,69 @@ static std::vector<std::string> const& test_sequences()
 {
     static std::vector<std::string> const seqs = [] {
         std::vector<std::string> out;
-        char const bases[] = "ACGTacgt";
         Splitmix64 rng(3003);
-
-        auto random_seq = [&](std::size_t len) {
-            std::string s;
-            s.reserve(len);
-            for (std::size_t k = 0; k < len; ++k) {
-                s += bases[rng.get_uint64() % 8];
-            }
-            return s;
-        };
-
         for (std::size_t len = 0; len <= 65; ++len) {
-            out.push_back(random_seq(len));
+            out.push_back(random_sequence(rng, len));
         }
         for (int i = 0; i < 30; ++i) {
             std::size_t const len = static_cast<std::size_t>(rng.get_uint64() % 200);
-            out.push_back(random_seq(len));
+            out.push_back(random_sequence(rng, len));
         }
         return out;
     }();
     return seqs;
 }
 
-// Checks a PackedSequence against `seq` and its oracle: length, data size, and every
-// base's code.
-template <Encoding E, Layout L, typename OracleFn>
-static void check_packed(
-    std::string const& seq, PackedSequence<E, L> const& packed, OracleFn&& oracle
-) {
+// Sequences with invalid characters from the full byte range. The word encoders assume valid
+// input, so the code they give an invalid character is unspecified; but it must not affect any
+// other position, nor the padding.
+static std::vector<std::string> const& invalid_sequences()
+{
+    static std::vector<std::string> const seqs = invalid_injected_sequences(40, 200, 0.1, 3004);
+    return seqs;
+}
+
+// Checks a PackedSequence against `seq` and the oracle: length, data size, the code of every
+// valid base, and zero padding.
+template <Encoding E, Layout L>
+static void check_packed(std::string const& seq, PackedSequence<E, L> const& packed)
+{
     EXPECT_EQ(packed.length, seq.size());
 
     std::size_t const expected_content_bytes = (seq.size() + 3) / 4;
     EXPECT_EQ(packed.data.size(), expected_content_bytes);
 
     for (std::size_t i = 0; i < seq.size(); ++i) {
-        EXPECT_EQ(decode_base(packed, i), oracle(seq[i]));
+        std::uint8_t const code = oracle_code<E>(seq[i]);
+        if (code < kInvalidNucleotide) {
+            EXPECT_EQ(decode_base(packed, i), static_cast<int>(code));
+        }
     }
+    check_packed_padding_zero(packed);
 }
 
 // Checks pack_sequence() -- both overloads, and reuse of one PackedSequence across calls -- for a
-// given scalar word encoder and its matching oracle.
-template <typename Encoder, typename OracleFn>
-static void check_scalar_pack(OracleFn&& oracle)
+// given scalar word encoder, on valid and invalid input.
+template <typename Encoder>
+static void check_scalar_pack()
 {
     Encoder encoder{};
     PackedSequence<Encoder::encoding, Encoder::layout> out;
 
-    for (auto const& seq : test_sequences()) {
-        pack_sequence(seq, encoder, out);
-        check_packed(seq, out, oracle);
+    for (auto const* seqs : {&test_sequences(), &invalid_sequences()}) {
+        for (auto const& seq : *seqs) {
+            pack_sequence(seq, encoder, out);
+            check_packed(seq, out);
 
-        auto const out2 = pack_sequence(seq, encoder);
-        check_packed(seq, out2, oracle);
+            auto const out2 = pack_sequence(seq, encoder);
+            check_packed(seq, out2);
+        }
     }
 
     // Reuse must not leak stale bytes from a previous, larger pack.
     pack_sequence(std::string(100, 'T'), encoder, out);
     pack_sequence(std::string("AC"), encoder, out);
-    check_packed(std::string("AC"), out, oracle);
+    check_packed(std::string("AC"), out);
 }
 
 #if defined(FISK_HAS_SSE2)   || \
@@ -130,23 +114,25 @@ static void check_scalar_pack(OracleFn&& oracle)
     defined(FISK_HAS_NEON)
 
 // Same as check_scalar_pack(), but for pack_sequence_simd() and a SIMD word encoder.
-template <typename Encoder, typename OracleFn>
-static void check_simd_pack(OracleFn&& oracle)
+template <typename Encoder>
+static void check_simd_pack()
 {
     Encoder encoder{};
     PackedSequence<Encoder::encoding, Encoder::layout> out;
 
-    for (auto const& seq : test_sequences()) {
-        pack_sequence_simd(seq, encoder, out);
-        check_packed(seq, out, oracle);
+    for (auto const* seqs : {&test_sequences(), &invalid_sequences()}) {
+        for (auto const& seq : *seqs) {
+            pack_sequence_simd(seq, encoder, out);
+            check_packed(seq, out);
 
-        auto const out2 = pack_sequence_simd(seq, encoder);
-        check_packed(seq, out2, oracle);
+            auto const out2 = pack_sequence_simd(seq, encoder);
+            check_packed(seq, out2);
+        }
     }
 
     pack_sequence_simd(std::string(100, 'T'), encoder, out);
     pack_sequence_simd(std::string("AC"), encoder, out);
-    check_packed(std::string("AC"), out, oracle);
+    check_packed(std::string("AC"), out);
 }
 
 #endif
@@ -236,22 +222,22 @@ static_assert(!std::is_convertible_v<ActgMsb const&, AcgtMsb const&>);
 
 TEST(SeqPack, ScalarButterflyActgLsb)
 {
-    check_scalar_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>>(expected_actg);
+    check_scalar_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>>();
 }
 
 TEST(SeqPack, ScalarButterflyActgMsb)
 {
-    check_scalar_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB>>(expected_actg);
+    check_scalar_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB>>();
 }
 
 TEST(SeqPack, ScalarButterflyAcgtLsb)
 {
-    check_scalar_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>>(expected_acgt);
+    check_scalar_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>>();
 }
 
 TEST(SeqPack, ScalarButterflyAcgtMsb)
 {
-    check_scalar_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>>(expected_acgt);
+    check_scalar_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>>();
 }
 
 // -----------------------------------------------------------------------------
@@ -262,22 +248,22 @@ TEST(SeqPack, ScalarButterflyAcgtMsb)
 
 TEST(SeqPack, ScalarPextActgLsb)
 {
-    check_scalar_pack<WordEncoderPext<Encoding::kACTG, Layout::kLSB>>(expected_actg);
+    check_scalar_pack<WordEncoderPext<Encoding::kACTG, Layout::kLSB>>();
 }
 
 TEST(SeqPack, ScalarPextActgMsb)
 {
-    check_scalar_pack<WordEncoderPext<Encoding::kACTG, Layout::kMSB>>(expected_actg);
+    check_scalar_pack<WordEncoderPext<Encoding::kACTG, Layout::kMSB>>();
 }
 
 TEST(SeqPack, ScalarPextAcgtLsb)
 {
-    check_scalar_pack<WordEncoderPext<Encoding::kACGT, Layout::kLSB>>(expected_acgt);
+    check_scalar_pack<WordEncoderPext<Encoding::kACGT, Layout::kLSB>>();
 }
 
 TEST(SeqPack, ScalarPextAcgtMsb)
 {
-    check_scalar_pack<WordEncoderPext<Encoding::kACGT, Layout::kMSB>>(expected_acgt);
+    check_scalar_pack<WordEncoderPext<Encoding::kACGT, Layout::kMSB>>();
 }
 
 #endif // FISK_HAS_BMI2
@@ -290,19 +276,19 @@ TEST(SeqPack, ScalarPextAcgtMsb)
 
 TEST(SeqPackSimd, Sse2ActgLsb)
 {
-    check_simd_pack<WordEncoderButterflySSE2<Encoding::kACTG, Layout::kLSB>>(expected_actg);
+    check_simd_pack<WordEncoderButterflySSE2<Encoding::kACTG, Layout::kLSB>>();
 }
 TEST(SeqPackSimd, Sse2ActgMsb)
 {
-    check_simd_pack<WordEncoderButterflySSE2<Encoding::kACTG, Layout::kMSB>>(expected_actg);
+    check_simd_pack<WordEncoderButterflySSE2<Encoding::kACTG, Layout::kMSB>>();
 }
 TEST(SeqPackSimd, Sse2AcgtLsb)
 {
-    check_simd_pack<WordEncoderButterflySSE2<Encoding::kACGT, Layout::kLSB>>(expected_acgt);
+    check_simd_pack<WordEncoderButterflySSE2<Encoding::kACGT, Layout::kLSB>>();
 }
 TEST(SeqPackSimd, Sse2AcgtMsb)
 {
-    check_simd_pack<WordEncoderButterflySSE2<Encoding::kACGT, Layout::kMSB>>(expected_acgt);
+    check_simd_pack<WordEncoderButterflySSE2<Encoding::kACGT, Layout::kMSB>>();
 }
 
 #endif // FISK_HAS_SSE2
@@ -311,19 +297,19 @@ TEST(SeqPackSimd, Sse2AcgtMsb)
 
 TEST(SeqPackSimd, Avx2ActgLsb)
 {
-    check_simd_pack<WordEncoderButterflyAVX2<Encoding::kACTG, Layout::kLSB>>(expected_actg);
+    check_simd_pack<WordEncoderButterflyAVX2<Encoding::kACTG, Layout::kLSB>>();
 }
 TEST(SeqPackSimd, Avx2ActgMsb)
 {
-    check_simd_pack<WordEncoderButterflyAVX2<Encoding::kACTG, Layout::kMSB>>(expected_actg);
+    check_simd_pack<WordEncoderButterflyAVX2<Encoding::kACTG, Layout::kMSB>>();
 }
 TEST(SeqPackSimd, Avx2AcgtLsb)
 {
-    check_simd_pack<WordEncoderButterflyAVX2<Encoding::kACGT, Layout::kLSB>>(expected_acgt);
+    check_simd_pack<WordEncoderButterflyAVX2<Encoding::kACGT, Layout::kLSB>>();
 }
 TEST(SeqPackSimd, Avx2AcgtMsb)
 {
-    check_simd_pack<WordEncoderButterflyAVX2<Encoding::kACGT, Layout::kMSB>>(expected_acgt);
+    check_simd_pack<WordEncoderButterflyAVX2<Encoding::kACGT, Layout::kMSB>>();
 }
 
 #endif // FISK_HAS_AVX2
@@ -332,19 +318,19 @@ TEST(SeqPackSimd, Avx2AcgtMsb)
 
 TEST(SeqPackSimd, Avx512ActgLsb)
 {
-    check_simd_pack<WordEncoderButterflyAVX512<Encoding::kACTG, Layout::kLSB>>(expected_actg);
+    check_simd_pack<WordEncoderButterflyAVX512<Encoding::kACTG, Layout::kLSB>>();
 }
 TEST(SeqPackSimd, Avx512ActgMsb)
 {
-    check_simd_pack<WordEncoderButterflyAVX512<Encoding::kACTG, Layout::kMSB>>(expected_actg);
+    check_simd_pack<WordEncoderButterflyAVX512<Encoding::kACTG, Layout::kMSB>>();
 }
 TEST(SeqPackSimd, Avx512AcgtLsb)
 {
-    check_simd_pack<WordEncoderButterflyAVX512<Encoding::kACGT, Layout::kLSB>>(expected_acgt);
+    check_simd_pack<WordEncoderButterflyAVX512<Encoding::kACGT, Layout::kLSB>>();
 }
 TEST(SeqPackSimd, Avx512AcgtMsb)
 {
-    check_simd_pack<WordEncoderButterflyAVX512<Encoding::kACGT, Layout::kMSB>>(expected_acgt);
+    check_simd_pack<WordEncoderButterflyAVX512<Encoding::kACGT, Layout::kMSB>>();
 }
 
 #endif // FISK_HAS_AVX512
@@ -353,19 +339,19 @@ TEST(SeqPackSimd, Avx512AcgtMsb)
 
 TEST(SeqPackSimd, NeonActgLsb)
 {
-    check_simd_pack<WordEncoderButterflyNEON<Encoding::kACTG, Layout::kLSB>>(expected_actg);
+    check_simd_pack<WordEncoderButterflyNEON<Encoding::kACTG, Layout::kLSB>>();
 }
 TEST(SeqPackSimd, NeonActgMsb)
 {
-    check_simd_pack<WordEncoderButterflyNEON<Encoding::kACTG, Layout::kMSB>>(expected_actg);
+    check_simd_pack<WordEncoderButterflyNEON<Encoding::kACTG, Layout::kMSB>>();
 }
 TEST(SeqPackSimd, NeonAcgtLsb)
 {
-    check_simd_pack<WordEncoderButterflyNEON<Encoding::kACGT, Layout::kLSB>>(expected_acgt);
+    check_simd_pack<WordEncoderButterflyNEON<Encoding::kACGT, Layout::kLSB>>();
 }
 TEST(SeqPackSimd, NeonAcgtMsb)
 {
-    check_simd_pack<WordEncoderButterflyNEON<Encoding::kACGT, Layout::kMSB>>(expected_acgt);
+    check_simd_pack<WordEncoderButterflyNEON<Encoding::kACGT, Layout::kMSB>>();
 }
 
 #endif // FISK_HAS_NEON

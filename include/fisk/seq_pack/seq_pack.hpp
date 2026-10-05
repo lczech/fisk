@@ -19,7 +19,8 @@ namespace fisk {
 // into their packed 2-bit codes, and is usable directly as the `Encoder` argument to
 // pack_sequence() below. They are the word-at-a-time counterparts of the per-character encoders in
 // core/char_encoder.hpp, and assume valid input: unlike those, they have no way to report an
-// invalid character. Both are templated on the two conventions they produce, and expose them as
+// invalid character. Such a character is packed as an arbitrary code at its own position, leaving
+// every other position unaffected. Both are templated on the two conventions they produce, and expose them as
 // `encoding` and `layout` static members right next to the logic that implements them, so that the
 // tags and the bits cannot silently drift apart. What distinguishes the two is only how the
 // selected bits are gathered: hardware PEXT, or the portable software butterfly network.

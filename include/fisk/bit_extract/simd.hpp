@@ -337,17 +337,19 @@ struct BitExtractKernelButterflyAVX512
     simd_vector bit_extract( simd_vector x ) const noexcept
     {
         x = _mm512_and_si512(x, mask_simd);
-        auto step_ = [&](unsigned int s, __m512i mvv)
+        // S is a template parameter: GCC's -O0 macro form of _mm512_srli_epi64 warns on a runtime
+        // unsigned shift (-Wsign-conversion).
+        auto step_ = [&]<unsigned S>(__m512i mvv)
         {
             __m512i t = _mm512_and_si512(x, mvv);
-            x = _mm512_or_si512(_mm512_xor_si512(x, t), _mm512_srli_epi64(t, s));
+            x = _mm512_or_si512(_mm512_xor_si512(x, t), _mm512_srli_epi64(t, S));
         };
-        step_(  1, sieves_simd[0] );
-        step_(  2, sieves_simd[1] );
-        step_(  4, sieves_simd[2] );
-        step_(  8, sieves_simd[3] );
-        step_( 16, sieves_simd[4] );
-        step_( 32, sieves_simd[5] );
+        step_.operator()<  1 >( sieves_simd[ 0 ]);
+        step_.operator()<  2 >( sieves_simd[ 1 ]);
+        step_.operator()<  4 >( sieves_simd[ 2 ]);
+        step_.operator()<  8 >( sieves_simd[ 3 ]);
+        step_.operator()< 16 >( sieves_simd[ 4 ]);
+        step_.operator()< 32 >( sieves_simd[ 5 ]);
         return x;
     }
 

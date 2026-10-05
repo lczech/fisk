@@ -295,17 +295,17 @@ inline void for_each_kmer_simd_scalar(
         std::uint64_t x;
         std::memcpy(&x, p, sizeof(x)); // unaligned-safe; optimized to one load
 
-        constexpr std::uint64_t lo = 0x0101010101010101ull;
-        constexpr std::uint64_t hi = 0x8080808080808080ull;
-
         // ASCII uppercase: clears the lowercase bit, so a/c/g/t become A/C/G/T.
         x &= 0xDFDFDFDFDFDFDFDFull;
 
         // Compare against 'A', 'C', 'G', 'T' in parallel,
         // getting 0x80 in each byte where there's a match.
+        // Exact zero-byte test, as no carry crosses a byte (all addends < 0x80). The common
+        // `(z - lo) & ~z & hi` is not exact: a zero byte's borrow also flags a following 0x01.
         auto byte_eq = [](std::uint64_t v, std::uint64_t c) noexcept {
-            std::uint64_t z = v ^ c;              // zero byte where equal
-            return (z - lo) & ~z & hi;            // high bit set in equal bytes
+            constexpr std::uint64_t low7 = 0x7F7F7F7F7F7F7F7Full;
+            std::uint64_t const z = v ^ c;                  // zero byte where equal
+            return ~(((z & low7) + low7) | z | low7);       // high bit set in equal bytes
         };
         std::uint64_t m =
             byte_eq(x, 0x4141414141414141ull) |   // A

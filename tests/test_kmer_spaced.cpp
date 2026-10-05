@@ -13,6 +13,8 @@
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
 #include "fisk/kmer_spaced/selector.hpp"
 #include "fisk/kmer_spaced/simd.hpp"
+#include "corpus.hpp"
+#include "oracle.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -28,33 +30,11 @@ struct SpacedEvent
     std::uint64_t value;
 };
 
-static int code_acgt(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'G': case 'g': return 2;
-        case 'T': case 't': return 3;
-        default:            return -1;
-    }
-}
-
-static int code_actg(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'T': case 't': return 2;
-        case 'G': case 'g': return 3;
-        default:            return -1;
-    }
-}
-
 // Builds the public spaced-k-mer contract from characters, without any rolling word or bit-extract
 // helper: each output event is (full-span start position, mask index, packed selected bases).
-template <typename CodeFn>
+template <Encoding E>
 static std::vector<SpacedEvent> oracle_events(
-    std::string const& seq, std::vector<std::string> const& masks, CodeFn&& code_of
+    std::string const& seq, std::vector<std::string> const& masks
 ) {
     std::vector<SpacedEvent> out;
     if (masks.empty() || seq.size() < masks.front().size()) {
@@ -70,12 +50,12 @@ static std::vector<SpacedEvent> oracle_events(
                 if (masks[mask_idx][i] != '1') {
                     continue;
                 }
-                int const code = code_of(seq[pos + i]);
-                if (code < 0) {
+                std::uint8_t const code = oracle_code<E>(seq[pos + i]);
+                if (code >= kInvalidNucleotide) {
                     valid = false;
                     break;
                 }
-                value = (value << 2) | static_cast<std::uint64_t>(code);
+                value = (value << 2) | code;
             }
             if (valid) {
                 out.push_back({pos, mask_idx, value});
@@ -144,41 +124,48 @@ static void check_by_mask_events(
     }
 }
 
-static std::string patterned_sequence(std::size_t length)
-{
-    static char const bases[] = "ACGTacgt";
-    std::string seq;
-    seq.reserve(length);
-    for (std::size_t i = 0; i < length; ++i) {
-        seq += bases[i % 8];
-    }
-    return seq;
-}
-
+// Sequences around the span and the SIMD block width: empty, one short of a span, and a span plus
+// up to two blocks, with random content (rather than a periodic pattern, under which a k-mer taken
+// from the wrong window could still have the right value). Then invalid characters: hand-picked
+// ones at the start, around the end of the first window, and in runs, and random bytes from the
+// full range at two densities.
 static std::vector<std::string> sequence_corpus(std::size_t span_k, std::size_t lanes)
 {
+    Splitmix64 rng(1000 * span_k + lanes);
+    std::size_t marker_idx = 0;
+    auto marker = [&] { return kHandPickedInvalid[marker_idx++ % kHandPickedInvalid.size()]; };
+
     std::vector<std::string> sequences;
     sequences.push_back("");
     if (span_k > 1) {
-        sequences.push_back(patterned_sequence(span_k - 1));
+        sequences.push_back(random_sequence(rng, span_k - 1));
     }
     for (std::size_t extra = 0; extra <= 2 * lanes; ++extra) {
-        sequences.push_back(patterned_sequence(span_k + extra));
+        sequences.push_back(random_sequence(rng, span_k + extra));
     }
 
-    std::string invalid = patterned_sequence(span_k + 2 * lanes + 5);
-    invalid[0] = 'N';
+    std::string invalid = random_sequence(rng, span_k + 2 * lanes + 5);
+    invalid[0] = marker();
     if (span_k > 2) {
-        invalid[1] = 'N';
+        invalid[1] = marker();
     }
-    invalid[span_k - 1] = 'N';
-    invalid[span_k] = 'N';
+    invalid[span_k - 1] = marker();
+    invalid[span_k] = marker();
     sequences.push_back(invalid);
 
     // N at index 1 is skipped by 10101, while N at index 2 is kept and suppresses position 0.
-    sequences.push_back("ANCGTACGTACGT");
-    sequences.push_back("ACNGTACGTACGT");
-    sequences.push_back("ACGTNNNACGTACGT");
+    for (std::string seq : {"ANCGTACGTACGT", "ACNGTACGTACGT", "ACGTNNNACGTACGT"}) {
+        std::replace(seq.begin(), seq.end(), 'N', marker());
+        sequences.push_back(seq);
+    }
+
+    for (double const rate : {0.05, 0.2}) {
+        for (std::size_t i = 0; i < 4; ++i) {
+            std::string seq = random_sequence(rng, span_k + 3 * lanes + i);
+            inject_invalid(seq, rng, rate, all_invalid_bytes());
+            sequences.push_back(std::move(seq));
+        }
+    }
     return sequences;
 }
 
@@ -233,28 +220,30 @@ static std::string mask_for_span(std::size_t span_k)
     return mask;
 }
 
+// Runs `extract`, called as `extract(callback)`, once with a `callback(pos, mask_idx, value)`, and,
+// if SingleMask, once more with the `callback(pos, value)` shorthand, which is only accepted for a
+// single mask known at compile time (see invoke_spaced_kmer_callback()). Returns the events of
+// each run, to be checked against the same expected events.
+template <bool SingleMask, typename Extract>
+static std::vector<std::vector<SpacedEvent>> collect_callback_forms(Extract&& extract)
+{
+    std::vector<std::vector<SpacedEvent>> runs(1);
+    extract([&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
+        runs[0].push_back({pos, mask_idx, value});
+    });
+    if constexpr (SingleMask) {
+        runs.emplace_back();
+        extract([&](std::size_t pos, std::uint64_t value) { runs[1].push_back({pos, 0, value}); });
+    }
+    return runs;
+}
+
 // =================================================================================================
 //     Scalar Extraction
 // =================================================================================================
 
-template <typename Mask, typename Enc, typename BitExtract>
-static std::vector<SpacedEvent> collect_scalar(
-    std::string const& seq,
-    std::size_t span_k,
-    std::vector<Mask> const& masks,
-    Enc const& enc,
-    BitExtract&& bit_extract
-) {
-    std::vector<SpacedEvent> out;
-    for_each_spaced_kmer(
-        seq, span_k, masks, enc, std::forward<BitExtract>(bit_extract),
-        [&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-            out.push_back({pos, mask_idx, value});
-        }
-    );
-    return out;
-}
-
+// Checks one scalar bit extractor for every sequence in the corpus, through the overload for a
+// vector of masks, and, for a single mask, also through the single-mask overload.
 template <typename Enc, typename Mask, typename BitExtract>
 static void check_scalar_variant(
     std::vector<std::string> const& mask_strings,
@@ -264,13 +253,22 @@ static void check_scalar_variant(
 ) {
     std::size_t const span_k = mask_strings.front().size();
     for (auto const& seq : sequence_corpus(span_k, 8)) {
-        check_events(
-            collect_scalar(seq, span_k, masks, enc, bit_extract),
-            oracle_events(
-                seq, mask_strings,
-                [](char c) { return Enc::encoding == Encoding::kACGT ? code_acgt(c) : code_actg(c); }
-            )
-        );
+        auto const expected = oracle_events<Enc::encoding>(seq, mask_strings);
+        auto const runs = collect_callback_forms<false>([&](auto const& callback) {
+            for_each_spaced_kmer(seq, span_k, masks, enc, bit_extract, callback);
+        });
+        for (auto const& got : runs) {
+            check_events(got, expected);
+        }
+
+        if (masks.size() == 1) {
+            auto const single_runs = collect_callback_forms<true>([&](auto const& callback) {
+                for_each_spaced_kmer(seq, span_k, masks.front(), enc, bit_extract, callback);
+            });
+            for (auto const& got : single_runs) {
+                check_events(got, expected);
+            }
+        }
     }
 }
 
@@ -342,34 +340,6 @@ static void check_scalar_all_spans(Enc const& enc)
     }
 }
 
-static void check_scalar_callback_forms()
-{
-    std::string const seq = "ACGTNACGTACGT";
-    std::string const mask_string = "10101";
-    BitExtractMask const mask(prepare_spaced_kmer_bit_extract_mask(mask_string));
-
-    std::vector<SpacedEvent> full;
-    for_each_spaced_kmer(
-        seq, mask_string.size(), mask, CharEncoderTable<Encoding::kACGT>{},
-        [](std::uint64_t x, BitExtractMask const& m) { return bit_extract_bitloop(x, m); },
-        [&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-            full.push_back({pos, mask_idx, value});
-        }
-    );
-
-    std::vector<SpacedEvent> shorthand;
-    for_each_spaced_kmer(
-        seq, mask_string.size(), mask, CharEncoderTable<Encoding::kACGT>{},
-        [](std::uint64_t x, BitExtractMask const& m) { return bit_extract_bitloop(x, m); },
-        [&](std::size_t pos, std::uint64_t value) {
-            shorthand.push_back({pos, 0, value});
-        }
-    );
-
-    check_events(full, shorthand);
-    check_events(full, oracle_events(seq, {mask_string}, code_acgt));
-}
-
 // =================================================================================================
 //     SIMD Extraction
 // =================================================================================================
@@ -384,40 +354,9 @@ static std::array<Kernel, N> make_kernels(std::array<std::string, N> const& mask
     return kernels;
 }
 
-template <typename Kernel, std::size_t N, typename Enc>
-static std::vector<SpacedEvent> collect_simd_by_position(
-    std::string const& seq,
-    std::size_t span_k,
-    std::array<Kernel, N> const& kernels,
-    Enc const& enc
-) {
-    std::vector<SpacedEvent> out;
-    for_each_spaced_kmer_simd_by_position(
-        seq, span_k, kernels, enc,
-        [&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-            out.push_back({pos, mask_idx, value});
-        }
-    );
-    return out;
-}
-
-template <typename Kernel, std::size_t N, typename Enc>
-static std::vector<SpacedEvent> collect_simd_by_mask(
-    std::string const& seq,
-    std::size_t span_k,
-    std::array<Kernel, N> const& kernels,
-    Enc const& enc
-) {
-    std::vector<SpacedEvent> out;
-    for_each_spaced_kmer_simd_by_mask(
-        seq, span_k, kernels, enc,
-        [&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-            out.push_back({pos, mask_idx, value});
-        }
-    );
-    return out;
-}
-
+// Checks both SIMD emission orders for one set of masks, for every sequence in the corpus: exact
+// order for by_position, and per-mask order for by_mask (see check_by_mask_events()). For a single
+// mask, also through the single-kernel overloads.
 template <typename Kernel, std::size_t N, typename Enc>
 static void check_simd_set(std::array<std::string, N> const& mask_array, Enc const& enc)
 {
@@ -426,72 +365,36 @@ static void check_simd_set(std::array<std::string, N> const& mask_array, Enc con
     std::size_t const span_k = masks.front().size();
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
-        auto const expected = oracle_events(
-            seq, masks,
-            [](char c) { return Enc::encoding == Encoding::kACGT ? code_acgt(c) : code_actg(c); }
-        );
-        check_events(collect_simd_by_position(seq, span_k, kernels, enc), expected);
-        check_by_mask_events(collect_simd_by_mask(seq, span_k, kernels, enc), expected, N);
+        auto const expected = oracle_events<Enc::encoding>(seq, masks);
+
+        auto const by_position = collect_callback_forms<N == 1>([&](auto const& callback) {
+            for_each_spaced_kmer_simd_by_position(seq, span_k, kernels, enc, callback);
+        });
+        for (auto const& got : by_position) {
+            check_events(got, expected);
+        }
+        auto const by_mask = collect_callback_forms<N == 1>([&](auto const& callback) {
+            for_each_spaced_kmer_simd_by_mask(seq, span_k, kernels, enc, callback);
+        });
+        for (auto const& got : by_mask) {
+            check_by_mask_events(got, expected, N);
+        }
+
+        if constexpr (N == 1) {
+            auto const single_by_position = collect_callback_forms<true>([&](auto const& callback) {
+                for_each_spaced_kmer_simd_by_position(seq, span_k, kernels[0], enc, callback);
+            });
+            for (auto const& got : single_by_position) {
+                check_events(got, expected);
+            }
+            auto const single_by_mask = collect_callback_forms<true>([&](auto const& callback) {
+                for_each_spaced_kmer_simd_by_mask(seq, span_k, kernels[0], enc, callback);
+            });
+            for (auto const& got : single_by_mask) {
+                check_by_mask_events(got, expected, N);
+            }
+        }
     }
-}
-
-template <typename Kernel>
-static void check_simd_callback_forms()
-{
-    std::string const seq = "ACGTNACGTACGT";
-    std::string const mask_string = "10101";
-    std::size_t const span_k = mask_string.size();
-    Kernel const kernel(prepare_spaced_kmer_bit_extract_mask(mask_string));
-    std::array<Kernel, 1> const kernels{{kernel}};
-
-    std::vector<SpacedEvent> expected = oracle_events(seq, {mask_string}, code_acgt);
-    std::vector<SpacedEvent> got;
-
-
-    for_each_spaced_kmer_simd_by_mask(
-        seq, span_k, kernel, CharEncoderTable<Encoding::kACGT>{},
-        [&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-            got.push_back({pos, mask_idx, value});
-        }
-    );
-    check_events(got, expected);
-
-    got.clear();
-    for_each_spaced_kmer_simd_by_position(
-        seq, span_k, kernel, CharEncoderTable<Encoding::kACGT>{},
-        [&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-            got.push_back({pos, mask_idx, value});
-        }
-    );
-    check_events(got, expected);
-
-    got.clear();
-    for_each_spaced_kmer_simd_by_mask(
-        seq, span_k, kernel, CharEncoderTable<Encoding::kACGT>{},
-        [&](std::size_t pos, std::uint64_t value) { got.push_back({pos, 0, value}); }
-    );
-    check_events(got, expected);
-
-    got.clear();
-    for_each_spaced_kmer_simd_by_mask(
-        seq, span_k, kernels, CharEncoderTable<Encoding::kACGT>{},
-        [&](std::size_t pos, std::uint64_t value) { got.push_back({pos, 0, value}); }
-    );
-    check_events(got, expected);
-
-    got.clear();
-    for_each_spaced_kmer_simd_by_position(
-        seq, span_k, kernel, CharEncoderTable<Encoding::kACGT>{},
-        [&](std::size_t pos, std::uint64_t value) { got.push_back({pos, 0, value}); }
-    );
-    check_events(got, expected);
-
-    got.clear();
-    for_each_spaced_kmer_simd_by_position(
-        seq, span_k, kernels, CharEncoderTable<Encoding::kACGT>{},
-        [&](std::size_t pos, std::uint64_t value) { got.push_back({pos, 0, value}); }
-    );
-    check_events(got, expected);
 }
 
 template <typename Kernel>
@@ -504,7 +407,6 @@ static void check_simd_kernel()
         );
     }
     check_simd_set<Kernel>(generated_masks<3>(), CharEncoderTable<Encoding::kACGT>{});
-    check_simd_callback_forms<Kernel>();
 }
 
 template <typename Kernel>
@@ -514,7 +416,7 @@ static void check_simd_dispatcher(std::vector<std::string> const& masks)
     std::size_t const span_k = masks.front().size();
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
-        auto const expected = oracle_events(seq, masks, code_acgt);
+        auto const expected = oracle_events<Encoding::kACGT>(seq, masks);
         std::vector<SpacedEvent> by_position;
         dispatcher.run([&](auto const& kernels) {
             for_each_spaced_kmer_simd_by_position(
@@ -617,7 +519,6 @@ TEST(KmerSpaced, MaskValidationAndFormatting)
 
 TEST(KmerSpaced, ScalarAcgt)
 {
-    check_scalar_callback_forms();
     check_scalar_all_spans(CharEncoderTable<Encoding::kACGT>{});
     check_all_scalar_variants(
         {"1"},
@@ -656,38 +557,26 @@ TEST(KmerSpaced, InvalidSpan)
     auto const extract = [](std::uint64_t x, BitExtractMask const& m) {
         return bit_extract_bitloop(x, m);
     };
-
-    EXPECT_THROW(
+    check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         for_each_spaced_kmer(
-            "A", 0, mask, CharEncoderTable<Encoding::kACGT>{}, extract,
+            seq, k, mask, CharEncoderTable<Encoding::kACGT>{}, extract,
             [](std::size_t, std::uint64_t) {}
-        ),
-        std::invalid_argument
-    );
-    EXPECT_THROW(
-        for_each_spaced_kmer(
-            "A", 33, mask, CharEncoderTable<Encoding::kACGT>{}, extract,
-            [](std::size_t, std::uint64_t) {}
-        ),
-        std::invalid_argument
-    );
+        );
+    });
 
-    using Kernel = BitExtractKernelButterflyScalar;
-    Kernel const kernel(mask.mask);
-    EXPECT_THROW(
+    BitExtractKernelButterflyScalar const kernel(mask.mask);
+    check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         for_each_spaced_kmer_simd_by_position(
-            "A", 0, kernel, CharEncoderTable<Encoding::kACGT>{},
+            seq, k, kernel, CharEncoderTable<Encoding::kACGT>{},
             [](std::size_t, std::uint64_t) {}
-        ),
-        std::invalid_argument
-    );
-    EXPECT_THROW(
+        );
+    });
+    check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         for_each_spaced_kmer_simd_by_mask(
-            "A", 33, kernel, CharEncoderTable<Encoding::kACGT>{},
+            seq, k, kernel, CharEncoderTable<Encoding::kACGT>{},
             [](std::size_t, std::uint64_t) {}
-        ),
-        std::invalid_argument
-    );
+        );
+    });
 }
 
 // =================================================================================================

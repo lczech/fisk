@@ -25,6 +25,7 @@
 // helper function it calls.
 
 #include <cstddef>
+#include <exception>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -149,7 +150,15 @@ inline int run_all_tests()
     for (auto const& t : tests) {
         std::cout << "[ RUN      ] " << t.suite_name << "." << t.test_name << "\n";
         detail::current_test_failed() = false;
-        t.run();
+        try {
+            t.run();
+        } catch (std::exception const& error) {
+            detail::record_failure(
+                __FILE__, __LINE__, "Unhandled std::exception: " + std::string(error.what())
+            );
+        } catch (...) {
+            detail::record_failure(__FILE__, __LINE__, "Unhandled non-standard exception");
+        }
         if (detail::current_test_failed()) {
             std::cout << "[  FAILED  ] " << t.suite_name << "." << t.test_name << "\n";
             failed_names.push_back(std::string(t.suite_name) + "." + t.test_name);

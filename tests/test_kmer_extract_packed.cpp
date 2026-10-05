@@ -1,7 +1,5 @@
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <vector>
 
@@ -9,167 +7,61 @@
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/packed.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
+#include "corpus.hpp"
+#include "oracle.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
 
 // =================================================================================================
-//     Helpers and Oracle
+//     Helpers
 // =================================================================================================
 
-static int code_acgt(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'G': case 'g': return 2;
-        case 'T': case 't': return 3;
-        default:            return -1;
-    }
-}
-
-// Ground truth, MSB/left-rolling convention -- matches for_each_kmer_rolling() in kmer_extract.hpp.
-static std::uint64_t oracle_msb(std::string const& seq, std::size_t start, std::size_t k)
-{
-    std::uint64_t v = 0;
-    for (std::size_t i = 0; i < k; ++i) {
-        v = (v << 2) | static_cast<std::uint64_t>(code_acgt(seq[start + i]));
-    }
-    return v;
-}
-
-// Ground truth, LSB/right-rolling convention -- earliest base in the low bits instead.
-static std::uint64_t oracle_lsb(std::string const& seq, std::size_t start, std::size_t k)
-{
-    std::uint64_t v = 0;
-    for (std::size_t i = 0; i < k; ++i) {
-        v |= static_cast<std::uint64_t>(code_acgt(seq[start + i])) << (2 * i);
-    }
-    return v;
-}
-
-// Same as above, for the ACTG encoding.
-static int code_actg(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'T': case 't': return 2;
-        case 'G': case 'g': return 3;
-        default:            return -1;
-    }
-}
-
-static std::uint64_t oracle_msb_actg(std::string const& seq, std::size_t start, std::size_t k)
-{
-    std::uint64_t v = 0;
-    for (std::size_t i = 0; i < k; ++i) {
-        v = (v << 2) | static_cast<std::uint64_t>(code_actg(seq[start + i]));
-    }
-    return v;
-}
-
-static std::uint64_t oracle_lsb_actg(std::string const& seq, std::size_t start, std::size_t k)
-{
-    std::uint64_t v = 0;
-    for (std::size_t i = 0; i < k; ++i) {
-        v |= static_cast<std::uint64_t>(code_actg(seq[start + i])) << (2 * i);
-    }
-    return v;
-}
+// The oracle (oracle.hpp) decodes directly from the ASCII input, independent of the packed
+// extractors under test; the packing step itself is checked in test_seq_pack.cpp.
 
 // Sequence lengths 0..512, each with random per-position content.
 static std::vector<std::string> const& test_sequences()
 {
     static std::vector<std::string> const seqs = [] {
         std::vector<std::string> out;
-        char const bases[] = "ACGTacgt";
         Splitmix64 rng(5005);
-
-        auto random_seq = [&](std::size_t len) {
-            std::string s;
-            s.reserve(len);
-            for (std::size_t k = 0; k < len; ++k) {
-                s += bases[rng.get_uint64() % 8];
-            }
-            return s;
-        };
-
         for (std::size_t len = 0; len <= 512; ++len) {
-            out.push_back(random_seq(len));
+            out.push_back(random_sequence(rng, len));
         }
         return out;
     }();
     return seqs;
 }
 
-// k values spanning both the narrow (k<=29) and wide (k in [30,32]) internal specializations.
-static std::vector<std::size_t> const& test_ks()
+// Checks one packed extractor, called as `extract(packed, k, callback)`, under the conventions of
+// E and L: the complete ordered output, positions and values, in both callback forms, for every k
+// and every test sequence, plus its invalid-k contract.
+template <Encoding E, Layout L, typename Extract>
+static void check_packed_variant(Extract const& extract)
 {
-    static std::vector<std::size_t> const ks = {
-        1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 27, 28, 29, 30, 31, 32
-    };
-    return ks;
-}
-
-// Checks `got` (one extractor's emitted k-mers for `seq`/`k`) against `oracle`.
-template <typename OracleFn>
-static void check_kmers(
-    std::vector<std::uint64_t> const& got, std::string const& seq, std::size_t k, OracleFn&& oracle
-) {
-    std::vector<std::uint64_t> exp;
-    if (seq.size() >= k) {
-        for (std::size_t e = k - 1; e < seq.size(); ++e) {
-            exp.push_back(oracle(seq, e - k + 1, k));
-        }
-    }
-
-    EXPECT_EQ(got.size(), exp.size());
-    std::size_t const n = std::min(got.size(), exp.size());
-    for (std::size_t i = 0; i < n; ++i) {
-        EXPECT_EQ(got[i], exp[i]);
-    }
-}
-
-// Reuse the base-by-base oracle for every variant, covering all k and every short length.
-template <typename Extractor, typename Encoder, typename OracleFn>
-static void check_aligned_variant(
-    Extractor extract, Encoder encoder, OracleFn oracle, std::size_t max_k
-) {
-    auto check_sequence = [&](std::string const& seq) {
-        auto const packed = pack_sequence(seq, encoder);
-        for (std::size_t k = 1; k <= max_k; ++k) {
-            std::vector<std::uint64_t> got;
-            extract(packed, k, [&](kmer_type_of<decltype(packed)> kmer) {
-                got.push_back(kmer_value(kmer));
+    WordEncoderButterfly<E, L> const encoder;
+    sweep_packed_extractors(
+        encoder, test_sequences(), 32,
+        [&](std::string const&, auto const& packed, std::size_t k, auto const& expected) {
+            check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+                extract(packed, k, callback);
             });
-            check_kmers(got, seq, k, oracle);
         }
-    };
-    for (auto const& seq : test_sequences()) {
-        check_sequence(seq);
-    }
-
-    // All-zero/all-one windows and isolated nonzero bases expose lost high bits and bad masks.
-    check_sequence(std::string(129, 'A'));
-    check_sequence(std::string(129, 'T'));
-    for (std::size_t p = 0; p < 40; ++p) {
-        std::string seq(40, 'A');
-        seq[p] = 'T';
-        check_sequence(seq);
-    }
-
-    // Reject invalid k before arithmetic, even for empty input or a value too large for unsigned.
-    for (std::size_t length : {std::size_t{0}, std::size_t{129}}) {
-        auto const packed = pack_sequence(std::string(length, 'T'), encoder);
-        for (std::size_t k : {std::size_t{0}, max_k + 1, std::numeric_limits<std::size_t>::max()}) {
-            EXPECT_THROW(
-                extract(packed, k, [](kmer_type_of<decltype(packed)>) {}),
-                std::invalid_argument
-            );
-        }
-    }
+    );
+    check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
+        extract(pack_sequence(seq, encoder), k, [](Kmer<E, L>) {});
+    });
 }
+
+// The extractors under test, each wrapped once so that it can be handed to the checks above under
+// every convention.
+static constexpr auto packed_rolling = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_rolling(seq, k, func);
+};
+static constexpr auto packed_aligned = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_aligned(seq, k, func);
+};
 
 // =================================================================================================
 //     for_each_kmer_packed_rolling()
@@ -177,114 +69,44 @@ static void check_aligned_variant(
 
 TEST(KmerExtractPacked, RollingMsb)
 {
-    WordEncoderButterfly<Encoding::kACGT, Layout::kMSB> ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_rolling(
-                packed, k, [&](KmerAcgtMsb kmer) { got.push_back(kmer_value(kmer)); }
-            );
-            check_kmers(got, seq, k, oracle_msb);
-        }
-    }
+    check_packed_variant<Encoding::kACGT, Layout::kMSB>(packed_rolling);
 }
 
 TEST(KmerExtractPacked, RollingLsb)
 {
-    WordEncoderButterfly<Encoding::kACGT, Layout::kLSB> ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_rolling(
-                packed, k, [&](KmerAcgtLsb kmer) { got.push_back(kmer_value(kmer)); }
-            );
-            check_kmers(got, seq, k, oracle_lsb);
-        }
-    }
+    check_packed_variant<Encoding::kACGT, Layout::kLSB>(packed_rolling);
 }
 
 TEST(KmerExtractPacked, RollingActgMsb)
 {
-    WordEncoderButterfly<Encoding::kACTG, Layout::kMSB> ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_rolling(
-                packed, k, [&](KmerActgMsb kmer) { got.push_back(kmer_value(kmer)); }
-            );
-            check_kmers(got, seq, k, oracle_msb_actg);
-        }
-    }
+    check_packed_variant<Encoding::kACTG, Layout::kMSB>(packed_rolling);
 }
 
 TEST(KmerExtractPacked, RollingActgLsb)
 {
-    WordEncoderButterfly<Encoding::kACTG, Layout::kLSB> ex;
-    for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, ex);
-        for (auto const k : test_ks()) {
-            std::vector<std::uint64_t> got;
-            for_each_kmer_packed_rolling(
-                packed, k, [&](KmerActgLsb kmer) { got.push_back(kmer_value(kmer)); }
-            );
-            check_kmers(got, seq, k, oracle_lsb_actg);
-        }
-    }
+    check_packed_variant<Encoding::kACTG, Layout::kLSB>(packed_rolling);
 }
 
 // =================================================================================================
-//     Error Contract
+//     for_each_kmer_packed_aligned()
 // =================================================================================================
-
-TEST(KmerExtractPacked, InvalidKThrows)
-{
-    PackedSequence<Encoding::kACGT, Layout::kMSB> empty;
-    EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 0, [](KmerAcgtMsb) {}));
-    EXPECT_ANY_THROW(for_each_kmer_packed_rolling(empty, 33, [](KmerAcgtMsb) {}));
-}
-
-// for_each_kmer_packed_aligned(): compare the complete ordered output, not merely a benchmark sum,
-// and cover its own invalid-k contract too (see check_aligned_variant() above).
 
 TEST(KmerExtractPacked, AlignedMsb)
 {
-    check_aligned_variant(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_aligned(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
-    );
+    check_packed_variant<Encoding::kACGT, Layout::kMSB>(packed_aligned);
 }
 
 TEST(KmerExtractPacked, AlignedLsb)
 {
-    check_aligned_variant(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_aligned(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
-    );
+    check_packed_variant<Encoding::kACGT, Layout::kLSB>(packed_aligned);
 }
 
 TEST(KmerExtractPacked, AlignedActgMsb)
 {
-    check_aligned_variant(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_aligned(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACTG, Layout::kMSB>{}, oracle_msb_actg, 32
-    );
+    check_packed_variant<Encoding::kACTG, Layout::kMSB>(packed_aligned);
 }
 
 TEST(KmerExtractPacked, AlignedActgLsb)
 {
-    check_aligned_variant(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_aligned(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>{}, oracle_lsb_actg, 32
-    );
+    check_packed_variant<Encoding::kACTG, Layout::kLSB>(packed_aligned);
 }

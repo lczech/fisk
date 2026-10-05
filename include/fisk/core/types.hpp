@@ -70,6 +70,7 @@ inline constexpr bool dependent_false_v = false;
  * @brief A nucleotide sequence, densely packed at 2 bits per base.
  *
  * `data` holds exactly `ceil(length / 4)` bytes of 4 bases each, with no trailing padding.
+ * When `length` is not a multiple of 4, the unused bits of the last byte are zero.
  * Readers are responsible for bounds checking when reading from `data`.
  *
  * `E` states which base each 2-bit code stands for (see Encoding), and `L` how the 4 bases are

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <unordered_set>
@@ -11,6 +12,8 @@
 #include "fisk/core/random.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
+#include "corpus.hpp"
+#include "oracle.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -19,60 +22,16 @@ using namespace fisk;
 //     Helpers and Oracle
 // =================================================================================================
 
-// Ground truth built from nucleotide strings, deliberately independent of core/kmer.hpp: the
-// conventions are re-implemented here as plain per-character rules, so that a mistake in the
-// bit tricks under test cannot cancel itself out against the reference. Both convention chains
-// end in a static_assert, for the same reason the ones in core/kmer.hpp do: a third Encoding or
-// Layout must break the oracle loudly rather than be silently treated as one of the existing two.
+// Ground truth comes from oracle.hpp, built from nucleotide strings and deliberately independent
+// of core/kmer.hpp, so that a mistake in the bit tricks under test cannot cancel itself out
+// against the reference.
 
-template <Encoding E>
-static std::uint64_t code_of(char c)
-{
-    if constexpr (E == Encoding::kACGT) {
-        switch (c) {
-            case 'A': return 0;
-            case 'C': return 1;
-            case 'G': return 2;
-            case 'T': return 3;
-        }
-    } else if constexpr (E == Encoding::kACTG) {
-        switch (c) {
-            case 'A': return 0;
-            case 'C': return 1;
-            case 'T': return 2;
-            case 'G': return 3;
-        }
-    } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in the test oracle's code_of()");
-    }
-    return 0;
-}
-
-// Encode a nucleotide string into a raw word, base by base, honoring both conventions.
-template <Encoding E, Layout L>
-static std::uint64_t encode_oracle(std::string const& seq)
-{
-    std::uint64_t value = 0;
-    for (std::size_t i = 0; i < seq.size(); ++i) {
-        std::size_t shift = 0;
-        if constexpr (L == Layout::kMSB) {
-            shift = 2 * (seq.size() - 1 - i);
-        } else if constexpr (L == Layout::kLSB) {
-            shift = 2 * i;
-        } else {
-            static_assert(dependent_false_v<L>, "Unhandled Layout in the test oracle");
-        }
-        value |= code_of<E>(seq[i]) << shift;
-    }
-    return value;
-}
-
-// Build the k-mer for a string under the conventions of K, via the oracle rather than via
-// any of the library's own encoders.
+// Build the k-mer for a string of nucleotides under the conventions of K, via the oracle rather
+// than via any of the library's own encoders.
 template <typename K>
 static K oracle_kmer(std::string const& seq)
 {
-    return K{encode_oracle<K::encoding, K::layout>(seq)};
+    return K{oracle_encode<K::encoding, K::layout>(seq).value()};
 }
 
 static char complement_char(char c)
@@ -108,18 +67,11 @@ static std::string reverse_complement_string(std::string const& s)
 // Random nucleotide strings of a given length, from a fixed seed so failures reproduce.
 static std::vector<std::string> random_seqs(std::size_t width, std::size_t count, std::uint64_t seed)
 {
-    static char const bases[4] = {'A', 'C', 'G', 'T'};
     Splitmix64 rng(seed);
-
     std::vector<std::string> out;
     out.reserve(count);
     for (std::size_t n = 0; n < count; ++n) {
-        std::string s;
-        s.resize(width);
-        for (std::size_t i = 0; i < width; ++i) {
-            s[i] = bases[rng.get_uint64() % 4];
-        }
-        out.push_back(s);
+        out.push_back(random_sequence(rng, width, "ACGT"));
     }
     return out;
 }
@@ -246,7 +198,10 @@ static void check_base_at()
         for (auto const& seq : random_seqs(width, 4, 424242 + width)) {
             auto const kmer = oracle_kmer<K>(seq);
             for (std::size_t i = 0; i < width; ++i) {
-                EXPECT_EQ(std::uint64_t{base_at(kmer, i, width)}, code_of<K::encoding>(seq[i]));
+                EXPECT_EQ(
+                    static_cast<int>(base_at(kmer, i, width)),
+                    static_cast<int>(oracle_code<K::encoding>(seq[i]))
+                );
             }
         }
     }
@@ -265,7 +220,7 @@ TEST(Kmer, ValueRoundTrip)
 {
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 131313 + width)) {
-            auto const raw = encode_oracle<Encoding::kACGT, Layout::kMSB>(seq);
+            auto const raw = oracle_encode<Encoding::kACGT, Layout::kMSB>(seq).value();
             auto const kmer = kmer_cast<Encoding::kACGT, Layout::kMSB>(raw, width);
             EXPECT_EQ(kmer_value(kmer), raw);
             EXPECT_EQ((kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer_value(kmer), width)), kmer);
@@ -639,6 +594,19 @@ TEST(Kmer, EncodeInvalidInput)
     EXPECT_ANY_THROW((void) kmer_encode("acgx"));
     EXPECT_EQ(kmer_decode(kmer_encode(std::string(32, 'T')), 32), std::string(32, 'T'));
 
+    // Every byte that is not a nucleotide throws, wherever it sits in the sequence, including '\0'
+    // and the bytes that are negative as a signed char.
+    for (std::size_t const width : {std::size_t{1}, std::size_t{5}, std::size_t{32}}) {
+        for (std::size_t const pos : {std::size_t{0}, width / 2, width - 1}) {
+            for (char const c : all_invalid_bytes()) {
+                std::string seq(width, 'A');
+                seq[pos] = c;
+                EXPECT_THROW((void) kmer_encode(seq), std::invalid_argument);
+                EXPECT_THROW((void) (kmer_encode<Encoding::kACTG>(seq)), std::invalid_argument);
+            }
+        }
+    }
+
     // Lower case is accepted, and normalized to upper case on the way back out.
     EXPECT_EQ(kmer_encode("acgt"), kmer_encode("ACGT"));
     EXPECT_EQ(kmer_decode(kmer_encode("acgt"), 4), "ACGT");
@@ -678,7 +646,7 @@ static void check_vector_cast(Vec vec, std::vector<std::string> const& seqs, std
 // Lane values for a test vector, as raw words under ACGT/MSB.
 static std::uint64_t lane_word(std::vector<std::string> const& seqs, std::size_t i)
 {
-    return encode_oracle<Encoding::kACGT, Layout::kMSB>(seqs[i]);
+    return oracle_encode<Encoding::kACGT, Layout::kMSB>(seqs[i]).value();
 }
 
 #if defined(FISK_HAS_SSE2)

@@ -1,98 +1,34 @@
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <vector>
 
 #include "fisk/core/random.hpp"
 #include "fisk/kmer_extract/packed_simd.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
+#include "corpus.hpp"
+#include "oracle.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
 
 // =================================================================================================
-//     Helpers and Oracle
+//     Helpers
 // =================================================================================================
 
-// Deliberately duplicated from test_kmer_extract_packed.cpp (same helpers, same shape) rather than
-// shared, since these are file-local `static` there. Might refactor later to avoid code duplication.
-
-static int code_acgt(char c)
-{
-    switch (c) {
-        case 'A': case 'a': return 0;
-        case 'C': case 'c': return 1;
-        case 'G': case 'g': return 2;
-        case 'T': case 't': return 3;
-        default:            return -1;
-    }
-}
-
-// Ground truth, MSB/left-rolling convention -- matches for_each_kmer_rolling() in kmer_extract.hpp.
-static std::uint64_t oracle_msb(std::string const& seq, std::size_t start, std::size_t k)
-{
-    std::uint64_t v = 0;
-    for (std::size_t i = 0; i < k; ++i) {
-        v = (v << 2) | static_cast<std::uint64_t>(code_acgt(seq[start + i]));
-    }
-    return v;
-}
-
-// Ground truth, LSB/right-rolling convention -- earliest base in the low bits instead.
-static std::uint64_t oracle_lsb(std::string const& seq, std::size_t start, std::size_t k)
-{
-    std::uint64_t v = 0;
-    for (std::size_t i = 0; i < k; ++i) {
-        v |= static_cast<std::uint64_t>(code_acgt(seq[start + i])) << (2 * i);
-    }
-    return v;
-}
-
-// Sequence lengths 0..512, each with random per-position content.
+// Same inputs as test_kmer_extract_packed.cpp: sequence lengths 0..512, each with random
+// per-position content, plus the edge cases of sweep_packed_extractors().
 static std::vector<std::string> const& test_sequences()
 {
     static std::vector<std::string> const seqs = [] {
         std::vector<std::string> out;
-        char const bases[] = "ACGTacgt";
         Splitmix64 rng(5005);
-
-        auto random_seq = [&](std::size_t len) {
-            std::string s;
-            s.reserve(len);
-            for (std::size_t k = 0; k < len; ++k) {
-                s += bases[rng.get_uint64() % 8];
-            }
-            return s;
-        };
-
         for (std::size_t len = 0; len <= 512; ++len) {
-            out.push_back(random_seq(len));
+            out.push_back(random_sequence(rng, len));
         }
         return out;
     }();
     return seqs;
-}
-
-// Checks `got` (one extractor's emitted k-mers for `seq`/`k`, already flattened and in order)
-// against `oracle`.
-template <typename OracleFn>
-static void check_kmers(
-    std::vector<std::uint64_t> const& got, std::string const& seq, std::size_t k, OracleFn&& oracle
-) {
-    std::vector<std::uint64_t> exp;
-    if (seq.size() >= k) {
-        for (std::size_t e = k - 1; e < seq.size(); ++e) {
-            exp.push_back(oracle(seq, e - k + 1, k));
-        }
-    }
-
-    EXPECT_EQ(got.size(), exp.size());
-    std::size_t const n = std::min(got.size(), exp.size());
-    for (std::size_t i = 0; i < n; ++i) {
-        EXPECT_EQ(got[i], exp[i]);
-    }
 }
 
 // =================================================================================================
@@ -131,67 +67,94 @@ static void store_kmer_vec(uint64x2_t v, std::uint64_t* buf)
 //     Generic SIMD Variant Check
 // =================================================================================================
 
-template <std::size_t Lanes, typename Extractor, typename Encoder, typename OracleFn>
-static void check_simd_variant(
-    Extractor extract, Encoder encoder, OracleFn oracle, std::size_t max_k
+#if defined(FISK_HAS_SSE2)   || \
+    defined(FISK_HAS_AVX2)   || \
+    defined(FISK_HAS_AVX512) || \
+    defined(FISK_HAS_NEON)
+
+// Runs `extract`, called as `extract(callback)`, once with a `callback(pos, vec, n)` and once with
+// a `callback(vec, n)`, and checks both against `expected`, lane by lane: `pos` is the start of
+// the k-mer in lane 0, and lane `j` holds the one starting at `pos + j`. Also checks the vector
+// structure: every vector is full except possibly the last, which zero-pads its unused lanes.
+template <std::size_t Lanes, typename Extract>
+static void check_simd_callbacks(
+    std::vector<ExpectedKmer> const& expected, std::size_t k, Extract&& extract
 ) {
-    auto check_sequence = [&](std::string const& seq) {
-        auto const packed = pack_sequence(seq, encoder);
-        for (std::size_t k = 1; k <= max_k; ++k) {
-            std::size_t const expected_kmers = seq.size() >= k ? seq.size() - k + 1 : 0;
-            std::size_t const expected_callbacks =
-                (expected_kmers + Lanes - 1) / Lanes;
-            std::size_t callback_index = 0;
-            std::vector<std::uint64_t> got;
-            extract(packed, k, [&](auto v, std::size_t n) {
-                EXPECT_TRUE(n > std::size_t{0});
-                EXPECT_TRUE(n <= Lanes);
+    std::size_t const expected_kmers = expected.size();
+    std::size_t const expected_callbacks = (expected_kmers + Lanes - 1) / Lanes;
 
-                std::size_t const expected_count =
-                    callback_index + 1 < expected_callbacks || expected_kmers % Lanes == 0
-                    ? Lanes
-                    : expected_kmers % Lanes;
-                EXPECT_EQ(n, expected_count);
+    std::vector<std::size_t> positions;
+    std::vector<std::uint64_t> values;
+    std::size_t callbacks = 0;
+    auto unpack = [&](auto vec, std::size_t n) {
+        std::size_t const expected_count =
+            callbacks + 1 < expected_callbacks || expected_kmers % Lanes == 0
+            ? Lanes
+            : expected_kmers % Lanes;
+        EXPECT_EQ(n, expected_count);
 
-                alignas(64) std::uint64_t buf[Lanes];
-                store_kmer_vec(v, buf);
-                for (std::size_t i = 0; i < n; ++i) {
-                    got.push_back(buf[i]);
-                }
-                if (n < Lanes) {
-                    for (std::size_t i = n; i < Lanes; ++i) {
-                        EXPECT_EQ(buf[i], std::uint64_t{0});
-                    }
-                }
-                ++callback_index;
-            });
-            EXPECT_EQ(callback_index, expected_callbacks);
-            check_kmers(got, seq, k, oracle);
+        alignas(64) std::uint64_t buf[Lanes];
+        store_kmer_vec(vec, buf);
+        for (std::size_t i = 0; i < n && i < Lanes; ++i) {
+            values.push_back(buf[i]);
         }
+        for (std::size_t i = n; i < Lanes; ++i) {
+            EXPECT_EQ(buf[i], std::uint64_t{0});
+        }
+        ++callbacks;
     };
-    for (auto const& seq : test_sequences()) {
-        check_sequence(seq);
-    }
 
-    // All-zero/all-one windows and isolated nonzero bases expose lost high bits and bad masks.
-    check_sequence(std::string(129, 'A'));
-    check_sequence(std::string(129, 'T'));
-    for (std::size_t p = 0; p < 40; ++p) {
-        std::string seq(40, 'A');
-        seq[p] = 'T';
-        check_sequence(seq);
-    }
-
-    // Reject invalid k before arithmetic, even for empty input or a value too large for unsigned.
-    for (std::size_t length : {std::size_t{0}, std::size_t{129}}) {
-        auto const packed = pack_sequence(std::string(length, 'T'), encoder);
-        for (std::size_t k : {std::size_t{0}, max_k + 1, std::numeric_limits<std::size_t>::max()}) {
-            EXPECT_THROW(
-                extract(packed, k, [](auto, std::size_t) {}), std::invalid_argument
-            );
+    extract([&](std::size_t pos, auto vec, std::size_t n) {
+        for (std::size_t i = 0; i < n && i < Lanes; ++i) {
+            positions.push_back(pos + i);
         }
-    }
+        unpack(vec, n);
+    });
+    EXPECT_EQ(callbacks, expected_callbacks);
+    check_emitted_kmers(expected, k, values, &positions);
+
+    values.clear();
+    callbacks = 0;
+    extract([&](auto vec, std::size_t n) { unpack(vec, n); });
+    EXPECT_EQ(callbacks, expected_callbacks);
+    check_emitted_kmers(expected, k, values, nullptr);
 }
+
+// Checks the narrow (k in [1, 29]) and wide (k in [1, 32]) internal helpers and the public
+// dispatcher of one ISA, each called as `extract(packed, k, callback)`, under the conventions of E
+// and L, against the same oracle output, plus their invalid-k contracts.
+template <std::size_t Lanes, Encoding E, Layout L, typename Narrow, typename Wide, typename Dispatch>
+static void check_simd_isa(Narrow const& narrow, Wide const& wide, Dispatch const& dispatch)
+{
+    WordEncoderButterfly<E, L> const encoder;
+    sweep_packed_extractors(
+        encoder, test_sequences(), 32,
+        [&](std::string const&, auto const& packed, std::size_t k, auto const& expected) {
+            if (k <= 29) {
+                check_simd_callbacks<Lanes>(expected, k, [&](auto const& callback) {
+                    narrow(packed, k, callback);
+                });
+            }
+            check_simd_callbacks<Lanes>(expected, k, [&](auto const& callback) {
+                wide(packed, k, callback);
+            });
+            check_simd_callbacks<Lanes>(expected, k, [&](auto const& callback) {
+                dispatch(packed, k, callback);
+            });
+        }
+    );
+
+    auto const throws_for = [&](auto const& extract, std::size_t max_k) {
+        check_invalid_k_throws(max_k, [&](std::string const& seq, std::size_t k) {
+            extract(pack_sequence(seq, encoder), k, [](auto, std::size_t) {});
+        });
+    };
+    throws_for(narrow, 29);
+    throws_for(wide, 32);
+    throws_for(dispatch, 32);
+}
+
+#endif
 
 // =================================================================================================
 //     SSE2
@@ -199,20 +162,34 @@ static void check_simd_variant(
 
 #if defined(FISK_HAS_SSE2)
 
-TEST(KmerExtractPackedSimd, DispatcherSse2)
+static constexpr auto sse2_narrow = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_narrow_sse2_(seq, k, func);
+};
+static constexpr auto sse2_wide = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_wide_sse2_(seq, k, func);
+};
+static constexpr auto sse2_dispatch = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_sse2(seq, k, func);
+};
+
+TEST(KmerExtractPackedSimd, Sse2AcgtMsb)
 {
-    check_simd_variant<2>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_sse2(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
-    );
-    check_simd_variant<2>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_sse2(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
-    );
+    check_simd_isa<2, Encoding::kACGT, Layout::kMSB>(sse2_narrow, sse2_wide, sse2_dispatch);
+}
+
+TEST(KmerExtractPackedSimd, Sse2AcgtLsb)
+{
+    check_simd_isa<2, Encoding::kACGT, Layout::kLSB>(sse2_narrow, sse2_wide, sse2_dispatch);
+}
+
+TEST(KmerExtractPackedSimd, Sse2ActgMsb)
+{
+    check_simd_isa<2, Encoding::kACTG, Layout::kMSB>(sse2_narrow, sse2_wide, sse2_dispatch);
+}
+
+TEST(KmerExtractPackedSimd, Sse2ActgLsb)
+{
+    check_simd_isa<2, Encoding::kACTG, Layout::kLSB>(sse2_narrow, sse2_wide, sse2_dispatch);
 }
 
 #endif // FISK_HAS_SSE2
@@ -223,60 +200,34 @@ TEST(KmerExtractPackedSimd, DispatcherSse2)
 
 #if defined(FISK_HAS_NEON)
 
-TEST(KmerExtractPackedSimd, NarrowNeonMsb)
+static constexpr auto neon_narrow = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_narrow_neon_(seq, k, func);
+};
+static constexpr auto neon_wide = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_wide_neon_(seq, k, func);
+};
+static constexpr auto neon_dispatch = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_neon(seq, k, func);
+};
+
+TEST(KmerExtractPackedSimd, NeonAcgtMsb)
 {
-    check_simd_variant<2>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_narrow_neon_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 29
-    );
+    check_simd_isa<2, Encoding::kACGT, Layout::kMSB>(neon_narrow, neon_wide, neon_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, NarrowNeonLsb)
+TEST(KmerExtractPackedSimd, NeonAcgtLsb)
 {
-    check_simd_variant<2>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_narrow_neon_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 29
-    );
+    check_simd_isa<2, Encoding::kACGT, Layout::kLSB>(neon_narrow, neon_wide, neon_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, WideNeonMsb)
+TEST(KmerExtractPackedSimd, NeonActgMsb)
 {
-    check_simd_variant<2>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_wide_neon_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
-    );
+    check_simd_isa<2, Encoding::kACTG, Layout::kMSB>(neon_narrow, neon_wide, neon_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, WideNeonLsb)
+TEST(KmerExtractPackedSimd, NeonActgLsb)
 {
-    check_simd_variant<2>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_wide_neon_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
-    );
-}
-
-TEST(KmerExtractPackedSimd, DispatcherNeon)
-{
-    check_simd_variant<2>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_neon(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
-    );
-    check_simd_variant<2>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_neon(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
-    );
+    check_simd_isa<2, Encoding::kACTG, Layout::kLSB>(neon_narrow, neon_wide, neon_dispatch);
 }
 
 #endif // FISK_HAS_NEON
@@ -287,60 +238,34 @@ TEST(KmerExtractPackedSimd, DispatcherNeon)
 
 #if defined(FISK_HAS_AVX2)
 
-TEST(KmerExtractPackedSimd, NarrowAvx2Msb)
+static constexpr auto avx2_narrow = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_narrow_avx2_(seq, k, func);
+};
+static constexpr auto avx2_wide = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_wide_avx2_(seq, k, func);
+};
+static constexpr auto avx2_dispatch = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_avx2(seq, k, func);
+};
+
+TEST(KmerExtractPackedSimd, Avx2AcgtMsb)
 {
-    check_simd_variant<4>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_narrow_avx2_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 29
-    );
+    check_simd_isa<4, Encoding::kACGT, Layout::kMSB>(avx2_narrow, avx2_wide, avx2_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, NarrowAvx2Lsb)
+TEST(KmerExtractPackedSimd, Avx2AcgtLsb)
 {
-    check_simd_variant<4>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_narrow_avx2_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 29
-    );
+    check_simd_isa<4, Encoding::kACGT, Layout::kLSB>(avx2_narrow, avx2_wide, avx2_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, WideAvx2Msb)
+TEST(KmerExtractPackedSimd, Avx2ActgMsb)
 {
-    check_simd_variant<4>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_wide_avx2_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
-    );
+    check_simd_isa<4, Encoding::kACTG, Layout::kMSB>(avx2_narrow, avx2_wide, avx2_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, WideAvx2Lsb)
+TEST(KmerExtractPackedSimd, Avx2ActgLsb)
 {
-    check_simd_variant<4>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_wide_avx2_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
-    );
-}
-
-TEST(KmerExtractPackedSimd, DispatcherAvx2)
-{
-    check_simd_variant<4>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_avx2(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
-    );
-    check_simd_variant<4>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_avx2(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
-    );
+    check_simd_isa<4, Encoding::kACTG, Layout::kLSB>(avx2_narrow, avx2_wide, avx2_dispatch);
 }
 
 #endif // FISK_HAS_AVX2
@@ -351,60 +276,34 @@ TEST(KmerExtractPackedSimd, DispatcherAvx2)
 
 #if defined(FISK_HAS_AVX512)
 
-TEST(KmerExtractPackedSimd, NarrowAvx512Msb)
+static constexpr auto avx512_narrow = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_narrow_avx512_(seq, k, func);
+};
+static constexpr auto avx512_wide = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_wide_avx512_(seq, k, func);
+};
+static constexpr auto avx512_dispatch = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_avx512(seq, k, func);
+};
+
+TEST(KmerExtractPackedSimd, Avx512AcgtMsb)
 {
-    check_simd_variant<8>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_narrow_avx512_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 29
-    );
+    check_simd_isa<8, Encoding::kACGT, Layout::kMSB>(avx512_narrow, avx512_wide, avx512_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, NarrowAvx512Lsb)
+TEST(KmerExtractPackedSimd, Avx512AcgtLsb)
 {
-    check_simd_variant<8>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_narrow_avx512_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 29
-    );
+    check_simd_isa<8, Encoding::kACGT, Layout::kLSB>(avx512_narrow, avx512_wide, avx512_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, WideAvx512Msb)
+TEST(KmerExtractPackedSimd, Avx512ActgMsb)
 {
-    check_simd_variant<8>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_wide_avx512_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
-    );
+    check_simd_isa<8, Encoding::kACTG, Layout::kMSB>(avx512_narrow, avx512_wide, avx512_dispatch);
 }
 
-TEST(KmerExtractPackedSimd, WideAvx512Lsb)
+TEST(KmerExtractPackedSimd, Avx512ActgLsb)
 {
-    check_simd_variant<8>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_wide_avx512_(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
-    );
-}
-
-TEST(KmerExtractPackedSimd, DispatcherAvx512)
-{
-    check_simd_variant<8>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_avx512(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, oracle_msb, 32
-    );
-    check_simd_variant<8>(
-        [](auto const& seq, std::size_t k, auto func) {
-            for_each_kmer_packed_simd_avx512(seq, k, func);
-        },
-        WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, oracle_lsb, 32
-    );
+    check_simd_isa<8, Encoding::kACTG, Layout::kLSB>(avx512_narrow, avx512_wide, avx512_dispatch);
 }
 
 #endif // FISK_HAS_AVX512
