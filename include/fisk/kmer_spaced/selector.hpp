@@ -200,8 +200,8 @@ inline SpacedKmerMode spaced_kmer_selector(
     {
         // Warmup, which also sums all extracted values, to verify equality across implementations.
         std::uint64_t checksum = 0;
-        run_fn([&](std::size_t /*pos*/, std::size_t /*mask_idx*/, std::uint64_t value) {
-            checksum += value;
+        run_fn([&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& value) {
+            checksum += kmer_value(value);
         });
 
         // Timed runs. The callback is stateless on purpose: an accumulator captured by reference
@@ -212,8 +212,8 @@ inline SpacedKmerMode spaced_kmer_selector(
         auto best = std::chrono::nanoseconds::max();
         for (std::size_t r = 0; r < repeats; ++r) {
             auto const start = clock::now();
-            run_fn([](std::size_t /*pos*/, std::size_t /*mask_idx*/, std::uint64_t value) {
-                do_not_optimize(value);
+            run_fn([](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& value) {
+                do_not_optimize(kmer_value(value));
             });
             auto const stop = clock::now();
 

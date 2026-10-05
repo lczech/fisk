@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -228,12 +229,12 @@ template <bool SingleMask, typename Extract>
 static std::vector<std::vector<SpacedEvent>> collect_callback_forms(Extract&& extract)
 {
     std::vector<std::vector<SpacedEvent>> runs(1);
-    extract([&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-        runs[0].push_back({pos, mask_idx, value});
+    extract([&](std::size_t pos, std::size_t mask_idx, auto const& value) {
+        runs[0].push_back({pos, mask_idx, kmer_value(value)});
     });
     if constexpr (SingleMask) {
         runs.emplace_back();
-        extract([&](std::size_t pos, std::uint64_t value) { runs[1].push_back({pos, 0, value}); });
+        extract([&](std::size_t pos, auto const& value) { runs[1].push_back({pos, 0, kmer_value(value)}); });
     }
     return runs;
 }
@@ -421,8 +422,8 @@ static void check_simd_dispatcher(std::vector<std::string> const& masks)
         dispatcher.run([&](auto const& kernels) {
             for_each_spaced_kmer_simd_by_position(
                 seq, span_k, kernels, CharEncoderTable<Encoding::kACGT>{},
-                [&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-                    by_position.push_back({pos, mask_idx, value});
+                [&](std::size_t pos, std::size_t mask_idx, auto const& value) {
+                    by_position.push_back({pos, mask_idx, kmer_value(value)});
                 }
             );
         });
@@ -432,8 +433,8 @@ static void check_simd_dispatcher(std::vector<std::string> const& masks)
         dispatcher.run([&](auto const& kernels) {
             for_each_spaced_kmer_simd_by_mask(
                 seq, span_k, kernels, CharEncoderTable<Encoding::kACGT>{},
-                [&](std::size_t pos, std::size_t mask_idx, std::uint64_t value) {
-                    by_mask.push_back({pos, mask_idx, value});
+                [&](std::size_t pos, std::size_t mask_idx, auto const& value) {
+                    by_mask.push_back({pos, mask_idx, kmer_value(value)});
                 }
             );
         });
@@ -444,6 +445,92 @@ static void check_simd_dispatcher(std::vector<std::string> const& masks)
 // =================================================================================================
 //     Mask Helpers
 // =================================================================================================
+
+TEST(KmerSpaced, Weight)
+{
+    EXPECT_EQ(spaced_kmer_weight(std::string("1")), std::size_t{1});
+    EXPECT_EQ(spaced_kmer_weight(std::string("1011")), std::size_t{3});
+    EXPECT_EQ(spaced_kmer_weight(std::string("1*1")), std::size_t{2});
+    EXPECT_EQ(spaced_kmer_weight(std::string(32, '1')), std::size_t{32});
+
+    EXPECT_EQ(spaced_kmer_weight(std::uint64_t{0xCF}), std::size_t{3});
+    EXPECT_EQ(spaced_kmer_weight(std::uint64_t{0x33}), std::size_t{2});
+    EXPECT_EQ(spaced_kmer_weight(~std::uint64_t{0}), std::size_t{32});
+
+    EXPECT_EQ(
+        spaced_kmer_weight(prepare_spaced_kmer_bit_extract_mask("1011")),
+        spaced_kmer_weight(std::string("1011"))
+    );
+
+    EXPECT_ANY_THROW(spaced_kmer_weight(std::string("")));
+    EXPECT_ANY_THROW(spaced_kmer_weight(std::string("010")));
+}
+
+// Emitted values are typed k-mers under the encoder's encoding and MSB layout. Decoding one with the
+// weight of its mask must give exactly the bases kept by that mask, with no bits above the weight.
+TEST(KmerSpaced, EmittedKmersAreTypedAndDecodeToKeptBases)
+{
+    std::vector<std::string> const mask_strings = {"1011", "1001"};
+    std::size_t const span_k = 4;
+    std::vector<BitExtractMask> masks;
+    for (auto const& mask : mask_strings) {
+        masks.emplace_back(prepare_spaced_kmer_bit_extract_mask(mask));
+    }
+
+    std::size_t emitted = 0;
+    for (auto const& seq : sequence_corpus(span_k, 8)) {
+        for_each_spaced_kmer(
+            std::string_view(seq), span_k, masks, CharEncoderTable<Encoding::kACGT>{},
+            bit_extract_bitloop,
+            [&](std::size_t pos, std::size_t mask_idx, auto const& kmer) {
+                static_assert(std::is_same_v<
+                    std::remove_cvref_t<decltype(kmer)>, SpacedKmer<Encoding::kACGT, Layout::kMSB>
+                >);
+
+                auto const weight = spaced_kmer_weight(mask_strings[mask_idx]);
+                EXPECT_EQ(kmer_value(kmer) >> (2 * weight), std::uint64_t{0});
+
+                std::string expected;
+                for (std::size_t p = 0; p < span_k; ++p) {
+                    if (mask_strings[mask_idx][p] == '1') {
+                        expected += static_cast<char>(
+                            std::toupper(static_cast<unsigned char>(seq[pos + p]))
+                        );
+                    }
+                }
+                EXPECT_EQ(kmer_decode(kmer, weight), expected);
+                ++emitted;
+            }
+        );
+    }
+    EXPECT_TRUE(emitted > 0);
+}
+
+// A mask that keeps every position is the contiguous k-mer, so the emitted spaced k-mers must match
+// the contiguous extraction exactly, in order.
+TEST(KmerSpaced, AllOnesMaskMatchesContiguousKmers)
+{
+    for (std::size_t const k : std::vector<std::size_t>{1, 4, 12, 31, 32}) {
+        BitExtractMask const mask(prepare_spaced_kmer_bit_extract_mask(std::string(k, '1')));
+        for (auto const& seq : sequence_corpus(k, 4)) {
+            std::vector<std::uint64_t> spaced_values;
+            for_each_spaced_kmer(
+                std::string_view(seq), k, mask, CharEncoderTable<Encoding::kACGT>{},
+                bit_extract_bitloop,
+                [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& kmer) {
+                    spaced_values.push_back(kmer_value(kmer));
+                }
+            );
+
+            std::vector<std::uint64_t> contiguous_values;
+            for_each_kmer_rolling(
+                std::string_view(seq), k, CharEncoderTable<Encoding::kACGT>{},
+                [&](auto const& kmer) { contiguous_values.push_back(kmer_value(kmer)); }
+            );
+            EXPECT_EQ(spaced_values, contiguous_values);
+        }
+    }
+}
 
 TEST(KmerSpaced, MaskHelpers)
 {
@@ -560,7 +647,7 @@ TEST(KmerSpaced, InvalidSpan)
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         for_each_spaced_kmer(
             seq, k, mask, CharEncoderTable<Encoding::kACGT>{}, extract,
-            [](std::size_t, std::uint64_t) {}
+            [](std::size_t, auto const&) {}
         );
     });
 
@@ -568,13 +655,13 @@ TEST(KmerSpaced, InvalidSpan)
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         for_each_spaced_kmer_simd_by_position(
             seq, k, kernel, CharEncoderTable<Encoding::kACGT>{},
-            [](std::size_t, std::uint64_t) {}
+            [](std::size_t, auto const&) {}
         );
     });
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         for_each_spaced_kmer_simd_by_mask(
             seq, k, kernel, CharEncoderTable<Encoding::kACGT>{},
-            [](std::size_t, std::uint64_t) {}
+            [](std::size_t, auto const&) {}
         );
     });
 }

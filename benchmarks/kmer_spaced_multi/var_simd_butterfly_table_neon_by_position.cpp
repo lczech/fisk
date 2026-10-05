@@ -20,8 +20,8 @@ std::uint64_t run_var_simd_butterfly_table_neon_by_position(
     kernel.run([&](auto const& kernels_arr) {
         for_each_spaced_kmer_simd_by_position(
             std::string_view(seq), k, kernels_arr, CharEncoderTable<Encoding::kACGT>{},
-            [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, std::uint64_t wmer) {
-                sink.consume(wmer);
+            [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& wmer) {
+                sink.consume(kmer_value(wmer));
             }
         );
     });

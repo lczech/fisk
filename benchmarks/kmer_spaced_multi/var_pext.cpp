@@ -20,8 +20,8 @@ std::uint64_t run_var_pext(
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer(
         std::string_view(seq), k, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_pext,
-        [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, std::uint64_t spaced_kmer) {
-            sink.consume(spaced_kmer);
+        [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer) {
+            sink.consume(kmer_value(spaced_kmer));
         }
     );
     return sink.finalize();

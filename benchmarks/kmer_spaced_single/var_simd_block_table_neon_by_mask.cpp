@@ -19,8 +19,8 @@ std::uint64_t run_var_simd_block_table_neon_by_mask(
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer_simd_by_mask(
         std::string_view(seq), k, kernel, CharEncoderTable<Encoding::kACGT>{},
-        [&](std::size_t /*pos*/, std::uint64_t wmer) {
-            sink.consume(wmer);
+        [&](std::size_t /*pos*/, auto const& wmer) {
+            sink.consume(kmer_value(wmer));
         }
     );
     return sink.finalize();

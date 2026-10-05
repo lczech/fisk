@@ -70,26 +70,26 @@ inline void invoke_kmer_vector_callback(
  *
  * @tparam SingleMask Whether the caller is known at compile time to iterate exactly one mask.
  */
-template <bool SingleMask, typename Callback>
+template <bool SingleMask, typename Callback, typename Value>
 FISK_ALWAYS_INLINE
 inline void invoke_spaced_kmer_callback(
-    Callback&& callback, std::size_t mask_idx, std::size_t pos, std::uint64_t value
+    Callback&& callback, std::size_t mask_idx, std::size_t pos, Value const& value
 ) {
     // There is no `callback(mask_idx, spaced_kmer)` shorthand for multiple masks: it would have the
-    // same shape as the single-mask shorthand, so a `(std::size_t, std::uint64_t)` callback would
-    // receive either pos or mask_idx, depending on how many masks are used at the call site.
-    if constexpr (std::is_invocable_v<Callback, std::size_t, std::size_t, std::uint64_t>) {
+    // same shape as the single-mask shorthand, so a `(std::size_t, Value)` callback would receive
+    // either pos or mask_idx, depending on how many masks are used at the call site.
+    if constexpr (std::is_invocable_v<Callback, std::size_t, std::size_t, Value const&>) {
         callback(pos, mask_idx, value);
-    } else if constexpr (SingleMask && std::is_invocable_v<Callback, std::size_t, std::uint64_t>) {
+    } else if constexpr (SingleMask && std::is_invocable_v<Callback, std::size_t, Value const&>) {
         callback(pos, value);
     } else if constexpr (SingleMask) {
         static_assert(
-            std::is_invocable_v<Callback, std::size_t, std::uint64_t>,
+            std::is_invocable_v<Callback, std::size_t, Value const&>,
             "Callback must be callable as callback(pos, mask_idx, value) or callback(pos, value)."
         );
     } else {
         static_assert(
-            std::is_invocable_v<Callback, std::size_t, std::size_t, std::uint64_t>,
+            std::is_invocable_v<Callback, std::size_t, std::size_t, Value const&>,
             "Callback must be callable as callback(pos, mask_idx, value). The 2-arg "
             "callback(pos, value) shorthand is only available for a single mask (known at "
             "compile time), since with multiple masks the mask index must be explicit."

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <concepts>
 #include <cstring>
 #include <functional>
 #include <stdexcept>
@@ -73,6 +74,30 @@ struct Kmer
     auto operator<=>(Kmer const&) const = default;
 };
 
+/**
+ * @brief A spaced k-mer: the bases kept as selected by a spaced seed mask, densely packed,
+ * tagged with its Encoding and Layout conventions.
+ *
+ * Same representation and conventions as Kmer. Operations that depend only on the bases themselves
+ * (complement, decoding, convention conversion, comparison, hashing) apply unchanged. The mask
+ * weight, i.e. the number of kept bases, takes the place of Kmer's width. The operations that
+ * would need the mask (reverse, reverse_complement, canonical) are not available for it, see
+ * ContiguousKmerType.
+ */
+template <Encoding E, Layout L>
+struct SpacedKmer
+{
+    static constexpr Encoding encoding = E;
+    static constexpr Layout layout = L;
+
+    template <Encoding E2, Layout L2>
+    using rebind = SpacedKmer<E2, L2>;
+
+    std::uint64_t value;
+
+    auto operator<=>(SpacedKmer const&) const = default;
+};
+
 // -------------------------------------------------------------------------------------------------
 //     Type Traits and Helpers
 // -------------------------------------------------------------------------------------------------
@@ -121,6 +146,16 @@ concept KmerType = requires(T kmer) {
     { T::layout }   -> std::convertible_to<Layout>;
     { kmer.value }  -> std::convertible_to<std::uint64_t>;
 };
+
+/**
+ * @brief A contiguous k-mer, i.e. a Kmer itself and not a look-alike such as SpacedKmer.
+ *
+ * Used to constrain the operations that depend on the bases being contiguous: reverse(), and
+ * everything built on it, only mean something for a contiguous k-mer. The exact-type check is what
+ * separates the two, as their shape is the same and so KmerType cannot.
+ */
+template <typename K>
+concept ContiguousKmerType = KmerType<K> && std::same_as<K, Kmer<K::encoding, K::layout>>;
 
 /**
  * @brief The k-mer type that a convention-tagged container yields, such as a PackedSequence.
@@ -254,12 +289,25 @@ inline constexpr std::uint64_t reverse_bit_pairs_(std::uint64_t value) noexcept
     return byte_swap_64(value);
 }
 
+/**
+ * @brief Get the raw 2-bit-packed word of a k-mer.
+ *
+ * Identical to reading the public `value` member, and provided as the named counterpart to
+ * kmer_cast(): every crossing of the type boundary, in either direction, is then one findable
+ * function call.
+ */
+template <KmerType K>
+[[nodiscard]] inline constexpr std::uint64_t kmer_value(K kmer) noexcept
+{
+    return kmer.value;
+}
+
 // =================================================================================================
-//     Construction and Access
+//     Construction and Cast
 // =================================================================================================
 
 // -------------------------------------------------------------------------------------------------
-//     Raw Cast
+//     Kmer
 // -------------------------------------------------------------------------------------------------
 
 /**
@@ -303,6 +351,10 @@ inline std::size_t kmer_cast(
         sizeof(Vec) % sizeof(std::uint64_t) == 0,
         "kmer_cast() expects a vector of whole 64-bit lanes"
     );
+    static_assert(
+        std::is_trivially_copyable_v<Vec>,
+        "kmer_cast() expects a trivially copyable vector"
+    );
     constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
     assert(count <= lanes);
     assert(out != nullptr);
@@ -323,25 +375,187 @@ inline std::size_t kmer_cast(
 template <Encoding E, Layout L, typename Vec>
 inline std::size_t kmer_cast(Vec vec, std::size_t width, Kmer<E, L>* out) noexcept
 {
+    static_assert(
+        sizeof(Vec) % sizeof(std::uint64_t) == 0,
+        "kmer_cast() expects a vector of whole 64-bit lanes"
+    );
     return kmer_cast<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), width, out);
 }
 
 /**
- * @brief Get the raw 2-bit-packed word of a k-mer.
+ * @brief Adopt a raw word as a k-mer of a given convention, without checking it against the width.
  *
- * Identical to reading the public `value` member, and provided as the named counterpart to
- * kmer_cast(): every crossing of the type boundary, in either direction, is then one findable
- * function call.
+ * For words that the caller already knows to be valid, such as the output of an extractor.
+ * Otherwise use kmer_cast(), which asserts the width in debug builds.
  */
-template <KmerType K>
-[[nodiscard]] inline constexpr std::uint64_t kmer_value(K kmer) noexcept
+template <Encoding E, Layout L>
+[[nodiscard]] inline constexpr Kmer<E, L> kmer_cast_unchecked(std::uint64_t raw) noexcept
 {
-    return kmer.value;
+    return Kmer<E, L>{raw};
+}
+
+/**
+ * @brief Adopt the first `count` lanes of a SIMD vector of raw words as k-mers, without checking
+ * them against the width. The unchecked counterpart of kmer_cast(vec, count, width, out).
+ */
+template <Encoding E, Layout L, typename Vec>
+inline std::size_t kmer_cast_unchecked(Vec vec, std::size_t count, Kmer<E, L>* out) noexcept
+{
+    static_assert(
+        sizeof(Vec) % sizeof(std::uint64_t) == 0,
+        "kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
+    );
+    static_assert(
+        std::is_trivially_copyable_v<Vec>,
+        "kmer_cast_unchecked() expects a trivially copyable vector"
+    );
+    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
+    assert(count <= lanes);
+    assert(out != nullptr);
+
+    std::uint64_t buffer[lanes];
+    std::memcpy(buffer, &vec, sizeof(Vec));
+    for (std::size_t i = 0; i < count; ++i) {
+        out[i] = kmer_cast_unchecked<E, L>(buffer[i]);
+    }
+    return count;
+}
+
+/**
+ * @brief Adopt every lane of a SIMD vector of raw words as k-mers, without checking them against
+ * the width. The unchecked counterpart of kmer_cast(vec, width, out).
+ */
+template <Encoding E, Layout L, typename Vec>
+inline std::size_t kmer_cast_unchecked(Vec vec, Kmer<E, L>* out) noexcept
+{
+    static_assert(
+        sizeof(Vec) % sizeof(std::uint64_t) == 0,
+        "kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
+    );
+    return kmer_cast_unchecked<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), out);
 }
 
 // -------------------------------------------------------------------------------------------------
-//     String Conversion
+//     Spaced Kmer
 // -------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Adopt a raw 2-bit-packed word of kept bases as a spaced k-mer of a given convention.
+ *
+ * The spaced counterpart of kmer_cast(): `weight` is the mask weight, i.e. the number of kept bases
+ * in `raw`. Same caveat as kmer_cast(), that the caller asserts the convention and the weight.
+ */
+template <Encoding E, Layout L>
+[[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast(
+    std::uint64_t raw, [[maybe_unused]] std::size_t weight
+) noexcept {
+    assert(weight >= 1 && weight <= 32);
+    assert(weight == 32 || (raw >> (2 * weight)) == 0);
+    return SpacedKmer<E, L>{raw};
+}
+
+/**
+ * @brief Adopt a raw word of kept bases as a spaced k-mer, without checking it against the weight.
+ *
+ * For words that the caller already knows to be valid, such as the output of an extractor.
+ * Otherwise use spaced_kmer_cast(), which asserts the weight in debug builds.
+ */
+template <Encoding E, Layout L>
+[[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast_unchecked(std::uint64_t raw) noexcept
+{
+    return SpacedKmer<E, L>{raw};
+}
+
+/**
+ * @brief Adopt the first `count` lanes of a SIMD vector of raw words as spaced k-mers, and return
+ * how many were written.
+ *
+ * The spaced counterpart of the contiguous vector kmer_cast() above, with the same memcpy-based,
+ * ISA-agnostic lane handling. `weight` is the mask weight shared by all lanes.
+ */
+template <Encoding E, Layout L, typename Vec>
+inline std::size_t spaced_kmer_cast(
+    Vec vec, std::size_t count, std::size_t weight, SpacedKmer<E, L>* out
+) noexcept {
+    static_assert(
+        sizeof(Vec) % sizeof(std::uint64_t) == 0,
+        "spaced_kmer_cast() expects a vector of whole 64-bit lanes"
+    );
+    static_assert(
+        std::is_trivially_copyable_v<Vec>,
+        "spaced_kmer_cast() expects a trivially copyable vector"
+    );
+    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
+    assert(count <= lanes);
+    assert(out != nullptr);
+
+    std::uint64_t buffer[lanes];
+    std::memcpy(buffer, &vec, sizeof(Vec));
+    for (std::size_t i = 0; i < count; ++i) {
+        out[i] = spaced_kmer_cast<E, L>(buffer[i], weight);
+    }
+    return count;
+}
+
+/**
+ * @brief Adopt every lane of a SIMD vector of raw words as spaced k-mers.
+ */
+template <Encoding E, Layout L, typename Vec>
+inline std::size_t spaced_kmer_cast(Vec vec, std::size_t weight, SpacedKmer<E, L>* out) noexcept
+{
+    static_assert(
+        sizeof(Vec) % sizeof(std::uint64_t) == 0,
+        "spaced_kmer_cast() expects a vector of whole 64-bit lanes"
+    );
+    return spaced_kmer_cast<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), weight, out);
+}
+
+/**
+ * @brief Adopt the first `count` lanes of a SIMD vector of raw words as spaced k-mers, without
+ * checking them against the weight. The unchecked counterpart of spaced_kmer_cast(vec, count,
+ * weight, out).
+ */
+template <Encoding E, Layout L, typename Vec>
+inline std::size_t spaced_kmer_cast_unchecked(
+    Vec vec, std::size_t count, SpacedKmer<E, L>* out
+) noexcept {
+    static_assert(
+        sizeof(Vec) % sizeof(std::uint64_t) == 0,
+        "spaced_kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
+    );
+    static_assert(
+        std::is_trivially_copyable_v<Vec>,
+        "spaced_kmer_cast_unchecked() expects a trivially copyable vector"
+    );
+    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
+    assert(count <= lanes);
+    assert(out != nullptr);
+
+    std::uint64_t buffer[lanes];
+    std::memcpy(buffer, &vec, sizeof(Vec));
+    for (std::size_t i = 0; i < count; ++i) {
+        out[i] = spaced_kmer_cast_unchecked<E, L>(buffer[i]);
+    }
+    return count;
+}
+
+/**
+ * @brief Adopt every lane of a SIMD vector of raw words as spaced k-mers, without checking them
+ * against the weight. The unchecked counterpart of spaced_kmer_cast(vec, weight, out).
+ */
+template <Encoding E, Layout L, typename Vec>
+inline std::size_t spaced_kmer_cast_unchecked(Vec vec, SpacedKmer<E, L>* out) noexcept
+{
+    static_assert(
+        sizeof(Vec) % sizeof(std::uint64_t) == 0,
+        "spaced_kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
+    );
+    return spaced_kmer_cast_unchecked<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), out);
+}
+
+// =================================================================================================
+//     String Conversion
+// =================================================================================================
 
 /**
  * @brief Get the 2-bit code of the base at position `index`, counted from the start of the k-mer.
@@ -469,7 +683,7 @@ template <KmerType K>
  * convention and the operation are spelled out in the type system rather than left to the reader
  * of a bare word.
  */
-template <KmerType K>
+template <ContiguousKmerType K>
 [[nodiscard]] inline constexpr K reverse(K kmer, std::size_t width) noexcept
 {
     assert(width >= 1 && width <= 32);
@@ -483,7 +697,7 @@ template <KmerType K>
  * XOR is applied to the full reversed word, and the shift that brings the k-mer's own bases down
  * then discards the complemented garbage above them, so no separate masking step is needed.
  */
-template <KmerType K>
+template <ContiguousKmerType K>
 [[nodiscard]] inline constexpr K reverse_complement(K kmer, std::size_t width) noexcept
 {
     assert(width >= 1 && width <= 32);
@@ -500,7 +714,7 @@ template <KmerType K>
  * two is picked depends on the conventions; it is consistent within one convention, which is all
  * that canonicalization needs.
  */
-template <KmerType K>
+template <ContiguousKmerType K>
 [[nodiscard]] inline constexpr K canonical(K kmer, std::size_t width) noexcept
 {
     K const rev_comp = reverse_complement(kmer, width);
@@ -670,6 +884,10 @@ namespace std {
  */
 template <fisk::Encoding E, fisk::Layout L>
 struct hash<fisk::Kmer<E, L>> : fisk::KmerHashMix
+{};
+
+template <fisk::Encoding E, fisk::Layout L>
+struct hash<fisk::SpacedKmer<E, L>> : fisk::KmerHashMix
 {};
 
 } // namespace std

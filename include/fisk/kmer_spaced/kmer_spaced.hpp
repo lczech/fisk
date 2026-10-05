@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <bit>
 #include <string>
 #include <string_view>
 #include <cstdint>
@@ -97,6 +98,26 @@ inline std::uint64_t prepare_spaced_kmer_bit_extract_mask( std::string const& ma
         }
     }
     return result;
+}
+
+/**
+ * @brief Get the weight of a two-bit encoded spaced k-mer mask, i.e., its number of kept positions.
+ *
+ * This is the `width` to pass to the Kmer operations for spaced k-mers extracted with this mask.
+ * The mask must be valid, see is_valid_spaced_kmer_mask(); every kept position is 0b11.
+ */
+inline std::size_t spaced_kmer_weight( std::uint64_t const mask )
+{
+    return static_cast<std::size_t>(std::popcount(mask)) / 2;
+}
+
+/**
+ * @brief Get the weight of a spaced k-mer mask given as a string of 0, 1 and *, as in
+ * prepare_spaced_kmer_bit_extract_mask().
+ */
+inline std::size_t spaced_kmer_weight( std::string const& mask )
+{
+    return spaced_kmer_weight( prepare_spaced_kmer_bit_extract_mask( mask ));
 }
 
 /**
@@ -269,8 +290,12 @@ inline void for_each_spaced_kmer_impl_(
         std::size_t mask_idx = 0;
         for_each_mask(masks, [&](auto const& mask) {
             if ((valid_bits & mask.mask) == mask.mask) {
+                // Layout is fixed to MSB, as produced by the rolling recurrence above.
                 invoke_spaced_kmer_callback<SingleMask>(
-                    callback, mask_idx, pos, bit_ext(kmer_bits, mask)
+                    callback, mask_idx, pos,
+                    spaced_kmer_cast_unchecked<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(
+                        bit_ext(kmer_bits, mask)
+                    )
                 );
             }
             ++mask_idx;
