@@ -53,7 +53,11 @@ inline PackedSequence<Encoder::encoding, Encoder::layout>& ascii_assume_valid_bu
 template <WordEncoder Encoder, unsigned K, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_ascii_assume_valid_chunked_(
-    std::string_view seq, Encoder const& encoder, std::size_t chunk_size, Func& func
+    std::string_view seq,
+    Encoder const& encoder,
+    std::size_t chunk_size,
+    PackedSequence<Encoder::encoding, Encoder::layout>& scratch,
+    Func& func
 ) {
     constexpr Encoding E = Encoder::encoding;
     constexpr Layout L = Encoder::layout;
@@ -72,8 +76,6 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
         }
     };
 
-    auto& buffer = ascii_assume_valid_buffer_<Encoder>();
-
     std::size_t const seq_len = seq.size();
     std::size_t const margin  = K - 1;
 
@@ -81,15 +83,15 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
         std::size_t const chunk_end = std::min(chunk_start + chunk_size, seq_len);
         std::size_t const view_end  = std::min(chunk_end + margin, seq_len);
 
-        pack_sequence(seq.substr(chunk_start, view_end - chunk_start), encoder, buffer);
-        if (buffer.length < K) {
+        pack_sequence(seq.substr(chunk_start, view_end - chunk_start), encoder, scratch);
+        if (scratch.length < K) {
             continue;
         }
         ChunkCallback chunk_func{func, chunk_start};
         if constexpr (K >= 30) {
-            for_each_kmer_packed_aligned_wide_impl_<E, L, K>(buffer, chunk_func);
+            for_each_kmer_packed_aligned_wide_impl_<E, L, K>(scratch, chunk_func);
         } else {
-            for_each_kmer_packed_aligned_narrow_impl_<E, L, K>(buffer, chunk_func);
+            for_each_kmer_packed_aligned_narrow_impl_<E, L, K>(scratch, chunk_func);
         }
     }
 }
@@ -100,7 +102,7 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
 
 /**
  * @brief Extract all k-mers for k in [1, 32] from an ASCII sequence that is known to contain only
- * valid nucleotides, and call a callback on each.
+ * valid nucleotides, and call a callback on each, using caller-provided temporary storage.
  *
  * Faster than for_each_kmer(), as it does no validity checking, and encodes the input a whole word
  * at a time. The sequence is processed in chunks of `chunk_size` bases, so that memory use stays
@@ -113,21 +115,25 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
  *
  * The callback receives a `Kmer<Encoder::encoding, Encoder::layout>`, in sequence order. It may be
  * called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start position of the
- * k-mer in `seq`; see invoke_kmer_callback(). The callback must not call this function again with
- * the same encoder type on the same thread, as they would share an internal buffer.
+ * k-mer in `seq`; see invoke_kmer_callback(). `scratch` is reusable temporary packed storage; its
+ * contents after the call are unspecified. Overlapping, nested, or concurrent calls must use
+ * distinct scratch buffers.
  *
  * @param seq        Input sequence.
  * @param k          K-mer size, in [1, 32].
  * @param encoder    Word encoder selecting the Encoding and Layout, e.g. WordEncoderButterfly
  *                   or WordEncoderPext (seq_pack.hpp).
  * @param chunk_size Number of bases processed per chunk; must be > 0.
+ * @param scratch    Reusable temporary packed storage for this call.
  * @param func       Callback function to be called for each k-mer.
  */
 template <WordEncoder Encoder, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_ascii_assume_valid(
     std::string_view seq, std::size_t k, Encoder const& encoder,
-    std::size_t chunk_size, Func&& func
+    std::size_t chunk_size,
+    PackedSequence<Encoder::encoding, Encoder::layout>& scratch,
+    Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -142,7 +148,9 @@ inline void for_each_kmer_ascii_assume_valid(
     // `func` is called from every chunk, so it is passed on as an lvalue, never forwarded.
     #define FISK_ASCII_ASSUME_VALID_CASE_(K_) \
         case K_: \
-            for_each_kmer_ascii_assume_valid_chunked_<Encoder, K_>(seq, encoder, chunk_size, func); \
+            for_each_kmer_ascii_assume_valid_chunked_<Encoder, K_>( \
+                seq, encoder, chunk_size, scratch, func \
+            ); \
             break;
 
     switch (k) {
@@ -184,7 +192,41 @@ inline void for_each_kmer_ascii_assume_valid(
 }
 
 /**
- * @brief Same as above, using kDefaultAsciiChunkSize.
+ * @brief Same as above, using the thread-local buffer for this encoder type.
+ *
+ * The callback must not call this overload again with the same encoder type on the same thread,
+ * because the calls would share that buffer. Use the overload taking `scratch` for nested calls.
+ */
+template <WordEncoder Encoder, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_kmer_ascii_assume_valid(
+    std::string_view seq, std::size_t k, Encoder const& encoder,
+    std::size_t chunk_size, Func&& func
+) {
+    for_each_kmer_ascii_assume_valid(
+        seq, k, encoder, chunk_size, ascii_assume_valid_buffer_<Encoder>(), std::forward<Func>(func)
+    );
+}
+
+/**
+ * @brief Same as the caller-scratch overload above, using kDefaultAsciiChunkSize.
+ */
+template <WordEncoder Encoder, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_kmer_ascii_assume_valid(
+    std::string_view seq,
+    std::size_t k,
+    Encoder const& encoder,
+    PackedSequence<Encoder::encoding, Encoder::layout>& scratch,
+    Func&& func
+) {
+    for_each_kmer_ascii_assume_valid(
+        seq, k, encoder, kDefaultAsciiChunkSize, scratch, std::forward<Func>(func)
+    );
+}
+
+/**
+ * @brief Same as the thread-local-buffer overload above, using kDefaultAsciiChunkSize.
  */
 template <WordEncoder Encoder, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH

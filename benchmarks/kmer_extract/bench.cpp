@@ -49,12 +49,16 @@ void bench_kmer_extract(
         std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
     );
 
-    // Reused across calls by pack_then_extract, the same way for_each_kmer_ascii_assume_valid()
-    // reuses its own internal buffer, so the two differ only in chunking, not in allocations.
-    PackedAcgtMsb scratch_acgt_msb;
-    PackedAcgtLsb scratch_acgt_lsb;
-    PackedActgMsb scratch_actg_msb;
-    PackedActgLsb scratch_actg_lsb;
+    // Each scratch buffer stays dedicated to one variant, so retained capacity from one benchmark
+    // cannot affect another variant's setup.
+    PackedAcgtMsb chunked_scratch_acgt_msb;
+    PackedAcgtLsb chunked_scratch_acgt_lsb;
+    PackedActgMsb chunked_scratch_actg_msb;
+    PackedActgLsb chunked_scratch_actg_lsb;
+    PackedAcgtMsb pack_scratch_acgt_msb;
+    PackedAcgtLsb pack_scratch_acgt_lsb;
+    PackedActgMsb pack_scratch_actg_msb;
+    PackedActgLsb pack_scratch_actg_lsb;
 
     // Run a benchmark for each valid k.
     for( std::size_t k = k_min; k <= k_max; ++k) {
@@ -150,21 +154,29 @@ void bench_kmer_extract(
         // validating ones above: Microbench::run() cross-validates that every bench in the same
         // call produces the same sink, but these encode invalid characters (see --n-prob in
         // main.cpp) as some valid base instead of skipping the k-mers overlapping them. One call
-        // per Encoding and Layout, as those produce different k-mer values; within each call, both
-        // variants go through the same packing, so they still agree exactly.
+        // per Encoding and Layout, as those produce different k-mer values; within each call, all
+        // variants use the same word encoder, so they still agree exactly.
         auto const results_acgt_msb = suite.run(
             sequences,
             bench(
-                "chunked_assume_valid",
+                "chunked_assume_valid_threadlocal",
                 [k, &sink_buffer](std::string const& seq){
                     return run_var_acgt_msb_chunked_assume_valid(seq, k, sink_buffer);
                 }
             ),
             bench(
+                "chunked_assume_valid_scratch",
+                [k, &chunked_scratch_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_msb_chunked_assume_valid_scratch(
+                        seq, k, chunked_scratch_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            bench(
                 "pack_then_extract",
-                [k, &scratch_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &pack_scratch_acgt_msb, &sink_buffer](std::string const& seq){
                     return run_var_acgt_msb_pack_then_extract(
-                        seq, k, scratch_acgt_msb, sink_buffer
+                        seq, k, pack_scratch_acgt_msb, sink_buffer
                     );
                 }
             )
@@ -176,16 +188,24 @@ void bench_kmer_extract(
         auto const results_acgt_lsb = suite.run(
             sequences,
             bench(
-                "chunked_assume_valid",
+                "chunked_assume_valid_threadlocal",
                 [k, &sink_buffer](std::string const& seq){
                     return run_var_acgt_lsb_chunked_assume_valid(seq, k, sink_buffer);
                 }
             ),
             bench(
+                "chunked_assume_valid_scratch",
+                [k, &chunked_scratch_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_lsb_chunked_assume_valid_scratch(
+                        seq, k, chunked_scratch_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            bench(
                 "pack_then_extract",
-                [k, &scratch_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &pack_scratch_acgt_lsb, &sink_buffer](std::string const& seq){
                     return run_var_acgt_lsb_pack_then_extract(
-                        seq, k, scratch_acgt_lsb, sink_buffer
+                        seq, k, pack_scratch_acgt_lsb, sink_buffer
                     );
                 }
             )
@@ -197,16 +217,24 @@ void bench_kmer_extract(
         auto const results_actg_msb = suite.run(
             sequences,
             bench(
-                "chunked_assume_valid",
+                "chunked_assume_valid_threadlocal",
                 [k, &sink_buffer](std::string const& seq){
                     return run_var_actg_msb_chunked_assume_valid(seq, k, sink_buffer);
                 }
             ),
             bench(
+                "chunked_assume_valid_scratch",
+                [k, &chunked_scratch_actg_msb, &sink_buffer](std::string const& seq){
+                    return run_var_actg_msb_chunked_assume_valid_scratch(
+                        seq, k, chunked_scratch_actg_msb, sink_buffer
+                    );
+                }
+            ),
+            bench(
                 "pack_then_extract",
-                [k, &scratch_actg_msb, &sink_buffer](std::string const& seq){
+                [k, &pack_scratch_actg_msb, &sink_buffer](std::string const& seq){
                     return run_var_actg_msb_pack_then_extract(
-                        seq, k, scratch_actg_msb, sink_buffer
+                        seq, k, pack_scratch_actg_msb, sink_buffer
                     );
                 }
             )
@@ -218,16 +246,24 @@ void bench_kmer_extract(
         auto const results_actg_lsb = suite.run(
             sequences,
             bench(
-                "chunked_assume_valid",
+                "chunked_assume_valid_threadlocal",
                 [k, &sink_buffer](std::string const& seq){
                     return run_var_actg_lsb_chunked_assume_valid(seq, k, sink_buffer);
                 }
             ),
             bench(
+                "chunked_assume_valid_scratch",
+                [k, &chunked_scratch_actg_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_actg_lsb_chunked_assume_valid_scratch(
+                        seq, k, chunked_scratch_actg_lsb, sink_buffer
+                    );
+                }
+            ),
+            bench(
                 "pack_then_extract",
-                [k, &scratch_actg_lsb, &sink_buffer](std::string const& seq){
+                [k, &pack_scratch_actg_lsb, &sink_buffer](std::string const& seq){
                     return run_var_actg_lsb_pack_then_extract(
-                        seq, k, scratch_actg_lsb, sink_buffer
+                        seq, k, pack_scratch_actg_lsb, sink_buffer
                     );
                 }
             )

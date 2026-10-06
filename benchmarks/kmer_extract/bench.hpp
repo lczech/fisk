@@ -98,8 +98,8 @@ std::uint64_t run_var_simd_scalar(
     std::vector<std::uint64_t>& sink_buffer
 );
 
-// Non-validating variants. pack_then_extract takes its PackedSequence buffer from the caller, so
-// that it is reused across calls rather than reallocated each time.
+// Non-validating variants. The scratch-buffer variants take caller-owned PackedSequence storage,
+// so it is reused across calls rather than reallocated each time.
 std::uint64_t run_var_acgt_msb_chunked_assume_valid(
     std::string const& seq,
     std::size_t k,
@@ -118,6 +118,30 @@ std::uint64_t run_var_actg_msb_chunked_assume_valid(
 std::uint64_t run_var_actg_lsb_chunked_assume_valid(
     std::string const& seq,
     std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_acgt_msb_chunked_assume_valid_scratch(
+    std::string const& seq,
+    std::size_t k,
+    PackedAcgtMsb& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_acgt_lsb_chunked_assume_valid_scratch(
+    std::string const& seq,
+    std::size_t k,
+    PackedAcgtLsb& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_actg_msb_chunked_assume_valid_scratch(
+    std::string const& seq,
+    std::size_t k,
+    PackedActgMsb& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_actg_lsb_chunked_assume_valid_scratch(
+    std::string const& seq,
+    std::size_t k,
+    PackedActgLsb& scratch,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_acgt_msb_pack_then_extract(
