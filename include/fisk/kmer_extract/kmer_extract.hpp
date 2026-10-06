@@ -105,9 +105,9 @@ inline void for_each_kmer_rolling(
         // k-mer window does not overlap the most recent invalid character.
         if( valid >= k ) {
             // valid >= k implies i >= k - 1, so the start position `i + 1 - k` does not underflow.
-            invoke_kmer_callback(
-                func, i + 1 - k,
-                kmer_cast<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(kmer, k)
+            assert_fits_width_(kmer, k);
+            invoke_kmer_callback<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(
+                func, i + 1 - k, kmer
             );
         }
     }
@@ -158,9 +158,9 @@ inline void for_each_kmer_reextract(
 
         if (valid) {
             // Here, i is already the start position of the k-mer.
-            invoke_kmer_callback(
-                func, i,
-                kmer_cast<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(kmer, k)
+            assert_fits_width_(kmer, k);
+            invoke_kmer_callback<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(
+                func, i, kmer
             );
         }
     }

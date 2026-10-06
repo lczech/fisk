@@ -68,7 +68,7 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
         FISK_ALWAYS_INLINE
         void operator()(std::size_t pos, Kmer<E, L> const& kmer) const
         {
-            invoke_kmer_callback(func, offset + pos, kmer);
+            invoke_kmer_callback<E, L>(func, offset + pos, kmer_value(kmer));
         }
     };
 
@@ -108,7 +108,7 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
  *
  * The input should only consist of the characters `ACGT` (upper or lower case). Any other character
  * is silently encoded as one of the four nucleotides, changing every k-mer that overlaps it. If
- * this is accetable (for instance for quick homology checks), this function is faster than the
+ * this is acceptable (for instance for quick homology checks), this function is faster than the
  * checked alternatives, such as for_each_kmer().
  *
  * The callback receives a `Kmer<Encoder::encoding, Encoder::layout>`, in sequence order. It may be

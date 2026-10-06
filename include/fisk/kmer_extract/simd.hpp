@@ -117,9 +117,8 @@ inline void consume_valid_run_(
 
         // The last character processed above, at index base + idx - 1, just completed the first
         // valid k-mer, which hence starts at base + idx - k.
-        invoke_kmer_callback(
-            func, base + idx - k, kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k)
-        );
+        assert_fits_width_(kmer, k);
+        invoke_kmer_callback<Encoding::kACGT, Layout::kMSB>(func, base + idx - k, kmer);
 
         // Saturate valid so we do not keep incrementing a counter that is only used
         // as a threshold predicate.
@@ -129,9 +128,8 @@ inline void consume_valid_run_(
     // Fully warm: every additional valid code yields one k-mer.
     for (; idx < len; ++idx) {
         kmer = ((kmer << 2) & mask) | codes[idx];
-        invoke_kmer_callback(
-            func, base + idx + 1 - k, kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k)
-        );
+        assert_fits_width_(kmer, k);
+        invoke_kmer_callback<Encoding::kACGT, Layout::kMSB>(func, base + idx + 1 - k, kmer);
     }
 }
 
@@ -238,9 +236,8 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
             valid = (valid < k) ? (valid + 1) : k;
 
             if (valid >= k) {
-                invoke_kmer_callback(
-                    func, i + 1 - k, kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, k)
-                );
+                assert_fits_width_(kmer, k);
+                invoke_kmer_callback<Encoding::kACGT, Layout::kMSB>(func, i + 1 - k, kmer);
             }
         } else {
             valid = 0;
@@ -345,9 +342,8 @@ inline void for_each_kmer_simd_scalar(
         // seen - kk.
         ++seen;
         if (seen >= kk && valid == valid_mask) {
-            invoke_kmer_callback(
-                func, seen - kk, kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer, kk)
-            );
+            assert_fits_width_(kmer, kk);
+            invoke_kmer_callback<Encoding::kACGT, Layout::kMSB>(func, seen - kk, kmer);
         }
     };
 

@@ -186,6 +186,31 @@ inline constexpr std::uint64_t width_mask_(std::size_t width) noexcept
 }
 
 /**
+ * @brief Debug check that a width (k-mer length, or mask weight) is in [1, 32].
+ *
+ * Compiled out in release builds, as are all debug checks in this file.
+ */
+FISK_ALWAYS_INLINE inline constexpr void assert_width_(
+    [[maybe_unused]] std::size_t width
+) noexcept {
+    assert(width >= 1 && width <= 32);
+}
+
+/**
+ * @brief Debug check that a word holds no bits above `width` bases, i.e. it is a valid k-mer or
+ * spaced k-mer of that width.
+ *
+ * Producers of k-mer words call this with the word they emit. The short-circuit keeps the shift
+ * from ever reaching 64 for width 32.
+ */
+FISK_ALWAYS_INLINE inline constexpr void assert_fits_width_(
+    [[maybe_unused]] std::uint64_t word, [[maybe_unused]] std::size_t width
+) noexcept {
+    assert_width_(width);
+    assert(width == 32 || (word >> (2 * width)) == 0);
+}
+
+/**
  * @brief XOR constant that complements every 2-bit code in a word at once.
  *
  * Complementing swaps A <-> T and C <-> G. Which bit pattern that is depends on the encoding,
@@ -324,8 +349,7 @@ template <Encoding E, Layout L>
 [[nodiscard]] inline constexpr Kmer<E, L> kmer_cast(
     std::uint64_t raw, [[maybe_unused]] std::size_t width
 ) noexcept {
-    assert(width >= 1 && width <= 32);
-    assert(width == 32 || (raw >> (2 * width)) == 0);
+    assert_fits_width_(raw, width);
     return Kmer<E, L>{raw};
 }
 
@@ -449,8 +473,7 @@ template <Encoding E, Layout L>
 [[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast(
     std::uint64_t raw, [[maybe_unused]] std::size_t weight
 ) noexcept {
-    assert(weight >= 1 && weight <= 32);
-    assert(weight == 32 || (raw >> (2 * weight)) == 0);
+    assert_fits_width_(raw, weight);
     return SpacedKmer<E, L>{raw};
 }
 
@@ -566,7 +589,7 @@ template <KmerType K>
 [[nodiscard]] inline constexpr std::uint8_t base_at(
     K kmer, std::size_t index, std::size_t width
 ) noexcept {
-    assert(width >= 1 && width <= 32);
+    assert_width_(width);
     assert(index < width);
     return static_cast<std::uint8_t>((kmer.value >> base_shift_<K::layout>(index, width)) & 0x3u);
 }
@@ -584,7 +607,7 @@ template <KmerType K>
     // predate full support for constexpr std::string (P0980), which makes std::string not a literal
     // type there, and a constexpr function's return type must be a literal type. No caller needs
     // compile-time evaluation here anyway.
-    assert(width >= 1 && width <= 32);
+    assert_width_(width);
 
     std::string str;
     str.resize(width);
@@ -670,7 +693,7 @@ template <Layout L, Encoding E = Encoding::kACGT, typename = Layout>
 template <KmerType K>
 [[nodiscard]] inline constexpr K complement(K kmer, std::size_t width) noexcept
 {
-    assert(width >= 1 && width <= 32);
+    assert_width_(width);
     return K{(kmer.value ^ complement_xor_<K::encoding>()) & width_mask_(width)};
 }
 
@@ -686,7 +709,7 @@ template <KmerType K>
 template <ContiguousKmerType K>
 [[nodiscard]] inline constexpr K reverse(K kmer, std::size_t width) noexcept
 {
-    assert(width >= 1 && width <= 32);
+    assert_width_(width);
     return K{reverse_bit_pairs_(kmer.value) >> (64 - 2 * width)};
 }
 
@@ -700,7 +723,7 @@ template <ContiguousKmerType K>
 template <ContiguousKmerType K>
 [[nodiscard]] inline constexpr K reverse_complement(K kmer, std::size_t width) noexcept
 {
-    assert(width >= 1 && width <= 32);
+    assert_width_(width);
     auto const reversed = reverse_bit_pairs_(kmer.value) ^ complement_xor_<K::encoding>();
     return K{reversed >> (64 - 2 * width)};
 }
@@ -792,7 +815,7 @@ template <Encoding E2, KmerType K, typename = Encoding>
 [[nodiscard]] inline constexpr typename K::template rebind<E2, K::layout> kmer_convert(
     K kmer, [[maybe_unused]] std::size_t width
 ) noexcept {
-    assert(width >= 1 && width <= 32);
+    assert_width_(width);
     return typename K::template rebind<E2, K::layout>{recode_<K::encoding, E2>(kmer.value)};
 }
 
@@ -807,7 +830,7 @@ template <Layout L2, KmerType K, typename = Layout>
 [[nodiscard]] inline constexpr typename K::template rebind<K::encoding, L2> kmer_convert(
     K kmer, std::size_t width
 ) noexcept {
-    assert(width >= 1 && width <= 32);
+    assert_width_(width);
     return typename K::template rebind<K::encoding, L2>{
         relayout_<K::layout, L2>(kmer.value, width)
     };
@@ -825,7 +848,7 @@ template <Encoding E2, Layout L2, KmerType K>
 [[nodiscard]] inline constexpr typename K::template rebind<E2, L2> kmer_convert(
     K kmer, std::size_t width
 ) noexcept {
-    assert(width >= 1 && width <= 32);
+    assert_width_(width);
     auto const recoded = recode_<K::encoding, E2>(kmer.value);
     return typename K::template rebind<E2, L2>{relayout_<K::layout, L2>(recoded, width)};
 }

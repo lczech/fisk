@@ -291,12 +291,11 @@ inline void for_each_spaced_kmer_impl_(
         for_each_mask(masks, [&](auto const& mask) {
             if ((valid_bits & mask.mask) == mask.mask) {
                 // Layout is fixed to MSB, as produced by the rolling recurrence above.
-                invoke_spaced_kmer_callback<SingleMask>(
-                    callback, mask_idx, pos,
-                    spaced_kmer_cast_unchecked<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(
-                        bit_ext(kmer_bits, mask)
-                    )
-                );
+                auto const word = bit_ext(kmer_bits, mask);
+                assert_fits_width_(word, spaced_kmer_weight(mask.mask));
+                invoke_spaced_kmer_callback<
+                    std::remove_cvref_t<Enc>::encoding, Layout::kMSB, SingleMask
+                >(callback, mask_idx, pos, word);
             }
             ++mask_idx;
         });

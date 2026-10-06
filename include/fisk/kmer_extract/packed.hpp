@@ -177,10 +177,14 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         do_not_optimize(v3);
         #endif
 
-        invoke_kmer_callback(func, 4 * b + 0, kmer_cast<E, L>(v0, K));
-        invoke_kmer_callback(func, 4 * b + 1, kmer_cast<E, L>(v1, K));
-        invoke_kmer_callback(func, 4 * b + 2, kmer_cast<E, L>(v2, K));
-        invoke_kmer_callback(func, 4 * b + 3, kmer_cast<E, L>(v3, K));
+        assert_fits_width_(v0, K);
+        invoke_kmer_callback<E, L>(func, 4 * b + 0, v0);
+        assert_fits_width_(v1, K);
+        invoke_kmer_callback<E, L>(func, 4 * b + 1, v1);
+        assert_fits_width_(v2, K);
+        invoke_kmer_callback<E, L>(func, 4 * b + 2, v2);
+        assert_fits_width_(v3, K);
+        invoke_kmer_callback<E, L>(func, 4 * b + 3, v3);
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -188,7 +192,8 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         seq, 4 * fast_bytes, p_max, K, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
-        invoke_kmer_callback(func, 4 * fast_bytes + i, kmer_cast<E, L>(tail_vals[i], K));
+        assert_fits_width_(tail_vals[i], K);
+        invoke_kmer_callback<E, L>(func, 4 * fast_bytes + i, tail_vals[i]);
     }
 }
 
@@ -259,10 +264,14 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
         do_not_optimize(v3);
         #endif
 
-        invoke_kmer_callback(func, 4 * b + 0, kmer_cast<E, L>(v0, K));
-        invoke_kmer_callback(func, 4 * b + 1, kmer_cast<E, L>(v1, K));
-        invoke_kmer_callback(func, 4 * b + 2, kmer_cast<E, L>(v2, K));
-        invoke_kmer_callback(func, 4 * b + 3, kmer_cast<E, L>(v3, K));
+        assert_fits_width_(v0, K);
+        invoke_kmer_callback<E, L>(func, 4 * b + 0, v0);
+        assert_fits_width_(v1, K);
+        invoke_kmer_callback<E, L>(func, 4 * b + 1, v1);
+        assert_fits_width_(v2, K);
+        invoke_kmer_callback<E, L>(func, 4 * b + 2, v2);
+        assert_fits_width_(v3, K);
+        invoke_kmer_callback<E, L>(func, 4 * b + 3, v3);
     }
 
     std::array<std::uint64_t, 64> tail_vals;
@@ -270,7 +279,8 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
         seq, 4 * fast_bytes, p_max, K, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
-        invoke_kmer_callback(func, 4 * fast_bytes + i, kmer_cast<E, L>(tail_vals[i], K));
+        assert_fits_width_(tail_vals[i], K);
+        invoke_kmer_callback<E, L>(func, 4 * fast_bytes + i, tail_vals[i]);
     }
 }
 
@@ -395,7 +405,9 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
             } else {
                 shift = 64 - 2 * static_cast<unsigned>(k) - s;
             }
-            invoke_kmer_callback(func, e + 1 - k, kmer_cast<E, L>((acc >> shift) & mask, k));
+            auto const word = (acc >> shift) & mask;
+            assert_fits_width_(word, k);
+            invoke_kmer_callback<E, L>(func, e + 1 - k, word);
         }
     }
 }
@@ -476,7 +488,9 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
             if (e + 1 < k) {
                 continue;
             }
-            invoke_kmer_callback(func, e + 1 - k, kmer_cast<E, L>(window_(plans[local]), k));
+            auto const word = window_(plans[local]);
+            assert_fits_width_(word, k);
+            invoke_kmer_callback<E, L>(func, e + 1 - k, word);
         }
     }
 }

@@ -92,12 +92,11 @@ inline void spaced_kmer_simd_tail_(
         for (std::size_t m = 0; m < NMasks; ++m) {
             Kernel const& kernel = kernels[m];
             if ((rolling_valid_pos & kernel.mask.mask) == kernel.mask.mask) {
-                auto const value = spaced_kmer_cast_unchecked<
-                    std::remove_cvref_t<Enc>::encoding, Layout::kMSB
-                >(kernel.bit_extract(rolling_kmer));
-                invoke_spaced_kmer_callback<NMasks == 1>(
-                    callback, m, i + 1 - span_k, value
-                );
+                auto const raw = kernel.bit_extract(rolling_kmer);
+                assert_fits_width_(raw, spaced_kmer_weight(kernel.mask.mask));
+                invoke_spaced_kmer_callback<
+                    std::remove_cvref_t<Enc>::encoding, Layout::kMSB, NMasks == 1
+                >(callback, m, i + 1 - span_k, raw);
             }
         }
     }
@@ -220,12 +219,10 @@ inline void for_each_spaced_kmer_simd_by_mask(
             for_each_lane_ct_<L>([&](auto lane_ic) {
                 constexpr std::size_t lane = lane_ic;
                 if ((simd_valids[lane] & mm) == mm) {
-                    invoke_spaced_kmer_callback<NMasks == 1>(
-                        callback, m, start_pos + lane,
-                        spaced_kmer_cast_unchecked<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(
-                            simd_buffer[lane]
-                        )
-                    );
+                    assert_fits_width_(simd_buffer[lane], spaced_kmer_weight(kernel.mask.mask));
+                    invoke_spaced_kmer_callback<
+                        std::remove_cvref_t<Enc>::encoding, Layout::kMSB, NMasks == 1
+                    >(callback, m, start_pos + lane, simd_buffer[lane]);
                 }
             });
         }
@@ -363,12 +360,10 @@ inline void for_each_spaced_kmer_simd_by_position(
                 word &= (word - 1);
                 unsigned const lane = idx / NMasks;
                 unsigned const m    = idx % NMasks;
-                invoke_spaced_kmer_callback<NMasks == 1>(
-                    callback, m, start_pos + lane,
-                    spaced_kmer_cast_unchecked<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(
-                        mask_kmers[m][lane]
-                    )
-                );
+                assert_fits_width_(mask_kmers[m][lane], spaced_kmer_weight(kernels[m].mask.mask));
+                invoke_spaced_kmer_callback<
+                    std::remove_cvref_t<Enc>::encoding, Layout::kMSB, NMasks == 1
+                >(callback, m, start_pos + lane, mask_kmers[m][lane]);
             }
         }
     }
