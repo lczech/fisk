@@ -124,6 +124,12 @@ inline u64 extract_blocks(
 }
 
 #if defined(__AVX2__)
+inline u64 horizontal_sum_avx2(__m256i value) noexcept {
+  alignas(32) u64 lanes[4];
+  _mm256_store_si256(reinterpret_cast<__m256i *>(lanes), value);
+  return lanes[0] + lanes[1] + lanes[2] + lanes[3];
+}
+
 inline __m256i extract_butterfly_avx2(__m256i value,
                                       ButterflyPlanAVX2 const &plan) noexcept {
   value = _mm256_and_si256(value, plan.mask);
@@ -428,8 +434,9 @@ RunResult spaced_array_butterfly_assume_valid(std::string_view seq,
 }
 
 #if defined(__AVX2__)
-RunResult spaced_array_butterfly_assume_valid_avx2(std::string_view seq,
-                                                   MaskPlan const &plan) {
+template <bool VectorSink>
+RunResult spaced_array_butterfly_assume_valid_avx2_impl(std::string_view seq,
+                                                        MaskPlan const &plan) {
   std::size_t const span = plan.text.size();
   if (seq.size() < span) {
     return {};
@@ -443,6 +450,8 @@ RunResult spaced_array_butterfly_assume_valid_avx2(std::string_view seq,
 
   __m256i const output_shift =
       _mm256_set1_epi64x(std::popcount(plan.msb_mask.words[0]));
+  // Model a vector-capable consumer without a scalar handoff per batch.
+  __m256i vector_sum = _mm256_setzero_si256();
   RunResult result;
   for (; i + 4 <= seq.size(); i += 4) {
     u64 const packed1 = encode_assume_valid(seq[i]);
@@ -467,9 +476,11 @@ RunResult spaced_array_butterfly_assume_valid_avx2(std::string_view seq,
         extract_butterfly_avx2(high_values, plan.msb_butterfly_avx2[1]);
     __m256i const output = _mm256_or_si256(
         extracted_low, _mm256_sllv_epi64(extracted_high, output_shift));
-    alignas(32) u64 lanes[4];
-    _mm256_store_si256(reinterpret_cast<__m256i *>(lanes), output);
-    result.sink += lanes[0] + lanes[1] + lanes[2] + lanes[3];
+    if constexpr (VectorSink) {
+      vector_sum = _mm256_add_epi64(vector_sum, output);
+    } else {
+      result.sink += horizontal_sum_avx2(output);
+    }
     result.count += 4;
     value = Wide2{{low3, high3}};
   }
@@ -478,7 +489,21 @@ RunResult spaced_array_butterfly_assume_valid_avx2(std::string_view seq,
     result.sink += extract_butterfly(value, plan.msb_mask, plan.msb_butterfly);
     ++result.count;
   }
+  if constexpr (VectorSink) {
+    result.sink += horizontal_sum_avx2(vector_sum);
+  }
   return result;
+}
+
+RunResult spaced_array_butterfly_assume_valid_avx2(std::string_view seq,
+                                                   MaskPlan const &plan) {
+  return spaced_array_butterfly_assume_valid_avx2_impl<false>(seq, plan);
+}
+
+RunResult
+spaced_array_butterfly_assume_valid_avx2_vector(std::string_view seq,
+                                                MaskPlan const &plan) {
+  return spaced_array_butterfly_assume_valid_avx2_impl<true>(seq, plan);
 }
 #endif
 
@@ -645,16 +670,19 @@ RunResult spaced_window_packed_butterfly(std::span<std::uint8_t const> packed,
 }
 
 #if defined(__AVX2__)
+template <bool VectorSink>
 RunResult
-spaced_window_packed_butterfly_avx2(std::span<std::uint8_t const> packed,
-                                    std::size_t seq_size,
-                                    MaskPlan const &plan) {
+spaced_window_packed_butterfly_avx2_impl(std::span<std::uint8_t const> packed,
+                                         std::size_t seq_size,
+                                         MaskPlan const &plan) {
   RunResult result;
   std::size_t const stop = seq_size - plan.text.size();
   __m256i const right = _mm256_set_epi64x(6, 4, 2, 0);
   __m256i const left = _mm256_set_epi64x(58, 60, 62, 64);
   __m256i const output_shift =
       _mm256_set1_epi64x(std::popcount(plan.lsb_mask.words[0]));
+  // Model a vector-capable consumer without a scalar handoff per batch.
+  __m256i vector_sum = _mm256_setzero_si256();
 
   for (std::size_t byte = 0; 4 * byte <= stop; ++byte) {
     auto const words = load_packed_words(packed, byte);
@@ -672,16 +700,46 @@ spaced_window_packed_butterfly_avx2(std::span<std::uint8_t const> packed,
     __m256i const output =
         _mm256_or_si256(low, _mm256_sllv_epi64(high, output_shift));
 
-    alignas(32) u64 lanes[4];
-    _mm256_store_si256(reinterpret_cast<__m256i *>(lanes), output);
     unsigned const count =
         static_cast<unsigned>(std::min<std::size_t>(4, stop + 1 - 4 * byte));
-    for (unsigned lane = 0; lane < count; ++lane) {
-      result.sink += lanes[lane];
+    if constexpr (VectorSink) {
+      if (count == 4) {
+        vector_sum = _mm256_add_epi64(vector_sum, output);
+      } else {
+        alignas(32) u64 lanes[4];
+        _mm256_store_si256(reinterpret_cast<__m256i *>(lanes), output);
+        for (unsigned lane = 0; lane < count; ++lane) {
+          result.sink += lanes[lane];
+        }
+      }
+    } else {
+      alignas(32) u64 lanes[4];
+      _mm256_store_si256(reinterpret_cast<__m256i *>(lanes), output);
+      for (unsigned lane = 0; lane < count; ++lane) {
+        result.sink += lanes[lane];
+      }
     }
     result.count += count;
   }
+  if constexpr (VectorSink) {
+    result.sink += horizontal_sum_avx2(vector_sum);
+  }
   return result;
+}
+
+RunResult
+spaced_window_packed_butterfly_avx2(std::span<std::uint8_t const> packed,
+                                    std::size_t seq_size,
+                                    MaskPlan const &plan) {
+  return spaced_window_packed_butterfly_avx2_impl<false>(packed, seq_size,
+                                                         plan);
+}
+
+RunResult
+spaced_window_packed_butterfly_avx2_vector(std::span<std::uint8_t const> packed,
+                                           std::size_t seq_size,
+                                           MaskPlan const &plan) {
+  return spaced_window_packed_butterfly_avx2_impl<true>(packed, seq_size, plan);
 }
 #endif
 
@@ -823,6 +881,8 @@ void self_test() {
 #if defined(__AVX2__)
       assert(spaced_array_butterfly_assume_valid_avx2(valid_seq, plan) ==
              valid_expected);
+      assert(spaced_array_butterfly_assume_valid_avx2_vector(valid_seq, plan) ==
+             valid_expected);
 #endif
       auto const packed = pack_lsb(valid_seq);
       RunResult const packed_expected =
@@ -836,6 +896,8 @@ void self_test() {
 #if defined(__AVX2__)
       assert(spaced_window_packed_butterfly_avx2(packed, valid_seq.size(),
                                                  plan) == packed_expected);
+      assert(spaced_window_packed_butterfly_avx2_vector(
+                 packed, valid_seq.size(), plan) == packed_expected);
 #endif
       assert(spaced_window_packed_blocks(packed, valid_seq.size(), plan) ==
              packed_expected);
@@ -943,6 +1005,14 @@ int main() {
                 return spaced_array_butterfly_assume_valid_avx2(ascii, plan);
               },
               spaced_expected));
+      print_row("spaced_ascii", span, weight,
+                "array2_butterfly_assume_valid_avx2_vector",
+                benchmark(
+                    [&] {
+                      return spaced_array_butterfly_assume_valid_avx2_vector(
+                          ascii, plan);
+                    },
+                    spaced_expected));
 #endif
       print_row("spaced_ascii", span, weight, "uint128_pext",
                 benchmark([&] { return spaced_u128_pext(ascii, plan); },
@@ -979,6 +1049,13 @@ int main() {
                 benchmark(
                     [&] {
                       return spaced_window_packed_butterfly_avx2(
+                          packed, valid_ascii.size(), plan);
+                    },
+                    packed_expected));
+      print_row("spaced_packed", span, weight, "window_butterfly2_avx2_vector",
+                benchmark(
+                    [&] {
+                      return spaced_window_packed_butterfly_avx2_vector(
                           packed, valid_ascii.size(), plan);
                     },
                     packed_expected));

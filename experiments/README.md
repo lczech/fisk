@@ -29,3 +29,5 @@ also retain the rejected direct-position/block candidates for comparison. The `*
 retain the rejected scalar-only unrolling candidate.
 The `*_immediate.csv` and `*_immediate_novec.csv` files replace AVX2 variable-count shifts with
 compile-time immediate shifts.
+The `*_vector_sink.csv` and `*_vector_sink_novec.csv` files keep four extracted outputs in an AVX2
+register for a vector-capable consumer instead of reducing every group to scalar values.
