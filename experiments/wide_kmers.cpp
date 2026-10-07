@@ -433,6 +433,13 @@ RunResult spaced_array_butterfly_assume_valid(std::string_view seq,
   });
 }
 
+RunResult spaced_array_pext_assume_valid(std::string_view seq,
+                                         MaskPlan const &plan) {
+  return spaced_array_extract_assume_valid(seq, plan, [&](Wide2 value) {
+    return extract_pext(value, plan.msb_mask);
+  });
+}
+
 #if defined(__AVX2__)
 template <bool VectorSink>
 RunResult spaced_array_butterfly_assume_valid_avx2_impl(std::string_view seq,
@@ -878,6 +885,7 @@ void self_test() {
              wide_array(valid_seq, span));
       assert(spaced_array_butterfly_assume_valid(valid_seq, plan) ==
              valid_expected);
+      assert(spaced_array_pext_assume_valid(valid_seq, plan) == valid_expected);
 #if defined(__AVX2__)
       assert(spaced_array_butterfly_assume_valid_avx2(valid_seq, plan) ==
              valid_expected);
@@ -997,6 +1005,10 @@ int main() {
           benchmark(
               [&] { return spaced_array_butterfly_assume_valid(ascii, plan); },
               spaced_expected));
+      print_row(
+          "spaced_ascii", span, weight, "array2_pext_assume_valid",
+          benchmark([&] { return spaced_array_pext_assume_valid(ascii, plan); },
+                    spaced_expected));
 #if defined(__AVX2__)
       print_row(
           "spaced_ascii", span, weight, "array2_butterfly_assume_valid_avx2",

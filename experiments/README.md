@@ -33,3 +33,5 @@ The `*_vector_sink.csv` and `*_vector_sink_novec.csv` files keep four extracted 
 register for a vector-capable consumer instead of reducing every group to scalar values.
 The `wide_kmers_intel_*_baseline.csv` files repeat the final baseline on an Intel Core 7 240H,
 pinned to performance core 4, using GCC 15.2 and Clang 21.1.
+The `*_pext_assume.csv` files add an assume-valid two-limb PEXT path; `wide_kmers_intel_*` names
+are Gaia results, while names without `intel` are from the AMD Zen 2 host.
