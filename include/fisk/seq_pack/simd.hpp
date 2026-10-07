@@ -77,6 +77,21 @@ struct SeqPackButterflyKernelSSE2 : public BitExtractKernelButterflySSE2
         );
         return x;
     }
+
+    // Extract the two low bytes from each 64-bit lane and place them contiguously. SSE2 has no
+    // byte-shuffle instruction, but a mask, 16-bit byte swap, and byte shift are sufficient here.
+    template <Layout L>
+    static void store_packed(simd_vector x, char* out) noexcept
+    {
+        __m128i const low_mask = _mm_set1_epi64x(0xFFFF);
+        __m128i low = _mm_and_si128(x, low_mask);
+        if constexpr (L == Layout::kMSB) {
+            low = _mm_or_si128(_mm_slli_epi16(low, 8), _mm_srli_epi16(low, 8));
+        }
+        low = _mm_or_si128(low, _mm_srli_si128(low, 6));
+        std::uint32_t const packed = static_cast<std::uint32_t>(_mm_cvtsi128_si32(low));
+        std::memcpy(out, &packed, sizeof(packed));
+    }
 };
 
 #endif // FISK_HAS_SSE2
@@ -127,6 +142,26 @@ struct SeqPackButterflyKernelAVX2 : public BitExtractKernelButterflyAVX2
         };
         simd_vector const ctrl = _mm256_loadu_si256(reinterpret_cast<__m256i const*>(pattern));
         return _mm256_shuffle_epi8(x, ctrl);
+    }
+
+    // AVX2 can select both low words per 128-bit half in one byte shuffle, avoiding a lane spill.
+    template <Layout L>
+    static void store_packed(simd_vector x, char* out) noexcept
+    {
+        __m128i const pack_control = [] {
+            if constexpr (L == Layout::kMSB) {
+                return _mm_setr_epi8(
+                    1, 0, 9, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+                );
+            } else {
+                return _mm_setr_epi8(
+                    0, 1, 8, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+                );
+            }
+        }();
+        __m128i const lo = _mm_shuffle_epi8(_mm256_castsi256_si128(x), pack_control);
+        __m128i const hi = _mm_shuffle_epi8(_mm256_extracti128_si256(x, 1), pack_control);
+        _mm_storel_epi64(reinterpret_cast<__m128i*>(out), _mm_unpacklo_epi32(lo, hi));
     }
 };
 
@@ -181,6 +216,39 @@ struct SeqPackButterflyKernelAVX512 : public BitExtractKernelButterflyAVX512
         simd_vector const ctrl = _mm512_loadu_si512(reinterpret_cast<__m512i const*>(pattern));
         return _mm512_shuffle_epi8(x, ctrl);
     }
+
+    template <Layout L>
+    static void store_packed(simd_vector const& x, char* out) noexcept
+    {
+        // Shuffle each 128-bit quarter to expose its two low words, then permute those words
+        // across quarters. Both instructions are AVX512BW, so this stays within the project's
+        // baseline rather than requiring AVX512VBMI2's byte-compress instruction.
+        static constexpr std::uint8_t lsb_shuffle_pattern[64] = {
+            0, 1, 8, 9, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+            0, 1, 8, 9, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+            0, 1, 8, 9, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+            0, 1, 8, 9, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80
+        };
+        static constexpr std::uint8_t msb_shuffle_pattern[64] = {
+            1, 0, 9, 8, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+            1, 0, 9, 8, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+            1, 0, 9, 8, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+            1, 0, 9, 8, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80
+        };
+        static constexpr std::uint16_t word_indices[32] = {
+            0, 1, 8, 9, 16, 17, 24, 25, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        };
+        std::uint8_t const* const shuffle_pattern =
+            L == Layout::kMSB ? msb_shuffle_pattern : lsb_shuffle_pattern;
+        __m512i const shuffled = _mm512_shuffle_epi8(
+            x, _mm512_loadu_si512(reinterpret_cast<__m512i const*>(shuffle_pattern))
+        );
+        __m512i const compacted = _mm512_permutexvar_epi16(
+            _mm512_loadu_si512(reinterpret_cast<__m512i const*>(word_indices)), shuffled
+        );
+        _mm_storeu_si128(reinterpret_cast<__m128i*>(out), _mm512_castsi512_si128(compacted));
+    }
 };
 
 #endif // FISK_HAS_AVX512
@@ -227,6 +295,19 @@ struct SeqPackButterflyKernelNEON : public BitExtractKernelButterflyNEON
     {
         return vreinterpretq_u64_u8(vrev64q_u8(vreinterpretq_u8_u64(x)));
     }
+
+    template <Layout L>
+    static void store_packed(simd_vector const& x, char* out) noexcept
+    {
+        uint16x8_t low = vandq_u16(vreinterpretq_u16_u64(x), vdupq_n_u16(0xFFFF));
+        if constexpr (L == Layout::kMSB) {
+            low = vorrq_u16(vshlq_n_u16(low, 8), vshrq_n_u16(low, 8));
+        }
+        std::uint32_t const packed =
+            static_cast<std::uint32_t>(vget_lane_u16(vget_low_u16(low), 0))
+            | (static_cast<std::uint32_t>(vget_lane_u16(vget_high_u16(low), 0)) << 16);
+        std::memcpy(out, &packed, sizeof(packed));
+    }
 };
 
 #endif // FISK_HAS_NEON
@@ -272,6 +353,11 @@ struct WordEncoderButterflySimd
     static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
         Kernel::store(v, out);
+    }
+
+    static void store_packed(simd_vector const& v, char* out) noexcept
+    {
+        Kernel::template store_packed<L>(v, out);
     }
 
     simd_vector operator()(simd_vector x) const noexcept
@@ -335,7 +421,7 @@ using WordEncoderButterflyNEON = WordEncoderButterflySimd<SeqPackButterflyKernel
  * WordEncoderButterflySimd above), reusing existing storage.
  *
  * Beyond the WordEncoder requirements, `Encoder` has to provide `lanes`, `simd_vector`, `loadu()`,
- * `store()` and a call operator on a whole vector, as WordEncoderButterflySimd does.
+ * `store_packed()` and a call operator on a whole vector, as WordEncoderButterflySimd does.
  */
 template <WordEncoder Encoder>
 inline void pack_sequence_simd(
@@ -359,20 +445,12 @@ inline void pack_sequence_simd(
     char* const out_bytes = reinterpret_cast<char*>(out.data.data());
     char const* const data = seq.data();
 
-    auto write_chunk = [&](std::size_t off, std::uint64_t value) {
-        write_two_bit_chunk_<layout>(out_bytes + off / 4, value);
-    };
-
     std::size_t i = 0;
     for (; i + vec_bytes <= seq_len; i += vec_bytes) {
         simd_vector const x = encoder(
             Encoder::loadu(reinterpret_cast<std::uint64_t const*>(data + i))
         );
-        alignas(alignof(simd_vector)) std::uint64_t lane_buf[lanes];
-        Encoder::store(x, lane_buf);
-        for (std::size_t lane = 0; lane < lanes; ++lane) {
-            write_chunk(i + lane * 8, lane_buf[lane]);
-        }
+        encoder.store_packed(x, out_bytes + i / 4);
     }
     for (; i < seq_len; i += 8) {
         std::size_t const remaining = seq_len - i;
