@@ -46,6 +46,13 @@ struct RunResult {
   bool operator==(RunResult const &) const = default;
 };
 
+#if defined(__AVX2__)
+struct alignas(32) ButterflyPlanAVX2 {
+  __m256i mask{};
+  __m256i sieves[6]{};
+};
+#endif
+
 struct MaskPlan {
   std::string text;
   std::vector<unsigned> positions;
@@ -56,6 +63,9 @@ struct MaskPlan {
   std::array<fisk::BitExtractButterflyTable, 2> lsb_butterfly;
   std::array<fisk::BitExtractBlockTable, 2> msb_blocks;
   std::array<fisk::BitExtractBlockTable, 2> lsb_blocks;
+#if defined(__AVX2__)
+  std::array<ButterflyPlanAVX2, 2> lsb_butterfly_avx2;
+#endif
   std::array<std::array<u64, 3>, 4> packed_masks{};
   std::array<std::array<unsigned, 3>, 4> packed_shifts{};
 };
@@ -107,6 +117,26 @@ inline u64 extract_blocks(
   return combine_extracted(lo, hi, std::popcount(mask.words[0]));
 }
 
+#if defined(__AVX2__)
+inline __m256i extract_butterfly_avx2(__m256i value,
+                                      ButterflyPlanAVX2 const &plan) noexcept {
+  value = _mm256_and_si256(value, plan.mask);
+  auto step = [&](int shift, __m256i sieve) {
+    __m256i const moved = _mm256_and_si256(value, sieve);
+    value =
+        _mm256_or_si256(_mm256_xor_si256(value, moved),
+                        _mm256_srlv_epi64(moved, _mm256_set1_epi64x(shift)));
+  };
+  step(1, plan.sieves[0]);
+  step(2, plan.sieves[1]);
+  step(4, plan.sieves[2]);
+  step(8, plan.sieves[3]);
+  step(16, plan.sieves[4]);
+  step(32, plan.sieves[5]);
+  return value;
+}
+#endif
+
 std::string make_mask(std::size_t span, std::size_t weight) {
   assert(span >= 33 && span <= 64);
   assert(weight >= 2 && weight <= std::min<std::size_t>(32, span));
@@ -147,6 +177,15 @@ MaskPlan prepare_mask(std::string text) {
         fisk::bit_extract_block_table_preprocess(plan.msb_mask.words[limb]);
     plan.lsb_blocks[limb] =
         fisk::bit_extract_block_table_preprocess(plan.lsb_mask.words[limb]);
+#if defined(__AVX2__)
+    auto &avx2 = plan.lsb_butterfly_avx2[limb];
+    avx2.mask = _mm256_set1_epi64x(
+        static_cast<long long>(plan.lsb_butterfly[limb].mask));
+    for (std::size_t i = 0; i < 6; ++i) {
+      avx2.sieves[i] = _mm256_set1_epi64x(
+          static_cast<long long>(plan.lsb_butterfly[limb].sieves[i]));
+    }
+#endif
   }
 
   // A packed LSB sequence has four possible two-bit starting offsets per byte.
@@ -503,6 +542,47 @@ RunResult spaced_window_packed_butterfly(std::span<std::uint8_t const> packed,
   });
 }
 
+#if defined(__AVX2__)
+RunResult
+spaced_window_packed_butterfly_avx2(std::span<std::uint8_t const> packed,
+                                    std::size_t seq_size,
+                                    MaskPlan const &plan) {
+  RunResult result;
+  std::size_t const stop = seq_size - plan.text.size();
+  __m256i const right = _mm256_set_epi64x(6, 4, 2, 0);
+  __m256i const left = _mm256_set_epi64x(58, 60, 62, 64);
+  __m256i const output_shift =
+      _mm256_set1_epi64x(std::popcount(plan.lsb_mask.words[0]));
+
+  for (std::size_t byte = 0; 4 * byte <= stop; ++byte) {
+    auto const words = load_packed_words(packed, byte);
+    __m256i const word0 = _mm256_set1_epi64x(words[0]);
+    __m256i const word1 = _mm256_set1_epi64x(words[1]);
+    __m256i const word2 = _mm256_set1_epi64x(words[2]);
+    __m256i const low_windows = _mm256_or_si256(_mm256_srlv_epi64(word0, right),
+                                                _mm256_sllv_epi64(word1, left));
+    __m256i const high_windows = _mm256_or_si256(
+        _mm256_srlv_epi64(word1, right), _mm256_sllv_epi64(word2, left));
+    __m256i const low =
+        extract_butterfly_avx2(low_windows, plan.lsb_butterfly_avx2[0]);
+    __m256i const high =
+        extract_butterfly_avx2(high_windows, plan.lsb_butterfly_avx2[1]);
+    __m256i const output =
+        _mm256_or_si256(low, _mm256_sllv_epi64(high, output_shift));
+
+    alignas(32) u64 lanes[4];
+    _mm256_store_si256(reinterpret_cast<__m256i *>(lanes), output);
+    unsigned const count =
+        static_cast<unsigned>(std::min<std::size_t>(4, stop + 1 - 4 * byte));
+    for (unsigned lane = 0; lane < count; ++lane) {
+      result.sink += lanes[lane];
+    }
+    result.count += count;
+  }
+  return result;
+}
+#endif
+
 RunResult spaced_window_packed_blocks(std::span<std::uint8_t const> packed,
                                       std::size_t seq_size,
                                       MaskPlan const &plan) {
@@ -642,6 +722,10 @@ void self_test() {
              packed_expected);
       assert(spaced_window_packed_butterfly(packed, valid_seq.size(), plan) ==
              packed_expected);
+#if defined(__AVX2__)
+      assert(spaced_window_packed_butterfly_avx2(packed, valid_seq.size(),
+                                                 plan) == packed_expected);
+#endif
       assert(spaced_window_packed_blocks(packed, valid_seq.size(), plan) ==
              packed_expected);
     }
@@ -762,6 +846,15 @@ int main() {
                           packed, valid_ascii.size(), plan);
                     },
                     packed_expected));
+#if defined(__AVX2__)
+      print_row("spaced_packed", span, weight, "window_butterfly2_avx2",
+                benchmark(
+                    [&] {
+                      return spaced_window_packed_butterfly_avx2(
+                          packed, valid_ascii.size(), plan);
+                    },
+                    packed_expected));
+#endif
       print_row("spaced_packed", span, weight, "window_blocks2",
                 benchmark(
                     [&] {

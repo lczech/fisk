@@ -21,4 +21,6 @@ The checked-in CSVs were produced on an AMD Ryzen 7 PRO 4750U. Times are best-of
 only be compared within the same file. The `*_novec.csv` files repeat the experiment with GCC's
 `-fno-tree-vectorize` or Clang's `-fno-vectorize -fno-slp-vectorize`; they bound how much the sum
 sink benefits from batched compiler code generation. The `*_valid1.csv` files compare the original
-two-bit validity state with the optimized one-bit-per-base state in the same run.
+two-bit validity state with the optimized one-bit-per-base state in the same run. The `*_avx2.csv`
+and `*_avx2_novec.csv` files compare scalar packed-window butterfly extraction with an explicit
+four-window AVX2 implementation.
