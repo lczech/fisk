@@ -352,7 +352,10 @@ inline void pack_sequence_simd(
     std::size_t const num_bytes = (seq_len + 3) / 4;
 
     out.length = seq_len;
-    out.data.assign(num_bytes, 0);
+
+    // Every output byte is filled below, including the final partial byte; preserve reusable
+    // storage instead of clearing it before the SIMD and scalar-tail stores overwrite it.
+    out.data.resize(num_bytes);
     char* const out_bytes = reinterpret_cast<char*>(out.data.data());
     char const* const data = seq.data();
 

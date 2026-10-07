@@ -214,7 +214,10 @@ inline void pack_sequence(
     std::size_t const num_bytes = (seq_len + 3) / 4;
 
     out.length = seq_len;
-    out.data.assign(num_bytes, 0);
+
+    // Every byte in the resized output is written below, including the partial final byte. Avoid
+    // clearing retained storage first: callers commonly reuse `out` across many sequences/chunks.
+    out.data.resize(num_bytes);
     char* const out_bytes = reinterpret_cast<char*>(out.data.data());
     char const* const data = seq.data();
 
