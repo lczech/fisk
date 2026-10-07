@@ -39,3 +39,5 @@ The `*_pext_grouped.csv` files compare a safe looped packed PEXT path with four 
 offsets; grouping also guarantees that the zero third limb is never shifted by 64 bits.
 The `*_scalar_windows.csv` files record the rejected alternative of constructing four packed
 windows with scalar shifts before AVX2 extraction.
+The `*_avx2_unroll2.csv` files record the rejected alternative of processing two four-window AVX2
+batches per loop iteration with independent accumulators.
