@@ -64,6 +64,7 @@ struct MaskPlan {
   std::array<fisk::BitExtractBlockTable, 2> msb_blocks;
   std::array<fisk::BitExtractBlockTable, 2> lsb_blocks;
 #if defined(__AVX2__)
+  std::array<ButterflyPlanAVX2, 2> msb_butterfly_avx2;
   std::array<ButterflyPlanAVX2, 2> lsb_butterfly_avx2;
 #endif
   std::array<std::array<u64, 3>, 4> packed_masks{};
@@ -183,13 +184,16 @@ MaskPlan prepare_mask(std::string text) {
     plan.lsb_blocks[limb] =
         fisk::bit_extract_block_table_preprocess(plan.lsb_mask.words[limb]);
 #if defined(__AVX2__)
-    auto &avx2 = plan.lsb_butterfly_avx2[limb];
-    avx2.mask = _mm256_set1_epi64x(
-        static_cast<long long>(plan.lsb_butterfly[limb].mask));
-    for (std::size_t i = 0; i < 6; ++i) {
-      avx2.sieves[i] = _mm256_set1_epi64x(
-          static_cast<long long>(plan.lsb_butterfly[limb].sieves[i]));
-    }
+    auto prepare_avx2 = [](fisk::BitExtractButterflyTable const &source,
+                           ButterflyPlanAVX2 &target) {
+      target.mask = _mm256_set1_epi64x(static_cast<long long>(source.mask));
+      for (std::size_t i = 0; i < 6; ++i) {
+        target.sieves[i] =
+            _mm256_set1_epi64x(static_cast<long long>(source.sieves[i]));
+      }
+    };
+    prepare_avx2(plan.msb_butterfly[limb], plan.msb_butterfly_avx2[limb]);
+    prepare_avx2(plan.lsb_butterfly[limb], plan.lsb_butterfly_avx2[limb]);
 #endif
   }
 
@@ -423,6 +427,61 @@ RunResult spaced_array_butterfly_assume_valid(std::string_view seq,
     return extract_butterfly(value, plan.msb_mask, plan.msb_butterfly);
   });
 }
+
+#if defined(__AVX2__)
+RunResult spaced_array_butterfly_assume_valid_avx2(std::string_view seq,
+                                                   MaskPlan const &plan) {
+  std::size_t const span = plan.text.size();
+  if (seq.size() < span) {
+    return {};
+  }
+  u64 const mask = high_mask(span);
+  Wide2 value;
+  std::size_t i = 0;
+  for (; i + 1 < span; ++i) {
+    shift_in(value, encode_assume_valid(seq[i]), mask);
+  }
+
+  __m256i const output_shift =
+      _mm256_set1_epi64x(std::popcount(plan.msb_mask.words[0]));
+  RunResult result;
+  for (; i + 4 <= seq.size(); i += 4) {
+    u64 const packed1 = encode_assume_valid(seq[i]);
+    u64 const packed2 = (packed1 << 2) | encode_assume_valid(seq[i + 1]);
+    u64 const packed3 = (packed2 << 2) | encode_assume_valid(seq[i + 2]);
+    u64 const packed4 = (packed3 << 2) | encode_assume_valid(seq[i + 3]);
+    u64 const low = value.words[0];
+    u64 const high = value.words[1];
+    u64 const low0 = (low << 2) | packed1;
+    u64 const low1 = (low << 4) | packed2;
+    u64 const low2 = (low << 6) | packed3;
+    u64 const low3 = (low << 8) | packed4;
+    u64 const high0 = ((high << 2) | (low >> 62)) & mask;
+    u64 const high1 = ((high << 4) | (low >> 60)) & mask;
+    u64 const high2 = ((high << 6) | (low >> 58)) & mask;
+    u64 const high3 = ((high << 8) | (low >> 56)) & mask;
+    __m256i const low_values = _mm256_set_epi64x(low3, low2, low1, low0);
+    __m256i const high_values = _mm256_set_epi64x(high3, high2, high1, high0);
+    __m256i const extracted_low =
+        extract_butterfly_avx2(low_values, plan.msb_butterfly_avx2[0]);
+    __m256i const extracted_high =
+        extract_butterfly_avx2(high_values, plan.msb_butterfly_avx2[1]);
+    __m256i const output = _mm256_or_si256(
+        extracted_low, _mm256_sllv_epi64(extracted_high, output_shift));
+    alignas(32) u64 lanes[4];
+    _mm256_store_si256(reinterpret_cast<__m256i *>(lanes), output);
+    result.sink += lanes[0] + lanes[1] + lanes[2] + lanes[3];
+    result.count += 4;
+    value = Wide2{{low3, high3}};
+  }
+  for (; i < seq.size(); ++i) {
+    shift_in(value, encode_assume_valid(seq[i]), mask);
+    result.sink += extract_butterfly(value, plan.msb_mask, plan.msb_butterfly);
+    ++result.count;
+  }
+  return result;
+}
+#endif
 
 RunResult spaced_u128_pext(std::string_view seq, MaskPlan const &plan) {
   std::size_t const span = plan.text.size();
@@ -762,6 +821,10 @@ void self_test() {
              wide_array(valid_seq, span));
       assert(spaced_array_butterfly_assume_valid(valid_seq, plan) ==
              valid_expected);
+#if defined(__AVX2__)
+      assert(spaced_array_butterfly_assume_valid_avx2(valid_seq, plan) ==
+             valid_expected);
+#endif
       auto const packed = pack_lsb(valid_seq);
       RunResult const packed_expected =
           spaced_positions_packed_fixed(packed, valid_seq.size(), plan);
@@ -873,6 +936,15 @@ int main() {
           benchmark(
               [&] { return spaced_array_butterfly_assume_valid(ascii, plan); },
               spaced_expected));
+#if defined(__AVX2__)
+      print_row(
+          "spaced_ascii", span, weight, "array2_butterfly_assume_valid_avx2",
+          benchmark(
+              [&] {
+                return spaced_array_butterfly_assume_valid_avx2(ascii, plan);
+              },
+              spaced_expected));
+#endif
       print_row("spaced_ascii", span, weight, "uint128_pext",
                 benchmark([&] { return spaced_u128_pext(ascii, plan); },
                           spaced_expected));
