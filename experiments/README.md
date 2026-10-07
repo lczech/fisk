@@ -31,3 +31,5 @@ The `*_immediate.csv` and `*_immediate_novec.csv` files replace AVX2 variable-co
 compile-time immediate shifts.
 The `*_vector_sink.csv` and `*_vector_sink_novec.csv` files keep four extracted outputs in an AVX2
 register for a vector-capable consumer instead of reducing every group to scalar values.
+The `wide_kmers_intel_*_baseline.csv` files repeat the final baseline on an Intel Core 7 240H,
+pinned to performance core 4, using GCC 15.2 and Clang 21.1.
