@@ -76,6 +76,11 @@ inline std::uint8_t encode(char c) noexcept {
   return fisk::CharEncoderTable<fisk::Encoding::kACGT>{}(c);
 }
 
+inline std::uint8_t encode_assume_valid(char c) noexcept {
+  return fisk::CharEncoderAscii<fisk::Encoding::kACGT,
+                                fisk::InputValidity::kAssumeValid>{}(c);
+}
+
 inline u64 high_mask(std::size_t k) noexcept {
   unsigned const high_bits = static_cast<unsigned>(2 * k - 64);
   return high_bits == 64 ? ~u64{0} : ((u64{1} << high_bits) - 1);
@@ -248,6 +253,20 @@ RunResult wide_array(std::string_view seq, std::size_t k) {
   return result;
 }
 
+RunResult wide_array_assume_valid(std::string_view seq, std::size_t k) {
+  Wide2 value;
+  u64 const mask = high_mask(k);
+  RunResult result;
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    shift_in(value, encode_assume_valid(seq[i]), mask);
+    if (i + 1 >= k) {
+      result.sink += value.words[0] + std::rotl(value.words[1], 17);
+      ++result.count;
+    }
+  }
+  return result;
+}
+
 RunResult wide_u128(std::string_view seq, std::size_t k) {
   u128 value = 0;
   u128 const mask = k == 64 ? ~u128{0} : ((u128{1} << (2 * k)) - 1);
@@ -377,6 +396,31 @@ RunResult spaced_array_blocks_valid1(std::string_view seq,
                                      MaskPlan const &plan) {
   return spaced_array_extract_valid1(seq, plan, [&](Wide2 value) {
     return extract_blocks(value, plan.msb_mask, plan.msb_blocks);
+  });
+}
+
+template <typename Extract>
+RunResult spaced_array_extract_assume_valid(std::string_view seq,
+                                            MaskPlan const &plan,
+                                            Extract &&extract) {
+  std::size_t const span = plan.text.size();
+  u64 const mask = high_mask(span);
+  Wide2 value;
+  RunResult result;
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    shift_in(value, encode_assume_valid(seq[i]), mask);
+    if (i + 1 >= span) {
+      result.sink += extract(value);
+      ++result.count;
+    }
+  }
+  return result;
+}
+
+RunResult spaced_array_butterfly_assume_valid(std::string_view seq,
+                                              MaskPlan const &plan) {
+  return spaced_array_extract_assume_valid(seq, plan, [&](Wide2 value) {
+    return extract_butterfly(value, plan.msb_mask, plan.msb_butterfly);
   });
 }
 
@@ -713,6 +757,11 @@ void self_test() {
              }) == extract_expected);
 
       std::string const valid_seq = make_sequence(400, false);
+      RunResult const valid_expected = spaced_direct_ascii(valid_seq, plan);
+      assert(wide_array_assume_valid(valid_seq, span) ==
+             wide_array(valid_seq, span));
+      assert(spaced_array_butterfly_assume_valid(valid_seq, plan) ==
+             valid_expected);
       auto const packed = pack_lsb(valid_seq);
       RunResult const packed_expected =
           spaced_positions_packed_fixed(packed, valid_seq.size(), plan);
@@ -749,6 +798,9 @@ int main() {
     RunResult const expected = wide_array(ascii, span);
     print_row("wide_ascii", span, 0, "array2",
               benchmark([&] { return wide_array(ascii, span); }, expected));
+    print_row("wide_ascii", span, 0, "array2_assume_valid",
+              benchmark([&] { return wide_array_assume_valid(ascii, span); },
+                        expected));
     print_row("wide_ascii", span, 0, "uint128",
               benchmark([&] { return wide_u128(ascii, span); }, expected));
     print_row("wide_ascii", span, 0, "vector2",
@@ -816,6 +868,11 @@ int main() {
           "spaced_ascii", span, weight, "array2_blocks_valid1",
           benchmark([&] { return spaced_array_blocks_valid1(ascii, plan); },
                     spaced_expected));
+      print_row(
+          "spaced_ascii", span, weight, "array2_butterfly_assume_valid",
+          benchmark(
+              [&] { return spaced_array_butterfly_assume_valid(ascii, plan); },
+              spaced_expected));
       print_row("spaced_ascii", span, weight, "uint128_pext",
                 benchmark([&] { return spaced_u128_pext(ascii, plan); },
                           spaced_expected));

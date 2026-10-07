@@ -23,4 +23,5 @@ only be compared within the same file. The `*_novec.csv` files repeat the experi
 sink benefits from batched compiler code generation. The `*_valid1.csv` files compare the original
 two-bit validity state with the optimized one-bit-per-base state in the same run. The `*_avx2.csv`
 and `*_avx2_novec.csv` files compare scalar packed-window butterfly extraction with an explicit
-four-window AVX2 implementation.
+four-window AVX2 implementation. The `*_assume.csv` files measure an assume-valid ASCII path and
+also retain the rejected direct-position/block candidates for comparison.
