@@ -596,8 +596,30 @@ load_packed_words(std::span<std::uint8_t const> packed, std::size_t byte) {
   return words;
 }
 
-RunResult spaced_direct_packed(std::span<std::uint8_t const> packed,
-                               std::size_t seq_size, MaskPlan const &plan) {
+inline u64
+extract_packed_pext_skip_zero(std::array<u64, 3> const &words,
+                              std::array<u64, 3> const &masks,
+                              std::array<unsigned, 3> const &shifts) noexcept {
+  u64 out = _pext_u64(words[0], masks[0]) |
+            (_pext_u64(words[1], masks[1]) << shifts[1]);
+  // Local offset zero never reaches word 2; avoid both PEXT and a shift by 64.
+  if (masks[2] != 0) {
+    out |= _pext_u64(words[2], masks[2]) << shifts[2];
+  }
+  return out;
+}
+
+inline u64
+extract_packed_pext_two(std::array<u64, 3> const &words,
+                        std::array<u64, 3> const &masks,
+                        std::array<unsigned, 3> const &shifts) noexcept {
+  return _pext_u64(words[0], masks[0]) |
+         (_pext_u64(words[1], masks[1]) << shifts[1]);
+}
+
+RunResult spaced_direct_packed_looped(std::span<std::uint8_t const> packed,
+                                      std::size_t seq_size,
+                                      MaskPlan const &plan) {
   RunResult result;
   std::size_t const stop = seq_size - plan.text.size();
   for (std::size_t byte = 0; 4 * byte <= stop; ++byte) {
@@ -605,12 +627,41 @@ RunResult spaced_direct_packed(std::span<std::uint8_t const> packed,
     unsigned const last_local =
         static_cast<unsigned>(std::min<std::size_t>(3, stop - 4 * byte));
     for (unsigned local = 0; local <= last_local; ++local) {
-      auto const &masks = plan.packed_masks[local];
-      auto const &shifts = plan.packed_shifts[local];
-      u64 const out = _pext_u64(words[0], masks[0]) |
-                      (_pext_u64(words[1], masks[1]) << shifts[1]) |
-                      (_pext_u64(words[2], masks[2]) << shifts[2]);
-      result.sink += out;
+      result.sink += extract_packed_pext_skip_zero(
+          words, plan.packed_masks[local], plan.packed_shifts[local]);
+      ++result.count;
+    }
+  }
+  return result;
+}
+
+RunResult spaced_direct_packed_unrolled(std::span<std::uint8_t const> packed,
+                                        std::size_t seq_size,
+                                        MaskPlan const &plan) {
+  RunResult result;
+  std::size_t const window_count = seq_size - plan.text.size() + 1;
+  std::size_t const full_bytes = window_count / 4;
+  for (std::size_t byte = 0; byte < full_bytes; ++byte) {
+    auto const words = load_packed_words(packed, byte);
+    result.sink += extract_packed_pext_two(words, plan.packed_masks[0],
+                                           plan.packed_shifts[0]);
+    result.sink += extract_packed_pext_skip_zero(words, plan.packed_masks[1],
+                                                 plan.packed_shifts[1]);
+    result.sink += extract_packed_pext_skip_zero(words, plan.packed_masks[2],
+                                                 plan.packed_shifts[2]);
+    result.sink += extract_packed_pext_skip_zero(words, plan.packed_masks[3],
+                                                 plan.packed_shifts[3]);
+    result.count += 4;
+  }
+
+  if (std::size_t const remaining = window_count % 4; remaining != 0) {
+    auto const words = load_packed_words(packed, full_bytes);
+    result.sink += extract_packed_pext_two(words, plan.packed_masks[0],
+                                           plan.packed_shifts[0]);
+    ++result.count;
+    for (std::size_t local = 1; local < remaining; ++local) {
+      result.sink += extract_packed_pext_skip_zero(
+          words, plan.packed_masks[local], plan.packed_shifts[local]);
       ++result.count;
     }
   }
@@ -895,7 +946,9 @@ void self_test() {
       auto const packed = pack_lsb(valid_seq);
       RunResult const packed_expected =
           spaced_positions_packed_fixed(packed, valid_seq.size(), plan);
-      assert(spaced_direct_packed(packed, valid_seq.size(), plan) ==
+      assert(spaced_direct_packed_looped(packed, valid_seq.size(), plan) ==
+             packed_expected);
+      assert(spaced_direct_packed_unrolled(packed, valid_seq.size(), plan) ==
              packed_expected);
       assert(spaced_window_packed(packed, valid_seq.size(), plan) ==
              packed_expected);
@@ -1035,11 +1088,18 @@ int main() {
 
       RunResult const packed_expected =
           spaced_positions_packed_fixed(packed, valid_ascii.size(), plan);
-      print_row("spaced_packed", span, weight, "direct_pext3",
+      print_row("spaced_packed", span, weight, "direct_pext_looped",
                 benchmark(
                     [&] {
-                      return spaced_direct_packed(packed, valid_ascii.size(),
-                                                  plan);
+                      return spaced_direct_packed_looped(
+                          packed, valid_ascii.size(), plan);
+                    },
+                    packed_expected));
+      print_row("spaced_packed", span, weight, "direct_pext_unrolled",
+                benchmark(
+                    [&] {
+                      return spaced_direct_packed_unrolled(
+                          packed, valid_ascii.size(), plan);
                     },
                     packed_expected));
       print_row("spaced_packed", span, weight, "window_pext2",

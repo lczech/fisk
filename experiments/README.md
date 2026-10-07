@@ -35,3 +35,5 @@ The `wide_kmers_intel_*_baseline.csv` files repeat the final baseline on an Inte
 pinned to performance core 4, using GCC 15.2 and Clang 21.1.
 The `*_pext_assume.csv` files add an assume-valid two-limb PEXT path; `wide_kmers_intel_*` names
 are Gaia results, while names without `intel` are from the AMD Zen 2 host.
+The `*_pext_grouped.csv` files compare a safe looped packed PEXT path with four explicitly grouped
+offsets; grouping also guarantees that the zero third limb is never shifted by 64 bits.
