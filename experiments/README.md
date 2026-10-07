@@ -37,3 +37,5 @@ The `*_pext_assume.csv` files add an assume-valid two-limb PEXT path; `wide_kmer
 are Gaia results, while names without `intel` are from the AMD Zen 2 host.
 The `*_pext_grouped.csv` files compare a safe looped packed PEXT path with four explicitly grouped
 offsets; grouping also guarantees that the zero third limb is never shifted by 64 bits.
+The `*_scalar_windows.csv` files record the rejected alternative of constructing four packed
+windows with scalar shifts before AVX2 extraction.
