@@ -41,3 +41,5 @@ The `*_scalar_windows.csv` files record the rejected alternative of constructing
 windows with scalar shifts before AVX2 extraction.
 The `*_avx2_unroll2.csv` files record the rejected alternative of processing two four-window AVX2
 batches per loop iteration with independent accumulators.
+The `*_pext_roll4.csv` files compare scalar and four-window assume-valid ASCII rolling before
+two-limb PEXT extraction.

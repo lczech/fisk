@@ -440,6 +440,50 @@ RunResult spaced_array_pext_assume_valid(std::string_view seq,
   });
 }
 
+RunResult spaced_array_pext_assume_valid_unroll4(std::string_view seq,
+                                                 MaskPlan const &plan) {
+  std::size_t const span = plan.text.size();
+  if (seq.size() < span) {
+    return {};
+  }
+  u64 const mask = high_mask(span);
+  Wide2 value;
+  std::size_t i = 0;
+  for (; i + 1 < span; ++i) {
+    shift_in(value, encode_assume_valid(seq[i]), mask);
+  }
+
+  RunResult result;
+  for (; i + 4 <= seq.size(); i += 4) {
+    u64 const packed1 = encode_assume_valid(seq[i]);
+    u64 const packed2 = (packed1 << 2) | encode_assume_valid(seq[i + 1]);
+    u64 const packed3 = (packed2 << 2) | encode_assume_valid(seq[i + 2]);
+    u64 const packed4 = (packed3 << 2) | encode_assume_valid(seq[i + 3]);
+    u64 const low = value.words[0];
+    u64 const high = value.words[1];
+    Wide2 const value0{
+        {(low << 2) | packed1, ((high << 2) | (low >> 62)) & mask}};
+    Wide2 const value1{
+        {(low << 4) | packed2, ((high << 4) | (low >> 60)) & mask}};
+    Wide2 const value2{
+        {(low << 6) | packed3, ((high << 6) | (low >> 58)) & mask}};
+    Wide2 const value3{
+        {(low << 8) | packed4, ((high << 8) | (low >> 56)) & mask}};
+    result.sink += extract_pext(value0, plan.msb_mask) +
+                   extract_pext(value1, plan.msb_mask) +
+                   extract_pext(value2, plan.msb_mask) +
+                   extract_pext(value3, plan.msb_mask);
+    result.count += 4;
+    value = value3;
+  }
+  for (; i < seq.size(); ++i) {
+    shift_in(value, encode_assume_valid(seq[i]), mask);
+    result.sink += extract_pext(value, plan.msb_mask);
+    ++result.count;
+  }
+  return result;
+}
+
 #if defined(__AVX2__)
 template <bool VectorSink>
 RunResult spaced_array_butterfly_assume_valid_avx2_impl(std::string_view seq,
@@ -937,6 +981,8 @@ void self_test() {
       assert(spaced_array_butterfly_assume_valid(valid_seq, plan) ==
              valid_expected);
       assert(spaced_array_pext_assume_valid(valid_seq, plan) == valid_expected);
+      assert(spaced_array_pext_assume_valid_unroll4(valid_seq, plan) ==
+             valid_expected);
 #if defined(__AVX2__)
       assert(spaced_array_butterfly_assume_valid_avx2(valid_seq, plan) ==
              valid_expected);
@@ -1062,6 +1108,13 @@ int main() {
           "spaced_ascii", span, weight, "array2_pext_assume_valid",
           benchmark([&] { return spaced_array_pext_assume_valid(ascii, plan); },
                     spaced_expected));
+      print_row(
+          "spaced_ascii", span, weight, "array2_pext_assume_valid_unroll4",
+          benchmark(
+              [&] {
+                return spaced_array_pext_assume_valid_unroll4(ascii, plan);
+              },
+              spaced_expected));
 #if defined(__AVX2__)
       print_row(
           "spaced_ascii", span, weight, "array2_butterfly_assume_valid_avx2",
