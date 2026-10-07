@@ -51,6 +51,7 @@ struct MaskPlan {
   std::vector<unsigned> positions;
   Wide2 msb_mask;
   Wide2 lsb_mask;
+  u64 position_mask_msb = 0;
   std::array<fisk::BitExtractButterflyTable, 2> msb_butterfly;
   std::array<fisk::BitExtractButterflyTable, 2> lsb_butterfly;
   std::array<fisk::BitExtractBlockTable, 2> msb_blocks;
@@ -127,8 +128,10 @@ MaskPlan prepare_mask(std::string text) {
   plan.text = std::move(text);
 
   for (std::size_t i = 0; i < plan.text.size(); ++i) {
-    shift_in(plan.msb_mask, plan.text[i] == '1' ? 3 : 0, ~u64{0});
-    if (plan.text[i] == '1') {
+    bool const kept = plan.text[i] == '1';
+    shift_in(plan.msb_mask, kept ? 3 : 0, ~u64{0});
+    plan.position_mask_msb = (plan.position_mask_msb << 1) | kept;
+    if (kept) {
       plan.positions.push_back(static_cast<unsigned>(i));
       unsigned const bit = static_cast<unsigned>(2 * i);
       plan.lsb_mask.words[bit / 64] |= u64{3} << (bit % 64);
@@ -293,6 +296,47 @@ RunResult spaced_array_butterfly(std::string_view seq, MaskPlan const &plan) {
 
 RunResult spaced_array_blocks(std::string_view seq, MaskPlan const &plan) {
   return spaced_array_extract(seq, plan, [&](Wide2 value) {
+    return extract_blocks(value, plan.msb_mask, plan.msb_blocks);
+  });
+}
+
+template <typename Extract>
+RunResult spaced_array_extract_valid1(std::string_view seq,
+                                      MaskPlan const &plan, Extract &&extract) {
+  std::size_t const span = plan.text.size();
+  u64 const mask = high_mask(span);
+  Wide2 value;
+  u64 valid = 0;
+  RunResult result;
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    std::uint8_t const code = encode(seq[i]);
+    shift_in(value, code & 3u, mask);
+    valid = (valid << 1) | static_cast<u64>(code < 4);
+    if (i + 1 >= span &&
+        (valid & plan.position_mask_msb) == plan.position_mask_msb) {
+      result.sink += extract(value);
+      ++result.count;
+    }
+  }
+  return result;
+}
+
+RunResult spaced_array_pext_valid1(std::string_view seq, MaskPlan const &plan) {
+  return spaced_array_extract_valid1(seq, plan, [&](Wide2 value) {
+    return extract_pext(value, plan.msb_mask);
+  });
+}
+
+RunResult spaced_array_butterfly_valid1(std::string_view seq,
+                                        MaskPlan const &plan) {
+  return spaced_array_extract_valid1(seq, plan, [&](Wide2 value) {
+    return extract_butterfly(value, plan.msb_mask, plan.msb_butterfly);
+  });
+}
+
+RunResult spaced_array_blocks_valid1(std::string_view seq,
+                                     MaskPlan const &plan) {
+  return spaced_array_extract_valid1(seq, plan, [&](Wide2 value) {
     return extract_blocks(value, plan.msb_mask, plan.msb_blocks);
   });
 }
@@ -568,6 +612,9 @@ void self_test() {
       assert(spaced_array_pext(seq, plan) == expected);
       assert(spaced_array_butterfly(seq, plan) == expected);
       assert(spaced_array_blocks(seq, plan) == expected);
+      assert(spaced_array_pext_valid1(seq, plan) == expected);
+      assert(spaced_array_butterfly_valid1(seq, plan) == expected);
+      assert(spaced_array_blocks_valid1(seq, plan) == expected);
       assert(spaced_u128_pext(seq, plan) == expected);
 
       auto const values = make_wide_values(100, span);
@@ -674,6 +721,17 @@ int main() {
       print_row("spaced_ascii", span, weight, "array2_blocks",
                 benchmark([&] { return spaced_array_blocks(ascii, plan); },
                           spaced_expected));
+      print_row("spaced_ascii", span, weight, "array2_pext_valid1",
+                benchmark([&] { return spaced_array_pext_valid1(ascii, plan); },
+                          spaced_expected));
+      print_row(
+          "spaced_ascii", span, weight, "array2_butterfly_valid1",
+          benchmark([&] { return spaced_array_butterfly_valid1(ascii, plan); },
+                    spaced_expected));
+      print_row(
+          "spaced_ascii", span, weight, "array2_blocks_valid1",
+          benchmark([&] { return spaced_array_blocks_valid1(ascii, plan); },
+                    spaced_expected));
       print_row("spaced_ascii", span, weight, "uint128_pext",
                 benchmark([&] { return spaced_u128_pext(ascii, plan); },
                           spaced_expected));
