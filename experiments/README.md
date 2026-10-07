@@ -43,3 +43,5 @@ The `*_avx2_unroll2.csv` files record the rejected alternative of processing two
 batches per loop iteration with independent accumulators.
 The `*_pext_roll4.csv` files compare scalar and four-window assume-valid ASCII rolling before
 two-limb PEXT extraction.
+The `*_pext_valid_roll4.csv` files record the rejected extension of four-window PEXT to the
+compact-validity ASCII path.
