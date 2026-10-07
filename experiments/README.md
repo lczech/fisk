@@ -18,4 +18,6 @@ taskset -c 2 ./build/wide_kmers_clang
 ```
 
 The checked-in CSVs were produced on an AMD Ryzen 7 PRO 4750U. Times are best-of-seven and should
-only be compared within the same file.
+only be compared within the same file. The `*_novec.csv` files repeat the experiment with GCC's
+`-fno-tree-vectorize` or Clang's `-fno-vectorize -fno-slp-vectorize`; they bound how much the sum
+sink benefits from batched compiler code generation.
