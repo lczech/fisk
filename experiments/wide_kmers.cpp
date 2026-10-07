@@ -127,18 +127,17 @@ inline u64 extract_blocks(
 inline __m256i extract_butterfly_avx2(__m256i value,
                                       ButterflyPlanAVX2 const &plan) noexcept {
   value = _mm256_and_si256(value, plan.mask);
-  auto step = [&](int shift, __m256i sieve) {
+  auto step = [&]<int Shift>(__m256i sieve) {
     __m256i const moved = _mm256_and_si256(value, sieve);
-    value =
-        _mm256_or_si256(_mm256_xor_si256(value, moved),
-                        _mm256_srlv_epi64(moved, _mm256_set1_epi64x(shift)));
+    value = _mm256_or_si256(_mm256_xor_si256(value, moved),
+                            _mm256_srli_epi64(moved, Shift));
   };
-  step(1, plan.sieves[0]);
-  step(2, plan.sieves[1]);
-  step(4, plan.sieves[2]);
-  step(8, plan.sieves[3]);
-  step(16, plan.sieves[4]);
-  step(32, plan.sieves[5]);
+  step.template operator()<1>(plan.sieves[0]);
+  step.template operator()<2>(plan.sieves[1]);
+  step.template operator()<4>(plan.sieves[2]);
+  step.template operator()<8>(plan.sieves[3]);
+  step.template operator()<16>(plan.sieves[4]);
+  step.template operator()<32>(plan.sieves[5]);
   return value;
 }
 #endif

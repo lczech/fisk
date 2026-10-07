@@ -27,3 +27,5 @@ four-window AVX2 implementation. The `*_assume.csv` files measure an assume-vali
 also retain the rejected direct-position/block candidates for comparison. The `*_roll4.csv` and
 `*_roll4_novec.csv` files measure four-at-once rolling plus explicit AVX2 extraction; they also
 retain the rejected scalar-only unrolling candidate.
+The `*_immediate.csv` and `*_immediate_novec.csv` files replace AVX2 variable-count shifts with
+compile-time immediate shifts.
