@@ -7,13 +7,14 @@
 #include <unordered_set>
 #include <vector>
 
-#include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
-#include "fisk/core/random.hpp"
+#include "fisk/core/kmer_hash.hpp"
+#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
+#include "simd_lanes.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -24,57 +25,7 @@ using namespace fisk;
 
 // Ground truth comes from oracle.hpp, built from nucleotide strings and deliberately independent
 // of core/kmer.hpp, so that a mistake in the bit tricks under test cannot cancel itself out
-// against the reference.
-
-// Build the k-mer for a string of nucleotides under the conventions of K, via the oracle rather
-// than via any of the library's own encoders.
-template <typename K>
-static K oracle_kmer(std::string const& seq)
-{
-    return K{oracle_encode<K::encoding, K::layout>(seq).value()};
-}
-
-static char complement_char(char c)
-{
-    switch (c) {
-        case 'A': return 'T';
-        case 'C': return 'G';
-        case 'G': return 'C';
-        case 'T': return 'A';
-    }
-    return 'N';
-}
-
-static std::string complement_string(std::string s)
-{
-    for (auto& c : s) {
-        c = complement_char(c);
-    }
-    return s;
-}
-
-static std::string reverse_string(std::string s)
-{
-    std::reverse(s.begin(), s.end());
-    return s;
-}
-
-static std::string reverse_complement_string(std::string const& s)
-{
-    return reverse_string(complement_string(s));
-}
-
-// Random nucleotide strings of a given length, from a fixed seed so failures reproduce.
-static std::vector<std::string> random_seqs(std::size_t width, std::size_t count, std::uint64_t seed)
-{
-    Splitmix64 rng(seed);
-    std::vector<std::string> out;
-    out.reserve(count);
-    for (std::size_t n = 0; n < count; ++n) {
-        out.push_back(random_sequence(rng, width, "ACGT"));
-    }
-    return out;
-}
+// against the reference. Random inputs come from random_seqs() in corpus.hpp.
 
 // =================================================================================================
 //     Compile-Time Guarantees
@@ -153,12 +104,21 @@ static_assert(
     std::is_same_v<decltype(kmer_convert<Encoding::kACTG, Layout::kLSB>(KmerAcgtMsb{0}, 1)), KmerActgLsb>
 );
 
+// The predicate behind the debug check in kmer_cast(): a word fits a width iff it has no bits set
+// above it, including at the boundary widths 1 and 32.
+static_assert(fits_width_(0x06, 3) && fits_width_(0x3F, 3));
+static_assert(!fits_width_(0x40, 3));
+static_assert(fits_width_(0x3, 1) && !fits_width_(0x4, 1));
+static_assert(fits_width_(std::uint64_t{1} << 61, 31) && !fits_width_(std::uint64_t{1} << 62, 31));
+static_assert(fits_width_(~std::uint64_t{0}, 32));
+
 // Every operation is constexpr, so k-mers can be built and manipulated at compile time. Spelled
 // out on one worked example, ACG under ACGT/MSB, whose expected words are short enough to read.
 namespace {
     constexpr auto acg = kmer_cast<Encoding::kACGT, Layout::kMSB>(0x06, 3);
 }
 static_assert(kmer_value(acg) == 0x06);
+static_assert(kmer_encode("ACG") == acg);
 static_assert(base_at(acg, 0, 3) == 0 && base_at(acg, 2, 3) == 2);
 static_assert(complement(acg, 3) == KmerAcgtMsb{0x39});          // TGC
 static_assert(reverse(acg, 3) == KmerAcgtMsb{0x24});             // GCA
@@ -266,10 +226,10 @@ static void check_nucleotide_ops()
         for (auto const& seq : random_seqs(width, 8, 222222 + width)) {
             auto const kmer = oracle_kmer<K>(seq);
 
-            EXPECT_EQ(kmer_decode(complement(kmer, width), width), complement_string(seq));
-            EXPECT_EQ(kmer_decode(reverse(kmer, width), width), reverse_string(seq));
+            EXPECT_EQ(kmer_decode(complement(kmer, width), width), oracle_complement_string(seq));
+            EXPECT_EQ(kmer_decode(reverse(kmer, width), width), oracle_reverse_string(seq));
             EXPECT_EQ(
-                kmer_decode(reverse_complement(kmer, width), width), reverse_complement_string(seq)
+                kmer_decode(reverse_complement(kmer, width), width), oracle_reverse_complement_string(seq)
             );
 
             // Each of the three is an involution: applying it twice restores the original.
@@ -490,55 +450,54 @@ TEST(Kmer, Hashing)
 // =================================================================================================
 
 // kmer_encode() must be the exact inverse of kmer_decode(): building a k-mer from a string and
-// decoding it again must return that same string, under every convention and every way of naming
-// the template arguments.
-TEST(Kmer, EncodeDecodeRoundTrip)
+// decoding it again must return that same string, under every convention.
+template <typename K>
+static void check_encode_decode_round_trip()
 {
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 141414 + width)) {
-            EXPECT_EQ(kmer_decode(kmer_encode(seq), width), seq);
-            EXPECT_EQ(kmer_decode((kmer_encode<Encoding::kACTG>(seq)), width), seq);
-            EXPECT_EQ(kmer_decode(kmer_encode<Layout::kLSB>(seq), width), seq);
-            EXPECT_EQ(
-                kmer_decode((kmer_encode<Encoding::kACTG, Layout::kLSB>(seq)), width), seq
-            );
-            // Same as the line above, but with the two template arguments given in the other
-            // order, exercising the reversed-order overload.
-            EXPECT_EQ(
-                kmer_decode((kmer_encode<Layout::kLSB, Encoding::kACTG>(seq)), width), seq
-            );
+            EXPECT_EQ(kmer_decode(kmer_encode<K>(seq), width), seq);
         }
     }
+}
+
+TEST(Kmer, EncodeDecodeRoundTrip)
+{
+    check_encode_decode_round_trip<KmerAcgtMsb>();
+    check_encode_decode_round_trip<KmerAcgtLsb>();
+    check_encode_decode_round_trip<KmerActgMsb>();
+    check_encode_decode_round_trip<KmerActgLsb>();
 }
 
 // kmer_encode() must agree with the oracle, not merely round-trip through kmer_decode(): a pair
 // of cancelling bugs in encode and decode could otherwise satisfy the round-trip alone.
-TEST(Kmer, EncodeMatchesOracle)
+template <typename K>
+static void check_encode_matches_oracle()
 {
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 151515 + width)) {
-            EXPECT_EQ(kmer_encode(seq), oracle_kmer<KmerAcgtMsb>(seq));
-            EXPECT_EQ((kmer_encode<Encoding::kACTG>(seq)), oracle_kmer<KmerActgMsb>(seq));
-            EXPECT_EQ(kmer_encode<Layout::kLSB>(seq), oracle_kmer<KmerAcgtLsb>(seq));
-            EXPECT_EQ(
-                (kmer_encode<Encoding::kACTG, Layout::kLSB>(seq)), oracle_kmer<KmerActgLsb>(seq)
-            );
-            // The reversed-order overload must agree with the canonical order, not just compile.
-            EXPECT_EQ(
-                (kmer_encode<Layout::kLSB, Encoding::kACTG>(seq)),
-                (kmer_encode<Encoding::kACTG, Layout::kLSB>(seq))
-            );
+            EXPECT_EQ(kmer_encode<K>(seq), oracle_kmer<K>(seq));
         }
     }
 }
 
-// Both argument orders name the exact same type, not merely equal values.
-TEST(Kmer, EncodeArgumentOrderIsInterchangeable)
+TEST(Kmer, EncodeMatchesOracle)
 {
-    static_assert(std::is_same_v<
-        decltype(kmer_encode<Encoding::kACTG, Layout::kLSB>("A")),
-        decltype(kmer_encode<Layout::kLSB, Encoding::kACTG>("A"))>);
+    check_encode_matches_oracle<KmerAcgtMsb>();
+    check_encode_matches_oracle<KmerAcgtLsb>();
+    check_encode_matches_oracle<KmerActgMsb>();
+    check_encode_matches_oracle<KmerActgLsb>();
 }
+
+// The template argument names the result type exactly. Only contiguous k-mers can be built from a
+// string alone; a spaced k-mer also needs its mask, see kmer_spaced/kmer_spaced.hpp.
+template <typename K>
+concept EncodableFromString = requires(std::string_view seq) { kmer_encode<K>(seq); };
+
+static_assert(std::is_same_v<decltype(kmer_encode<KmerActgLsb>("A")), KmerActgLsb>);
+static_assert(EncodableFromString<KmerAcgtMsb>);
+static_assert(!EncodableFromString<SpacedKmerAcgtMsb>);
+static_assert(!EncodableFromString<std::uint64_t>);
 
 // The default template arguments must be ACGT/MSB, matching what for_each_kmer() emits.
 TEST(Kmer, EncodeDefaultsMatchForEachKmer)
@@ -575,11 +534,11 @@ TEST(Kmer, EncodeAgreesWithSeqEnc)
 
         if (is_actg) {
             EXPECT_EQ(
-                kmer_value((kmer_encode<Encoding::kACTG>(seq))),
+                kmer_value(kmer_encode<KmerActgMsb>(seq)),
                 std::uint64_t{CharEncoderTable<Encoding::kACTG>{}(c)}
             );
         } else {
-            EXPECT_ANY_THROW((void) (kmer_encode<Encoding::kACTG>(seq)));
+            EXPECT_ANY_THROW((void) kmer_encode<KmerActgMsb>(seq));
         }
     }
 }
@@ -602,7 +561,7 @@ TEST(Kmer, EncodeInvalidInput)
                 std::string seq(width, 'A');
                 seq[pos] = c;
                 EXPECT_THROW((void) kmer_encode(seq), std::invalid_argument);
-                EXPECT_THROW((void) (kmer_encode<Encoding::kACTG>(seq)), std::invalid_argument);
+                EXPECT_THROW((void) kmer_encode<KmerActgMsb>(seq), std::invalid_argument);
             }
         }
     }
@@ -616,275 +575,11 @@ TEST(Kmer, EncodeInvalidInput)
 //     SIMD Re-entry
 // =================================================================================================
 
-// The vector overloads of kmer_cast() must hand back exactly the lanes they were given, in lane
-// order and tagged with the conventions asked for, so that consumers of the vector-emitting
-// extractors can return to the typed world. Exercised once per ISA below, since each builds its
-// vectors with its own set intrinsic and it is precisely the lane ordering that must agree.
-template <std::size_t Lanes, typename Vec>
-static void check_vector_cast(Vec vec, std::vector<std::string> const& seqs, std::size_t width)
-{
-    ASSERT_EQ(seqs.size(), Lanes);
-
-    // The full-vector overload writes every lane.
-    KmerAcgtMsb out[Lanes] = {};
-    EXPECT_EQ((kmer_cast<Encoding::kACGT, Layout::kMSB>(vec, width, out)), Lanes);
-    for (std::size_t i = 0; i < Lanes; ++i) {
-        EXPECT_EQ(out[i], oracle_kmer<KmerAcgtMsb>(seqs[i]));
-        EXPECT_EQ(kmer_decode(out[i], width), seqs[i]);
-    }
-
-    // The counted overload writes only the lanes it is told are valid, as the zero-padded final
-    // vector of an extraction run requires.
-    KmerAcgtMsb partial[Lanes] = {};
-    EXPECT_EQ((kmer_cast<Encoding::kACGT, Layout::kMSB>(vec, 1, width, partial)), std::size_t{1});
-    EXPECT_EQ(partial[0], oracle_kmer<KmerAcgtMsb>(seqs[0]));
-    if constexpr (Lanes > 1) {
-        EXPECT_EQ(partial[1], KmerAcgtMsb{0});
-    }
-
-    // The spaced overloads adopt the same lanes under a weight, with the same words and bases.
-    using Spaced = SpacedKmer<Encoding::kACGT, Layout::kMSB>;
-    Spaced spaced[Lanes] = {};
-    EXPECT_EQ((spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(vec, width, spaced)), Lanes);
-    for (std::size_t i = 0; i < Lanes; ++i) {
-        EXPECT_EQ(kmer_value(spaced[i]), kmer_value(out[i]));
-        EXPECT_EQ(kmer_decode(spaced[i], width), seqs[i]);
-    }
-
-    Spaced spaced_partial[Lanes] = {};
-    EXPECT_EQ(
-        (spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(vec, 1, width, spaced_partial)),
-        std::size_t{1}
-    );
-    EXPECT_EQ(kmer_value(spaced_partial[0]), kmer_value(partial[0]));
-
-    // The unchecked overloads write the same words as the checked ones.
-    KmerAcgtMsb unchecked[Lanes] = {};
-    EXPECT_EQ((kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(vec, unchecked)), Lanes);
-    for (std::size_t i = 0; i < Lanes; ++i) {
-        EXPECT_EQ(unchecked[i], out[i]);
-    }
-    KmerAcgtMsb unchecked_partial[Lanes] = {};
-    EXPECT_EQ(
-        (kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(vec, 1, unchecked_partial)),
-        std::size_t{1}
-    );
-    EXPECT_EQ(unchecked_partial[0], partial[0]);
-
-    Spaced spaced_unchecked[Lanes] = {};
-    EXPECT_EQ(
-        (spaced_kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(vec, spaced_unchecked)),
-        Lanes
-    );
-    for (std::size_t i = 0; i < Lanes; ++i) {
-        EXPECT_EQ(kmer_value(spaced_unchecked[i]), kmer_value(out[i]));
-    }
-    Spaced spaced_unchecked_partial[Lanes] = {};
-    EXPECT_EQ(
-        (spaced_kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(vec, 1, spaced_unchecked_partial)),
-        std::size_t{1}
-    );
-    EXPECT_EQ(kmer_value(spaced_unchecked_partial[0]), kmer_value(partial[0]));
-}
-
-// Lane values for a test vector, as raw words under ACGT/MSB.
-static std::uint64_t lane_word(std::vector<std::string> const& seqs, std::size_t i)
-{
-    return oracle_encode<Encoding::kACGT, Layout::kMSB>(seqs[i]).value();
-}
-
-#if defined(FISK_HAS_SSE2)
-
-TEST(Kmer, CastVectorSse2)
+// See check_vector_cast() in simd_lanes.hpp, run once per vector ISA compiled in.
+TEST(Kmer, CastVector)
 {
     std::size_t const width = 10;
-    auto const seqs = random_seqs(width, 2, 909090);
-    auto const vec = _mm_set_epi64x(
-        static_cast<long long>(lane_word(seqs, 1)),
-        static_cast<long long>(lane_word(seqs, 0))
-    );
-    check_vector_cast<2>(vec, seqs, width);
-}
-
-#endif
-
-#if defined(FISK_HAS_AVX2)
-
-TEST(Kmer, CastVectorAvx2)
-{
-    std::size_t const width = 10;
-    auto const seqs = random_seqs(width, 4, 909091);
-    auto const vec = _mm256_set_epi64x(
-        static_cast<long long>(lane_word(seqs, 3)),
-        static_cast<long long>(lane_word(seqs, 2)),
-        static_cast<long long>(lane_word(seqs, 1)),
-        static_cast<long long>(lane_word(seqs, 0))
-    );
-    check_vector_cast<4>(vec, seqs, width);
-}
-
-#endif
-
-#if defined(FISK_HAS_AVX512)
-
-TEST(Kmer, CastVectorAvx512)
-{
-    std::size_t const width = 10;
-    auto const seqs = random_seqs(width, 8, 909092);
-    auto const vec = _mm512_set_epi64(
-        static_cast<long long>(lane_word(seqs, 7)),
-        static_cast<long long>(lane_word(seqs, 6)),
-        static_cast<long long>(lane_word(seqs, 5)),
-        static_cast<long long>(lane_word(seqs, 4)),
-        static_cast<long long>(lane_word(seqs, 3)),
-        static_cast<long long>(lane_word(seqs, 2)),
-        static_cast<long long>(lane_word(seqs, 1)),
-        static_cast<long long>(lane_word(seqs, 0))
-    );
-    check_vector_cast<8>(vec, seqs, width);
-}
-
-#endif
-
-#if defined(FISK_HAS_NEON)
-
-TEST(Kmer, CastVectorNeon)
-{
-    std::size_t const width = 10;
-    auto const seqs = random_seqs(width, 2, 909093);
-    std::uint64_t const lanes[2] = {lane_word(seqs, 0), lane_word(seqs, 1)};
-    auto const vec = vld1q_u64(lanes);
-    check_vector_cast<2>(vec, seqs, width);
-}
-
-#endif
-
-// =================================================================================================
-//     Spaced K-mers
-// =================================================================================================
-
-using SpacedAcgtMsb = SpacedKmer<Encoding::kACGT, Layout::kMSB>;
-using SpacedActgLsb = SpacedKmer<Encoding::kACTG, Layout::kLSB>;
-
-template <typename K>
-concept CanReverse = requires(K kmer) { reverse(kmer, 3); };
-
-template <typename K>
-concept CanReverseComplement = requires(K kmer) { reverse_complement(kmer, 3); };
-
-template <typename K>
-concept CanCanonical = requires(K kmer) { canonical(kmer, 3); };
-
-static_assert(KmerType<SpacedAcgtMsb>);
-static_assert(!ContiguousKmerType<SpacedAcgtMsb>);
-static_assert(ContiguousKmerType<KmerAcgtMsb>);
-
-static_assert(CanReverse<KmerAcgtMsb> && CanReverseComplement<KmerAcgtMsb> && CanCanonical<KmerAcgtMsb>);
-static_assert(!CanReverse<SpacedAcgtMsb> && !CanReverseComplement<SpacedAcgtMsb>);
-static_assert(!CanCanonical<SpacedAcgtMsb>);
-
-namespace {
-    constexpr auto spaced_acg = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(0x06, 3);
-}
-static_assert(spaced_kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(0x06) == spaced_acg);
-static_assert(kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(0x06) == KmerAcgtMsb{0x06});
-static_assert(kmer_value(spaced_acg) == 0x06);
-static_assert(base_at(spaced_acg, 0, 3) == 0 && base_at(spaced_acg, 2, 3) == 2);
-static_assert(complement(spaced_acg, 3) == SpacedAcgtMsb{0x39});
-static_assert(kmer_convert<Layout::kLSB>(spaced_acg, 3) == SpacedKmer<Encoding::kACGT, Layout::kLSB>{0x24});
-static_assert(kmer_convert<Encoding::kACTG>(spaced_acg, 3) == SpacedKmer<Encoding::kACTG, Layout::kMSB>{0x07});
-static_assert(std::is_same_v<
-    decltype(kmer_convert<Encoding::kACTG, Layout::kLSB>(spaced_acg, 3)), SpacedActgLsb
->);
-
-// Bases kept by a spaced mask carry the same meaning as the contiguous k-mer of the same bases, so
-// decoding and the convention-only operations must agree with the contiguous results.
-TEST(SpacedKmer, AgreesWithContiguousOnBaseOps)
-{
-    std::size_t const width = 9;
-    for (auto const& seq : random_seqs(width, 32, 4242)) {
-        auto const contiguous = oracle_kmer<KmerAcgtMsb>(seq);
-        auto const spaced = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(
-            kmer_value(contiguous), width
-        );
-        EXPECT_EQ(kmer_decode(spaced, width), seq);
-        EXPECT_EQ(
-            kmer_value(complement(spaced, width)),
-            kmer_value(complement(contiguous, width))
-        );
-        EXPECT_EQ(
-            kmer_value(kmer_convert<Layout::kLSB>(spaced, width)),
-            kmer_value(kmer_convert<Layout::kLSB>(contiguous, width))
-        );
-    }
-}
-
-TEST(SpacedKmer, Hashing)
-{
-    auto const probe = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(0x1B, 3);
-    EXPECT_EQ(std::hash<SpacedAcgtMsb>{}(probe), KmerHashMix{}(probe));
-    EXPECT_NE(std::hash<SpacedAcgtMsb>{}(probe), KmerHashIdentity{}(probe));
-}
-
-TEST(SpacedKmer, UnorderedContainers)
-{
-    std::size_t const width = 12;
-    auto const seqs = random_seqs(width, 64, 135790);
-
-    std::unordered_set<SpacedAcgtMsb> spaced_set;
-    std::unordered_set<KmerAcgtMsb> contiguous_set;
-    for (auto const& seq : seqs) {
-        auto const contiguous = oracle_kmer<KmerAcgtMsb>(seq);
-        auto const spaced = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(
-            kmer_value(contiguous), width
-        );
-        spaced_set.insert(spaced);
-        contiguous_set.insert(contiguous);
-        EXPECT_EQ(spaced_set.count(spaced), std::size_t{1});
-    }
-    EXPECT_EQ(spaced_set.size(), contiguous_set.size());
-}
-
-TEST(SpacedKmer, Comparison)
-{
-    auto const a = SpacedAcgtMsb{7};
-    auto const b = SpacedAcgtMsb{9};
-    EXPECT_TRUE(a == a);
-    EXPECT_TRUE(a != b);
-    EXPECT_TRUE(a < b);
-    EXPECT_TRUE(b > a);
-    EXPECT_TRUE(a <= a);
-}
-
-TEST(SpacedKmer, ConvertRoundTripAndComposition)
-{
-    for (std::size_t width = 1; width <= 32; ++width) {
-        for (auto const& seq : random_seqs(width, 4, 888888 + width)) {
-            auto const kmer = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(
-                kmer_value(oracle_kmer<KmerAcgtMsb>(seq)), width
-            );
-
-            EXPECT_EQ(
-                kmer_convert<Encoding::kACGT>(kmer_convert<Encoding::kACTG>(kmer, width), width),
-                kmer
-            );
-            EXPECT_EQ(
-                kmer_convert<Layout::kMSB>(kmer_convert<Layout::kLSB>(kmer, width), width), kmer
-            );
-            EXPECT_EQ(
-                (kmer_convert<Encoding::kACGT, Layout::kMSB>(
-                    kmer_convert<Encoding::kACTG, Layout::kLSB>(kmer, width), width
-                )),
-                kmer
-            );
-
-            auto const combined = kmer_convert<Encoding::kACTG, Layout::kLSB>(kmer, width);
-            auto const encoding_first =
-                kmer_convert<Layout::kLSB>(kmer_convert<Encoding::kACTG>(kmer, width), width);
-            auto const layout_first =
-                kmer_convert<Encoding::kACTG>(kmer_convert<Layout::kLSB>(kmer, width), width);
-            EXPECT_EQ(combined, encoding_first);
-            EXPECT_EQ(combined, layout_first);
-        }
-    }
+    for_each_lane_vector(width, 909090, [&](auto vec, auto const& seqs) {
+        check_vector_cast<KmerAcgtMsb>(vec, seqs, width);
+    });
 }

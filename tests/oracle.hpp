@@ -26,7 +26,7 @@
 #include "testing.hpp"
 
 // =================================================================================================
-//     Characters and Windows
+//     Characters
 // =================================================================================================
 
 // Two-bit code of `c` under E, case-insensitive, or kInvalidNucleotide for anything that is not a
@@ -58,6 +58,46 @@ inline std::uint8_t oracle_code(char c)
     }
 }
 
+// =================================================================================================
+//     Nucleotide String Operations
+// =================================================================================================
+
+// Character-level nucleotide operations used to derive expected decoded strings without invoking
+// the k-mer operations being tested. Their callers pass upper-case bases.
+inline char oracle_complement_char(char c)
+{
+    switch (c) {
+        case 'A': return 'T';
+        case 'C': return 'G';
+        case 'G': return 'C';
+        case 'T': return 'A';
+    }
+    return 'N';
+}
+
+inline std::string oracle_complement_string(std::string seq)
+{
+    for (char& c : seq) {
+        c = oracle_complement_char(c);
+    }
+    return seq;
+}
+
+inline std::string oracle_reverse_string(std::string seq)
+{
+    std::reverse(seq.begin(), seq.end());
+    return seq;
+}
+
+inline std::string oracle_reverse_complement_string(std::string const& seq)
+{
+    return oracle_reverse_string(oracle_complement_string(seq));
+}
+
+// =================================================================================================
+//     Encoded Windows
+// =================================================================================================
+
 // Encode a whole window into a raw word, base by base, honoring both conventions; nullopt if any
 // character in it is not a nucleotide. The window must be at most 32 characters.
 template <fisk::Encoding E, fisk::Layout L>
@@ -80,6 +120,14 @@ inline std::optional<std::uint64_t> oracle_encode(std::string_view window)
         value |= std::uint64_t{code} << shift;
     }
     return value;
+}
+
+// The k-mer of type K for a string of nucleotides, via the oracle rather than via any of the
+// library's own encoders. Works for every type built from one raw word, such as Kmer or SpacedKmer.
+template <typename K>
+inline K oracle_kmer(std::string_view seq)
+{
+    return K{oracle_encode<K::encoding, K::layout>(seq).value()};
 }
 
 // =================================================================================================

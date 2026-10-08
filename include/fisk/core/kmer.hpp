@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <concepts>
 #include <cstring>
-#include <functional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -74,30 +73,6 @@ struct Kmer
     auto operator<=>(Kmer const&) const = default;
 };
 
-/**
- * @brief A spaced k-mer: the bases kept as selected by a spaced seed mask, densely packed,
- * tagged with its Encoding and Layout conventions.
- *
- * Same representation and conventions as Kmer. Operations that depend only on the bases themselves
- * (complement, decoding, convention conversion, comparison, hashing) apply unchanged. The mask
- * weight, i.e. the number of kept bases, takes the place of Kmer's width. The operations that
- * would need the mask (reverse, reverse_complement, canonical) are not available for it, see
- * ContiguousKmerType.
- */
-template <Encoding E, Layout L>
-struct SpacedKmer
-{
-    static constexpr Encoding encoding = E;
-    static constexpr Layout layout = L;
-
-    template <Encoding E2, Layout L2>
-    using rebind = SpacedKmer<E2, L2>;
-
-    std::uint64_t value;
-
-    auto operator<=>(SpacedKmer const&) const = default;
-};
-
 // -------------------------------------------------------------------------------------------------
 //     Type Traits and Helpers
 // -------------------------------------------------------------------------------------------------
@@ -137,8 +112,8 @@ using KmerActgLsb = Kmer<Encoding::kACTG, Layout::kLSB>;
  * @brief Anything shaped like a k-mer: convention tags plus a 2-bit-packed word.
  *
  * All operations below are written against this rather than against Kmer directly, so that
- * SpacedKmer (a spaced k-mer, where `width` is the mask weight rather than k) shares the entire
- * op set without any of it being duplicated.
+ * SpacedKmer (a spaced k-mer, where `width` is the mask weight rather than k, see
+ * core/kmer_spaced.hpp) shares the entire op set without any of it being duplicated.
  */
 template <typename T>
 concept KmerType = requires(T kmer) {
@@ -197,17 +172,24 @@ FISK_ALWAYS_INLINE inline constexpr void assert_width_(
 }
 
 /**
- * @brief Debug check that a word holds no bits above `width` bases, i.e. it is a valid k-mer or
- * spaced k-mer of that width.
+ * @brief Whether a word holds no bits above `width` bases, i.e. it is a valid k-mer or spaced k-mer
+ * of that width.
+ */
+inline constexpr bool fits_width_(std::uint64_t word, std::size_t width) noexcept
+{
+    return (word & ~width_mask_(width)) == 0;
+}
+
+/**
+ * @brief Debug check that a word is a valid k-mer or spaced k-mer of `width` bases.
  *
- * Producers of k-mer words call this with the word they emit. The short-circuit keeps the shift
- * from ever reaching 64 for width 32.
+ * Producers of k-mer words call this with the word they emit.
  */
 FISK_ALWAYS_INLINE inline constexpr void assert_fits_width_(
     [[maybe_unused]] std::uint64_t word, [[maybe_unused]] std::size_t width
 ) noexcept {
     assert_width_(width);
-    assert(width == 32 || (word >> (2 * width)) == 0);
+    assert(fits_width_(word, width));
 }
 
 /**
@@ -330,10 +312,6 @@ template <KmerType K>
 // =================================================================================================
 //     Construction and Cast
 // =================================================================================================
-
-// -------------------------------------------------------------------------------------------------
-//     Kmer
-// -------------------------------------------------------------------------------------------------
 
 /**
  * @brief Adopt a raw 2-bit-packed word as a k-mer of a given convention.
@@ -459,123 +437,6 @@ inline std::size_t kmer_cast_unchecked(Vec vec, Kmer<E, L>* out) noexcept
     return kmer_cast_unchecked<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), out);
 }
 
-// -------------------------------------------------------------------------------------------------
-//     Spaced Kmer
-// -------------------------------------------------------------------------------------------------
-
-/**
- * @brief Adopt a raw 2-bit-packed word of kept bases as a spaced k-mer of a given convention.
- *
- * The spaced counterpart of kmer_cast(): `weight` is the mask weight, i.e. the number of kept bases
- * in `raw`. Same caveat as kmer_cast(), that the caller asserts the convention and the weight.
- */
-template <Encoding E, Layout L>
-[[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast(
-    std::uint64_t raw, [[maybe_unused]] std::size_t weight
-) noexcept {
-    assert_fits_width_(raw, weight);
-    return SpacedKmer<E, L>{raw};
-}
-
-/**
- * @brief Adopt a raw word of kept bases as a spaced k-mer, without checking it against the weight.
- *
- * For words that the caller already knows to be valid, such as the output of an extractor.
- * Otherwise use spaced_kmer_cast(), which asserts the weight in debug builds.
- */
-template <Encoding E, Layout L>
-[[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast_unchecked(std::uint64_t raw) noexcept
-{
-    return SpacedKmer<E, L>{raw};
-}
-
-/**
- * @brief Adopt the first `count` lanes of a SIMD vector of raw words as spaced k-mers, and return
- * how many were written.
- *
- * The spaced counterpart of the contiguous vector kmer_cast() above, with the same memcpy-based,
- * ISA-agnostic lane handling. `weight` is the mask weight shared by all lanes.
- */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t spaced_kmer_cast(
-    Vec vec, std::size_t count, std::size_t weight, SpacedKmer<E, L>* out
-) noexcept {
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "spaced_kmer_cast() expects a vector of whole 64-bit lanes"
-    );
-    static_assert(
-        std::is_trivially_copyable_v<Vec>,
-        "spaced_kmer_cast() expects a trivially copyable vector"
-    );
-    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
-    assert(count <= lanes);
-    assert(out != nullptr);
-
-    std::uint64_t buffer[lanes];
-    std::memcpy(buffer, &vec, sizeof(Vec));
-    for (std::size_t i = 0; i < count; ++i) {
-        out[i] = spaced_kmer_cast<E, L>(buffer[i], weight);
-    }
-    return count;
-}
-
-/**
- * @brief Adopt every lane of a SIMD vector of raw words as spaced k-mers.
- */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t spaced_kmer_cast(Vec vec, std::size_t weight, SpacedKmer<E, L>* out) noexcept
-{
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "spaced_kmer_cast() expects a vector of whole 64-bit lanes"
-    );
-    return spaced_kmer_cast<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), weight, out);
-}
-
-/**
- * @brief Adopt the first `count` lanes of a SIMD vector of raw words as spaced k-mers, without
- * checking them against the weight. The unchecked counterpart of spaced_kmer_cast(vec, count,
- * weight, out).
- */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t spaced_kmer_cast_unchecked(
-    Vec vec, std::size_t count, SpacedKmer<E, L>* out
-) noexcept {
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "spaced_kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
-    );
-    static_assert(
-        std::is_trivially_copyable_v<Vec>,
-        "spaced_kmer_cast_unchecked() expects a trivially copyable vector"
-    );
-    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
-    assert(count <= lanes);
-    assert(out != nullptr);
-
-    std::uint64_t buffer[lanes];
-    std::memcpy(buffer, &vec, sizeof(Vec));
-    for (std::size_t i = 0; i < count; ++i) {
-        out[i] = spaced_kmer_cast_unchecked<E, L>(buffer[i]);
-    }
-    return count;
-}
-
-/**
- * @brief Adopt every lane of a SIMD vector of raw words as spaced k-mers, without checking them
- * against the weight. The unchecked counterpart of spaced_kmer_cast(vec, weight, out).
- */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t spaced_kmer_cast_unchecked(Vec vec, SpacedKmer<E, L>* out) noexcept
-{
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "spaced_kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
-    );
-    return spaced_kmer_cast_unchecked<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), out);
-}
-
 // =================================================================================================
 //     String Conversion
 // =================================================================================================
@@ -624,24 +485,17 @@ template <KmerType K>
  * or turning a literal into a key. Not a bulk path; extracting the k-mers of a sequence is what
  * the for_each_kmer*() functions are for.
  *
- * The conventions default to ACGT with an MSB layout, either axis can be named on its own, and
- * both axes can be given in either order: `kmer_encode(seq)`, `kmer_encode<Encoding::kACTG>(seq)`,
- * `kmer_encode<Layout::kLSB>(seq)`, `kmer_encode<Encoding::kACTG, Layout::kLSB>(seq)` and
- * `kmer_encode<Layout::kLSB, Encoding::kACTG>(seq)` all work.
+ * The result type is named as the template argument and defaults to KmerAcgtMsb, as in
+ * `kmer_encode(seq)` or `kmer_encode<KmerActgLsb>(seq)`. Spaced k-mers have a counterpart that
+ * also takes the mask, see kmer_spaced/kmer_spaced.hpp.
  *
  * Unlike the operations around it this throws rather than asserting, on an empty sequence, one
  * longer than 32 bases, or any character that is not a nucleotide. Loud failure is the right
  * trade for a function used to construct known inputs, where a silently wrong k-mer would
  * undermine whatever is being checked with it. Upper and lower case are both accepted.
- *
- * The unused, always-defaulted third parameter works around an MSVC linker bug (LNK1179
- * "duplicate COMDAT"), the same one worked around on kmer_convert() above: this overload's
- * mangled name can collide with the Layout-first overload below when both calls happen to
- * supply the same pair of underlying enum values (e.g. both 0, or both 1). A genuinely different
- * type here keeps the two overloads' mangled names apart.
  */
-template <Encoding E = Encoding::kACGT, Layout L = Layout::kMSB, typename = Encoding>
-[[nodiscard]] inline constexpr Kmer<E, L> kmer_encode(std::string_view seq)
+template <ContiguousKmerType K = KmerAcgtMsb>
+[[nodiscard]] inline constexpr K kmer_encode(std::string_view seq)
 {
     if (seq.empty() || seq.size() > 32) {
         throw std::invalid_argument(
@@ -651,34 +505,15 @@ template <Encoding E = Encoding::kACGT, Layout L = Layout::kMSB, typename = Enco
 
     std::uint64_t value = 0;
     for (std::size_t i = 0; i < seq.size(); ++i) {
-        std::uint8_t const code = char_to_code_<E>(seq[i]);
+        std::uint8_t const code = char_to_code_<K::encoding>(seq[i]);
         if (code > 3) {
             throw std::invalid_argument(
                 "Invalid call to kmer_encode() with a non-nucleotide character in the sequence"
             );
         }
-        value |= std::uint64_t{code} << base_shift_<L>(i, seq.size());
+        value |= std::uint64_t{code} << base_shift_<K::layout>(i, seq.size());
     }
-    return Kmer<E, L>{value};
-}
-
-/**
- * @brief Build a k-mer from a nucleotide string, with the layout named first.
- *
- * Exists so that both argument orders work, and so that the layout can be given on its own: a
- * Layout value passed as the *first* template argument would otherwise be read as an Encoding by
- * the overload above, and so needs a template parameter list that starts with Layout instead.
- * Since Encoding and Layout are unrelated types, a template argument list can only ever match the
- * overload whose parameters are declared in the order it supplies them, so this coexists with the
- * Encoding-first overload above without ambiguity. `E` is given a default here too, which is what
- * lets this single overload also cover the Layout-only call.
- *
- * See the matching third-parameter comment on the Encoding-first overload above for why it's here.
- */
-template <Layout L, Encoding E = Encoding::kACGT, typename = Layout>
-[[nodiscard]] inline constexpr Kmer<E, L> kmer_encode(std::string_view seq)
-{
-    return kmer_encode<E, L>(seq);
+    return K{value};
 }
 
 // =================================================================================================
@@ -853,64 +688,4 @@ template <Encoding E2, Layout L2, KmerType K>
     return typename K::template rebind<E2, L2>{relayout_<K::layout, L2>(recoded, width)};
 }
 
-// =================================================================================================
-//     Hashing
-// =================================================================================================
-
-/**
- * @brief Hash a k-mer by its raw word, without mixing.
- *
- * Free, but note that k-mers adjacent in a sequence differ only by a shift, so their raw words
- * cluster heavily. Use this only when the k-mers are already well distributed, or when the
- * container does its own mixing. Otherwise prefer KmerHashMix, which is the default.
- */
-struct KmerHashIdentity
-{
-    template <KmerType K>
-    [[nodiscard]] std::size_t operator()(K kmer) const noexcept
-    {
-        return static_cast<std::size_t>(kmer.value);
-    }
-};
-
-/**
- * @brief Hash a k-mer through the splitmix64 finalizer.
- *
- * Same mixing steps as Splitmix64::get_uint64() (see core/random.hpp), applied to the k-mer word
- * instead of to a counter. A handful of cycles, against the cache miss that the hash table lookup
- * around it costs anyway, in exchange for full avalanche.
- *
- * This is what std::hash<Kmer> uses. To opt out, name KmerHashIdentity as the container's hasher.
- */
-struct KmerHashMix
-{
-    template <KmerType K>
-    [[nodiscard]] std::size_t operator()(K kmer) const noexcept
-    {
-        std::uint64_t z = kmer.value;
-        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
-        z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
-        return static_cast<std::size_t>(z ^ (z >> 31));
-    }
-};
-
 } // namespace fisk
-
-namespace std {
-
-/**
- * @brief Make Kmer usable as a key in the standard unordered containers.
- *
- * Defaults to the mixing hash rather than the identity, so that the path a user gets without
- * thinking about it is the one that behaves. The cost is bounded and small; the cost of identity
- * hashing with clustered keys is neither.
- */
-template <fisk::Encoding E, fisk::Layout L>
-struct hash<fisk::Kmer<E, L>> : fisk::KmerHashMix
-{};
-
-template <fisk::Encoding E, fisk::Layout L>
-struct hash<fisk::SpacedKmer<E, L>> : fisk::KmerHashMix
-{};
-
-} // namespace std

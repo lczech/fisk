@@ -7,6 +7,7 @@
 
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
+#include "fisk/core/kmer_spaced.hpp"
 
 namespace fisk {
 

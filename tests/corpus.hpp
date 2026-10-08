@@ -59,6 +59,19 @@ inline std::string random_sequence(
     return s;
 }
 
+// `count` random upper-case nucleotide strings of length `len`, from a fixed seed so failures
+// reproduce.
+inline std::vector<std::string> random_seqs(std::size_t len, std::size_t count, std::uint64_t seed)
+{
+    fisk::Splitmix64 rng(seed);
+    std::vector<std::string> out;
+    out.reserve(count);
+    for (std::size_t n = 0; n < count; ++n) {
+        out.push_back(random_sequence(rng, len, "ACGT"));
+    }
+    return out;
+}
+
 // Overwrite each position of `seq` with a random character from `invalid`, with probability `rate`.
 inline void inject_invalid(
     std::string& seq, fisk::Splitmix64& rng, double rate, std::string_view invalid

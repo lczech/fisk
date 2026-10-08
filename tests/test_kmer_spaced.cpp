@@ -4,18 +4,25 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string>
+#include <string_view>
+#include <type_traits>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/char_encoder.hpp"
+#include "fisk/core/kmer_hash.hpp"
+#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
 #include "fisk/kmer_spaced/selector.hpp"
 #include "fisk/kmer_spaced/simd.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
+#include "simd_lanes.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -443,6 +450,223 @@ static void check_simd_dispatcher(std::vector<std::string> const& masks)
 }
 
 // =================================================================================================
+//     Spaced K-mer Type
+// =================================================================================================
+
+template <typename K>
+concept CanReverse = requires(K kmer) { reverse(kmer, 3); };
+
+template <typename K>
+concept CanReverseComplement = requires(K kmer) { reverse_complement(kmer, 3); };
+
+template <typename K>
+concept CanCanonical = requires(K kmer) { canonical(kmer, 3); };
+
+static_assert(KmerType<SpacedKmerAcgtMsb>);
+static_assert(!ContiguousKmerType<SpacedKmerAcgtMsb>);
+static_assert(ContiguousKmerType<KmerAcgtMsb>);
+static_assert(SpacedKmerType<SpacedKmerActgLsb>);
+static_assert(!SpacedKmerType<KmerAcgtMsb>);
+static_assert(!SpacedKmerType<std::uint64_t>);
+static_assert(std::is_same_v<SpacedKmerActgLsb, SpacedKmer<Encoding::kACTG, Layout::kLSB>>);
+
+static_assert(CanReverse<KmerAcgtMsb> && CanReverseComplement<KmerAcgtMsb> && CanCanonical<KmerAcgtMsb>);
+static_assert(!CanReverse<SpacedKmerAcgtMsb> && !CanReverseComplement<SpacedKmerAcgtMsb>);
+static_assert(!CanCanonical<SpacedKmerAcgtMsb>);
+
+namespace {
+    constexpr auto spaced_acg = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(0x06, 3);
+}
+static_assert(spaced_kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(0x06) == spaced_acg);
+static_assert(kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(0x06) == KmerAcgtMsb{0x06});
+static_assert(kmer_value(spaced_acg) == 0x06);
+static_assert(base_at(spaced_acg, 0, 3) == 0 && base_at(spaced_acg, 2, 3) == 2);
+static_assert(complement(spaced_acg, 3) == SpacedKmerAcgtMsb{0x39});
+static_assert(kmer_convert<Layout::kLSB>(spaced_acg, 3) == SpacedKmerAcgtLsb{0x24});
+static_assert(kmer_convert<Encoding::kACTG>(spaced_acg, 3) == SpacedKmerActgMsb{0x07});
+static_assert(std::is_same_v<
+    decltype(kmer_convert<Encoding::kACTG, Layout::kLSB>(spaced_acg, 3)), SpacedKmerActgLsb
+>);
+
+// Bases kept by a spaced mask carry the same meaning as the contiguous k-mer of the same bases, so
+// decoding and the convention-only operations must agree with the contiguous results.
+TEST(SpacedKmer, AgreesWithContiguousOnBaseOps)
+{
+    std::size_t const width = 9;
+    for (auto const& seq : random_seqs(width, 32, 4242)) {
+        auto const contiguous = oracle_kmer<KmerAcgtMsb>(seq);
+        auto const spaced = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(
+            kmer_value(contiguous), width
+        );
+        EXPECT_EQ(kmer_decode(spaced, width), seq);
+        EXPECT_EQ(
+            kmer_value(complement(spaced, width)),
+            kmer_value(complement(contiguous, width))
+        );
+        EXPECT_EQ(
+            kmer_value(kmer_convert<Layout::kLSB>(spaced, width)),
+            kmer_value(kmer_convert<Layout::kLSB>(contiguous, width))
+        );
+    }
+}
+
+// See check_vector_cast() in simd_lanes.hpp, run once per vector ISA compiled in.
+TEST(SpacedKmer, CastVector)
+{
+    std::size_t const width = 10;
+    for_each_lane_vector(width, 919190, [&](auto vec, auto const& seqs) {
+        check_vector_cast<SpacedKmerAcgtMsb>(vec, seqs, width);
+    });
+}
+
+TEST(SpacedKmer, Hashing)
+{
+    auto const probe = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(0x1B, 3);
+    EXPECT_EQ(std::hash<SpacedKmerAcgtMsb>{}(probe), KmerHashMix{}(probe));
+    EXPECT_NE(std::hash<SpacedKmerAcgtMsb>{}(probe), KmerHashIdentity{}(probe));
+}
+
+TEST(SpacedKmer, UnorderedContainers)
+{
+    std::size_t const width = 12;
+    auto const seqs = random_seqs(width, 64, 135790);
+
+    std::unordered_set<SpacedKmerAcgtMsb> spaced_set;
+    std::unordered_set<KmerAcgtMsb> contiguous_set;
+    for (auto const& seq : seqs) {
+        auto const contiguous = oracle_kmer<KmerAcgtMsb>(seq);
+        auto const spaced = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(
+            kmer_value(contiguous), width
+        );
+        spaced_set.insert(spaced);
+        contiguous_set.insert(contiguous);
+        EXPECT_EQ(spaced_set.count(spaced), std::size_t{1});
+    }
+    EXPECT_EQ(spaced_set.size(), contiguous_set.size());
+}
+
+TEST(SpacedKmer, Comparison)
+{
+    auto const a = SpacedKmerAcgtMsb{7};
+    auto const b = SpacedKmerAcgtMsb{9};
+    EXPECT_TRUE(a == a);
+    EXPECT_TRUE(a != b);
+    EXPECT_TRUE(a < b);
+    EXPECT_TRUE(b > a);
+    EXPECT_TRUE(a <= a);
+}
+
+TEST(SpacedKmer, ConvertRoundTripAndComposition)
+{
+    for (std::size_t width = 1; width <= 32; ++width) {
+        for (auto const& seq : random_seqs(width, 4, 888888 + width)) {
+            auto const kmer = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(
+                kmer_value(oracle_kmer<KmerAcgtMsb>(seq)), width
+            );
+
+            EXPECT_EQ(
+                kmer_convert<Encoding::kACGT>(kmer_convert<Encoding::kACTG>(kmer, width), width),
+                kmer
+            );
+            EXPECT_EQ(
+                kmer_convert<Layout::kMSB>(kmer_convert<Layout::kLSB>(kmer, width), width), kmer
+            );
+            EXPECT_EQ(
+                (kmer_convert<Encoding::kACGT, Layout::kMSB>(
+                    kmer_convert<Encoding::kACTG, Layout::kLSB>(kmer, width), width
+                )),
+                kmer
+            );
+
+            auto const combined = kmer_convert<Encoding::kACTG, Layout::kLSB>(kmer, width);
+            auto const encoding_first =
+                kmer_convert<Layout::kLSB>(kmer_convert<Encoding::kACTG>(kmer, width), width);
+            auto const layout_first =
+                kmer_convert<Encoding::kACTG>(kmer_convert<Layout::kLSB>(kmer, width), width);
+            EXPECT_EQ(combined, encoding_first);
+            EXPECT_EQ(combined, layout_first);
+        }
+    }
+}
+
+// =================================================================================================
+//     Spaced K-mer Encoding
+// =================================================================================================
+
+// Encoding a window with a mask keeps exactly the bases at the mask's '1' positions, in order, and
+// must agree with the oracle under every convention.
+template <typename K>
+static void check_spaced_encode(std::string const& mask)
+{
+    std::size_t const weight = spaced_kmer_weight(mask);
+    for (auto const& window : random_seqs(mask.size(), 8, 525252 + mask.size())) {
+        std::string kept;
+        for (std::size_t i = 0; i < mask.size(); ++i) {
+            if (mask[i] == '1') {
+                kept.push_back(window[i]);
+            }
+        }
+        auto const spaced = kmer_encode<K>(window, mask);
+        EXPECT_EQ(spaced, oracle_kmer<K>(kept));
+        EXPECT_EQ(kmer_decode(spaced, weight), kept);
+    }
+}
+
+TEST(SpacedKmer, EncodeWithMask)
+{
+    for (std::string const& mask : std::vector<std::string>{
+        "1", "11", "101", "1*011", "110100111", mask_for_span(31), std::string(32, '1')
+    }) {
+        check_spaced_encode<SpacedKmerAcgtMsb>(mask);
+        check_spaced_encode<SpacedKmerAcgtLsb>(mask);
+        check_spaced_encode<SpacedKmerActgMsb>(mask);
+        check_spaced_encode<SpacedKmerActgLsb>(mask);
+    }
+}
+
+// The result type is named as for the contiguous kmer_encode(), and defaults to ACGT/MSB. Only
+// spaced k-mers take a mask.
+template <typename K>
+concept EncodableWithMask = requires(std::string_view window, std::string const& mask) {
+    kmer_encode<K>(window, mask);
+};
+
+static_assert(std::is_same_v<decltype(kmer_encode("ACGT", "1011")), SpacedKmerAcgtMsb>);
+static_assert(std::is_same_v<decltype(kmer_encode<SpacedKmerActgLsb>("A", "1")), SpacedKmerActgLsb>);
+static_assert(EncodableWithMask<SpacedKmerAcgtMsb>);
+static_assert(!EncodableWithMask<KmerAcgtMsb>);
+
+TEST(SpacedKmer, EncodeWithMaskDefaults)
+{
+    // ACGT under 1011 keeps A, G, T: codes 0, 2, 3, earliest in the high bits.
+    EXPECT_EQ(kmer_value(kmer_encode("ACGT", "1011")), std::uint64_t{0x0B});
+    EXPECT_EQ(kmer_encode("acgt", "1011"), kmer_encode("ACGT", "1011"));
+}
+
+// Invalid masks, mismatched lengths and non-nucleotides at kept positions throw. Positions the mask
+// skips are not inspected, as during extraction.
+TEST(SpacedKmer, EncodeWithMaskInvalidInput)
+{
+    EXPECT_THROW((void) kmer_encode("ACG", "1011"), std::invalid_argument);
+    EXPECT_THROW((void) kmer_encode("ACGTA", "1011"), std::invalid_argument);
+    EXPECT_THROW((void) kmer_encode("", ""), std::invalid_argument);
+    EXPECT_THROW((void) kmer_encode("ACGT", "0111"), std::invalid_argument);
+    EXPECT_THROW((void) kmer_encode("ACGT", "1110"), std::invalid_argument);
+    EXPECT_THROW((void) kmer_encode("ACGT", "1x11"), std::invalid_argument);
+    EXPECT_THROW(
+        (void) kmer_encode(std::string(33, 'A'), std::string(33, '1')), std::invalid_argument
+    );
+
+    for (char const c : all_invalid_bytes()) {
+        std::string window = "ACGT";
+        window[2] = c;
+        EXPECT_THROW((void) kmer_encode(window, "1111"), std::invalid_argument);
+        EXPECT_EQ(kmer_encode(window, "1101"), kmer_encode("ACAT", "1101"));
+        EXPECT_EQ(kmer_encode(window, "11*1"), kmer_encode("ACAT", "1101"));
+    }
+}
+
+// =================================================================================================
 //     Mask Helpers
 // =================================================================================================
 
@@ -467,7 +691,8 @@ TEST(KmerSpaced, Weight)
 }
 
 // Emitted values are typed k-mers under the encoder's encoding and MSB layout. Decoding one with the
-// weight of its mask must give exactly the bases kept by that mask, with no bits above the weight.
+// weight of its mask must give exactly the bases kept by that mask, with no bits above the weight,
+// and it must equal kmer_encode() of the same window and mask.
 TEST(KmerSpaced, EmittedKmersAreTypedAndDecodeToKeptBases)
 {
     std::vector<std::string> const mask_strings = {"1011", "1001"};
@@ -483,9 +708,10 @@ TEST(KmerSpaced, EmittedKmersAreTypedAndDecodeToKeptBases)
             std::string_view(seq), span_k, masks, CharEncoderTable<Encoding::kACGT>{},
             bit_extract_bitloop,
             [&](std::size_t pos, std::size_t mask_idx, auto const& kmer) {
-                static_assert(std::is_same_v<
-                    std::remove_cvref_t<decltype(kmer)>, SpacedKmer<Encoding::kACGT, Layout::kMSB>
-                >);
+                static_assert(
+                    std::is_same_v<std::remove_cvref_t<decltype(kmer)>, SpacedKmerAcgtMsb>
+                );
+                EXPECT_EQ(kmer, kmer_encode(seq.substr(pos, span_k), mask_strings[mask_idx]));
 
                 auto const weight = spaced_kmer_weight(mask_strings[mask_idx]);
                 EXPECT_EQ(kmer_value(kmer) >> (2 * weight), std::uint64_t{0});

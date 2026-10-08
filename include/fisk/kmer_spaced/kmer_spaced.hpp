@@ -15,6 +15,7 @@
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
+#include "fisk/core/kmer_spaced.hpp"
 
 namespace fisk {
 
@@ -190,6 +191,38 @@ inline std::string bit_extract_mask_to_spaced_kmer_mask_string( std::uint64_t ma
     }
     std::reverse(str.begin(), str.end());
     return str;
+}
+
+// =================================================================================================
+//     Spaced k-mer Encoding
+// =================================================================================================
+
+/**
+ * @brief Build the spaced k-mer that a mask selects from a window of nucleotides.
+ *
+ * The spaced counterpart of kmer_encode() for contiguous k-mers, with the same purpose and the same
+ * loud failure: it throws on an invalid mask (see prepare_spaced_kmer_position_mask()), on a window
+ * whose length differs from the mask's, and on any non-nucleotide at a kept position. Skipped
+ * positions are not inspected, as during extraction. The result decodes to the kept bases, with the
+ * mask weight as its width.
+ */
+template <SpacedKmerType K = SpacedKmerAcgtMsb>
+[[nodiscard]] inline K kmer_encode(std::string_view window, std::string const& mask)
+{
+    auto const positions = prepare_spaced_kmer_position_mask(mask);
+    if (window.size() != mask.size()) {
+        throw std::invalid_argument(
+            "Invalid call to kmer_encode() with a window length that differs from the mask length"
+        );
+    }
+
+    std::string kept;
+    kept.reserve(positions.size());
+    for (auto const pos : positions) {
+        kept.push_back(window[pos]);
+    }
+    auto const contiguous = kmer_encode<Kmer<K::encoding, K::layout>>(kept);
+    return spaced_kmer_cast_unchecked<K::encoding, K::layout>(kmer_value(contiguous));
 }
 
 // =================================================================================================
