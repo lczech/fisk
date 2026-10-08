@@ -9,6 +9,7 @@
 // which are part of the contracts being tested, not of their implementations.
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -98,28 +99,41 @@ inline std::string oracle_reverse_complement_string(std::string const& seq)
 //     Encoded Windows
 // =================================================================================================
 
-// Encode a whole window into a raw word, base by base, honoring both conventions; nullopt if any
-// character in it is not a nucleotide. The window must be at most 32 characters.
-template <fisk::Encoding E, fisk::Layout L>
-inline std::optional<std::uint64_t> oracle_encode(std::string_view window)
+// Encode a whole window into N raw words, base by base, honoring both conventions: base `i` goes
+// into two-bit slot `i` under kLSB and slot `size - 1 - i` under kMSB, and slot `s` lives in word
+// `s / 32`. Nullopt if any character in it is not a nucleotide. At most 32 * N characters.
+template <fisk::Encoding E, fisk::Layout L, std::size_t N>
+inline std::optional<std::array<std::uint64_t, N>> oracle_encode_words(std::string_view window)
 {
-    std::uint64_t value = 0;
+    std::array<std::uint64_t, N> words{};
     for (std::size_t i = 0; i < window.size(); ++i) {
         std::uint8_t const code = oracle_code<E>(window[i]);
         if (code >= fisk::kInvalidNucleotide) {
             return std::nullopt;
         }
-        std::size_t shift = 0;
+        std::size_t slot = 0;
         if constexpr (L == fisk::Layout::kMSB) {
-            shift = 2 * (window.size() - 1 - i);
+            slot = window.size() - 1 - i;
         } else if constexpr (L == fisk::Layout::kLSB) {
-            shift = 2 * i;
+            slot = i;
         } else {
             static_assert(fisk::dependent_false_v<L>, "Unhandled Layout in the test oracle");
         }
-        value |= std::uint64_t{code} << shift;
+        words[slot / 32] |= std::uint64_t{code} << (2 * (slot % 32));
     }
-    return value;
+    return words;
+}
+
+// Encode a whole window into a single raw word, see above; nullopt if any character in it is not a
+// nucleotide. The window must be at most 32 characters.
+template <fisk::Encoding E, fisk::Layout L>
+inline std::optional<std::uint64_t> oracle_encode(std::string_view window)
+{
+    auto const words = oracle_encode_words<E, L, 1>(window);
+    if (!words) {
+        return std::nullopt;
+    }
+    return (*words)[0];
 }
 
 // The k-mer of type K for a string of nucleotides, via the oracle rather than via any of the
@@ -128,6 +142,13 @@ template <typename K>
 inline K oracle_kmer(std::string_view seq)
 {
     return K{oracle_encode<K::encoding, K::layout>(seq).value()};
+}
+
+// The wide k-mer of type K for a string of nucleotides, via the oracle.
+template <typename K>
+inline K oracle_wide_kmer(std::string_view seq)
+{
+    return K{oracle_encode_words<K::encoding, K::layout, K::word_count>(seq).value()};
 }
 
 // =================================================================================================
