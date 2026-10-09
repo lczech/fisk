@@ -217,7 +217,7 @@ inline void info_print_compiler(std::ostream& os)
 
 #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
 
-inline void ensure_cpu_init() noexcept
+inline void ensure_cpu_init_() noexcept
 {
     static bool initialized = [] {
         __builtin_cpu_init();
@@ -234,20 +234,20 @@ inline void ensure_cpu_init() noexcept
 
 #if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
 
-inline void cpuidex(int out[4], int leaf, int subleaf) noexcept
+inline void cpuidex_(int out[4], int leaf, int subleaf) noexcept
 {
     __cpuidex(out, leaf, subleaf);
 }
 
-inline std::uint64_t xgetbv0() noexcept
+inline std::uint64_t xgetbv0_() noexcept
 {
     return _xgetbv(0);
 }
 
-inline bool os_avx_state_enabled() noexcept
+inline bool os_avx_state_enabled_() noexcept
 {
     int regs[4] = {};
-    cpuidex(regs, 1, 0);
+    cpuidex_(regs, 1, 0);
 
     bool const osxsave = (regs[2] & (1 << 27)) != 0;
     bool const avx     = (regs[2] & (1 << 28)) != 0;
@@ -256,64 +256,57 @@ inline bool os_avx_state_enabled() noexcept
         return false;
     }
 
-    std::uint64_t const xcr0 = xgetbv0();
+    std::uint64_t const xcr0 = xgetbv0_();
 
     // XMM state (bit 1) and YMM state (bit 2) must be enabled by the OS.
     return (xcr0 & 0x6) == 0x6;
 }
 
-inline bool os_avx512_state_enabled() noexcept
+inline bool os_avx512_state_enabled_() noexcept
 {
-    if (!os_avx_state_enabled()) {
+    if (!os_avx_state_enabled_()) {
         return false;
     }
 
-    std::uint64_t const xcr0 = xgetbv0();
+    std::uint64_t const xcr0 = xgetbv0_();
 
     // XMM/YMM + opmask + upper ZMM state
     return (xcr0 & 0xE6) == 0xE6;
 }
 
-inline bool msvc_cpu_bmi2() noexcept
+inline bool msvc_cpu_bmi2_() noexcept
 {
     int regs[4] = {};
-    cpuidex(regs, 7, 0);
+    cpuidex_(regs, 7, 0);
     return (regs[1] & (1 << 8)) != 0; // EBX.BMI2
 }
 
-inline bool msvc_cpu_sse2() noexcept
+inline bool msvc_cpu_sse2_() noexcept
 {
     int regs[4] = {};
-    cpuidex(regs, 1, 0);
+    cpuidex_(regs, 1, 0);
     return (regs[3] & (1 << 26)) != 0; // EDX.SSE2
 }
 
-inline bool msvc_cpu_pclmul() noexcept
+inline bool msvc_cpu_avx2_() noexcept
 {
-    int regs[4] = {};
-    cpuidex(regs, 1, 0);
-    return (regs[2] & (1 << 1)) != 0; // ECX.PCLMULQDQ
-}
-
-inline bool msvc_cpu_avx2() noexcept
-{
-    if (!os_avx_state_enabled()) {
+    if (!os_avx_state_enabled_()) {
         return false;
     }
 
     int regs[4] = {};
-    cpuidex(regs, 7, 0);
+    cpuidex_(regs, 7, 0);
     return (regs[1] & (1 << 5)) != 0; // EBX.AVX2
 }
 
-inline bool msvc_cpu_avx512f() noexcept
+inline bool msvc_cpu_avx512f_() noexcept
 {
-    if (!os_avx512_state_enabled()) {
+    if (!os_avx512_state_enabled_()) {
         return false;
     }
 
     int regs[4] = {};
-    cpuidex(regs, 7, 0);
+    cpuidex_(regs, 7, 0);
     return (regs[1] & (1 << 16)) != 0; // EBX.AVX512F
 }
 
@@ -375,10 +368,10 @@ inline bool compiled_neon() noexcept
 inline bool cpu_bmi2() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
-        ensure_cpu_init();
+        ensure_cpu_init_();
         return __builtin_cpu_supports("bmi2");
     #elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
-        return msvc_cpu_bmi2();
+        return msvc_cpu_bmi2_();
     #else
         return false;
     #endif
@@ -387,10 +380,10 @@ inline bool cpu_bmi2() noexcept
 inline bool cpu_sse2() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
-        ensure_cpu_init();
+        ensure_cpu_init_();
         return __builtin_cpu_supports("sse2");
     #elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
-        return msvc_cpu_sse2();
+        return msvc_cpu_sse2_();
     #else
         return false;
     #endif
@@ -399,10 +392,10 @@ inline bool cpu_sse2() noexcept
 inline bool cpu_avx2() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
-        ensure_cpu_init();
+        ensure_cpu_init_();
         return __builtin_cpu_supports("avx2");
     #elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
-        return msvc_cpu_avx2();
+        return msvc_cpu_avx2_();
     #else
         return false;
     #endif
@@ -411,10 +404,10 @@ inline bool cpu_avx2() noexcept
 inline bool cpu_avx512() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
-        ensure_cpu_init();
+        ensure_cpu_init_();
         return __builtin_cpu_supports("avx512f");
     #elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
-        return msvc_cpu_avx512f();
+        return msvc_cpu_avx512f_();
     #else
         return false;
     #endif

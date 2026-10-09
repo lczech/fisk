@@ -97,7 +97,9 @@ template <Encoding E, Layout L>
  * Otherwise use spaced_kmer_cast(), which asserts the weight in debug builds.
  */
 template <Encoding E, Layout L>
-[[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast_unchecked(std::uint64_t raw) noexcept
+[[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast_unchecked(
+    std::uint64_t raw
+) noexcept
 {
     return SpacedKmer<E, L>{raw};
 }

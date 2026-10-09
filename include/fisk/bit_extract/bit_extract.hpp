@@ -318,7 +318,8 @@ inline std::uint64_t bit_extract_block_table(
 }
 
 /**
- * @brief Helper for bit_extract_block_table_unrolled() to run the unrolled block table for one chunk.
+ * @brief Helper for bit_extract_block_table_unrolled() to run the unrolled block table for one
+ * chunk.
  */
 template<std::size_t... Is>
 inline std::uint64_t bit_extract_block_table_chunk_(

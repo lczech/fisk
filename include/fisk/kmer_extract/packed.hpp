@@ -57,9 +57,9 @@ namespace fisk {
 //     Details
 // -------------------------------------------------------------------------------------------------
 
-// Precondition-check throws are routed through the shared throw_invalid_kmer_k_() (kmer_extract.hpp)
-// rather than thrown directly, trying to keep these functions small enough for the
-// compiler to treat as inlining candidates.
+// Precondition-check throws are routed through the shared throw_invalid_kmer_k_()
+// (kmer_extract.hpp) rather than thrown directly, trying to keep these functions small enough for
+// the compiler to treat as inlining candidates.
 
 // do_not_optimize barriers on the k-mer emission in some of the functions below force each value
 // to at least be manifested in a register, so a benchmark summing them cannot be proven reducible
@@ -88,7 +88,7 @@ namespace fisk {
 // compiler optimizations; instead, values are returned to the caller.
 template <Encoding E, Layout L>
 FISK_NOINLINE_COLD
-std::size_t for_each_kmer_packed_tail_(
+std::size_t collect_kmers_packed_tail_(
     PackedSequence<E, L> const& seq, std::size_t start_pos, std::size_t p_max,
     unsigned k32, std::array<std::uint64_t, 64>& out
 ) {
@@ -100,7 +100,7 @@ std::size_t for_each_kmer_packed_tail_(
         } else if constexpr (L == Layout::kLSB) {
             return (byte >> (2 * in_byte)) & 0x3u;
         } else {
-            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_tail_()");
+            static_assert(dependent_false_v<L>, "Unhandled Layout in collect_kmers_packed_tail_()");
         }
     };
 
@@ -115,7 +115,7 @@ std::size_t for_each_kmer_packed_tail_(
                 kmer |= std::uint64_t{code} << (2 * i);
             } else {
                 static_assert(
-                    dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_tail_()"
+                    dependent_false_v<L>, "Unhandled Layout in collect_kmers_packed_tail_()"
                 );
             }
         }
@@ -137,7 +137,7 @@ std::size_t for_each_kmer_packed_tail_(
 // on GCC). The cost is one instantiation per K in for_each_kmer_packed_aligned()'s dispatch.
 template <Encoding E, Layout L, unsigned K, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_narrow_impl_(
+inline void for_each_kmer_packed_aligned_narrow_(
     PackedSequence<E, L> const& seq, Func&& func
 ) {
     static_assert(K >= 1 && K <= 29, "K must be in [1, 29]");
@@ -161,7 +161,7 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_impl_()"
+                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_()"
             );
         }
         std::uint64_t v0, v1, v2, v3;
@@ -178,7 +178,7 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_impl_()"
+                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_()"
             );
         }
 
@@ -206,7 +206,7 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, K, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
@@ -244,7 +244,7 @@ inline std::uint64_t aligned_boundary_window_(
 
 template <Encoding E, Layout L, unsigned K, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& seq, Func&& func)
+inline void for_each_kmer_packed_aligned_wide_(PackedSequence<E, L> const& seq, Func&& func)
 {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
 
@@ -275,7 +275,7 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_aligned_wide_impl_()"
+                "Unhandled Layout in for_each_kmer_packed_aligned_wide_()"
             );
         }
 
@@ -302,7 +302,7 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, K, tail_vals
     );
     for (std::size_t i = 0; i < tail_n; ++i) {
@@ -337,7 +337,7 @@ inline void for_each_kmer_packed_aligned(
     // from their K, and spelling each out longhand would bury that in repetition.
     #define FISK_PACKED_ALIGNED_NARROW_CASE_(K_) \
         case K_: \
-            for_each_kmer_packed_aligned_narrow_impl_<E, L, K_>(seq, std::forward<Func>(func)); \
+            for_each_kmer_packed_aligned_narrow_<E, L, K_>(seq, std::forward<Func>(func)); \
             break;
 
     switch (k) {
@@ -371,15 +371,15 @@ inline void for_each_kmer_packed_aligned(
         FISK_PACKED_ALIGNED_NARROW_CASE_(28)
         FISK_PACKED_ALIGNED_NARROW_CASE_(29)
         case 30: {
-            for_each_kmer_packed_aligned_wide_impl_<E, L, 30>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_wide_<E, L, 30>(seq, std::forward<Func>(func));
             break;
         }
         case 31: {
-            for_each_kmer_packed_aligned_wide_impl_<E, L, 31>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_wide_<E, L, 31>(seq, std::forward<Func>(func));
             break;
         }
         case 32: {
-            for_each_kmer_packed_aligned_wide_impl_<E, L, 32>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_wide_<E, L, 32>(seq, std::forward<Func>(func));
             break;
         }
     }
@@ -396,7 +396,7 @@ inline void for_each_kmer_packed_aligned(
 // That serial dependency chain is what makes this version slower.
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_narrow_impl_(
+inline void for_each_kmer_packed_rolling_narrow_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
@@ -411,7 +411,7 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_narrow_impl_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_narrow_()"
             );
         }
     };
@@ -439,7 +439,7 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
             } else {
                 static_assert(
                     dependent_false_v<L>,
-                    "Unhandled Layout in for_each_kmer_packed_rolling_narrow_impl_()"
+                    "Unhandled Layout in for_each_kmer_packed_rolling_narrow_()"
                 );
             }
             auto const word = (acc >> shift) & mask;
@@ -454,7 +454,7 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
 // byte, which is why the narrow impl above still exists as the faster choice for k <= 29.
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_wide_impl_(
+inline void for_each_kmer_packed_rolling_wide_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     std::uint64_t const mask = (k == 32)
@@ -479,7 +479,7 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_wide_impl_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_wide_()"
             );
         }
         int case_id;
@@ -508,7 +508,7 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_wide_impl_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_wide_()"
             );
         }
     };
@@ -549,8 +549,8 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
  * Kept only as a slower algorithmic comparison baseline; prefer for_each_kmer_packed_aligned()
  * for production use.
  *
- * For k <= 29, delegates to for_each_kmer_packed_rolling_narrow_impl_() (single 64-bit
- * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_wide_impl_() (hi:lo pair)
+ * For k <= 29, delegates to for_each_kmer_packed_rolling_narrow_() (single 64-bit
+ * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_wide_() (hi:lo pair)
  * instead, since a single 64-bit accumulator no longer fits.
  *
  * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
@@ -568,9 +568,9 @@ inline void for_each_kmer_packed_rolling(
         return;
     }
     if (k <= 29) {
-        for_each_kmer_packed_rolling_narrow_impl_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_rolling_narrow_(seq, k, std::forward<Func>(func));
     } else {
-        for_each_kmer_packed_rolling_wide_impl_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_rolling_wide_(seq, k, std::forward<Func>(func));
     }
 }
 

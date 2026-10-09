@@ -43,9 +43,10 @@ namespace fisk {
 // convention on to its consumer. What distinguishes them from each other is only the
 // technique used to get there; we provide several so that they can be benchmarked against
 // each other. All of them return 0-3 for a valid nucleotide and a value >= kInvalidNucleotide
-// otherwise, for both upper and lower case, except CharEncoderAscii<E, InputValidity::kAssumeValid>,
-// which trusts the caller instead of checking, and so returns a valid-looking 0-3 code even for
-// input that is not actually a nucleotide; see InputValidity below.
+// otherwise, for both upper and lower case, except
+// CharEncoderAscii<E, InputValidity::kAssumeValid>, which trusts the caller instead of checking,
+// and so returns a valid-looking 0-3 code even for input that is not actually a nucleotide; see
+// InputValidity below.
 
 // Every encoder below relies on the ASCII code points of the nucleotide characters, whether
 // through the lookup tables or the bit tricks. Assert once here that the host character set

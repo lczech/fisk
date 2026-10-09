@@ -261,7 +261,7 @@ template<
     bool SingleMask, typename MaskOrMasks, typename Enc, typename BitExtract, typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_impl_(
+inline void for_each_spaced_kmer_(
     std::string_view seq,
     std::size_t const span_k,
     MaskOrMasks const& masks,
@@ -373,7 +373,7 @@ inline void for_each_spaced_kmer(
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    for_each_spaced_kmer_impl_<true>(
+    for_each_spaced_kmer_<true>(
         seq, span_k, mask, std::forward<Enc>(enc), std::forward<BitExtract>(bit_ext),
         std::forward<Callback>(callback)
     );
@@ -398,7 +398,7 @@ inline void for_each_spaced_kmer(
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    for_each_spaced_kmer_impl_<false>(
+    for_each_spaced_kmer_<false>(
         seq, span_k, masks, std::forward<Enc>(enc), std::forward<BitExtract>(bit_ext),
         std::forward<Callback>(callback)
     );

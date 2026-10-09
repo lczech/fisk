@@ -130,8 +130,8 @@ inline BitExtractMode bit_extract_selector(
     {
         // Warmup. do_not_optimize() forces each result into a register, so the compiler cannot
         // prove the loop reducible and optimize it out, which would create invalid benchmarks.
-        // (A volatile accumulator used to serve this purpose here, but compound assignment on a
-        // volatile-qualified type is deprecated as of C++20.)
+        // Not a volatile accumulator, as compound assignment on a volatile-qualified type is
+        // deprecated as of C++20.
         std::uint64_t sink_out = 0;
         for (auto const x : data) {
             sink_out += func(x);

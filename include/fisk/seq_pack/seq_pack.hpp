@@ -20,16 +20,17 @@ namespace fisk {
 // pack_sequence() below. They are the word-at-a-time counterparts of the per-character encoders in
 // core/char_encoder.hpp, and assume valid input: unlike those, they have no way to report an
 // invalid character. Such a character is packed as an arbitrary code at its own position, leaving
-// every other position unaffected. Both are templated on the two conventions they produce, and expose them as
-// `encoding` and `layout` static members right next to the logic that implements them, so that the
-// tags and the bits cannot silently drift apart. What distinguishes the two is only how the
-// selected bits are gathered: hardware PEXT, or the portable software butterfly network.
+// every other position unaffected. Both are templated on the two conventions they produce, and
+// expose them as `encoding` and `layout` static members right next to the logic that implements
+// them, so that the tags and the bits cannot silently drift apart. What distinguishes the two is
+// only how the selected bits are gathered: hardware PEXT, or the portable software butterfly
+// network.
 //
 // Both conventions enter the same way, and only in one place each. The encoding picks which bits
 // of every ASCII byte hold the code, and hence the extraction mask; ACGT additionally needs a SWAR
-// pre-transform to fold its two bits into place (see ascii_bits_to_code_() in core/char_encoder.hpp for
-// the scalar version of the same trick). ACTG needs no such fold: its two code bits already sit at
-// bits 1-2 of every raw (lowercased) ASCII byte, so pack_mask_v alone selects them, and the bit
+// pre-transform to fold its two bits into place (see ascii_bits_to_code_() in core/char_encoder.hpp
+// for the scalar version of the same trick). ACTG needs no such fold: its two code bits already sit
+// at bits 1-2 of every raw (lowercased) ASCII byte, so pack_mask_v alone selects them, and the bit
 // extraction (PEXT or the butterfly network) shifts them down to bits 0-1 of the result as part of
 // gathering them - no separate shift is needed either way. The layout picks whether the chunk is
 // byte-swapped first, so that its first character lands in the high bits of the result instead of
@@ -172,9 +173,9 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
     // sequential write.
     //
     // `Bytes` (1 or 2) is a template parameter rather than a runtime one so that the hot full-chunk
-    // call sites below (always 2) keep a fixed-width store with no added branch; only the ragged tail
-    // chunk (<=4 real bases) ever instantiates the 1-byte write, and byte 0 -- the first of the two
-    // output bytes post-swap -- is the one holding those bases in both layouts.
+    // call sites below (always 2) keep a fixed-width store with no added branch; only the ragged
+    // tail chunk (<=4 real bases) ever instantiates the 1-byte write, and byte 0 -- the first of
+    // the two output bytes post-swap -- is the one holding those bases in both layouts.
 
     static_assert(Bytes == 1 || Bytes == 2, "write_two_bit_chunk_() only supports 1 or 2 bytes");
     assert(dest != nullptr);

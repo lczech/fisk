@@ -33,7 +33,8 @@
     #include <immintrin.h>
     #define FISK_HAS_BMI2 1
 #endif
-#if defined(FISK_HAS_SSE2) || defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+#if defined(FISK_HAS_SSE2) || defined(__SSE2__) || defined(_M_X64) \
+    || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
     #include <emmintrin.h>
     #define FISK_HAS_SSE2 1
 #endif

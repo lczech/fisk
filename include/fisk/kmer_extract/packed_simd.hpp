@@ -92,7 +92,8 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
     std::size_t const p_max = seq.length - k;
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes  = (seq.length + 3) / 4;
-    // Every fast-loop starting byte has a safe 8-byte read; paired b+1 is covered by the same bound.
+    // Every fast-loop starting byte has a safe 8-byte read; paired b+1 is covered by the same
+    // bound.
     std::size_t const fast_bytes = std::min(
         full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
     );
@@ -162,7 +163,7 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
     // Any byte excluded purely by the parity rounding above (fast_bytes odd) is still safe to
     // fast-read but has no partner to pair with. It is left to the scalar tail.
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
@@ -246,7 +247,9 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
     // shift instruction out-of-range (>=64) rule zeroes the result; so whichever term does not
     // apply to a given `start` self-cancels with no branch, blend, or special-casing of
     // start==0 needed.
-    auto extract = [&](__m128i lo_pair, __m128i hi_pair, __m128i cnt_lo, __m128i cnt_hi_l) -> __m128i {
+    auto extract = [&](
+        __m128i lo_pair, __m128i hi_pair, __m128i cnt_lo, __m128i cnt_hi_l
+    ) -> __m128i {
         __m128i const cnt_hi_r = _mm_sub_epi64(zero_v, cnt_hi_l); // start - 64 == -(64 - start)
         __m128i const lo_contrib = _mm_srl_epi64(lo_pair, cnt_lo);
         __m128i const hi_contrib = _mm_or_si128(
@@ -294,7 +297,7 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
 
     // Any odd trailing byte is left to the scalar tail.
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
@@ -401,7 +404,7 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<4>(
@@ -489,7 +492,7 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<4>(
@@ -553,7 +556,8 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
     std::size_t const p_max = seq.length - k;
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes  = (seq.length + 3) / 4;
-    // Every fast-loop starting byte has a safe 8-byte read; paired b+1 is covered by the same bound.
+    // Every fast-loop starting byte has a safe 8-byte read; paired b+1 is covered by the same
+    // bound.
     std::size_t const fast_bytes = std::min(
         full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
     );
@@ -613,7 +617,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<8>(
@@ -727,7 +731,7 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<8>(
@@ -841,7 +845,7 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(
@@ -947,7 +951,7 @@ inline void for_each_kmer_packed_simd_wide_neon_(
     }
 
     std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = for_each_kmer_packed_tail_<E, L>(
+    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
     emit_tail_packed_<2>(

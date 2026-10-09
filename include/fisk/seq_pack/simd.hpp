@@ -28,7 +28,8 @@ namespace fisk {
 #if defined(FISK_HAS_SSE2)
 
 /**
- * @brief SSE2 vector ops needed for whole-sequence packing, on top of BitExtractKernelButterflySSE2.
+ * @brief SSE2 vector ops needed for whole-sequence packing, on top of
+ * BitExtractKernelButterflySSE2.
  */
 struct SeqPackButterflyKernelSSE2 : public BitExtractKernelButterflySSE2
 {
@@ -106,7 +107,8 @@ struct SeqPackButterflyKernelSSE2 : public BitExtractKernelButterflySSE2
 #if defined(FISK_HAS_AVX2)
 
 /**
- * @brief AVX2 vector ops needed for whole-sequence packing, on top of BitExtractKernelButterflyAVX2.
+ * @brief AVX2 vector ops needed for whole-sequence packing, on top of
+ * BitExtractKernelButterflyAVX2.
  */
 struct SeqPackButterflyKernelAVX2 : public BitExtractKernelButterflyAVX2
 {
@@ -278,7 +280,8 @@ struct SeqPackButterflyKernelAVX512 : public BitExtractKernelButterflyAVX512
 #if defined(FISK_HAS_NEON)
 
 /**
- * @brief NEON vector ops needed for whole-sequence packing, on top of BitExtractKernelButterflyNEON.
+ * @brief NEON vector ops needed for whole-sequence packing, on top of
+ * BitExtractKernelButterflyNEON.
  */
 struct SeqPackButterflyKernelNEON : public BitExtractKernelButterflyNEON
 {
@@ -503,8 +506,8 @@ inline void pack_sequence_simd(
 }
 
 /**
- * @brief Pack a whole ASCII sequence into a freshly allocated PackedSequence via a SIMD word encoder.
- * Convenience wrapper around pack_sequence_simd() above; see its docs for the caveat about
+ * @brief Pack a whole ASCII sequence into a freshly allocated PackedSequence via a SIMD word
+ * encoder. Convenience wrapper around pack_sequence_simd() above; see its docs for the caveat about
  * reusing one PackedSequence across repeated calls (e.g. in a benchmark) instead.
  */
 template <WordEncoder Encoder>
