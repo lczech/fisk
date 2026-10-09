@@ -12,6 +12,7 @@
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_callback.hpp"
+#include "fisk/core/types.hpp"
 
 namespace fisk {
 
@@ -40,7 +41,7 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
  * @brief Iterate a sequence, extract all valid k-mers from it (using bit shifts),
  * and call a callback function on each k-mer.
  *
- * The encoder `enc` must return:
+ * The encoder must return:
  *   - 0,1,2,3 for valid A/C/G/T-like symbols
  *   - any value >= 4 for invalid symbols
  *
@@ -51,26 +52,31 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
  * e.g., for benchmarking different encoders against each other.
  *
  * The callback receives a Kmer (core/kmer.hpp) tagged with the encoder's own Encoding, and with
- * Layout::kMSB, which is what this loop's `(kmer << 2) | code` recurrence produces. The encoder
- * therefore has to state its encoding, which is what the CharEncoder concept requires: a
- * bare function carries no such statement, and so cannot be passed here.
+ * Layout `L`. The encoder therefore has to state its encoding, which is what the CharEncoder
+ * concept requires: a bare function carries no such statement, and so cannot be passed here.
+ * The layout is chosen at compile time, so either costs the same:
+ *
+ *     CharEncoderTable<Encoding::kACTG> const encoder;
+ *     for_each_kmer_rolling(seq, k, encoder, func);                // Kmer<kACTG, kMSB>
+ *     for_each_kmer_rolling<Layout::kLSB>(seq, k, encoder, func);  // Kmer<kACTG, kLSB>
  *
  * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
  * position of the k-mer in `seq`. See invoke_kmer_callback().
  *
- * @tparam Enc  Encoder turning characters into two-bit codes, see CharEncoder.
- * @tparam Func Callback function to be called for each valid k-mer.
+ * @tparam L       Layout of the emitted k-mers, see Layout.
+ * @tparam Encoder Encoder turning characters into two-bit codes, see CharEncoder.
+ * @tparam Func    Callback function to be called for each valid k-mer.
  */
-template<typename Enc, typename Func>
-    requires CharEncoder<std::remove_cvref_t<Enc>>
+template<Layout L = Layout::kMSB, typename Encoder, typename Func>
+    requires CharEncoder<std::remove_cvref_t<Encoder>>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_rolling(
-    std::string_view seq, std::size_t k, Enc&& enc, Func&& func
+    std::string_view seq, std::size_t k, Encoder&& encoder, Func&& func
 ) {
     // Iterate all k-mers of a sequence, encoded as 2-bit packed uint64_t.
     // For a sequence of length n and k <= 32, this function visits
     // (n - k + 1) overlapping k-mers. Each k-mer is encoded into the
-    // lowest 2*k bits of a uint64_t, using the two-bit encoding provided by `enc`.
+    // lowest 2*k bits of a uint64_t, using the two-bit encoding provided by `encoder`.
 
     // Boundary checks
     if (k == 0 || k > 32) {
@@ -84,21 +90,29 @@ inline void for_each_kmer_rolling(
     std::size_t const seq_len = seq.size();
     char const*       data    = seq.data();
 
-    // Mask to keep only the lowest 2*k bits.
-    // This works for all k in [1, 32].
+    // MSB shifts each base in at the bottom, and needs a mask to drop the base leaving at the top.
+    // This works for all k in [1, 32]. LSB shifts each base in at the top, at `top_shift`, and the
+    // base leaving at the bottom simply falls off, so it needs no mask.
     std::uint64_t const mask = (k == 32)
         ? ~std::uint64_t{0}
         : ((std::uint64_t{1} << (2 * k)) - 1u);
+    unsigned const top_shift = 2 * (static_cast<unsigned>(k) - 1);
 
     std::uint64_t kmer = 0;
     std::size_t valid = 0;
     for( std::size_t i = 0; i < seq_len; ++i ) {
-        std::uint8_t const code = enc(data[i]);
+        std::uint8_t const code = encoder(data[i]);
 
         // Always shift in the low 2 bits. For invalid symbols this value is ignored,
         // because all overlapping k-mers will be skipped until the bad position
         // has slid out of the window.
-        kmer = ((kmer << 2) & mask) | (code & 0x03u);
+        if constexpr (L == Layout::kMSB) {
+            kmer = ((kmer << 2) & mask) | (code & 0x03u);
+        } else if constexpr (L == Layout::kLSB) {
+            kmer = (kmer >> 2) | (std::uint64_t{code & 0x03u} << top_shift);
+        } else {
+            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_kmer_rolling()");
+        }
         valid = (code < 4) ? (valid + 1) : 0;
 
         // We can emit once we have seen at least k characters, and the current
@@ -106,7 +120,7 @@ inline void for_each_kmer_rolling(
         if( valid >= k ) {
             // valid >= k implies i >= k - 1, so the start position `i + 1 - k` does not underflow.
             assert_fits_width_(kmer, k);
-            invoke_kmer_callback<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(
+            invoke_kmer_callback<std::remove_cvref_t<Encoder>::encoding, L>(
                 func, i + 1 - k, kmer
             );
         }
@@ -121,13 +135,13 @@ inline void for_each_kmer_rolling(
  * characters. This is of course slower, but apparently used in practice. We hence implement
  * it here for benchmarking.
  *
- * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, see for_each_kmer_rolling().
+ * The Layout `L`, the encoder, and Func are as for for_each_kmer_rolling().
  */
-template<typename Enc, typename Func>
-    requires CharEncoder<std::remove_cvref_t<Enc>>
+template<Layout L = Layout::kMSB, typename Encoder, typename Func>
+    requires CharEncoder<std::remove_cvref_t<Encoder>>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_reextract(
-    std::string_view seq, std::size_t k, Enc&& enc, Func&& func
+    std::string_view seq, std::size_t k, Encoder&& encoder, Func&& func
 ) {
     // Same as above, but each k-mer is extracted separately.
     // Not efficient, and worse for larger k. Meant only for benchmarking.
@@ -151,17 +165,23 @@ inline void for_each_kmer_reextract(
         bool valid = true;
 
         for (std::size_t x = 0; x < k; ++x) {
-            std::uint8_t const code = static_cast<std::uint8_t>(enc(data[i + x]));
+            std::uint8_t const code = static_cast<std::uint8_t>(encoder(data[i + x]));
             valid &= (code < 4);
-            kmer = (kmer << 2) | (code & 0x3u);
+            if constexpr (L == Layout::kMSB) {
+                kmer = (kmer << 2) | (code & 0x3u);
+            } else if constexpr (L == Layout::kLSB) {
+                kmer |= std::uint64_t{code & 0x3u} << (2 * x);
+            } else {
+                static_assert(
+                    dependent_false_v<L>, "Unhandled Layout in for_each_kmer_reextract()"
+                );
+            }
         }
 
         if (valid) {
             // Here, i is already the start position of the k-mer.
             assert_fits_width_(kmer, k);
-            invoke_kmer_callback<std::remove_cvref_t<Enc>::encoding, Layout::kMSB>(
-                func, i, kmer
-            );
+            invoke_kmer_callback<std::remove_cvref_t<Encoder>::encoding, L>(func, i, kmer);
         }
     }
 }
@@ -171,22 +191,28 @@ inline void for_each_kmer_reextract(
  * each k-mer.
  *
  * Convenience entry point for callers who do not need to choose an encoder or extraction
- * technique themselves: fixes the encoder to the ACGT lookup table (CharEncoderTable, see
- * core/char_encoder.hpp) and forwards to for_each_kmer_rolling(), the fastest of the extraction
- * techniques offered here. Call for_each_kmer_rolling() directly instead to plug in a different
- * encoder.
+ * technique themselves: uses the lookup table encoder (CharEncoderTable, see core/char_encoder.hpp)
+ * and forwards to for_each_kmer_rolling(), the fastest of the extraction techniques offered here.
+ * Call for_each_kmer_rolling() directly instead to plug in a different encoder.
  *
- * The callback receives a Kmer<Encoding::kACGT, Layout::kMSB> (see core/kmer.hpp), so the
- * conventions it was produced under travel with it. Use kmer_decode() to turn one back into a string,
- * and convert() to move it to different conventions.
+ * The callback receives a Kmer<E, L> (see core/kmer.hpp), so the conventions it was produced under
+ * travel with it. They default to ACGT/MSB; pass them to get others, at no extra cost:
  *
+ *     for_each_kmer(seq, k, func);                                 // Kmer<kACGT, kMSB>
+ *     for_each_kmer<Encoding::kACTG, Layout::kLSB>(seq, k, func);  // Kmer<kACTG, kLSB>
+ *
+ * Use kmer_decode() to turn a k-mer back into a string, and kmer_convert() to move it to different
+ * conventions.
+ *
+ * @tparam E    Encoding of the emitted k-mers, see Encoding.
+ * @tparam L    Layout of the emitted k-mers, see Layout.
  * @tparam Func Callback function to be called for each valid k-mer.
  */
-template<typename Func>
+template<Encoding E = Encoding::kACGT, Layout L = Layout::kMSB, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer(std::string_view seq, std::size_t k, Func&& func)
 {
-    for_each_kmer_rolling(seq, k, CharEncoderTable<Encoding::kACGT>{}, std::forward<Func>(func));
+    for_each_kmer_rolling<L>(seq, k, CharEncoderTable<E>{}, std::forward<Func>(func));
 }
 
 } // namespace fisk

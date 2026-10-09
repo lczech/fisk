@@ -98,6 +98,18 @@ std::uint64_t run_var_simd_scalar(
     std::vector<std::uint64_t>& sink_buffer
 );
 
+// Validating rolling variants emitting Layout::kLSB, to compare against their MSB counterparts.
+std::uint64_t run_var_acgt_lsb_table_shift(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_acgt_lsb_ascii_shift(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+
 // Non-validating variants. The scratch-buffer variants take caller-owned PackedSequence storage,
 // so it is reused across calls rather than reallocated each time.
 std::uint64_t run_var_acgt_msb_chunked_assume_valid(

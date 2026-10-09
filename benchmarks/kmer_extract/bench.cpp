@@ -150,6 +150,27 @@ void bench_kmer_extract(
             csv_os, suite_title, "encoding=acgt;layout=msb;" + k_label, results, kSinkName
         );
 
+        // LSB emits different k-mer values than MSB, so it needs its own suite.run() call, as
+        // Microbench::run() cross-validates the sinks of all benches within one call.
+        auto const results_lsb = suite.run(
+            sequences,
+            bench(
+                "table_shift",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_lsb_table_shift(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "ascii_shift",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_lsb_ascii_shift(seq, k, sink_buffer);
+                }
+            )
+        );
+        write_csv_rows(
+            csv_os, suite_title, "encoding=acgt;layout=lsb;" + k_label, results_lsb, kSinkName
+        );
+
         // The non-validating variants run in their own suite.run() calls, not alongside the
         // validating ones above: Microbench::run() cross-validates that every bench in the same
         // call produces the same sink, but these encode invalid characters (see --n-prob in

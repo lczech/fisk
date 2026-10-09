@@ -20,38 +20,68 @@ using namespace fisk;
 // =================================================================================================
 
 // Checks for_each_kmer_rolling() and for_each_kmer_reextract(), the two extractors that take an
-// encoder, against `expected` for one (seq, k), in both callback forms.
-template <typename Enc>
-static void check_encoder_impls(
-    std::string const& seq, std::size_t k, Enc const& enc, std::vector<ExpectedKmer> const& expected
+// encoder, against the oracle for one (seq, k) in Layout L, in both callback forms. `as_seen` is
+// `seq` as the encoder sees it, for the oracle.
+template <Layout L, typename Enc>
+static void check_encoder_impls_in_layout(
+    std::string const& seq, std::size_t k, Enc const& enc, std::string const& as_seen
 ) {
     constexpr auto E = Enc::encoding;
-    check_kmer_callbacks<E, Layout::kMSB>(expected, k, [&](auto const& callback) {
-        for_each_kmer_rolling(seq, k, enc, callback);
+    auto const expected = oracle_kmers_skipping_invalid<E, L>(as_seen, k);
+    check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+        for_each_kmer_rolling<L>(seq, k, enc, callback);
     });
-    check_kmer_callbacks<E, Layout::kMSB>(expected, k, [&](auto const& callback) {
-        for_each_kmer_reextract(seq, k, enc, callback);
+    check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+        for_each_kmer_reextract<L>(seq, k, enc, callback);
+    });
+}
+
+// Same, in both layouts. `as_seen` differs from `seq` only for an encoder that deems other
+// characters invalid than the oracle does.
+template <typename Enc>
+static void check_encoder_impls(
+    std::string const& seq, std::size_t k, Enc const& enc, std::string const& as_seen
+) {
+    check_encoder_impls_in_layout<Layout::kMSB>(seq, k, enc, as_seen);
+    check_encoder_impls_in_layout<Layout::kLSB>(seq, k, enc, as_seen);
+}
+
+template <typename Enc>
+static void check_encoder_impls(std::string const& seq, std::size_t k, Enc const& enc)
+{
+    check_encoder_impls(seq, k, enc, seq);
+}
+
+// Checks the for_each_kmer() convenience wrapper against the oracle for one (seq, k), under the
+// conventions E and L.
+template <Encoding E, Layout L>
+static void check_for_each_kmer(std::string const& seq, std::size_t k)
+{
+    auto const expected = oracle_kmers_skipping_invalid<E, L>(seq, k);
+    check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+        for_each_kmer<E, L>(seq, k, callback);
     });
 }
 
 // Checks all five for_each_kmer variants against the oracle for one (seq, k): exact positions and
-// values, in order, skipping every window that overlaps an invalid character. ACGT-table encoding
-// throughout, since for_each_kmer_simd()/for_each_kmer_simd_scalar() hardcode ACGT-ascii encoding
-// and for_each_kmer() fixes its encoder to the ACGT lookup table, so neither can be checked
-// against any other ordering.
+// values, in order, skipping every window that overlaps an invalid character. The two
+// encoder-taking extractors are checked with the ACGT table encoder in both layouts, and
+// for_each_kmer() under all four conventions. for_each_kmer_simd()/for_each_kmer_simd_scalar()
+// hardcode ACGT/MSB, so they can only be checked under those.
 static void check_all_impls_acgt(std::string const& seq, std::size_t k)
 {
     auto const expected = oracle_kmers_skipping_invalid<Encoding::kACGT, Layout::kMSB>(seq, k);
-    check_encoder_impls(seq, k, CharEncoderTable<Encoding::kACGT>{}, expected);
+    check_encoder_impls(seq, k, CharEncoderTable<Encoding::kACGT>{});
     check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& callback) {
         for_each_kmer_simd(seq, k, callback);
     });
     check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& callback) {
         for_each_kmer_simd_scalar(seq, k, callback);
     });
-    check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& callback) {
-        for_each_kmer(seq, k, callback);
-    });
+    check_for_each_kmer<Encoding::kACGT, Layout::kMSB>(seq, k);
+    check_for_each_kmer<Encoding::kACGT, Layout::kLSB>(seq, k);
+    check_for_each_kmer<Encoding::kACTG, Layout::kMSB>(seq, k);
+    check_for_each_kmer<Encoding::kACTG, Layout::kLSB>(seq, k);
 }
 
 // =================================================================================================
@@ -82,9 +112,8 @@ static std::vector<std::string> const& valid_sequences()
 //     Oracle Correctness
 // =================================================================================================
 
-// Correct k-mers, correct positions, correct order, correct MSB encoding, for every length/k
-// combination in the shared sequence set. ACGT-table encoding, checked against all five
-// implementations.
+// Correct k-mers, correct positions, correct order, correct encoding and layout, for every
+// length/k combination in the shared sequence set, checked against all five implementations.
 TEST(KmerExtract, OracleAcgtTable)
 {
     for (auto const& seq : valid_sequences()) {
@@ -95,16 +124,13 @@ TEST(KmerExtract, OracleAcgtTable)
 }
 
 // Same, but with an ACTG-ordered encoder, to prove for_each_kmer_rolling()/for_each_kmer_reextract()
-// do not hardcode ACGT ordering. The other three cannot be checked here, since they hardcode ACGT
-// (see check_all_impls_acgt()).
+// do not hardcode ACGT ordering. for_each_kmer() is already checked under ACTG above, and the two
+// SIMD variants hardcode ACGT (see check_all_impls_acgt()).
 TEST(KmerExtract, OracleActgTable)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            check_encoder_impls(
-                seq, k, CharEncoderTable<Encoding::kACTG>{},
-                oracle_kmers_skipping_invalid<Encoding::kACTG, Layout::kMSB>(seq, k)
-            );
+            check_encoder_impls(seq, k, CharEncoderTable<Encoding::kACTG>{});
         }
     }
 }
@@ -209,6 +235,20 @@ static_assert( RollingAccepts<CharEncoderAscii<Encoding::kACTG>>);
 static_assert(!RollingAccepts<UntaggedEncoder>);
 static_assert(!RollingAccepts<std::uint8_t(*)(char)>);
 
+// Without template arguments, the extractors keep emitting ACGT/MSB. The callback only accepts
+// KmerAcgtMsb, so any other default fails to compile.
+TEST(KmerExtract, DefaultConventions)
+{
+    std::string const seq = "ACGTA";
+    CharEncoderTable<Encoding::kACGT> const table;
+    std::size_t count = 0;
+    auto const callback = [&](KmerAcgtMsb) { ++count; };
+    for_each_kmer_rolling(seq, 3, table, callback);
+    for_each_kmer_reextract(seq, 3, table, callback);
+    for_each_kmer(seq, 3, callback);
+    EXPECT_EQ(count, std::size_t{9});
+}
+
 // Custom encoder whose invalid sentinel is not exactly 4 (255 here, and lowercase bases are
 // deliberately "invalid" under it), checking that for_each_kmer_rolling()/for_each_kmer_reextract()
 // honor the documented ">= 4 is invalid" contract rather than special-casing the value 4. Only
@@ -247,9 +287,7 @@ TEST(KmerExtract, InvalidSentinelNotFour)
             }
         }
         for (auto const k : test_ks()) {
-            auto const expected =
-                oracle_kmers_skipping_invalid<Encoding::kACGT, Layout::kMSB>(as_seen, k);
-            check_encoder_impls(seq, k, enc, expected);
+            check_encoder_impls(seq, k, enc, as_seen);
         }
     }
 }
