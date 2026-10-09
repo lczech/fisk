@@ -138,9 +138,9 @@ void bench_kmer_extract(
                 }
             ),
             bench(
-                "simd_scalar",
+                "swar",
                 [k, &sink_buffer](std::string const& seq){
-                    return run_var_simd_scalar(seq, k, sink_buffer);
+                    return run_var_swar(seq, k, sink_buffer);
                 }
             )
         );
@@ -165,10 +165,48 @@ void bench_kmer_extract(
                 [k, &sink_buffer](std::string const& seq){
                     return run_var_acgt_lsb_ascii_shift(seq, k, sink_buffer);
                 }
+            ),
+            bench(
+                "simd_avx2",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_lsb_simd_avx2(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "swar",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_acgt_lsb_swar(seq, k, sink_buffer);
+                }
             )
         );
         write_csv_rows(
             csv_os, suite_title, "encoding=acgt;layout=lsb;" + k_label, results_lsb, kSinkName
+        );
+
+        // ACTG emits different k-mer values than ACGT, so it gets its own suite.run() call too.
+        auto const results_actg = suite.run(
+            sequences,
+            bench(
+                "ascii_shift",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_actg_msb_ascii_shift(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_avx2",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_actg_msb_simd_avx2(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "swar",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_actg_msb_swar(seq, k, sink_buffer);
+                }
+            )
+        );
+        write_csv_rows(
+            csv_os, suite_title, "encoding=actg;layout=msb;" + k_label, results_actg, kSinkName
         );
 
         // The non-validating variants run in their own suite.run() calls, not alongside the

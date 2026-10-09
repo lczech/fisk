@@ -38,6 +38,28 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
 }
 
 /**
+ * @brief Get the k-mer to emit from a rolling `kmer` that is only masked on emission.
+ *
+ * The rolling extractors shift each MSB base in without masking, so `kmer` keeps the bases that
+ * have left the window in its upper bits, and `mask` is only applied here, to the emitted k-mers.
+ * That keeps the mask off the dependency chain through `kmer` from one character to the next.
+ * For LSB, nothing ever reaches the bits above the window, so it is emitted as is.
+ */
+template <Layout L>
+FISK_ALWAYS_INLINE
+inline std::uint64_t window_bits_(std::uint64_t kmer, std::uint64_t mask) noexcept
+{
+    if constexpr (L == Layout::kMSB) {
+        return kmer & mask;
+    } else if constexpr (L == Layout::kLSB) {
+        return kmer;
+    } else {
+        static_assert(dependent_false_v<L>, "Unhandled Layout in window_bits_()");
+        return 0;
+    }
+}
+
+/**
  * @brief Iterate a sequence, extract all valid k-mers from it (using bit shifts),
  * and call a callback function on each k-mer.
  *
@@ -90,9 +112,10 @@ inline void for_each_kmer_rolling(
     std::size_t const seq_len = seq.size();
     char const*       data    = seq.data();
 
-    // MSB shifts each base in at the bottom, and needs a mask to drop the base leaving at the top.
-    // This works for all k in [1, 32]. LSB shifts each base in at the top, at `top_shift`, and the
-    // base leaving at the bottom simply falls off, so it needs no mask.
+    // MSB shifts each base in at the bottom, and needs a mask to drop the bases that have left the
+    // window at the top, applied on emission, see window_bits_(). This works for all k in [1, 32].
+    // LSB shifts each base in at the top, at `top_shift`, and the base leaving at the bottom simply
+    // falls off, so it needs no mask.
     std::uint64_t const mask = (k == 32)
         ? ~std::uint64_t{0}
         : ((std::uint64_t{1} << (2 * k)) - 1u);
@@ -107,7 +130,7 @@ inline void for_each_kmer_rolling(
         // because all overlapping k-mers will be skipped until the bad position
         // has slid out of the window.
         if constexpr (L == Layout::kMSB) {
-            kmer = ((kmer << 2) & mask) | (code & 0x03u);
+            kmer = (kmer << 2) | (code & 0x03u);
         } else if constexpr (L == Layout::kLSB) {
             kmer = (kmer >> 2) | (std::uint64_t{code & 0x03u} << top_shift);
         } else {
@@ -119,9 +142,9 @@ inline void for_each_kmer_rolling(
         // k-mer window does not overlap the most recent invalid character.
         if( valid >= k ) {
             // valid >= k implies i >= k - 1, so the start position `i + 1 - k` does not underflow.
-            assert_fits_width_(kmer, k);
+            assert_fits_width_(window_bits_<L>(kmer, mask), k);
             invoke_kmer_callback<std::remove_cvref_t<Encoder>::encoding, L>(
-                func, i + 1 - k, kmer
+                func, i + 1 - k, window_bits_<L>(kmer, mask)
             );
         }
     }

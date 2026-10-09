@@ -52,36 +52,34 @@ static void check_encoder_impls(std::string const& seq, std::size_t k, Enc const
     check_encoder_impls(seq, k, enc, seq);
 }
 
-// Checks the for_each_kmer() convenience wrapper against the oracle for one (seq, k), under the
-// conventions E and L.
+// Checks the three extractors that take no encoder, for_each_kmer(), for_each_kmer_simd() and
+// for_each_kmer_swar(), against the oracle for one (seq, k), under the conventions E and L.
 template <Encoding E, Layout L>
-static void check_for_each_kmer(std::string const& seq, std::size_t k)
+static void check_encoder_free_impls(std::string const& seq, std::size_t k)
 {
     auto const expected = oracle_kmers_skipping_invalid<E, L>(seq, k);
     check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
         for_each_kmer<E, L>(seq, k, callback);
     });
+    check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+        for_each_kmer_simd<E, L>(seq, k, callback);
+    });
+    check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+        for_each_kmer_swar<E, L>(seq, k, callback);
+    });
 }
 
 // Checks all five for_each_kmer variants against the oracle for one (seq, k): exact positions and
 // values, in order, skipping every window that overlaps an invalid character. The two
-// encoder-taking extractors are checked with the ACGT table encoder in both layouts, and
-// for_each_kmer() under all four conventions. for_each_kmer_simd()/for_each_kmer_simd_scalar()
-// hardcode ACGT/MSB, so they can only be checked under those.
-static void check_all_impls_acgt(std::string const& seq, std::size_t k)
+// encoder-taking extractors are checked with the ACGT table encoder in both layouts, and the
+// other three under all four conventions.
+static void check_all_impls(std::string const& seq, std::size_t k)
 {
-    auto const expected = oracle_kmers_skipping_invalid<Encoding::kACGT, Layout::kMSB>(seq, k);
     check_encoder_impls(seq, k, CharEncoderTable<Encoding::kACGT>{});
-    check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& callback) {
-        for_each_kmer_simd(seq, k, callback);
-    });
-    check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& callback) {
-        for_each_kmer_simd_scalar(seq, k, callback);
-    });
-    check_for_each_kmer<Encoding::kACGT, Layout::kMSB>(seq, k);
-    check_for_each_kmer<Encoding::kACGT, Layout::kLSB>(seq, k);
-    check_for_each_kmer<Encoding::kACTG, Layout::kMSB>(seq, k);
-    check_for_each_kmer<Encoding::kACTG, Layout::kLSB>(seq, k);
+    check_encoder_free_impls<Encoding::kACGT, Layout::kMSB>(seq, k);
+    check_encoder_free_impls<Encoding::kACGT, Layout::kLSB>(seq, k);
+    check_encoder_free_impls<Encoding::kACTG, Layout::kMSB>(seq, k);
+    check_encoder_free_impls<Encoding::kACTG, Layout::kLSB>(seq, k);
 }
 
 // =================================================================================================
@@ -118,14 +116,13 @@ TEST(KmerExtract, OracleAcgtTable)
 {
     for (auto const& seq : valid_sequences()) {
         for (auto const k : test_ks()) {
-            check_all_impls_acgt(seq, k);
+            check_all_impls(seq, k);
         }
     }
 }
 
 // Same, but with an ACTG-ordered encoder, to prove for_each_kmer_rolling()/for_each_kmer_reextract()
-// do not hardcode ACGT ordering. for_each_kmer() is already checked under ACTG above, and the two
-// SIMD variants hardcode ACGT (see check_all_impls_acgt()).
+// do not hardcode ACGT ordering. The other three are already checked under ACTG above.
 TEST(KmerExtract, OracleActgTable)
 {
     for (auto const& seq : valid_sequences()) {
@@ -153,7 +150,7 @@ TEST(KmerExtract, InvalidKThrows)
         for_each_kmer_simd(seq, k, [](KmerAcgtMsb) {});
     });
     check_invalid_k_throws(32, [](std::string const& seq, std::size_t k) {
-        for_each_kmer_simd_scalar(seq, k, [](KmerAcgtMsb) {});
+        for_each_kmer_swar(seq, k, [](KmerAcgtMsb) {});
     });
     check_invalid_k_throws(32, [](std::string const& seq, std::size_t k) {
         for_each_kmer(seq, k, [](KmerAcgtMsb) {});
@@ -170,10 +167,10 @@ TEST(KmerExtract, LengthBoundaries)
     }
 
     for (auto const k : test_ks()) {
-        check_all_impls_acgt("", k);
-        check_all_impls_acgt(seq.substr(0, k - 1), k);
-        check_all_impls_acgt(seq.substr(0, k), k);
-        check_all_impls_acgt(seq.substr(0, k + 1), k);
+        check_all_impls("", k);
+        check_all_impls(seq.substr(0, k - 1), k);
+        check_all_impls(seq.substr(0, k), k);
+        check_all_impls(seq.substr(0, k + 1), k);
     }
 }
 
@@ -210,7 +207,7 @@ TEST(KmerExtract, InvalidCharacterPlacement)
         for (auto seq : seqs) {
             std::replace(seq.begin(), seq.end(), 'N', marker);
             for (auto const k : ks) {
-                check_all_impls_acgt(seq, k);
+                check_all_impls(seq, k);
             }
         }
     }
@@ -246,13 +243,15 @@ TEST(KmerExtract, DefaultConventions)
     for_each_kmer_rolling(seq, 3, table, callback);
     for_each_kmer_reextract(seq, 3, table, callback);
     for_each_kmer(seq, 3, callback);
-    EXPECT_EQ(count, std::size_t{9});
+    for_each_kmer_simd(seq, 3, callback);
+    for_each_kmer_swar(seq, 3, callback);
+    EXPECT_EQ(count, std::size_t{15});
 }
 
 // Custom encoder whose invalid sentinel is not exactly 4 (255 here, and lowercase bases are
 // deliberately "invalid" under it), checking that for_each_kmer_rolling()/for_each_kmer_reextract()
 // honor the documented ">= 4 is invalid" contract rather than special-casing the value 4. Only
-// applies to these two, since neither for_each_kmer_simd()/for_each_kmer_simd_scalar() nor the
+// applies to these two, since neither for_each_kmer_simd()/for_each_kmer_swar() nor the
 // for_each_kmer() convenience wrapper take a custom encoder. Also shows the shape a user-defined
 // encoder takes: a functor that states its encoding.
 namespace {
@@ -306,7 +305,7 @@ TEST(KmerExtract, InvalidInjectionFuzz)
     for (auto const& r : rates) {
         for (auto const& seq : invalid_injected_sequences(40, 149, r.p, r.seed)) {
             for (auto const k : test_ks()) {
-                check_all_impls_acgt(seq, k);
+                check_all_impls(seq, k);
             }
         }
     }
@@ -317,7 +316,7 @@ TEST(KmerExtract, InvalidInjectionFuzz)
 // =================================================================================================
 
 // for_each_kmer_simd() processes 32-character AVX2 blocks (falling back to a scalar tail), and
-// for_each_kmer_simd_scalar() processes 8-character blocks; both then finish with a byte-at-a-time
+// for_each_kmer_swar() processes 8-character blocks; both then finish with a byte-at-a-time
 // remainder. 16 and 64 are included pre-emptively, matching the SSE2/AVX512 block widths already
 // used elsewhere in the codebase, so this generator needs no changes if k-mer extraction grows
 // those variants too.
@@ -364,7 +363,7 @@ TEST(KmerExtract, SimdBlockBoundaries)
                 }
 
                 for (auto const k : test_ks()) {
-                    check_all_impls_acgt(seq, k);
+                    check_all_impls(seq, k);
                 }
             }
         }
@@ -383,7 +382,7 @@ TEST(KmerExtract, MixedCase)
     std::string const seq = "AcGtACgtacGTAcGtACgtacGTAcGtACgt";
     std::vector<std::size_t> const ks = { 1, 4, 8, 16, 32 };
     for (auto const k : ks) {
-        check_all_impls_acgt(seq, k);
+        check_all_impls(seq, k);
     }
 }
 

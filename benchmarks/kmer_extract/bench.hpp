@@ -92,19 +92,46 @@ std::uint64_t run_var_simd_avx2(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_simd_scalar(
+std::uint64_t run_var_swar(
     std::string const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
 
-// Validating rolling variants emitting Layout::kLSB, to compare against their MSB counterparts.
+// Validating variants emitting Layout::kLSB, to compare against their MSB counterparts.
 std::uint64_t run_var_acgt_lsb_table_shift(
     std::string const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_acgt_lsb_ascii_shift(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_acgt_lsb_simd_avx2(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_acgt_lsb_swar(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+
+// Validating variants emitting Encoding::kACTG, to compare against their ACGT counterparts.
+std::uint64_t run_var_actg_msb_ascii_shift(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_actg_msb_simd_avx2(
+    std::string const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_actg_msb_swar(
     std::string const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer

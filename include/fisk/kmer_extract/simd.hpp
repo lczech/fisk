@@ -15,6 +15,7 @@
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
+#include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 
 namespace fisk {
@@ -23,23 +24,20 @@ namespace fisk {
 //     K-mer Extraction SIMD AVX2
 // =================================================================================================
 
-// We here only test k-mer extraction with AVX2, to see how much gain we get.
-// It is somewhat faster, giving 0.8ns instead of 1.0ns per k-mer.
-// The spaced k-mer extraction also uses SIMD for acceleration, but currently needs
-// to process each char individually. Might be worth it to optimize this further,
-// but left as future work for now.
-// The fundamental issue is that k-mers depend on each other, each one only differing
-// in the first and last character, so there is not much room for vectorization.
+// AVX2 vectorizes the encoding and validity check of 32 characters at a time; the k-mers themselves
+// are still rolled one character at a time, as each one only differs from the previous one in its
+// first and last character, so there is not much room for vectorizing that part.
 
 #if defined(FISK_HAS_AVX2)
 
 /**
- * @brief Encode 32 ASCII characters into 2-bit nucleotide codes.
+ * @brief Encode 32 ASCII characters into 2-bit nucleotide codes of Encoding `E`.
  *
  * Returns a 32-bit mask with bit i set iff lane i is valid A/C/G/T (case-insensitive).
  * Invalid lanes are written as zero into `codes`.
  */
-inline std::uint32_t encode_32_nts_avx2(char const* data, std::uint8_t* codes) noexcept
+template <Encoding E>
+inline std::uint32_t encode_32_nts_avx2_(char const* data, std::uint8_t* codes) noexcept
 {
     __m256i const in    = _mm256_loadu_si256(reinterpret_cast<__m256i const*>(data));
     __m256i const lower = _mm256_or_si256(in, _mm256_set1_epi8(0x20));
@@ -55,20 +53,32 @@ inline std::uint32_t encode_32_nts_avx2(char const* data, std::uint8_t* codes) n
         _mm256_or_si256(is_g, is_t)
     );
 
-    // Same ASCII bit trick as CharEncoderAscii<Encoding::kACGT>(), but vectorized.
+    // Same ASCII bit trick as ascii_bits_to_code_(), but vectorized.
     // Shift within 16-bit lanes, then mask back to byte-local bits.
-    __m256i const s1 = _mm256_and_si256(
-        _mm256_srli_epi16(lower, 1),
-        _mm256_set1_epi8(0x7f)
-    );
-    __m256i const s2 = _mm256_and_si256(
-        _mm256_srli_epi16(lower, 2),
-        _mm256_set1_epi8(0x3f)
-    );
-    __m256i const enc = _mm256_and_si256(
-        _mm256_xor_si256(s1, s2),
-        _mm256_set1_epi8(0x03)
-    );
+    __m256i const enc = [&] {
+        if constexpr (E == Encoding::kACGT) {
+            __m256i const s1 = _mm256_and_si256(
+                _mm256_srli_epi16(lower, 1),
+                _mm256_set1_epi8(0x7f)
+            );
+            __m256i const s2 = _mm256_and_si256(
+                _mm256_srli_epi16(lower, 2),
+                _mm256_set1_epi8(0x3f)
+            );
+            return _mm256_and_si256(
+                _mm256_xor_si256(s1, s2),
+                _mm256_set1_epi8(0x03)
+            );
+        } else if constexpr (E == Encoding::kACTG) {
+            // The final mask also drops the bit shifted in from the neighboring byte.
+            return _mm256_and_si256(
+                _mm256_srli_epi16(lower, 1),
+                _mm256_set1_epi8(0x03)
+            );
+        } else {
+            static_assert(dependent_false_v<E>, "Unhandled Encoding in encode_32_nts_avx2_()");
+        }
+    }();
 
     // Zero out invalid lanes so the consumer does not need to care.
     __m256i const enc_masked = _mm256_and_si256(enc, valid_vec);
@@ -83,20 +93,24 @@ inline std::uint32_t encode_32_nts_avx2(char const* data, std::uint8_t* codes) n
  * @brief Consume a contiguous run of valid two-bit codes.
  *
  * `base` is the index into the original sequence of `codes[0]`, used to report the start position
- * of each emitted k-mer to the callback.
+ * of each emitted k-mer to the callback. `mask` and `top_shift` are as in for_each_kmer_rolling(),
+ * for Layout::kMSB and Layout::kLSB, respectively. For MSB, `mask` is only applied to the emitted
+ * k-mers, see window_bits_().
  */
-template<typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void consume_valid_run_(
+template<Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE
+inline void for_each_kmer_in_valid_run_(
     std::uint8_t const* codes,
     std::size_t len,
     std::size_t base,
     std::size_t k,
     std::uint64_t mask,
+    unsigned top_shift,
     std::uint64_t& kmer,
     std::size_t& valid,
     Func&& func
 ) {
+    // The codes of a valid run are all within 0-3, so they need no masking.
     std::size_t idx = 0;
 
     // Warm-up phase until we have accumulated k valid characters.
@@ -105,7 +119,15 @@ inline void consume_valid_run_(
         std::size_t const warm = std::min(len, need);
 
         for (; idx < warm; ++idx) {
-            kmer = ((kmer << 2) & mask) | codes[idx];
+            if constexpr (L == Layout::kMSB) {
+                kmer = (kmer << 2) | codes[idx];
+            } else if constexpr (L == Layout::kLSB) {
+                kmer = (kmer >> 2) | (std::uint64_t{codes[idx]} << top_shift);
+            } else {
+                static_assert(
+                    dependent_false_v<L>, "Unhandled Layout in for_each_kmer_in_valid_run_()"
+                );
+            }
         }
 
         valid += warm;
@@ -117,8 +139,8 @@ inline void consume_valid_run_(
 
         // The last character processed above, at index base + idx - 1, just completed the first
         // valid k-mer, which hence starts at base + idx - k.
-        assert_fits_width_(kmer, k);
-        invoke_kmer_callback<Encoding::kACGT, Layout::kMSB>(func, base + idx - k, kmer);
+        assert_fits_width_(window_bits_<L>(kmer, mask), k);
+        invoke_kmer_callback<E, L>(func, base + idx - k, window_bits_<L>(kmer, mask));
 
         // Saturate valid so we do not keep incrementing a counter that is only used
         // as a threshold predicate.
@@ -127,16 +149,27 @@ inline void consume_valid_run_(
 
     // Fully warm: every additional valid code yields one k-mer.
     for (; idx < len; ++idx) {
-        kmer = ((kmer << 2) & mask) | codes[idx];
-        assert_fits_width_(kmer, k);
-        invoke_kmer_callback<Encoding::kACGT, Layout::kMSB>(func, base + idx + 1 - k, kmer);
+        if constexpr (L == Layout::kMSB) {
+            kmer = (kmer << 2) | codes[idx];
+        } else if constexpr (L == Layout::kLSB) {
+            kmer = (kmer >> 2) | (std::uint64_t{codes[idx]} << top_shift);
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_in_valid_run_()"
+            );
+        }
+        assert_fits_width_(window_bits_<L>(kmer, mask), k);
+        invoke_kmer_callback<E, L>(func, base + idx + 1 - k, window_bits_<L>(kmer, mask));
     }
 }
 
 /**
  * @brief Count trailing zeros in a nonzero 32-bit value.
+ *
+ * Unlike std::countr_zero(), undefined for zero, which spares the zero check that the former
+ * needs on targets without BMI1 (TZCNT).
  */
-inline unsigned ctz32(std::uint32_t x) noexcept
+inline unsigned ctz32_(std::uint32_t x) noexcept
 {
     #if defined(_MSC_VER)
         unsigned long idx = 0;
@@ -155,9 +188,14 @@ inline unsigned ctz32(std::uint32_t x) noexcept
  *
  * Invalid characters reset the valid-window state and suppress any overlapping k-mers.
  *
+ * The callback receives a Kmer<E, L>, ACGT/MSB by default, as for for_each_kmer():
+ *
+ *     for_each_kmer_simd(seq, k, func);                                 // Kmer<kACGT, kMSB>
+ *     for_each_kmer_simd<Encoding::kACTG, Layout::kLSB>(seq, k, func);  // Kmer<kACTG, kLSB>
+ *
  * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, see for_each_kmer_rolling().
  */
-template<typename Func>
+template<Encoding E = Encoding::kACGT, Layout L = Layout::kMSB, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 {
@@ -171,9 +209,11 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
     std::size_t const seq_len = seq.size();
     char const* data = seq.data();
 
+    // Rolling constants for MSB and LSB, see for_each_kmer_rolling().
     std::uint64_t const mask = (k == 32)
         ? ~std::uint64_t{0}
         : ((std::uint64_t{1} << (2 * k)) - 1u);
+    unsigned const top_shift = 2 * (static_cast<unsigned>(k) - 1);
 
     std::uint64_t kmer = 0;
     std::size_t valid = 0;
@@ -184,12 +224,12 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
     alignas(32) std::array<std::uint8_t, 32> codes{};
 
     for (; i + 32 <= seq_len; i += 32) {
-        std::uint32_t valid_bits = encode_32_nts_avx2(data + i, codes.data());
+        std::uint32_t valid_bits = encode_32_nts_avx2_<E>(data + i, codes.data());
 
         // Fast path: whole block valid.
         if (valid_bits == 0xFFFFFFFFu) {
-            consume_valid_run_(
-                codes.data(), 32, i, k, mask, kmer, valid, std::forward<Func>(func)
+            for_each_kmer_in_valid_run_<E, L>(
+                codes.data(), 32, i, k, mask, top_shift, kmer, valid, std::forward<Func>(func)
             );
             continue;
         }
@@ -204,7 +244,7 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
             }
 
             if ((tail & 1u) == 0u) {
-                unsigned const skip = ctz32(tail);
+                unsigned const skip = ctz32_(tail);
                 j += skip;
                 valid = 0;
                 if (j >= 32) {
@@ -217,9 +257,10 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 
             // Number of leading 1-bits in tail, computed as ctz(~tail).
             // This works because the right shift fills upper bits with zero.
-            unsigned const run_len = ctz32(~tail);
-            consume_valid_run_(
-                codes.data() + j, run_len, i + j, k, mask, kmer, valid, std::forward<Func>(func)
+            unsigned const run_len = ctz32_(~tail);
+            for_each_kmer_in_valid_run_<E, L>(
+                codes.data() + j, run_len, i + j, k, mask, top_shift, kmer, valid,
+                std::forward<Func>(func)
             );
             j += run_len;
         }
@@ -227,35 +268,40 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 
     #endif
 
-    // Scalar tail, and full fallback if AVX2 is unavailable.
+    // Scalar tail, and full fallback if AVX2 is unavailable: the same loop as in
+    // for_each_kmer_rolling(), with the encoder of for_each_kmer(), continuing from the state that
+    // the blocks above left behind.
+    CharEncoderTable<E> const encoder;
     for (; i < seq_len; ++i) {
-        std::uint8_t const code = CharEncoderAscii<Encoding::kACGT>{}(data[i]);
+        std::uint8_t const code = encoder(data[i]);
 
-        if (code < 4) {
-            kmer = ((kmer << 2) & mask) | (code & 0x03u);
-            valid = (valid < k) ? (valid + 1) : k;
-
-            if (valid >= k) {
-                assert_fits_width_(kmer, k);
-                invoke_kmer_callback<Encoding::kACGT, Layout::kMSB>(func, i + 1 - k, kmer);
-            }
+        if constexpr (L == Layout::kMSB) {
+            kmer = (kmer << 2) | (code & 0x03u);
+        } else if constexpr (L == Layout::kLSB) {
+            kmer = (kmer >> 2) | (std::uint64_t{code & 0x03u} << top_shift);
         } else {
-            valid = 0;
+            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_kmer_simd()");
+        }
+        valid = (code < 4) ? (valid + 1) : 0;
+
+        if (valid >= k) {
+            assert_fits_width_(window_bits_<L>(kmer, mask), k);
+            invoke_kmer_callback<E, L>(func, i + 1 - k, window_bits_<L>(kmer, mask));
         }
     }
 }
 
 // =================================================================================================
-//     K-mer Extraction SIMD Scalar
+//     K-mer Extraction SWAR
 // =================================================================================================
 
 // Alternative implementation, using only 64 bit scalar operations to do SIMD within a register.
 // It is not as fast as the AVX above, or just the lookup table... But kept here for reference.
-// Func may be called either as `func(pos, kmer)` or as `func(kmer)`, see for_each_kmer_rolling().
+// E and L, and the callback, are as for for_each_kmer_simd().
 
-template<typename Func>
+template<Encoding E = Encoding::kACGT, Layout L = Layout::kMSB, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_simd_scalar(
+inline void for_each_kmer_swar(
     std::string_view seq,
     std::size_t k,
     Func&& func
@@ -271,18 +317,23 @@ inline void for_each_kmer_simd_scalar(
     // returning the 2-bit code and validity in one go.
     // Note that they are not bit packed yet here, and in separate bytes,
     // to avoid unnecessary bit manipulation in the hot loop. We will pack them later.
-    auto encode_acgt8_ascii = [](char const* p) noexcept -> std::uint64_t
+    auto encode8_ascii_ = [](char const* p) noexcept -> std::uint64_t
     {
         std::uint64_t x;
         std::memcpy(&x, p, sizeof(x)); // unaligned-safe; usually optimized to one load
 
-        // ASCII trick per byte:
-        //
-        // code = ((c >> 1) ^ (c >> 2)) & 0x03
-        //
-        // This works for both upper/lowercase ACGT because the relevant
-        // lower bits are identical for upper and lower case.
-        return ((x >> 1) ^ (x >> 2)) & 0x0303030303030303ull;
+        // ASCII trick of ascii_bits_to_code_(), per byte. This works for both upper/lowercase ACGT
+        // because the relevant lower bits are identical for upper and lower case. The final mask
+        // also drops the bits shifted in from the neighboring byte.
+        if constexpr (E == Encoding::kACGT) {
+            return ((x >> 1) ^ (x >> 2)) & 0x0303030303030303ull;
+        } else if constexpr (E == Encoding::kACTG) {
+            return (x >> 1) & 0x0303030303030303ull;
+        } else {
+            static_assert(
+                dependent_false_v<E>, "Unhandled Encoding in for_each_kmer_swar()"
+            );
+        }
     };
 
     // The above function does not perform a validity check, so we need to do that separately.
@@ -321,10 +372,13 @@ inline void for_each_kmer_simd_scalar(
     std::size_t const seq_len = seq.size();
     unsigned const kk = static_cast<unsigned>(k);
 
-    // Masks
+    // Masks, and the LSB counterpart, see for_each_kmer_rolling(). As in for_each_kmer_simd(), both
+    // masks are applied when checking and emitting rather than at every step, which keeps them off
+    // the dependency chains through `kmer` and `valid`.
     std::uint64_t const kmer_mask = (kk == 32)
         ? ~std::uint64_t{0}
         : ((std::uint64_t{1} << (2u * kk)) - 1u);
+    unsigned const top_shift = 2u * (kk - 1u);
 
     std::uint64_t const valid_mask = (std::uint64_t{1} << kk) - 1u;
 
@@ -334,16 +388,23 @@ inline void for_each_kmer_simd_scalar(
     std::size_t seen = 0;
 
     // Process one of the input bytes, as encoded above.
+    // `code` is always within 0-3 here, also for invalid characters, so it needs no masking.
     auto step = [&](std::uint64_t code, std::uint8_t is_valid) {
-        kmer  = ((kmer  << 2u) & kmer_mask)  | std::uint64_t{code};
-        valid = ((valid << 1u) & valid_mask) | std::uint64_t{is_valid};
+        if constexpr (L == Layout::kMSB) {
+            kmer = (kmer << 2u) | std::uint64_t{code};
+        } else if constexpr (L == Layout::kLSB) {
+            kmer = (kmer >> 2u) | (std::uint64_t{code} << top_shift);
+        } else {
+            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_kmer_swar()");
+        }
+        valid = (valid << 1u) | std::uint64_t{is_valid};
 
         // `seen` counts every character processed so far, so the k-mer ending here starts at
         // seen - kk.
         ++seen;
-        if (seen >= kk && valid == valid_mask) {
-            assert_fits_width_(kmer, kk);
-            invoke_kmer_callback<Encoding::kACGT, Layout::kMSB>(func, seen - kk, kmer);
+        if (seen >= kk && (valid & valid_mask) == valid_mask) {
+            assert_fits_width_(window_bits_<L>(kmer, kmer_mask), kk);
+            invoke_kmer_callback<E, L>(func, seen - kk, window_bits_<L>(kmer, kmer_mask));
         }
     };
 
@@ -351,7 +412,7 @@ inline void for_each_kmer_simd_scalar(
     // and emitting 8 k-mers per iteration.
     std::size_t i = 0;
     for (; i + 8 <= seq_len; i += 8) {
-        std::uint64_t const enc = encode_acgt8_ascii(data + i);
+        std::uint64_t const enc = encode8_ascii_(data + i);
         std::uint8_t  const val = valid_acgt8_mask(data + i);
 
         step( (enc >>  0) & 0x03u, (val >> 0) & 0x01u );
@@ -364,9 +425,10 @@ inline void for_each_kmer_simd_scalar(
         step( (enc >> 56) & 0x03u, (val >> 7) & 0x01u );
     }
 
-    // Scalar tail.
+    // Scalar tail, with the encoder of for_each_kmer().
+    CharEncoderTable<E> const encoder;
     for (; i < seq_len; ++i) {
-        std::uint8_t const code = CharEncoderAscii<Encoding::kACGT>{}(data[i]);
+        std::uint8_t const code = encoder(data[i]);
 
         step(
             static_cast<std::uint64_t>(code & 0x03u),
