@@ -182,6 +182,10 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
     std::uint16_t v16 = static_cast<std::uint16_t>(value);
     if constexpr (L == Layout::kMSB) {
         v16 = byte_swap_16(v16);
+    } else if constexpr (L == Layout::kLSB) {
+        // The bytes are already in output order.
+    } else {
+        static_assert(dependent_false_v<L>, "Unhandled Layout in write_two_bit_chunk_()");
     }
     std::memcpy(dest, &v16, Bytes);
 }

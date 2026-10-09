@@ -108,8 +108,12 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
     auto shift_of = [&](unsigned local) -> std::uint64_t {
         if constexpr (L == Layout::kMSB) {
             return (64u - 2u * k32) - 2u * local;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             return 2u * local;
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_sse2_()"
+            );
         }
     };
     std::uint64_t const shift0 = shift_of(0);
@@ -129,6 +133,12 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
         if constexpr (L == Layout::kMSB) {
             word0 = byte_swap_64(word0);
             word1 = byte_swap_64(word1);
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_sse2_()"
+            );
         }
         __m128i const pair = _mm_set_epi64x(
             static_cast<std::int64_t>(word1), static_cast<std::int64_t>(word0)
@@ -203,8 +213,12 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
     auto start_of = [&](unsigned local) -> std::uint64_t {
         if constexpr (L == Layout::kMSB) {
             return 128u - 2u * local - 2u * k32;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             return 2u * local;
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_sse2_()"
+            );
         }
     };
     // Per-local shift-count vectors, precomputed: cnt_lo is `start`, cnt_hi_l is `64-start`.
@@ -253,6 +267,12 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
             std::uint64_t const swapped_lo1 = byte_swap_64(lo1);
             lo0 = hi0 << 56; hi0 = swapped_lo0;
             lo1 = hi1 << 56; hi1 = swapped_lo1;
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_sse2_()"
+            );
         }
         __m128i const lo_pair = _mm_set_epi64x(
             static_cast<std::int64_t>(lo1), static_cast<std::int64_t>(lo0)
@@ -349,8 +369,12 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
     for (unsigned local = 0; local < 4; ++local) {
         if constexpr (L == Layout::kMSB) {
             shifts[local] = (64u - 2u * k32) - 2u * local;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             shifts[local] = 2u * local;
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_avx2_()"
+            );
         }
     }
     __m256i const shift_v = _mm256_set_epi64x(
@@ -363,6 +387,12 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
         std::memcpy(&word, &seq.data[b], 8);
         if constexpr (L == Layout::kMSB) {
             word = byte_swap_64(word);
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_avx2_()"
+            );
         }
         __m256i const bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(word));
         __m256i const r = _mm256_and_si256(_mm256_srlv_epi64(bcast, shift_v), mask_v);
@@ -415,8 +445,12 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
     for (unsigned local = 0; local < 4; ++local) {
         if constexpr (L == Layout::kMSB) {
             starts[local] = 128u - 2u * local - 2u * k32;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             starts[local] = 2u * local;
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_avx2_()"
+            );
         }
     }
     __m256i const lo_shift_v = _mm256_set_epi64x(
@@ -435,6 +469,12 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
             std::uint64_t const swapped_lo = byte_swap_64(lo);
             lo = hi << 56;
             hi = swapped_lo;
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_avx2_()"
+            );
         }
         __m256i const lo_bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(lo));
         __m256i const hi_bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(hi));
@@ -530,8 +570,13 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
     for (unsigned local = 0; local < 4; ++local) {
         if constexpr (L == Layout::kMSB) {
             shifts[local] = (64u - 2u * k32) - 2u * local;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             shifts[local] = 2u * local;
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_avx512_()"
+            );
         }
     }
     __m512i const shift_v = _mm512_set_epi64(
@@ -548,6 +593,13 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
         if constexpr (L == Layout::kMSB) {
             word0 = byte_swap_64(word0);
             word1 = byte_swap_64(word1);
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_avx512_()"
+            );
         }
         __m512i const dbcast = _mm512_set_epi64(
             static_cast<std::int64_t>(word1), static_cast<std::int64_t>(word1),
@@ -610,8 +662,12 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
     for (unsigned local = 0; local < 4; ++local) {
         if constexpr (L == Layout::kMSB) {
             starts[local] = 128u - 2u * local - 2u * k32;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             starts[local] = 2u * local;
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_avx512_()"
+            );
         }
     }
     __m512i const lo_shift_v = _mm512_set_epi64(
@@ -645,6 +701,12 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
             std::uint64_t const swapped_lo1 = byte_swap_64(lo1);
             lo0 = hi0 << 56; hi0 = swapped_lo0;
             lo1 = hi1 << 56; hi1 = swapped_lo1;
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_avx512_()"
+            );
         }
         __m512i const lo_dbcast = _mm512_set_epi64(
             static_cast<std::int64_t>(lo1), static_cast<std::int64_t>(lo1),
@@ -743,8 +805,12 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
         std::uint64_t s;
         if constexpr (L == Layout::kMSB) {
             s = (64u - 2u * k32) - 2u * local;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             s = 2u * local;
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_neon_()"
+            );
         }
         return -static_cast<std::int64_t>(s);
     };
@@ -758,6 +824,12 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
         std::memcpy(&word, &seq.data[b], 8);
         if constexpr (L == Layout::kMSB) {
             word = byte_swap_64(word);
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_neon_()"
+            );
         }
         uint64x2_t const bcast = vdupq_n_u64(word);
 
@@ -816,8 +888,12 @@ inline void for_each_kmer_packed_simd_wide_neon_(
     auto start_of = [&](unsigned local) -> std::uint64_t {
         if constexpr (L == Layout::kMSB) {
             return 128u - 2u * local - 2u * k32;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             return 2u * local;
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_neon_()"
+            );
         }
     };
     // lo contribution: shift right by `start`, i.e. signed count -start.
@@ -849,6 +925,12 @@ inline void for_each_kmer_packed_simd_wide_neon_(
             std::uint64_t const swapped_lo = byte_swap_64(lo);
             lo = hi << 56;
             hi = swapped_lo;
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_neon_()"
+            );
         }
         uint64x2_t const lo_bcast = vdupq_n_u64(lo);
         uint64x2_t const hi_bcast = vdupq_n_u64(hi);

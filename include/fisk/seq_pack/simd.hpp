@@ -87,6 +87,13 @@ struct SeqPackButterflyKernelSSE2 : public BitExtractKernelButterflySSE2
         __m128i low = _mm_and_si128(x, low_mask);
         if constexpr (L == Layout::kMSB) {
             low = _mm_or_si128(_mm_slli_epi16(low, 8), _mm_srli_epi16(low, 8));
+        } else if constexpr (L == Layout::kLSB) {
+            // The bytes are already in output order.
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in SeqPackButterflyKernelSSE2::store_packed()"
+            );
         }
         low = _mm_or_si128(low, _mm_srli_si128(low, 6));
         std::uint32_t const packed = static_cast<std::uint32_t>(_mm_cvtsi128_si32(low));
@@ -153,9 +160,14 @@ struct SeqPackButterflyKernelAVX2 : public BitExtractKernelButterflyAVX2
                 return _mm_setr_epi8(
                     1, 0, 9, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
                 );
-            } else {
+            } else if constexpr (L == Layout::kLSB) {
                 return _mm_setr_epi8(
                     0, 1, 8, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+                );
+            } else {
+                static_assert(
+                    dependent_false_v<L>,
+                    "Unhandled Layout in SeqPackButterflyKernelAVX2::store_packed()"
                 );
             }
         }();
@@ -239,8 +251,18 @@ struct SeqPackButterflyKernelAVX512 : public BitExtractKernelButterflyAVX512
             0, 1, 8, 9, 16, 17, 24, 25, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         };
-        std::uint8_t const* const shuffle_pattern =
-            L == Layout::kMSB ? msb_shuffle_pattern : lsb_shuffle_pattern;
+        std::uint8_t const* const shuffle_pattern = [] {
+            if constexpr (L == Layout::kMSB) {
+                return msb_shuffle_pattern;
+            } else if constexpr (L == Layout::kLSB) {
+                return lsb_shuffle_pattern;
+            } else {
+                static_assert(
+                    dependent_false_v<L>,
+                    "Unhandled Layout in SeqPackButterflyKernelAVX512::store_packed()"
+                );
+            }
+        }();
         __m512i const shuffled = _mm512_shuffle_epi8(
             x, _mm512_loadu_si512(reinterpret_cast<__m512i const*>(shuffle_pattern))
         );
@@ -302,6 +324,13 @@ struct SeqPackButterflyKernelNEON : public BitExtractKernelButterflyNEON
         uint16x8_t low = vandq_u16(vreinterpretq_u16_u64(x), vdupq_n_u16(0xFFFF));
         if constexpr (L == Layout::kMSB) {
             low = vorrq_u16(vshlq_n_u16(low, 8), vshrq_n_u16(low, 8));
+        } else if constexpr (L == Layout::kLSB) {
+            // The bytes are already in output order.
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in SeqPackButterflyKernelNEON::store_packed()"
+            );
         }
         std::uint32_t const packed =
             static_cast<std::uint32_t>(vget_lane_u16(vget_low_u16(low), 0))
@@ -364,24 +393,30 @@ struct WordEncoderButterflySimd
     {
         if constexpr (L == Layout::kMSB) {
             x = Kernel::byte_reverse_lanes(x);
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in WordEncoderButterflySimd::operator()"
+            );
         }
         if constexpr (E == Encoding::kACGT) {
             simd_vector const s1 = Kernel::template shr<1>(x);
             simd_vector const s2 = Kernel::template shr<2>(x);
             x = Kernel::and_(Kernel::xor_(s1, s2), acgt_mask_simd);
+        } else if constexpr (E == Encoding::kACTG) {
+            // The codes already sit in bits 1-2 of each byte, see pack_fold_codes_().
+        } else {
+            static_assert(
+                dependent_false_v<E>, "Unhandled Encoding in WordEncoderButterflySimd::operator()"
+            );
         }
         return kernel.bit_extract(x);
     }
 
     std::uint64_t operator()(std::uint64_t word) const noexcept
     {
-        if constexpr (L == Layout::kMSB) {
-            word = byte_swap_64(word);
-        }
-        if constexpr (E == Encoding::kACGT) {
-            word = pack_fold_codes_<E>(word);
-        }
-        return kernel.bit_extract(word);
+        return kernel.bit_extract(pack_fold_codes_<E>(pack_orient_chunk_<L>(word)));
     }
 };
 

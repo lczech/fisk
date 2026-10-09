@@ -97,8 +97,10 @@ std::size_t for_each_kmer_packed_tail_(
         unsigned const in_byte = static_cast<unsigned>(p % 4);
         if constexpr (L == Layout::kMSB) {
             return (byte >> (6 - 2 * in_byte)) & 0x3u;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             return (byte >> (2 * in_byte)) & 0x3u;
+        } else {
+            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_tail_()");
         }
     };
 
@@ -109,8 +111,12 @@ std::size_t for_each_kmer_packed_tail_(
             unsigned const code = decode_base_(p + i);
             if constexpr (L == Layout::kMSB) {
                 kmer = (kmer << 2) | code;
-            } else {
+            } else if constexpr (L == Layout::kLSB) {
                 kmer |= std::uint64_t{code} << (2 * i);
+            } else {
+                static_assert(
+                    dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_tail_()"
+                );
             }
         }
         out[n++] = kmer;
@@ -150,6 +156,13 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
         if constexpr (L == Layout::kMSB) {
             // 58-2K is in [0,56]; adding the local shift recovers 64-2K-2*local.
             word = byte_swap_64(word) >> (58 - 2 * K);
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_impl_()"
+            );
         }
         std::uint64_t v0, v1, v2, v3;
         if constexpr (L == Layout::kMSB) {
@@ -157,11 +170,16 @@ inline void for_each_kmer_packed_aligned_narrow_impl_(
             v1 = (word >> 4) & mask;
             v2 = (word >> 2) & mask;
             v3 = (word >> 0) & mask;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             v0 = (word >> 0) & mask;
             v1 = (word >> 2) & mask;
             v2 = (word >> 4) & mask;
             v3 = (word >> 6) & mask;
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_impl_()"
+            );
         }
 
         // Prevent the compiler from optimizing away the values in the benchmarks,
@@ -208,8 +226,10 @@ inline std::uint64_t aligned_boundary_window_(
     unsigned start;
     if constexpr (L == Layout::kMSB) {
         start = 128 - 2 * local - 2 * K;
-    } else {
+    } else if constexpr (L == Layout::kLSB) {
         start = 2 * local;
+    } else {
+        static_assert(dependent_false_v<L>, "Unhandled Layout in aligned_boundary_window_()");
     }
     std::uint64_t bits;
     if (start >= 64) {
@@ -250,6 +270,13 @@ inline void for_each_kmer_packed_aligned_wide_impl_(PackedSequence<E, L> const& 
             std::uint64_t const swapped_lo = byte_swap_64(lo);
             lo = hi << 56;
             hi = swapped_lo;
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_aligned_wide_impl_()"
+            );
         }
 
         auto const v0 = aligned_boundary_window_<L, K>(hi, lo, 0, mask);
@@ -379,8 +406,13 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
     auto fold_byte_ = [&](std::uint8_t byte) {
         if constexpr (L == Layout::kMSB) {
             acc = (acc << 8) | byte;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             acc = (acc >> 8) | (std::uint64_t{byte} << 56);
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_rolling_narrow_impl_()"
+            );
         }
     };
 
@@ -402,8 +434,13 @@ inline void for_each_kmer_packed_rolling_narrow_impl_(
             unsigned shift;
             if constexpr (L == Layout::kMSB) {
                 shift = s;
-            } else {
+            } else if constexpr (L == Layout::kLSB) {
                 shift = 64 - 2 * static_cast<unsigned>(k) - s;
+            } else {
+                static_assert(
+                    dependent_false_v<L>,
+                    "Unhandled Layout in for_each_kmer_packed_rolling_narrow_impl_()"
+                );
             }
             auto const word = (acc >> shift) & mask;
             assert_fits_width_(word, k);
@@ -437,8 +474,13 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
         unsigned start;
         if constexpr (L == Layout::kMSB) {
             start = s;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             start = 128 - 2 * static_cast<unsigned>(k) - s;
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_rolling_wide_impl_()"
+            );
         }
         int case_id;
         if (start >= 64) {
@@ -459,10 +501,15 @@ inline void for_each_kmer_packed_rolling_wide_impl_(
             std::uint64_t const carry = lo >> 56;
             lo = (lo << 8) | byte;
             hi = (hi << 8) | carry;
-        } else {
+        } else if constexpr (L == Layout::kLSB) {
             std::uint64_t const carry = hi & 0xFFu;
             hi = (hi >> 8) | (std::uint64_t{byte} << 56);
             lo = (lo >> 8) | (carry << 56);
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_rolling_wide_impl_()"
+            );
         }
     };
 
