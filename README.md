@@ -157,3 +157,9 @@ Unused implementations
 https://github.com/InstLatx64/InstLatX64_Demo/blob/master/PEXT_PDEP_Emu.cpp
 https://github.com/zwegner/zp7/blob/master/zp7.c
 -->
+
+## So Long, and Thanks for All the Fish
+
+*Fisk* simply means fish in Danish (as well as Norwegian and Swedish). It seems fitting: I currently live in Copenhagen, and I wanted the `k` of k-mers to make an appearance in the name.
+
+This library, its benchmarks and tests, and its documentation, were developed with the assistance of [Claude Code](https://claude.com/claude-code) and [Codex](https://openai.com/codex/).
