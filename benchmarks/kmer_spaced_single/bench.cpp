@@ -53,8 +53,8 @@ void bench_kmer_spaced_single(
         auto const naive_mask = prepare_spaced_kmer_position_mask(masks[m]);
         auto const raw_mask = prepare_spaced_kmer_bit_extract_mask(masks[m]);
         BitExtractMask const bit_ext_mask(raw_mask);
-        auto const bit_ext_block_mask = bit_extract_block_table_preprocess(raw_mask);
-        auto const bit_ext_butterfly_table = bit_extract_butterfly_table_preprocess(raw_mask);
+        auto const bit_ext_block_mask = make_bit_extract_block_table(raw_mask);
+        auto const bit_ext_butterfly_table = make_bit_extract_butterfly_table(raw_mask);
 
         // Just to test the selector
         std::cout << "fastest mode: ";

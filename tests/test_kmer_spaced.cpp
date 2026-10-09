@@ -289,8 +289,8 @@ static void check_all_scalar_variants(
     std::vector<BitExtractButterflyTable> butterfly_masks;
     for (auto const raw : raw_masks(mask_strings)) {
         direct_masks.emplace_back(raw);
-        block_masks.push_back(bit_extract_block_table_preprocess(raw));
-        butterfly_masks.push_back(bit_extract_butterfly_table_preprocess(raw));
+        block_masks.push_back(make_bit_extract_block_table(raw));
+        butterfly_masks.push_back(make_bit_extract_butterfly_table(raw));
     }
 
     check_scalar_variant(

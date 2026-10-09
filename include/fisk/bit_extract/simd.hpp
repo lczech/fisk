@@ -140,7 +140,7 @@ struct BitExtractKernelButterflyScalar
     BitExtractKernelButterflyScalar() = default;
 
     explicit BitExtractKernelButterflyScalar( std::uint64_t const mask_value )
-        : mask( bit_extract_butterfly_table_preprocess( mask_value ))
+        : mask( make_bit_extract_butterfly_table( mask_value ))
     {}
 
     static simd_vector load( std::uint64_t const* a ) noexcept
@@ -180,7 +180,7 @@ struct BitExtractKernelButterflySSE2
     BitExtractKernelButterflySSE2() = default;
 
     explicit BitExtractKernelButterflySSE2( std::uint64_t const mask_value )
-        : mask( bit_extract_butterfly_table_preprocess( mask_value ))
+        : mask( make_bit_extract_butterfly_table( mask_value ))
     {
         // Copy the scalar mask and table over to the simd vectors.
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
@@ -247,7 +247,7 @@ struct BitExtractKernelButterflyAVX2
     BitExtractKernelButterflyAVX2() = default;
 
     explicit BitExtractKernelButterflyAVX2( std::uint64_t const mask_value )
-        : mask( bit_extract_butterfly_table_preprocess( mask_value ))
+        : mask( make_bit_extract_butterfly_table( mask_value ))
     {
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
         mask_simd = _mm256_set1_epi64x( static_cast<long long>( mask_value ));
@@ -313,7 +313,7 @@ struct BitExtractKernelButterflyAVX512
     BitExtractKernelButterflyAVX512() = default;
 
     explicit BitExtractKernelButterflyAVX512( std::uint64_t const mask_value )
-        : mask( bit_extract_butterfly_table_preprocess( mask_value ))
+        : mask( make_bit_extract_butterfly_table( mask_value ))
     {
         static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
         mask_simd = _mm512_set1_epi64( static_cast<long long>( mask_value ));
@@ -381,7 +381,7 @@ struct BitExtractKernelButterflyNEON
     BitExtractKernelButterflyNEON() = default;
 
     explicit BitExtractKernelButterflyNEON( std::uint64_t const mask_value )
-        : mask( bit_extract_butterfly_table_preprocess( mask_value ))
+        : mask( make_bit_extract_butterfly_table( mask_value ))
     {
         mask_simd = vdupq_n_u64( mask.mask );
         for( size_t i = 0; i < 6; ++i) {
@@ -465,7 +465,7 @@ struct BitExtractKernelBlockScalar
     BitExtractKernelBlockScalar() = default;
 
     explicit BitExtractKernelBlockScalar(std::uint64_t mask_value)
-        : mask(bit_extract_block_table_preprocess(mask_value))
+        : mask(make_bit_extract_block_table(mask_value))
     {}
 
     static simd_vector load(std::uint64_t const* a) noexcept
@@ -512,7 +512,7 @@ struct BitExtractKernelBlockSSE2
     BitExtractKernelBlockSSE2() = default;
 
     explicit BitExtractKernelBlockSSE2(std::uint64_t const mask_value)
-        : mask(bit_extract_block_table_preprocess(mask_value))
+        : mask(make_bit_extract_block_table(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
         static_assert(sizeof(long long) >= sizeof(std::uint64_t));
@@ -610,7 +610,7 @@ struct BitExtractKernelBlockAVX2
     BitExtractKernelBlockAVX2() = default;
 
     explicit BitExtractKernelBlockAVX2(std::uint64_t const mask_value)
-        : mask(bit_extract_block_table_preprocess(mask_value))
+        : mask(make_bit_extract_block_table(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
         static_assert(sizeof(long long) >= sizeof(std::uint64_t));
@@ -707,7 +707,7 @@ struct BitExtractKernelBlockAVX512
     BitExtractKernelBlockAVX512() = default;
 
     explicit BitExtractKernelBlockAVX512(std::uint64_t const mask_value)
-        : mask(bit_extract_block_table_preprocess(mask_value))
+        : mask(make_bit_extract_block_table(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
         static_assert(sizeof(long long) >= sizeof(std::uint64_t));
@@ -802,7 +802,7 @@ struct BitExtractKernelBlockNEON
     BitExtractKernelBlockNEON() = default;
 
     explicit BitExtractKernelBlockNEON(std::uint64_t const mask_value)
-        : mask(bit_extract_block_table_preprocess(mask_value))
+        : mask(make_bit_extract_block_table(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
         for (std::size_t i = 0; i < 33; ++i) {

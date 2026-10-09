@@ -221,6 +221,10 @@ inline std::uint64_t bit_extract_byte_table(std::uint64_t x, BitExtractMask mask
  */
 struct BitExtractBlockTable
 {
+    // Declared so that this is not an aggregate: `BitExtractBlockTable{mask}` would otherwise
+    // compile, but leave the tables empty. Use make_bit_extract_block_table() instead.
+    BitExtractBlockTable() = default;
+
     // The original underlying bit mask.
     std::uint64_t mask{};
 
@@ -240,7 +244,7 @@ struct BitExtractBlockTable
 /**
  * @brief Compute the Block Shift lookup tables for a given mask.
  */
-inline BitExtractBlockTable bit_extract_block_table_preprocess( std::uint64_t mask )
+inline BitExtractBlockTable make_bit_extract_block_table( std::uint64_t mask )
 {
     BitExtractBlockTable table{};
     table.mask = mask;
@@ -379,6 +383,10 @@ inline std::uint64_t bit_extract_block_table_unrolled(
  */
 struct BitExtractButterflyTable
 {
+    // Declared so that this is not an aggregate, see BitExtractBlockTable.
+    // Use make_bit_extract_butterfly_table() instead.
+    BitExtractButterflyTable() = default;
+
     // The original mask, as well as subsets for each power of two.
     std::uint64_t mask = 0;
     std::array<std::uint64_t, 6> sieves{};
@@ -387,7 +395,7 @@ struct BitExtractButterflyTable
 /**
  * @brief Compute the `mv` table for a given @p mask for bit extraction via butterfly network.
  */
-inline BitExtractButterflyTable bit_extract_butterfly_table_preprocess( std::uint64_t mask )
+inline BitExtractButterflyTable make_bit_extract_butterfly_table( std::uint64_t mask )
 {
     BitExtractButterflyTable out{};
     out.mask = mask;

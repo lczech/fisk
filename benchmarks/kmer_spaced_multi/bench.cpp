@@ -77,9 +77,9 @@ void bench_kmer_spaced_multi(
             raw_masks.push_back(prepare_spaced_kmer_bit_extract_mask(mask));
             naive_masks.push_back(prepare_spaced_kmer_position_mask(mask));
             bit_ext_masks.push_back(BitExtractMask(raw_masks.back()));
-            bit_ext_block_masks.push_back(bit_extract_block_table_preprocess(raw_masks.back()));
+            bit_ext_block_masks.push_back(make_bit_extract_block_table(raw_masks.back()));
             bit_ext_butterfly_tables.push_back(
-                bit_extract_butterfly_table_preprocess(raw_masks.back())
+                make_bit_extract_butterfly_table(raw_masks.back())
             );
 
             // Just to test the selector implementation

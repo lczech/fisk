@@ -252,8 +252,8 @@ static std::vector<BitExtractBlocksBatch> make_input_blocks(
         // add to the list of inputs
         batch.values.push_back(value);
         batch.masks.push_back(BitExtractMask(mask));
-        batch.block_tables.push_back(bit_extract_block_table_preprocess(mask));
-        batch.butterfly_tables.push_back(bit_extract_butterfly_table_preprocess(mask));
+        batch.block_tables.push_back(make_bit_extract_block_table(mask));
+        batch.butterfly_tables.push_back(make_bit_extract_butterfly_table(mask));
     }
 
     // One batch is one input to the benchmark: every implementation is handed the whole thing in

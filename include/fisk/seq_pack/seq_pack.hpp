@@ -148,7 +148,7 @@ struct WordEncoderButterfly
     inline std::uint64_t operator()(std::uint64_t word) const noexcept
     {
         static const BitExtractButterflyTable table =
-            bit_extract_butterfly_table_preprocess(pack_mask_v<E>);
+            make_bit_extract_butterfly_table(pack_mask_v<E>);
         word = pack_fold_codes_<E>(pack_orient_chunk_<L>(word));
         return bit_extract_butterfly_table(word, table);
     }

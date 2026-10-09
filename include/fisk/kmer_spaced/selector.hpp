@@ -170,7 +170,7 @@ inline SpacedKmerMode spaced_kmer_selector(
     std::vector<BitExtractButterflyTable> butterfly_tables;
     butterfly_tables.reserve(masks.size());
     for (auto const& mask : masks) {
-        butterfly_tables.push_back(bit_extract_butterfly_table_preprocess(mask.mask));
+        butterfly_tables.push_back(make_bit_extract_butterfly_table(mask.mask));
     }
 
     // BitExtractKernelDispatcher takes raw mask values, not BitExtractMask.

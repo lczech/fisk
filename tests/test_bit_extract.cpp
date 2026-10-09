@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
@@ -125,10 +126,16 @@ TEST(BitExtract, ByteTable)
     });
 }
 
+// The tables must not be constructible from a raw mask, as that would skip the preprocessing.
+static_assert(!std::is_aggregate_v<BitExtractBlockTable>);
+static_assert(!std::is_aggregate_v<BitExtractButterflyTable>);
+static_assert(!std::is_constructible_v<BitExtractBlockTable, std::uint64_t>);
+static_assert(!std::is_constructible_v<BitExtractButterflyTable, std::uint64_t>);
+
 TEST(BitExtract, BlockTable)
 {
     check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = bit_extract_block_table_preprocess(mask);
+        auto const table = make_bit_extract_block_table(mask);
         return bit_extract_block_table(x, table);
     });
 }
@@ -140,7 +147,7 @@ template <std::size_t UF>
 static void check_block_table_unrolled()
 {
     check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = bit_extract_block_table_preprocess(mask);
+        auto const table = make_bit_extract_block_table(mask);
         return bit_extract_block_table_unrolled<UF>(x, table);
     });
 }
@@ -158,7 +165,7 @@ TEST(BitExtract, BlockTableUnrolled)
 TEST(BitExtract, ButterflyTable)
 {
     check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = bit_extract_butterfly_table_preprocess(mask);
+        auto const table = make_bit_extract_butterfly_table(mask);
         return bit_extract_butterfly_table(x, table);
     });
 }
