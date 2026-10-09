@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <cstdint>
 #include <cstring>
 #include <cstddef>
@@ -25,20 +26,22 @@ namespace fisk {
 // =================================================================================================
 
 /**
- * @brief Count trailing zeros in a nonzero 32-bit value.
+ * @brief Increment a counter of consecutive valid characters, or reset it to zero, without a
+ * branch.
  *
- * Unlike std::countr_zero(), undefined for zero, which spares the zero check that the former
- * needs on targets without BMI1 (TZCNT).
+ * Some compilers turn `keep ? count + 1 : 0` into a branch, which mispredicts on scattered invalid
+ * characters. Instead, `count + 1` is masked with all zeros or all ones, which relies on the
+ * modular arithmetic of unsigned types that are not promoted to int.
  */
-inline unsigned ctz32_(std::uint32_t x) noexcept
+template <typename T>
+FISK_ALWAYS_INLINE
+constexpr T increment_or_reset_(T count, bool keep) noexcept
 {
-    #if defined(_MSC_VER)
-        unsigned long idx = 0;
-        _BitScanForward(&idx, x);
-        return static_cast<unsigned>(idx);
-    #else
-        return static_cast<unsigned>(__builtin_ctz(x));
-    #endif
+    static_assert(
+        std::is_unsigned_v<T> && sizeof(T) >= sizeof(unsigned),
+        "increment_or_reset_() needs an unsigned type that is not promoted to int"
+    );
+    return (count + 1) & (T{0} - static_cast<T>(keep));
 }
 
 /**
@@ -119,10 +122,13 @@ inline void for_each_kmer_in_valid_run_(
  * @brief Iterate the k-mers ending in one block of `Width` characters, given their codes and their
  * validity.
  *
- * Bit j of `valid_bits` is set iff `codes[j]` is a valid code. Invalid characters reset the window,
- * and each contiguous run of valid codes is handed to for_each_kmer_in_valid_run_(); codes of
- * invalid characters are never read. `base` is the index into the original sequence of `codes[0]`.
- * The other parameters are as for for_each_kmer_in_valid_run_().
+ * Bit j of `valid_bits` is set iff `codes[j]` is a valid code. Fully valid blocks are handed to
+ * for_each_kmer_in_valid_run_(). Other blocks are rolled in one character at a time, with invalid
+ * characters resetting the window; this is branch-free apart from the emission, as splitting the
+ * block into valid runs instead would mispredict on scattered invalid characters. Codes of invalid
+ * characters are hence rolled into the k-mer as well, and must be within 0-3, too.
+ * `base` is the index into the original sequence of `codes[0]`. The other parameters are as for
+ * for_each_kmer_in_valid_run_().
  */
 template<Encoding E, Layout L, unsigned Width, typename Func>
 FISK_ALWAYS_INLINE
@@ -150,35 +156,22 @@ inline void for_each_kmer_in_block_(
         return;
     }
 
-    std::size_t j = 0;
-    while (j < Width) {
-        // Skip invalid region.
-        std::uint32_t tail = valid_bits >> j;
-        if (tail == 0) {
-            valid = 0;
-            break;
+    // Slow path: block contains invalid characters.
+    for (unsigned j = 0; j < Width; ++j) {
+        if constexpr (L == Layout::kMSB) {
+            kmer = (kmer << 2) | codes[j];
+        } else if constexpr (L == Layout::kLSB) {
+            kmer = (kmer >> 2) | (std::uint64_t{codes[j]} << top_shift);
+        } else {
+            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_kmer_in_block_()");
         }
 
-        if ((tail & 1u) == 0u) {
-            unsigned const skip = ctz32_(tail);
-            j += skip;
-            valid = 0;
-            if (j >= Width) {
-                break;
-            }
+        valid = increment_or_reset_(valid, ((valid_bits >> j) & 1u) != 0);
+
+        if (valid >= k) {
+            assert_fits_width_(window_bits_<L>(kmer, mask), k);
+            invoke_kmer_callback<E, L>(func, base + j + 1 - k, window_bits_<L>(kmer, mask));
         }
-
-        // Consume contiguous valid run starting at j.
-        tail = valid_bits >> j;
-
-        // Number of leading 1-bits in tail, computed as ctz(~tail).
-        // This works because the right shift fills upper bits with zero.
-        unsigned const run_len = ctz32_(~tail);
-        for_each_kmer_in_valid_run_<E, L>(
-            codes + j, run_len, base + j, k, mask, top_shift, kmer, valid,
-            std::forward<Func>(func)
-        );
-        j += run_len;
     }
 }
 
@@ -236,8 +229,9 @@ inline void for_each_kmer_scalar_tail_(
 /**
  * @brief Encode 32 ASCII characters into 2-bit nucleotide codes of Encoding `E`.
  *
- * Returns a 32-bit mask with bit i set iff lane i is valid A/C/G/T (case-insensitive).
- * Invalid lanes are written as zero into `codes`.
+ * Returns a 32-bit mask with bit i set iff lane i is valid A/C/G/T (case-insensitive). Invalid
+ * lanes are not zeroed: their codes are arbitrary values within 0-3, which is all that
+ * for_each_kmer_in_block_() needs.
  */
 template <Encoding E>
 inline std::uint32_t encode_32_nts_avx2_(char const* data, std::uint8_t* codes) noexcept
@@ -283,9 +277,7 @@ inline std::uint32_t encode_32_nts_avx2_(char const* data, std::uint8_t* codes) 
         }
     }();
 
-    // Zero out invalid lanes so the consumer does not need to care.
-    __m256i const enc_masked = _mm256_and_si256(enc, valid_vec);
-    _mm256_storeu_si256(reinterpret_cast<__m256i*>(codes), enc_masked);
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(codes), enc);
 
     return static_cast<std::uint32_t>(_mm256_movemask_epi8(valid_vec));
 }
@@ -296,7 +288,8 @@ inline std::uint32_t encode_32_nts_avx2_(char const* data, std::uint8_t* codes) 
  * @brief SIMD-assisted iteration over all valid k-mers in a sequence.
  *
  * This AVX2 version vectorizes nucleotide encoding and validity testing in blocks
- * of 32 characters, then consumes contiguous valid runs with a tight inner loop.
+ * of 32 characters, then rolls the k-mers over each block, with a tight inner loop for fully valid
+ * blocks, see for_each_kmer_in_block_().
  *
  * Invalid characters reset the valid-window state and suppress any overlapping k-mers.
  *
@@ -358,9 +351,8 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
  * @brief Encode 8 ASCII characters into 2-bit nucleotide codes of Encoding `E`, using SWAR (SIMD
  * within a register) on a single 64-bit word.
  *
- * Returns an 8-bit mask with bit i set iff lane i is valid A/C/G/T (case-insensitive). Unlike in
- * encode_32_nts_avx2_(), invalid lanes are not zeroed: only the codes of lanes whose bit is set are
- * meaningful, which is all that for_each_kmer_in_block_() reads.
+ * Returns an 8-bit mask with bit i set iff lane i is valid A/C/G/T (case-insensitive). As in
+ * encode_32_nts_avx2_(), invalid lanes are not zeroed.
  */
 template <Encoding E>
 inline std::uint32_t encode_8_nts_swar_(char const* data, std::uint8_t* codes) noexcept
@@ -408,7 +400,7 @@ inline std::uint32_t encode_8_nts_swar_(char const* data, std::uint8_t* codes) n
 /**
  * @brief Iterate over all valid k-mers in a sequence, with 8-character blocks encoded via SWAR.
  *
- * Portable reference implementation of the block-and-run structure of for_each_kmer_simd(), with
+ * Portable reference implementation of the block-wise structure of for_each_kmer_simd(), with
  * 8-character blocks encoded via SWAR (SIMD within a register) on plain 64-bit words, so that it
  * needs no SIMD instructions. Kept for testing and benchmarking: on valid input it is roughly on
  * par with for_each_kmer(), and behind it with frequent invalid characters, so regular callers

@@ -117,7 +117,7 @@ Overview of the library headers (in `include/fisk/`), and their most important f
  - `seq_pack/seq_pack.hpp`: Packs an ASCII sequence into a compact 2-bit-per-base representation (`PackedSequence`), 8 characters at a time via the `WordEncoder` family, using the same PEXT/butterfly building blocks as bit extraction.
  - `seq_pack/simd.hpp`: SIMD implementation of sequence packing.
  - `kmer_extract/kmer_extract.hpp`: Basic extraction loop of k-mers from a sequence.
- - `kmer_extract/simd.hpp`: SIMD variant of the rolling extraction, probably overkill for most use cases.
+ - `kmer_extract/simd.hpp`: Block-wise variants of the rolling extraction: `for_each_kmer_simd()` encodes and validates 32 characters at a time with AVX2, and is about 5-25% faster than the rolling extraction on typical data; `for_each_kmer_swar()` is its portable counterpart without SIMD instructions.
  - `kmer_extract/packed.hpp`: K-mer extraction reading directly from an already-packed `PackedSequence` (`seq_pack.hpp`), instead of re-deriving codes from ASCII on every call.
  - `kmer_spaced/kmer_spaced.hpp`: Extraction loop for spaced k-mers from a sequence, templated with the bit extract function. Also contains the naive implementation, and some helper functions, e.g., to prepare the mask from a string of 1s and 0s.
  - `kmer_spaced/simd.hpp`: SIMD variant of the spaced k-mer extraction, taking one of the `bit_extract/simd.hpp` implementations as template parameter.
