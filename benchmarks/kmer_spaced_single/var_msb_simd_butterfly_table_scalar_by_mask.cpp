@@ -1,0 +1,24 @@
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "fisk/kmer_spaced/simd.hpp"
+#include "kmer_spaced_single/bench.hpp"
+
+using namespace fisk;
+
+std::uint64_t run_var_msb_simd_butterfly_table_scalar_by_mask(
+    std::string const& seq,
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelButterflyScalar> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
+    for_each_spaced_kmer_simd_by_mask(
+        std::string_view(seq), kernel, CharEncoderTable<Encoding::kACGT>{},
+        [&](std::size_t /*pos*/, auto const& wmer) {
+            sink.consume(kmer_value(wmer));
+        }
+    );
+    return sink.finalize();
+}

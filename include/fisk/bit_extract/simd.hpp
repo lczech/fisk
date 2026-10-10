@@ -891,13 +891,11 @@ private:
  * BitExtractKernelDispatcher<MyKernel> dispatcher(masks);
  *
  * dispatcher.run([&](auto const& kernels) {
- *     for_each_spaced_kmer_simd_by_mask(seq, span_k, kernels,
- *         [&](size_t pos, size_t mask_idx, uint64_t value) {
- *             // consume spaced k-mer
- *         }
- *     );
+ *     // process with the std::array<MyKernel, N> of kernels
  * });
  * ```
+ *
+ * For spaced k-mer extraction, see make_spaced_kmer_kernels() for constructing the kernels.
  *
  * This class hence is merely an optimization to obtain performance through compile time knowledge.
  * It is instead perfectly possible to just store the masks directly in a `std::vector` or such,

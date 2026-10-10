@@ -124,26 +124,24 @@ inline std::string spaced_kmer_mode_name(SpacedKmerMode mode)
  * The selector returns only the mode. The caller is expected to do a single outer `switch`
  * and then instantiate the corresponding hot loop without any further runtime dispatch inside.
  *
- * @param masks      Two-bit spaced-k-mer masks, each with first and last positions set.
- * @param span_k     Full span of the spaced seed, in `[1, 32]`.
+ * @param masks      Spaced k-mer masks, see make_spaced_kmer_masks(), all with the same span.
+ *                   Their Layout is used for the benchmark.
  * @param axis       Which emission order to restrict candidates to; see SpacedKmerAxis.
  * @param seq_len    Length of the random benchmark sequence.
  * @return           The fastest spaced-k-mer extraction mode for this mask set on this build.
  */
+template <Layout L>
 inline SpacedKmerMode spaced_kmer_selector(
-    std::vector<BitExtractMask> const& masks,
-    std::size_t const span_k,
+    std::vector<SpacedKmerMask<L, BitExtractMask>> const& masks,
     SpacedKmerAxis const axis = SpacedKmerAxis::kByPosition,
     std::size_t const seq_len = (1 << 16)
 ) {
-    if (span_k == 0 || span_k > 32) {
-        throw std::invalid_argument("spaced_kmer_selector(): span_k must be in [1, 32]");
-    }
     if (masks.empty()) {
         throw std::invalid_argument("spaced_kmer_selector(): need at least one mask");
     }
+    std::size_t const span_k = common_spaced_kmer_span_(masks);
     for (auto const& mask : masks) {
-        if (!is_valid_spaced_kmer_mask(mask.mask, span_k)) {
+        if (!is_valid_spaced_kmer_mask(mask)) {
             throw std::invalid_argument("spaced_kmer_selector(): invalid spaced k-mer mask");
         }
     }
@@ -166,19 +164,8 @@ inline SpacedKmerMode spaced_kmer_selector(
     }
 
     // Precompute scalar butterfly tables once, one per mask.
-    // SIMD kernel dispatchers also preprocess internally, once per candidate.
-    std::vector<BitExtractButterflyTable> butterfly_tables;
-    butterfly_tables.reserve(masks.size());
-    for (auto const& mask : masks) {
-        butterfly_tables.push_back(make_bit_extract_butterfly_table(mask.mask));
-    }
-
-    // BitExtractKernelDispatcher takes raw mask values, not BitExtractMask.
-    std::vector<std::uint64_t> raw_masks;
-    raw_masks.reserve(masks.size());
-    for (auto const& mask : masks) {
-        raw_masks.push_back(mask.mask);
-    }
+    // SIMD kernels are created once per candidate below.
+    auto const butterfly_tables = make_spaced_kmer_butterfly_tables(masks);
 
     bool const want_by_mask     = (
         (axis == SpacedKmerAxis::kByMask)     || (axis == SpacedKmerAxis::kEither)
@@ -241,7 +228,7 @@ inline SpacedKmerMode spaced_kmer_selector(
     if (bmi2_enabled()) {
         benchmark_candidate_(SpacedKmerMode::kPext, [&](auto&& cb) {
             for_each_spaced_kmer(
-                std::string_view(seq), span_k, masks, CharEncoderTable<Encoding::kACGT>{},
+                std::string_view(seq), masks, CharEncoderTable<Encoding::kACGT>{},
                 [](std::uint64_t x, BitExtractMask const& m) noexcept {
                     return bit_extract_pext(x, m);
                 },
@@ -253,7 +240,7 @@ inline SpacedKmerMode spaced_kmer_selector(
 
     benchmark_candidate_(SpacedKmerMode::kButterflyTable, [&](auto&& cb) {
         for_each_spaced_kmer(
-            std::string_view(seq), span_k, butterfly_tables, CharEncoderTable<Encoding::kACGT>{},
+            std::string_view(seq), butterfly_tables, CharEncoderTable<Encoding::kACGT>{},
             [](std::uint64_t x, BitExtractButterflyTable const& bf) noexcept {
                 return bit_extract_butterfly_table(x, bf);
             },
@@ -269,12 +256,14 @@ inline SpacedKmerMode spaced_kmer_selector(
     auto benchmark_simd_candidates_ = [&]<typename Kernel>(
         std::type_identity<Kernel>, SpacedKmerMode mode_by_mask, SpacedKmerMode mode_by_position
     ) {
-        BitExtractKernelDispatcher<Kernel> disp(raw_masks);
+        BitExtractKernelDispatcher<SpacedKmerMask<L, Kernel>> disp(
+            make_spaced_kmer_kernels<Kernel>(masks)
+        );
         if (want_by_mask) {
             benchmark_candidate_(mode_by_mask, [&](auto&& cb) {
                 disp.run([&](auto const& kernels) {
                     for_each_spaced_kmer_simd_by_mask(
-                        std::string_view(seq), span_k, kernels,
+                        std::string_view(seq), kernels,
                         CharEncoderTable<Encoding::kACGT>{}, cb
                     );
                 });
@@ -284,7 +273,7 @@ inline SpacedKmerMode spaced_kmer_selector(
             benchmark_candidate_(mode_by_position, [&](auto&& cb) {
                 disp.run([&](auto const& kernels) {
                     for_each_spaced_kmer_simd_by_position(
-                        std::string_view(seq), span_k, kernels,
+                        std::string_view(seq), kernels,
                         CharEncoderTable<Encoding::kACGT>{}, cb
                     );
                 });
@@ -341,42 +330,15 @@ inline SpacedKmerMode spaced_kmer_selector(
 /**
  * @brief Overload for a single mask: forwards to the multi-mask overload with a 1-element vector.
  */
+template <Layout L>
 inline SpacedKmerMode spaced_kmer_selector(
-    BitExtractMask const mask,
-    std::size_t const span_k,
+    SpacedKmerMask<L, BitExtractMask> const& mask,
     SpacedKmerAxis const axis = SpacedKmerAxis::kByPosition,
     std::size_t const seq_len = (1 << 16)
 ) {
-    return spaced_kmer_selector(std::vector<BitExtractMask>{mask}, span_k, axis, seq_len);
-}
-
-/**
- * @brief Overload taking a single spaced-k-mer mask as raw uint64_t.
- */
-inline SpacedKmerMode spaced_kmer_selector(
-    std::uint64_t const mask,
-    std::size_t const span_k,
-    SpacedKmerAxis const axis = SpacedKmerAxis::kByPosition,
-    std::size_t const seq_len = (1 << 16)
-) {
-    return spaced_kmer_selector(BitExtractMask(mask), span_k, axis, seq_len);
-}
-
-/**
- * @brief Overload taking spaced-k-mer masks as raw uint64_t values.
- */
-inline SpacedKmerMode spaced_kmer_selector(
-    std::vector<std::uint64_t> const& masks,
-    std::size_t const span_k,
-    SpacedKmerAxis const axis = SpacedKmerAxis::kByPosition,
-    std::size_t const seq_len = (1 << 16)
-) {
-    std::vector<BitExtractMask> converted;
-    converted.reserve(masks.size());
-    for (auto const& mask : masks) {
-        converted.emplace_back(mask);
-    }
-    return spaced_kmer_selector(converted, span_k, axis, seq_len);
+    return spaced_kmer_selector(
+        std::vector<SpacedKmerMask<L, BitExtractMask>>{mask}, axis, seq_len
+    );
 }
 
 } // namespace fisk

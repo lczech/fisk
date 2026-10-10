@@ -71,7 +71,7 @@ AXIS_COLORS = {
 
 def has_axis_rows(csv_path):
     """Whether a CSV has any _by_mask/_by_position rows at all; older result files do not."""
-    benchmarks = pd.read_csv(csv_path)["benchmark"]
+    benchmarks = normalize_spaced_layout(pd.read_csv(csv_path))["benchmark"]
     return bool((benchmarks.str.endswith("_by_mask") | benchmarks.str.endswith("_by_position")).any())
 
 
@@ -82,7 +82,7 @@ def load_technique_axis_pivot(csv_path, unit):
     scalar/bit-extract baselines) are dropped. The mean over cases is taken in ns/op space, and
     only then converted, see convert_for_display().
     """
-    df = pd.read_csv(csv_path)
+    df = normalize_spaced_layout(pd.read_csv(csv_path))
     df = df[df["benchmark"].str.endswith("_by_mask") | df["benchmark"].str.endswith("_by_position")]
     if df.empty:
         raise ValueError(f"No _by_mask/_by_position rows in {csv_path}")

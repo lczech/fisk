@@ -77,7 +77,7 @@ def load_one(
     raw_label: str | None = None,
     plot_benchmarks: set[str] | None = None,
 ) -> pd.DataFrame:
-    df = pd.read_csv(csv_path)
+    df = normalize_spaced_layout(pd.read_csv(csv_path))
 
     if raw_label is None:
         raw_label = platform_from_csv_path(csv_path)

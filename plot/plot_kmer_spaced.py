@@ -183,7 +183,7 @@ def main():
     add_unit_scale_args(ap)
     args = ap.parse_args()
 
-    df = pd.read_csv(args.csv)
+    df = normalize_spaced_layout(pd.read_csv(args.csv))
 
     cpu = platform_from_csv_path(args.csv).replace("_", " ")
     suite = args.suite

@@ -191,4 +191,45 @@ inline std::size_t spaced_kmer_cast_unchecked(Vec vec, SpacedKmer<E, L>* out) no
     return spaced_kmer_cast_unchecked<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), out);
 }
 
+// =================================================================================================
+//     Spaced K-mer Mask
+// =================================================================================================
+
+/**
+ * @brief A spaced k-mer mask in the representation `M` of some bit extraction algorithm, tagged
+ * with the Layout of the spaced k-mers that it extracts, and with its span.
+ *
+ * `M` is a bit extraction mask, table, or SIMD kernel, such as BitExtractMask,
+ * BitExtractButterflyTable, or BitExtractKernelButterflyAVX2. As this derives from `M`, it can be
+ * passed to the generic bit extraction functions as is. The spaced k-mer extraction functions on
+ * the other hand only accept masks tagged this way, and use the tag as the Layout of the rolling
+ * window and of the emitted spaced k-mers. Hence, the bits of the mask have to be arranged for that
+ * Layout.
+ *
+ * Create via make_spaced_kmer_mask() and the related functions, which take care of this.
+ */
+template <Layout L, typename M>
+struct SpacedKmerMask : M
+{
+    static constexpr Layout layout = L;
+
+    // Declared so that this is not an aggregate, as setting the members by hand is not safe.
+    SpacedKmerMask() = default;
+
+    // Number of positions that the mask spans, i.e., the k of the rolling window.
+    std::size_t span_k = 0;
+};
+
+template <typename T>
+struct is_spaced_kmer_mask_ : std::false_type {};
+
+template <Layout L, typename M>
+struct is_spaced_kmer_mask_<SpacedKmerMask<L, M>> : std::true_type {};
+
+/**
+ * @brief A spaced k-mer mask, i.e., a SpacedKmerMask, and not an untagged bit extraction mask.
+ */
+template <typename T>
+concept SpacedKmerMaskType = is_spaced_kmer_mask_<T>::value;
+
 } // namespace fisk

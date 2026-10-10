@@ -101,6 +101,19 @@ def parse_case_fields(df: pd.DataFrame, column: str = "case") -> pd.DataFrame:
     return df
 
 
+def normalize_spaced_layout(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    The spaced k-mer benchmarks are named by Layout, as "msb_<technique>" and "lsb_<technique>".
+    Keep the MSB ones under their plain technique name, as used in older result files, and drop
+    the LSB ones, which only serve to check that both layouts perform the same.
+    """
+    spaced = df["suite"].str.startswith("kmer_spaced")
+    df = df[~(spaced & df["benchmark"].str.startswith("lsb_"))].copy()
+    spaced = df["suite"].str.startswith("kmer_spaced")
+    df.loc[spaced, "benchmark"] = df.loc[spaced, "benchmark"].str.removeprefix("msb_")
+    return df
+
+
 # Select which benchmarks to plot at all.
 # This list is across all types of benchmarks we run;
 # not all are thus present in all tables.
