@@ -513,17 +513,19 @@ concept CanExtractWith = requires(std::string_view seq, Mask const& mask) {
 };
 
 static_assert(SpacedKmerMaskType<SpacedKmerMask<Layout::kMSB, BitExtractMask>>);
-static_assert(SpacedKmerMaskType<SpacedKmerMask<Layout::kLSB, BitExtractKernelButterflyScalar>>);
+static_assert(
+    SpacedKmerMaskType<SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdScalar>>>
+);
 static_assert(!SpacedKmerMaskType<BitExtractMask>);
-static_assert(!SpacedKmerMaskType<BitExtractKernelButterflyScalar>);
+static_assert(!SpacedKmerMaskType<BitExtractKernelButterfly<SimdScalar>>);
 static_assert(!std::is_aggregate_v<SpacedKmerMask<Layout::kMSB, BitExtractMask>>);
 static_assert(CanExtractWith<SpacedKmerMask<Layout::kMSB, BitExtractMask>>);
 static_assert(!CanExtractWith<BitExtractMask>);
 static_assert(decltype(make_spaced_kmer_mask("1"))::layout == Layout::kMSB);
 static_assert(decltype(make_spaced_kmer_mask<Layout::kLSB>("1"))::layout == Layout::kLSB);
 static_assert(std::is_same_v<
-    decltype(make_spaced_kmer_kernel<BitExtractKernelButterflyScalar, Layout::kLSB>("1")),
-    SpacedKmerMask<Layout::kLSB, BitExtractKernelButterflyScalar>
+    decltype(make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>, Layout::kLSB>("1")),
+    SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdScalar>>
 >);
 static_assert(!CanReverse<SpacedKmerAcgtMsb> && !CanReverseComplement<SpacedKmerAcgtMsb>);
 static_assert(!CanCanonical<SpacedKmerAcgtMsb>);
@@ -732,7 +734,7 @@ TEST(SpacedKmer, DecodeWithMask)
     // Tagged masks, in any representation, behave as their mask string.
     auto const kmer = spaced_kmer_encode("ACGTA", "10101");
     auto const mask = make_spaced_kmer_mask("1*101");
-    auto const kernel = make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>(mask);
+    auto const kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(mask);
     EXPECT_EQ(spaced_kmer_encode("ACGTA", mask), kmer);
     EXPECT_EQ(spaced_kmer_encode("ACGTA", make_spaced_kmer_block_table(mask)), kmer);
     EXPECT_EQ(spaced_kmer_encode("ACGTA", kernel), kmer);
@@ -747,7 +749,9 @@ TEST(SpacedKmer, DecodeWithMask)
     // An LSB mask encodes to an LSB spaced k-mer, but shows the same span.
     auto const lsb_kmer = spaced_kmer_encode<SpacedKmerAcgtLsb>("ACGTT", "11001");
     auto const lsb_mask = make_spaced_kmer_mask<Layout::kLSB>("11001");
-    auto const lsb_kernel = make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>(lsb_mask);
+    auto const lsb_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(lsb_mask)
+    ;
     EXPECT_EQ(spaced_kmer_encode("ACGTT", lsb_mask), lsb_kmer);
     EXPECT_EQ(spaced_kmer_encode("ACGTT", lsb_kernel), lsb_kmer);
     EXPECT_EQ(spaced_kmer_decode(lsb_kmer, lsb_mask), "AC--T");
@@ -801,7 +805,7 @@ TEST(KmerSpaced, Weight)
     EXPECT_EQ(spaced_kmer_weight(make_spaced_kmer_butterfly_table("1011")), std::size_t{3});
     EXPECT_EQ(spaced_kmer_weight(make_spaced_kmer_block_table("1011")), std::size_t{3});
     EXPECT_EQ(
-        spaced_kmer_weight(make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>("1011")),
+        spaced_kmer_weight(make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("1011")),
         std::size_t{3}
     );
 
@@ -969,7 +973,7 @@ static void check_mask_factories()
     auto const masks = make_spaced_kmer_masks<L>(strings);
     auto const butterfly_tables = make_spaced_kmer_butterfly_tables(masks);
     auto const block_tables = make_spaced_kmer_block_tables(masks);
-    auto const kernels = make_spaced_kmer_kernels<BitExtractKernelBlockScalar<>>(masks);
+    auto const kernels = make_spaced_kmer_kernels<BitExtractKernelBlock<SimdScalar>>(masks);
     ASSERT_EQ(masks.size(), strings.size());
 
     for (std::size_t i = 0; i < strings.size(); ++i) {
@@ -979,7 +983,9 @@ static void check_mask_factories()
 
         auto const butterfly_table = make_spaced_kmer_butterfly_table<L>(strings[i]);
         auto const block_table = make_spaced_kmer_block_table<L>(strings[i]);
-        auto const kernel = make_spaced_kmer_kernel<BitExtractKernelBlockScalar<>, L>(strings[i]);
+        auto const kernel
+            = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdScalar>, L>(strings[i])
+        ;
         static_assert(decltype(butterfly_table)::layout == L);
         static_assert(decltype(block_table)::layout == L);
         static_assert(decltype(kernel)::layout == L);
@@ -1030,7 +1036,9 @@ static void check_mask_formatting()
         EXPECT_EQ(spaced_kmer_mask_string(mask), normalized);
         EXPECT_EQ(spaced_kmer_mask_string(make_spaced_kmer_butterfly_table(mask)), normalized);
         EXPECT_EQ(
-            spaced_kmer_mask_string(make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>(mask)),
+            spaced_kmer_mask_string(
+                make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(mask)
+            ),
             normalized
         );
     }
@@ -1093,7 +1101,7 @@ TEST(KmerSpaced, InvalidSpan)
     });
 
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        auto kernel = make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>("1");
+        auto kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("1");
         kernel.span_k = k;
         for_each_spaced_kmer_simd_by_position(
             seq, kernel, CharEncoderTable<Encoding::kACGT>{},
@@ -1101,7 +1109,7 @@ TEST(KmerSpaced, InvalidSpan)
         );
     });
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        auto kernel = make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>("1");
+        auto kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("1");
         kernel.span_k = k;
         for_each_spaced_kmer_simd_by_mask(
             seq, kernel, CharEncoderTable<Encoding::kACGT>{},
@@ -1124,9 +1132,10 @@ TEST(KmerSpaced, MixedSpans)
         std::invalid_argument
     );
 
-    std::array<SpacedKmerMask<Layout::kMSB, BitExtractKernelButterflyScalar>, 2> const kernels{{
-        make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>("101"),
-        make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>("10001")
+    using Kernel = SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdScalar>>;
+    std::array<Kernel, 2> const kernels{{
+        make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("101"),
+        make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("10001")
     }};
     EXPECT_THROW(
         for_each_spaced_kmer_simd_by_position(
@@ -1149,59 +1158,59 @@ TEST(KmerSpaced, MixedSpans)
 
 TEST(KmerSpacedSimd, ButterflyScalar)
 {
-    check_simd_kernel<BitExtractKernelButterflyScalar>();
+    check_simd_kernel<BitExtractKernelButterfly<SimdScalar>>();
 }
 
 TEST(KmerSpacedSimd, BlockScalar)
 {
-    check_simd_kernel<BitExtractKernelBlockScalar<>>();
+    check_simd_kernel<BitExtractKernelBlock<SimdScalar>>();
 }
 
 #if defined(FISK_HAS_SSE2)
 TEST(KmerSpacedSimd, ButterflySse2)
 {
-    check_simd_kernel<BitExtractKernelButterflySSE2>();
+    check_simd_kernel<BitExtractKernelButterfly<SimdSSE2>>();
 }
 
 TEST(KmerSpacedSimd, BlockSse2)
 {
-    check_simd_kernel<BitExtractKernelBlockSSE2<>>();
+    check_simd_kernel<BitExtractKernelBlock<SimdSSE2>>();
 }
 #endif
 
 #if defined(FISK_HAS_AVX2)
 TEST(KmerSpacedSimd, ButterflyAvx2)
 {
-    check_simd_kernel<BitExtractKernelButterflyAVX2>();
+    check_simd_kernel<BitExtractKernelButterfly<SimdAVX2>>();
 }
 
 TEST(KmerSpacedSimd, BlockAvx2)
 {
-    check_simd_kernel<BitExtractKernelBlockAVX2<>>();
+    check_simd_kernel<BitExtractKernelBlock<SimdAVX2>>();
 }
 #endif
 
 #if defined(FISK_HAS_AVX512)
 TEST(KmerSpacedSimd, ButterflyAvx512)
 {
-    check_simd_kernel<BitExtractKernelButterflyAVX512>();
+    check_simd_kernel<BitExtractKernelButterfly<SimdAVX512>>();
 }
 
 TEST(KmerSpacedSimd, BlockAvx512)
 {
-    check_simd_kernel<BitExtractKernelBlockAVX512<>>();
+    check_simd_kernel<BitExtractKernelBlock<SimdAVX512>>();
 }
 #endif
 
 #if defined(FISK_HAS_NEON)
 TEST(KmerSpacedSimd, ButterflyNeon)
 {
-    check_simd_kernel<BitExtractKernelButterflyNEON>();
+    check_simd_kernel<BitExtractKernelButterfly<SimdNEON>>();
 }
 
 TEST(KmerSpacedSimd, BlockNeon)
 {
-    check_simd_kernel<BitExtractKernelBlockNEON<>>();
+    check_simd_kernel<BitExtractKernelBlock<SimdNEON>>();
 }
 #endif
 
@@ -1215,13 +1224,13 @@ TEST(KmerSpacedSimd, Pext)
 TEST(KmerSpacedSimd, DispatcherMaskCounts)
 {
     for (std::size_t span_k = 1; span_k <= 32; ++span_k) {
-        check_simd_dispatcher<BitExtractKernelButterflyScalar>({mask_for_span(span_k)});
+        check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>({mask_for_span(span_k)});
     }
-    check_simd_dispatcher<BitExtractKernelButterflyScalar>(to_vector(generated_masks<1>()));
-    check_simd_dispatcher<BitExtractKernelButterflyScalar>(to_vector(generated_masks<2>()));
-    check_simd_dispatcher<BitExtractKernelButterflyScalar>(to_vector(generated_masks<3>()));
-    check_simd_dispatcher<BitExtractKernelButterflyScalar>(to_vector(generated_masks<9>()));
-    check_simd_dispatcher<BitExtractKernelButterflyScalar>(to_vector(generated_masks<16>()));
+    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<1>()));
+    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<2>()));
+    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<3>()));
+    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<9>()));
+    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<16>()));
 
     #if defined(FISK_HAS_BMI2)
     // Eight PEXT lanes and 9+ masks exercise the two-word position-presence bitset.
@@ -1229,8 +1238,8 @@ TEST(KmerSpacedSimd, DispatcherMaskCounts)
     check_simd_dispatcher<BitExtractKernelPEXT<>>(to_vector(generated_masks<16>()));
     #elif defined(FISK_HAS_AVX512)
     // AVX-512 likewise has eight lanes, reaching the two-word presence path above eight masks.
-    check_simd_dispatcher<BitExtractKernelButterflyAVX512>(to_vector(generated_masks<9>()));
-    check_simd_dispatcher<BitExtractKernelButterflyAVX512>(to_vector(generated_masks<16>()));
+    check_simd_dispatcher<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<9>()));
+    check_simd_dispatcher<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<16>()));
     #endif
 }
 
@@ -1239,10 +1248,10 @@ TEST(KmerSpacedSimd, DispatcherMaskCounts)
 TEST(KmerSpacedSimd, ActgForwarding)
 {
     std::array<std::string, 3> const masks{"10101", "11101", "10001"};
-    check_simd_set<BitExtractKernelButterflyScalar, Layout::kMSB>(
+    check_simd_set<BitExtractKernelButterfly<SimdScalar>, Layout::kMSB>(
         masks, CharEncoderTable<Encoding::kACTG>{}
     );
-    check_simd_set<BitExtractKernelButterflyScalar, Layout::kLSB>(
+    check_simd_set<BitExtractKernelButterfly<SimdScalar>, Layout::kLSB>(
         masks, CharEncoderTable<Encoding::kACTG>{}
     );
 }

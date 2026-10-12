@@ -3,7 +3,6 @@
 #include <array>
 #include <bit>
 #include <cassert>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -93,7 +92,7 @@ inline void spaced_kmer_simd_tail_(
         for (std::size_t m = 0; m < NMasks; ++m) {
             Kernel const& kernel = kernels[m];
             if ((rolling_valid_pos & kernel.mask.mask) == kernel.mask.mask) {
-                auto const raw = kernel.bit_extract(rolling_kmer);
+                auto const raw = kernel.bit_extract_scalar(rolling_kmer);
                 assert_fits_width_(raw, spaced_kmer_weight(kernel.mask.mask));
                 invoke_spaced_kmer_callback<
                     std::remove_cvref_t<Enc>::encoding, Kernel::layout, NMasks == 1
@@ -124,20 +123,11 @@ inline void for_each_lane_ct_(F&& f)
 // =================================================================================================
 
 /**
- * @brief A bit extraction kernel of bit_extract/simd.hpp, as opposed to a mask or table.
- */
-template <typename Kernel>
-concept SpacedKmerKernel_ = requires {
-    Kernel::lanes;
-    typename Kernel::simd_vector;
-} && std::constructible_from<Kernel, std::uint64_t>;
-
-/**
  * @brief Create a bit extraction kernel of a spaced k-mer mask, such as
- * BitExtractKernelButterflyAVX2, for the SIMD spaced k-mer extraction functions below.
+ * BitExtractKernelButterfly<SimdAVX2>, for the SIMD spaced k-mer extraction functions below.
  */
 template <typename Kernel, Layout L>
-    requires SpacedKmerKernel_<Kernel>
+    requires BitExtractKernel<Kernel>
 inline SpacedKmerMask<L, Kernel> make_spaced_kmer_kernel(
     SpacedKmerMask<L, BitExtractMask> const& mask
 ) {
@@ -151,7 +141,7 @@ inline SpacedKmerMask<L, Kernel> make_spaced_kmer_kernel(
  * make_spaced_kmer_mask().
  */
 template <typename Kernel, Layout L = Layout::kMSB>
-    requires SpacedKmerKernel_<Kernel>
+    requires BitExtractKernel<Kernel>
 inline SpacedKmerMask<L, Kernel> make_spaced_kmer_kernel(std::string const& mask)
 {
     return make_spaced_kmer_kernel<Kernel>(make_spaced_kmer_mask<L>(mask));
@@ -162,7 +152,7 @@ inline SpacedKmerMask<L, Kernel> make_spaced_kmer_kernel(std::string const& mask
  * with BitExtractKernelDispatcher.
  */
 template <typename Kernel, Layout L>
-    requires SpacedKmerKernel_<Kernel>
+    requires BitExtractKernel<Kernel>
 inline std::vector<SpacedKmerMask<L, Kernel>> make_spaced_kmer_kernels(
     std::vector<SpacedKmerMask<L, BitExtractMask>> const& masks
 ) {

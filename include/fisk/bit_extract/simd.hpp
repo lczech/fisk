@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <cassert>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
@@ -11,29 +13,41 @@
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/intrinsics.hpp"
+#include "fisk/core/simd.hpp"
 
 namespace fisk {
 
-// Kernel concept:
+// =================================================================================================
+//     Kernel Concept
+// =================================================================================================
+
+// A kernel implements a bit extraction algorithm for a SIMD arch (core/simd.hpp), with the tables
+// of one mask, and applies it to all lanes of a SIMD vector in parallel.
 //
-//   simd_vector     Type of the SIMD vector
-//   lanes           Number of SIMD lanes
-//   ..._table       Masks for the algorithm
+// The in and out arguments of load() and store() are expected to be aligned to the vector size.
+// Besides bit_extract() on a whole SIMD vector, bit_extract_scalar() applies the algorithm to a
+// single uint64_t, such that the caller can process the tail of loop iterations with it.
 //
-//   load()          Load data from external variables into the lanes
-//   store()         Store data from lanes into external variables
-//   bit_extract()   Perform the bit extraction on all lanes, or a scalar
-//
-// Note that we expect the in and out arguments for load() and store() to be properly memory
-// aligned. Alternative functions for unaligned loads and stores are provided in comments.
-//
-// The bit_extract() function is always overloaded for both the SIMD vector and a normal scalar
-// uint64_t, such that the caller can process the tail of loop iterations with the latter.
-//
-// The kernels offer functionality to run bit extraction in parallel across SIMD lanes,
-// using the same mask on different values. Overloads or extensions to multiple masks
-// are possible, but as the number of available lanes differes, would not be consistent
-// across SIMD architectures. We hence focus here on the case with a single mask.
+// Overloads or extensions to multiple masks are possible, but as the number of available lanes
+// differs, would not be consistent across SIMD archs. We hence focus here on a single mask.
+
+/**
+ * @brief Concept for a bit extraction kernel, such as BitExtractKernelButterfly<SimdAVX2>.
+ */
+template <typename Kernel>
+concept BitExtractKernel = requires(
+    Kernel const kernel,
+    typename Kernel::simd_vector const v,
+    std::uint64_t const* in,
+    std::uint64_t* out,
+    std::uint64_t x
+) {
+    { Kernel::lanes } -> std::convertible_to<std::size_t>;
+    Kernel::load(in);
+    Kernel::store(v, out);
+    kernel.bit_extract(v);
+    { kernel.bit_extract_scalar(x) } -> std::same_as<std::uint64_t>;
+} && std::constructible_from<Kernel, std::uint64_t>;
 
 // =================================================================================================
 //     Pseudo-SIMD Kernels for PEXT
@@ -106,7 +120,7 @@ struct BitExtractKernelPEXT
         return out;
     }
 
-    std::uint64_t bit_extract(std::uint64_t x) const noexcept
+    std::uint64_t bit_extract_scalar(std::uint64_t x) const noexcept
     {
         return bit_extract_pext(x, mask);
     }
@@ -115,295 +129,48 @@ struct BitExtractKernelPEXT
 #endif
 
 // =================================================================================================
-//     SIMD Kernels for Bit Extract Butterfly Table Implementation
+//     Butterfly Table Kernel
 // =================================================================================================
 
-// These kernels implement the butterfly table algorithm for bit extraction.
-//
-// The kernels simply copy the entries of the butterfly table for a given mask into simd registers,
-// such that the bit extraction can be applied in parallel across simd lanes.
-
-// -------------------------------------------------------------------------------------------------
-//     Scalar Kernel
-// -------------------------------------------------------------------------------------------------
-
 /**
- * @brief Kernel for bit extract using a simple scalar implementation of the butterfly table.
+ * @brief Kernel for bit extract using the butterfly table, for a SIMD arch.
+ *
+ * The entries of the butterfly table of the mask are broadcast into SIMD vectors, such that the
+ * bit extraction can be applied in parallel across lanes.
  */
-struct BitExtractKernelButterflyScalar
+template <SimdArch Simd>
+struct BitExtractKernelButterfly
 {
-    // Regular scalar values for the butterfly table
-    using simd_vector = std::uint64_t;
-    static constexpr std::size_t lanes = 1;
+    using simd_vector = typename Simd::simd_vector;
+    static constexpr std::size_t lanes = Simd::lanes;
     BitExtractButterflyTable mask{};
+    simd_vector mask_simd{};
+    simd_vector sieves_simd[6]{};
 
-    BitExtractKernelButterflyScalar() = default;
+    BitExtractKernelButterfly() = default;
 
-    explicit BitExtractKernelButterflyScalar( std::uint64_t const mask_value )
-        : mask( make_bit_extract_butterfly_table( mask_value ))
-    {}
-
-    static simd_vector load( std::uint64_t const* a ) noexcept
+    explicit BitExtractKernelButterfly(std::uint64_t const mask_value)
+        : mask(make_bit_extract_butterfly_table(mask_value))
     {
-        return a[0];
-    }
-
-    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
-    {
-        out[0] = v;
-    }
-
-    simd_vector bit_extract( simd_vector x ) const noexcept
-    {
-        return bit_extract_butterfly_table( x, mask );
-    }
-};
-
-// -------------------------------------------------------------------------------------------------
-//     SSE2 Kernel
-// -------------------------------------------------------------------------------------------------
-
-#if defined(FISK_HAS_SSE2)
-
-/**
- * @brief Kernel for bit extract using an SSE2 implementation of the butterfly table.
- */
-struct BitExtractKernelButterflySSE2
-{
-    // Regular butterfly table values, and simd copies across lanes
-    using simd_vector = __m128i;
-    static constexpr std::size_t lanes = 2;
-    BitExtractButterflyTable mask{};
-    __m128i mask_simd{};
-    __m128i sieves_simd[6]{};
-
-    BitExtractKernelButterflySSE2() = default;
-
-    explicit BitExtractKernelButterflySSE2( std::uint64_t const mask_value )
-        : mask( make_bit_extract_butterfly_table( mask_value ))
-    {
-        // Copy the scalar mask and table over to the simd vectors.
-        static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
-        mask_simd = _mm_set1_epi64x( static_cast<long long>( mask_value ));
-        for( size_t i = 0; i < 6; ++i ) {
-            sieves_simd[i] = _mm_set1_epi64x( static_cast<long long>( mask.sieves[i] ));
+        mask_simd = Simd::broadcast(mask_value);
+        for (std::size_t i = 0; i < 6; ++i) {
+            sieves_simd[i] = Simd::broadcast(mask.sieves[i]);
         }
     }
 
-    static simd_vector load( std::uint64_t const* a ) noexcept
+    static simd_vector load(std::uint64_t const* a) noexcept
     {
-        return _mm_load_si128(reinterpret_cast<__m128i const*>(a));
-        // return _mm_loadu_si128(reinterpret_cast<__m128i const*>(a));
+        return Simd::load_aligned(a);
     }
 
-    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
+    static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
-        _mm_store_si128( reinterpret_cast<__m128i*>(out), v );
-        // _mm_storeu_si128( reinterpret_cast<__m128i*>(out), v );
+        Simd::store_aligned(v, out);
     }
 
-    simd_vector bit_extract( simd_vector x ) const noexcept
+    simd_vector bit_extract(simd_vector x) const noexcept
     {
-        x = _mm_and_si128(x, mask_simd);
-        auto step_ = [&](int s, __m128i mvv)
-        {
-            __m128i t = _mm_and_si128(x, mvv);
-            x = _mm_or_si128(_mm_xor_si128(x, t), _mm_srli_epi64(t, s));
-        };
-        step_(  1, sieves_simd[0] );
-        step_(  2, sieves_simd[1] );
-        step_(  4, sieves_simd[2] );
-        step_(  8, sieves_simd[3] );
-        step_( 16, sieves_simd[4] );
-        step_( 32, sieves_simd[5] );
-        return x;
-    }
-
-    std::uint64_t bit_extract( std::uint64_t x ) const noexcept
-    {
-        return bit_extract_butterfly_table( x, mask );
-    }
-};
-
-#endif
-
-// -------------------------------------------------------------------------------------------------
-//     AVX2 Kernel
-// -------------------------------------------------------------------------------------------------
-
-#if defined(FISK_HAS_AVX2)
-
-/**
- * @brief Kernel for bit extract using an AVX2 implementation of the butterfly table.
- */
-struct BitExtractKernelButterflyAVX2
-{
-    using simd_vector = __m256i;
-    static constexpr std::size_t lanes = 4;
-    BitExtractButterflyTable mask{};
-    __m256i mask_simd{};
-    __m256i sieves_simd[6]{};
-
-    BitExtractKernelButterflyAVX2() = default;
-
-    explicit BitExtractKernelButterflyAVX2( std::uint64_t const mask_value )
-        : mask( make_bit_extract_butterfly_table( mask_value ))
-    {
-        static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
-        mask_simd = _mm256_set1_epi64x( static_cast<long long>( mask_value ));
-        for( size_t i = 0; i < 6; ++i ) {
-            sieves_simd[i] = _mm256_set1_epi64x( static_cast<long long>( mask.sieves[i] ));
-        }
-    }
-
-    static simd_vector load( std::uint64_t const* a ) noexcept
-    {
-        return _mm256_load_si256( reinterpret_cast<__m256i const*>( a ));
-        // return _mm256_loadu_si256( reinterpret_cast<__m256i const*>( a ));
-    }
-
-    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
-    {
-        _mm256_store_si256( reinterpret_cast<__m256i*>(out), v );
-        // _mm256_storeu_si256( reinterpret_cast<__m256i*>(out), v );
-    }
-
-    simd_vector bit_extract( simd_vector x ) const noexcept
-    {
-        x = _mm256_and_si256(x, mask_simd);
-        auto step_ = [&](int s, __m256i mvv)
-        {
-            __m256i t = _mm256_and_si256(x, mvv);
-            x = _mm256_or_si256(_mm256_xor_si256(x, t), _mm256_srli_epi64(t, s));
-        };
-        step_(  1, sieves_simd[0] );
-        step_(  2, sieves_simd[1] );
-        step_(  4, sieves_simd[2] );
-        step_(  8, sieves_simd[3] );
-        step_( 16, sieves_simd[4] );
-        step_( 32, sieves_simd[5] );
-        return x;
-    }
-
-    std::uint64_t bit_extract( std::uint64_t x ) const noexcept
-    {
-        return bit_extract_butterfly_table( x, mask );
-    }
-};
-
-#endif
-
-// -------------------------------------------------------------------------------------------------
-//     AVX512 Kernel
-// -------------------------------------------------------------------------------------------------
-
-#if defined(FISK_HAS_AVX512)
-
-/**
- * @brief Kernel for bit extract using an AVX512 implementation of the butterfly table.
- */
-struct BitExtractKernelButterflyAVX512
-{
-    using simd_vector = __m512i;
-    static constexpr std::size_t lanes = 8;
-    BitExtractButterflyTable mask{};
-    __m512i mask_simd{};
-    __m512i sieves_simd[6]{};
-
-    BitExtractKernelButterflyAVX512() = default;
-
-    explicit BitExtractKernelButterflyAVX512( std::uint64_t const mask_value )
-        : mask( make_bit_extract_butterfly_table( mask_value ))
-    {
-        static_assert( sizeof(long long) >= sizeof(std::uint64_t) );
-        mask_simd = _mm512_set1_epi64( static_cast<long long>( mask_value ));
-        for( size_t i = 0; i < 6; ++i ) {
-            sieves_simd[i] = _mm512_set1_epi64( static_cast<long long>( mask.sieves[i] ));
-        }
-    }
-
-    static simd_vector load( std::uint64_t const* a ) noexcept
-    {
-        return _mm512_load_si512( reinterpret_cast<__m512i const*>( a ));
-        // return _mm512_loadu_si512( reinterpret_cast<__m512i const*>( a ));
-    }
-
-    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
-    {
-        _mm512_store_si512( reinterpret_cast<__m512i*>(out), v );
-        // _mm512_storeu_si512( reinterpret_cast<__m512i*>(out), v );
-    }
-
-    simd_vector bit_extract( simd_vector x ) const noexcept
-    {
-        x = _mm512_and_si512(x, mask_simd);
-        // S is a template parameter: GCC's -O0 macro form of _mm512_srli_epi64 warns on a runtime
-        // unsigned shift (-Wsign-conversion).
-        auto step_ = [&]<unsigned S>(__m512i mvv)
-        {
-            __m512i t = _mm512_and_si512(x, mvv);
-            x = _mm512_or_si512(_mm512_xor_si512(x, t), _mm512_srli_epi64(t, S));
-        };
-        step_.operator()<  1 >( sieves_simd[ 0 ]);
-        step_.operator()<  2 >( sieves_simd[ 1 ]);
-        step_.operator()<  4 >( sieves_simd[ 2 ]);
-        step_.operator()<  8 >( sieves_simd[ 3 ]);
-        step_.operator()< 16 >( sieves_simd[ 4 ]);
-        step_.operator()< 32 >( sieves_simd[ 5 ]);
-        return x;
-    }
-
-    std::uint64_t bit_extract( std::uint64_t x ) const noexcept
-    {
-        return bit_extract_butterfly_table( x, mask );
-    }
-};
-
-#endif
-
-// -------------------------------------------------------------------------------------------------
-//     NEON Kernel
-// -------------------------------------------------------------------------------------------------
-
-#if defined(FISK_HAS_NEON)
-
-/**
- * @brief Kernel for bit extract using an ARM NEON implementation of the butterfly table.
- */
-struct BitExtractKernelButterflyNEON
-{
-    using simd_vector = uint64x2_t;
-    static constexpr std::size_t lanes = 2;
-    BitExtractButterflyTable mask{};
-    uint64x2_t mask_simd{};
-    uint64x2_t sieves_simd[6]{};
-
-    BitExtractKernelButterflyNEON() = default;
-
-    explicit BitExtractKernelButterflyNEON( std::uint64_t const mask_value )
-        : mask( make_bit_extract_butterfly_table( mask_value ))
-    {
-        mask_simd = vdupq_n_u64( mask.mask );
-        for( size_t i = 0; i < 6; ++i) {
-            sieves_simd[i] = vdupq_n_u64( mask.sieves[i] );
-        }
-    }
-
-    static simd_vector load( std::uint64_t const* a ) noexcept
-    {
-        return vld1q_u64(a);
-    }
-
-    static void store( simd_vector const& v, std::uint64_t* out ) noexcept
-    {
-        vst1q_u64(out, v);
-    }
-
-    simd_vector bit_extract( simd_vector x ) const noexcept
-    {
-        // vshrq_n_u64() needs a compile time constant shift value,
-        // which we provide here via template paramater
-        x = vandq_u64(x, mask_simd);
+        x = Simd::bitwise_and(x, mask_simd);
         step_< 1>(x, sieves_simd[0]);
         step_< 2>(x, sieves_simd[1]);
         step_< 4>(x, sieves_simd[2]);
@@ -413,245 +180,93 @@ struct BitExtractKernelButterflyNEON
         return x;
     }
 
-    std::uint64_t bit_extract( std::uint64_t x ) const noexcept
+    std::uint64_t bit_extract_scalar(std::uint64_t x) const noexcept
     {
-        return bit_extract_butterfly_table( x, mask );
+        return bit_extract_butterfly_table(x, mask);
     }
 
 private:
 
-    template <int Shift>
-    inline void step_(simd_vector& x, uint64x2_t mvv) const noexcept
+    template <int S>
+    static void step_(simd_vector& x, simd_vector sieve) noexcept
     {
-        uint64x2_t t = vandq_u64(x, mvv);
-        x = vorrq_u64(veorq_u64(x, t), vshrq_n_u64(t, Shift));
+        simd_vector const t = Simd::bitwise_and(x, sieve);
+        x = Simd::bitwise_or(Simd::bitwise_xor(x, t), Simd::template shift_right<S>(t));
     }
-
 };
-
-#endif
 
 // =================================================================================================
-//     SIMD Kernels for Bit Extract Unrolled Block Table Implementation
+//     Block Table Kernel
 // =================================================================================================
 
-// These kernels implement the block table algorithm for bit extraction.
-//
-// All kernels are templetized with an unrolling factor `UF`, for loop unrolling at compile time.
-// As here the compiler might not have sufficient optimization to see through the operations,
-// we manually implement a compile-time balanced tree over [0, UF) for the OR operations that
-// combine the different blocks. That is, instead of a long chain of consecutive (and dependent)
-// operations, we use a tree structure, where several operations can occur in parallel,
-// in order to maximize throughput.
-
-// -------------------------------------------------------------------------------------------------
-//     Scalar Kernel
-// -------------------------------------------------------------------------------------------------
-
 /**
- * @brief Kernel for bit extract using a simple scalar implementation of the block table.
- */
-template<std::size_t UF = 8>
-struct BitExtractKernelBlockScalar
-{
-    static_assert(
-        UF == 1 || UF == 2 || UF == 4 || UF == 8 || UF == 16 || UF == 32,
-        "Supported unroll factors are 1, 2, 4, 8, 16, 32."
-    );
-    using simd_vector = std::uint64_t;
-    static constexpr std::size_t lanes = 1;
-    BitExtractBlockTable mask{};
-
-    BitExtractKernelBlockScalar() = default;
-
-    explicit BitExtractKernelBlockScalar(std::uint64_t mask_value)
-        : mask(make_bit_extract_block_table(mask_value))
-    {}
-
-    static simd_vector load(std::uint64_t const* a) noexcept
-    {
-        return a[0];
-    }
-
-    static void store(simd_vector const& v, std::uint64_t* out) noexcept
-    {
-        out[0] = v;
-    }
-
-    simd_vector bit_extract(simd_vector x) const noexcept
-    {
-        return bit_extract_block_table_unrolled<UF>(x, mask);
-    }
-};
-
-// -------------------------------------------------------------------------------------------------
-//     SSE2 Kernel
-// -------------------------------------------------------------------------------------------------
-
-#if defined(FISK_HAS_SSE2)
-
-/**
- * @brief Kernel for bit extract using an SSE2 implementation of the block table.
+ * @brief Kernel for bit extract using the unrolled block table, for a SIMD arch.
+ *
+ * The kernel is templetized with an unrolling factor `UF`, for loop unrolling at compile time.
+ * As here the compiler might not have sufficient optimization to see through the operations,
+ * we manually implement a compile-time balanced tree over [0, UF) for the OR operations that
+ * combine the different blocks. That is, instead of a long chain of consecutive (and dependent)
+ * operations, we use a tree structure, where several operations can occur in parallel,
+ * in order to maximize throughput.
  *
  * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
  */
-template<std::size_t UF = 8>
-struct BitExtractKernelBlockSSE2
+template <SimdArch Simd, std::size_t UF = 8>
+struct BitExtractKernelBlock
 {
     static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
     static_assert(UF <= 32, "UF must be <= 32");
     static_assert((32 % UF) == 0, "UF must divide 32");
 
-    using simd_vector = __m128i;
-    static constexpr std::size_t lanes = 2;
+    using simd_vector = typename Simd::simd_vector;
+    using shift_count = typename Simd::shift_count;
+    static constexpr std::size_t lanes = Simd::lanes;
 
     BitExtractBlockTable mask{};
-    __m128i blocks_simd[33]{};
-    __m128i shifts_simd[33]{};
+    simd_vector blocks_simd[33]{};
+    shift_count shifts_simd[33]{};
 
-    BitExtractKernelBlockSSE2() = default;
+    BitExtractKernelBlock() = default;
 
-    explicit BitExtractKernelBlockSSE2(std::uint64_t const mask_value)
+    explicit BitExtractKernelBlock(std::uint64_t const mask_value)
         : mask(make_bit_extract_block_table(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
-        static_assert(sizeof(long long) >= sizeof(std::uint64_t));
         for (std::size_t i = 0; i < 33; ++i) {
-            // Set the blocks and shift. Shift count in low 64-bit lane (x86 convention)
-            auto const mm = static_cast<long long>( mask.blocks[i] );
-            auto const ss = static_cast<long long>( mask.shifts[i] );
-            blocks_simd[i] = _mm_set_epi64x(mm, mm);
-            shifts_simd[i] = _mm_set_epi64x(0, ss);
+            blocks_simd[i] = Simd::broadcast(mask.blocks[i]);
+            shifts_simd[i] = Simd::make_shift_count(mask.shifts[i]);
         }
     }
 
     static simd_vector load(std::uint64_t const* a) noexcept
     {
-        return _mm_load_si128(reinterpret_cast<__m128i const*>(a));
-        // return _mm_loadu_si128(reinterpret_cast<__m128i const*>(a));
+        return Simd::load_aligned(a);
     }
 
     static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
-        _mm_store_si128(reinterpret_cast<__m128i*>(out), v);
-        // _mm_storeu_si128(reinterpret_cast<__m128i*>(out), v);
+        Simd::store_aligned(v, out);
     }
 
     simd_vector bit_extract(simd_vector x) const noexcept
     {
-        simd_vector res = _mm_setzero_si128();
+        simd_vector res = Simd::zero();
         std::size_t i = 0;
 
         while (mask.blocks[i]) {
             simd_vector combined = or_reduce_<0, UF, UF>(x, i);
-            res = _mm_or_si128(res, combined);
+            res = Simd::bitwise_or(res, combined);
             i += UF;
         }
         return res;
     }
 
-    std::uint64_t bit_extract(std::uint64_t x) const noexcept
+    std::uint64_t bit_extract_scalar(std::uint64_t x) const noexcept
     {
         return bit_extract_block_table(x, mask);
     }
 
 private:
-    template<std::size_t L, std::size_t R, std::size_t U>
-    inline simd_vector or_reduce_(simd_vector x, std::size_t i) const noexcept
-    {
-        static_assert(L < R, "bad bounds");
-        if constexpr (R - L == 1) {
-            return term_<L>(x, i);
-        } else {
-            constexpr std::size_t M = L + (R - L) / 2;
-            simd_vector a = or_reduce_<L, M, U>(x, i);
-            simd_vector b = or_reduce_<M, R, U>(x, i);
-            return _mm_or_si128(a, b);
-        }
-    }
-
-    template<std::size_t K>
-    inline simd_vector term_(simd_vector x, std::size_t i) const noexcept
-    {
-        return _mm_srl_epi64(
-            _mm_and_si128(x, blocks_simd[i + K]),
-            shifts_simd[i + K]
-        );
-    }
-};
-
-#endif
-
-// -------------------------------------------------------------------------------------------------
-//     AVX2 Kernel
-// -------------------------------------------------------------------------------------------------
-
-#if defined(FISK_HAS_AVX2)
-
-/**
- * @brief Kernel for bit extract using an AVX2 implementation of the block table.
- *
- * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
- */
-template<std::size_t UF = 8>
-struct BitExtractKernelBlockAVX2
-{
-    static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
-    static_assert(UF <= 32, "UF must be <= 32");
-    static_assert((32 % UF) == 0, "UF must divide 32");
-
-    using simd_vector = __m256i;
-    static constexpr std::size_t lanes = 4;
-
-    BitExtractBlockTable mask{};
-    __m256i blocks_simd[33]{};
-    __m128i shifts_simd[33]{};
-
-    BitExtractKernelBlockAVX2() = default;
-
-    explicit BitExtractKernelBlockAVX2(std::uint64_t const mask_value)
-        : mask(make_bit_extract_block_table(mask_value))
-    {
-        assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
-        static_assert(sizeof(long long) >= sizeof(std::uint64_t));
-        for (std::size_t i = 0; i < 33; ++i) {
-            blocks_simd[i] = _mm256_set1_epi64x( static_cast<long long>( mask.blocks[i] ));
-            shifts_simd[i] = _mm_set_epi64x( 0,  static_cast<long long>( mask.shifts[i] ));
-        }
-    }
-
-    static simd_vector load(std::uint64_t const* a) noexcept
-    {
-        return _mm256_load_si256(reinterpret_cast<__m256i const*>(a));
-        // return _mm256_loadu_si256(reinterpret_cast<__m256i const*>(a));
-    }
-
-    static void store(simd_vector const& v, std::uint64_t* out) noexcept
-    {
-        _mm256_store_si256(reinterpret_cast<__m256i*>(out), v);
-        // _mm256_storeu_si256(reinterpret_cast<__m256i*>(out), v);
-    }
-
-    simd_vector bit_extract(simd_vector x) const noexcept
-    {
-        simd_vector res = _mm256_setzero_si256();
-        std::size_t i = 0;
-
-        while (mask.blocks[i]) {
-            simd_vector combined = or_reduce_<0, UF, UF>(x, i);
-            res = _mm256_or_si256(res, combined);
-            i += UF;
-        }
-
-        return res;
-    }
-
-    std::uint64_t bit_extract( std::uint64_t x ) const noexcept
-    {
-        return bit_extract_block_table( x, mask );
-    }
-
-private:
 
     template<std::size_t L, std::size_t R, std::size_t U>
     inline simd_vector or_reduce_(simd_vector x, std::size_t i) const noexcept
@@ -663,211 +278,19 @@ private:
             constexpr std::size_t M = L + (R - L) / 2;
             simd_vector a = or_reduce_<L, M, U>(x, i);
             simd_vector b = or_reduce_<M, R, U>(x, i);
-            return _mm256_or_si256(a, b);
+            return Simd::bitwise_or(a, b);
         }
     }
 
     template<std::size_t K>
     inline simd_vector term_(simd_vector x, std::size_t i) const noexcept
     {
-        return _mm256_srl_epi64(
-            _mm256_and_si256(x, blocks_simd[i + K]),
+        return Simd::shift_right(
+            Simd::bitwise_and(x, blocks_simd[i + K]),
             shifts_simd[i + K]
         );
     }
 };
-
-#endif
-
-// -------------------------------------------------------------------------------------------------
-//     AVX512 Kernel
-// -------------------------------------------------------------------------------------------------
-
-#if defined(FISK_HAS_AVX512)
-
-/**
- * @brief Kernel for bit extract using an AVX512 implementation of the block table.
- *
- * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
- */
-template<std::size_t UF = 8>
-struct BitExtractKernelBlockAVX512
-{
-    static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
-    static_assert(UF <= 32, "UF must be <= 32");
-    static_assert((32 % UF) == 0, "UF must divide 32");
-
-    using simd_vector = __m512i;
-    static constexpr std::size_t lanes = 8;
-
-    BitExtractBlockTable mask{};
-    __m512i blocks_simd[33]{};
-    __m128i shifts_simd[33]{};
-
-    BitExtractKernelBlockAVX512() = default;
-
-    explicit BitExtractKernelBlockAVX512(std::uint64_t const mask_value)
-        : mask(make_bit_extract_block_table(mask_value))
-    {
-        assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
-        static_assert(sizeof(long long) >= sizeof(std::uint64_t));
-        for (std::size_t i = 0; i < 33; ++i) {
-            blocks_simd[i] = _mm512_set1_epi64(static_cast<long long>( mask.blocks[i] ));
-            shifts_simd[i] = _mm_set_epi64x(0, static_cast<long long>( mask.shifts[i] ));
-        }
-    }
-
-    static simd_vector load(std::uint64_t const* a) noexcept
-    {
-        return _mm512_load_si512( reinterpret_cast<__m512i const*>( a ));
-        // return _mm512_loadu_si512( reinterpret_cast<__m512i const*>( a ));
-    }
-
-    static void store(simd_vector const& v, std::uint64_t* out) noexcept
-    {
-        _mm512_store_si512( reinterpret_cast<__m512i*>(out), v );
-        // _mm512_storeu_si512( reinterpret_cast<__m512i*>(out), v );
-    }
-
-    simd_vector bit_extract(simd_vector x) const noexcept
-    {
-        simd_vector res = _mm512_setzero_si512();
-        std::size_t i = 0;
-
-        while (mask.blocks[i]) {
-            simd_vector combined = or_reduce_<0, UF, UF>(x, i);
-            res = _mm512_or_si512(res, combined);
-            i += UF;
-        }
-        return res;
-    }
-
-    std::uint64_t bit_extract(std::uint64_t x) const noexcept
-    {
-        return bit_extract_block_table(x, mask);
-    }
-
-private:
-    template<std::size_t L, std::size_t R, std::size_t U>
-    inline simd_vector or_reduce_(simd_vector x, std::size_t i) const noexcept
-    {
-        static_assert(L < R, "bad bounds");
-        if constexpr (R - L == 1) {
-            return term_<L>(x, i);
-        } else {
-            constexpr std::size_t M = L + (R - L) / 2;
-            simd_vector a = or_reduce_<L, M, U>(x, i);
-            simd_vector b = or_reduce_<M, R, U>(x, i);
-            return _mm512_or_si512(a, b);
-        }
-    }
-
-    template<std::size_t K>
-    inline simd_vector term_(simd_vector x, std::size_t i) const noexcept
-    {
-        return _mm512_srl_epi64(
-            _mm512_and_si512(x, blocks_simd[i + K]),
-            shifts_simd[i + K]
-        );
-    }
-};
-
-#endif
-
-// -------------------------------------------------------------------------------------------------
-//     NEON Kernel
-// -------------------------------------------------------------------------------------------------
-
-#if defined(FISK_HAS_NEON)
-
-/**
- * @brief Kernel for bit extract using an ARM NEON implementation of the block table.
- *
- * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
- */
-template<std::size_t UF = 8>
-struct BitExtractKernelBlockNEON
-{
-    static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
-    static_assert(UF <= 32, "UF must be <= 32");
-    static_assert((32 % UF) == 0, "UF must divide 32");
-
-    using simd_vector = uint64x2_t;
-    static constexpr std::size_t lanes = 2;
-
-    BitExtractBlockTable mask{};
-    uint64x2_t blocks_simd[33]{};
-    int64x2_t  shifts_simd[33]{};  // signed: negative = shift right
-
-    BitExtractKernelBlockNEON() = default;
-
-    explicit BitExtractKernelBlockNEON(std::uint64_t const mask_value)
-        : mask(make_bit_extract_block_table(mask_value))
-    {
-        assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
-        for (std::size_t i = 0; i < 33; ++i) {
-            blocks_simd[i] = vdupq_n_u64( mask.blocks[i] );
-
-            // vshlq_u64 shifts left for positive, right for negative, so store -s in both lanes
-            shifts_simd[i] = vdupq_n_s64( -static_cast<std::int64_t>( mask.shifts[i] ));
-        }
-    }
-
-    static simd_vector load(std::uint64_t const* a) noexcept
-    {
-        return vld1q_u64(a);
-    }
-
-    static void store(simd_vector const& v, std::uint64_t* out) noexcept
-    {
-        vst1q_u64(out, v);
-    }
-
-    simd_vector bit_extract(simd_vector x) const noexcept
-    {
-        simd_vector res = vdupq_n_u64(0);
-        std::size_t i = 0;
-
-        while (mask.blocks[i]) {
-            simd_vector combined = or_reduce_<0, UF, UF>(x, i);
-            res = vorrq_u64(res, combined);
-            i += UF;
-        }
-        return res;
-    }
-
-    std::uint64_t bit_extract(std::uint64_t x) const noexcept
-    {
-        return bit_extract_block_table(x, mask);
-    }
-
-private:
-    template<std::size_t L, std::size_t R, std::size_t U>
-    inline simd_vector or_reduce_(simd_vector x, std::size_t i) const noexcept
-    {
-        static_assert(L < R, "bad bounds");
-        if constexpr (R - L == 1) {
-            return term_<L>(x, i);
-        } else {
-            constexpr std::size_t M = L + (R - L) / 2;
-            simd_vector a = or_reduce_<L, M, U>(x, i);
-            simd_vector b = or_reduce_<M, R, U>(x, i);
-            return vorrq_u64(a, b);
-        }
-    }
-
-    template<std::size_t K>
-    inline simd_vector term_(simd_vector x, std::size_t i) const noexcept
-    {
-        // right shift by variable count: vshlq_u64 with negative shift
-        return vshlq_u64(
-            vandq_u64(x, blocks_simd[i + K]),
-            shifts_simd[i + K]
-        );
-    }
-};
-
-#endif
 
 // =================================================================================================
 //     SIMD Kernel Dispatcher

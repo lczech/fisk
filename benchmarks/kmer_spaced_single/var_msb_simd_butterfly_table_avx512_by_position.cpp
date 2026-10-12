@@ -12,7 +12,7 @@ using namespace fisk;
 
 std::uint64_t run_var_simd_butterfly_table_avx512_by_position(
     std::string const& seq,
-    SpacedKmerMask<Layout::kMSB, BitExtractKernelButterflyAVX512> const& kernel,
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdAVX512>> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);

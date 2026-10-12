@@ -11,7 +11,6 @@
 #include <stdexcept>
 #include <utility>
 
-#include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/intrinsics.hpp"

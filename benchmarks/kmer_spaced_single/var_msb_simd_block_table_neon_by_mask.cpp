@@ -12,7 +12,7 @@ using namespace fisk;
 
 std::uint64_t run_var_simd_block_table_neon_by_mask(
     std::string const& seq,
-    SpacedKmerMask<Layout::kMSB, BitExtractKernelBlockNEON<>> const& kernel,
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelBlock<SimdNEON>> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);

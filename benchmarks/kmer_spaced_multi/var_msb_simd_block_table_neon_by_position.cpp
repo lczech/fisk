@@ -13,7 +13,7 @@ using namespace fisk;
 std::uint64_t run_var_simd_block_table_neon_by_position(
     std::string const& seq,
     BitExtractKernelDispatcher<
-        SpacedKmerMask<Layout::kMSB, BitExtractKernelBlockNEON<>>
+        SpacedKmerMask<Layout::kMSB, BitExtractKernelBlock<SimdNEON>>
     > const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {

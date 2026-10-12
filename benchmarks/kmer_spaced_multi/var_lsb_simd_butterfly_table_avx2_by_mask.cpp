@@ -13,7 +13,7 @@ using namespace fisk;
 std::uint64_t run_var_simd_butterfly_table_avx2_by_mask(
     std::string const& seq,
     BitExtractKernelDispatcher<
-        SpacedKmerMask<Layout::kLSB, BitExtractKernelButterflyAVX2>
+        SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdAVX2>>
     > const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {

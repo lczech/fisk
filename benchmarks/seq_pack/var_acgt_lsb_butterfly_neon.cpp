@@ -12,7 +12,9 @@ std::uint64_t run_var_acgt_lsb_butterfly_neon(
     std::string const& seq,
     PackedSequence<Encoding::kACGT, Layout::kLSB>& out
 ) {
-    pack_sequence_simd(seq, WordEncoderButterflyNEON<Encoding::kACGT, Layout::kLSB>{}, out);
+    pack_sequence_simd(
+        seq, WordEncoderButterflySimd<SimdNEON, Encoding::kACGT, Layout::kLSB>{}, out
+    );
     return 0;
 }
 

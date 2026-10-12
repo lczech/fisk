@@ -10,7 +10,7 @@ using namespace fisk;
 
 std::uint64_t run_var_simd_block_table_scalar_by_position(
     std::string const& seq,
-    SpacedKmerMask<Layout::kMSB, BitExtractKernelBlockScalar<>> const& kernel,
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelBlock<SimdScalar>> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);

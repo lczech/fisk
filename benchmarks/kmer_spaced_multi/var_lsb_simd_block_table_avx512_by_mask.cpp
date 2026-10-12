@@ -13,7 +13,7 @@ using namespace fisk;
 std::uint64_t run_var_simd_block_table_avx512_by_mask(
     std::string const& seq,
     BitExtractKernelDispatcher<
-        SpacedKmerMask<Layout::kLSB, BitExtractKernelBlockAVX512<>>
+        SpacedKmerMask<Layout::kLSB, BitExtractKernelBlock<SimdAVX512>>
     > const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {

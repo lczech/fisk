@@ -11,7 +11,7 @@ using namespace fisk;
 std::uint64_t run_var_simd_block_table_scalar_by_mask(
     std::string const& seq,
     BitExtractKernelDispatcher<
-        SpacedKmerMask<Layout::kLSB, BitExtractKernelBlockScalar<>>
+        SpacedKmerMask<Layout::kLSB, BitExtractKernelBlock<SimdScalar>>
     > const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {

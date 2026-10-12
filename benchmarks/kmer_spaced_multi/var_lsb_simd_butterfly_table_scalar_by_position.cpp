@@ -11,7 +11,7 @@ using namespace fisk;
 std::uint64_t run_var_simd_butterfly_table_scalar_by_position(
     std::string const& seq,
     BitExtractKernelDispatcher<
-        SpacedKmerMask<Layout::kLSB, BitExtractKernelButterflyScalar>
+        SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdScalar>>
     > const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {

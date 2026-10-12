@@ -12,7 +12,9 @@ std::uint64_t run_var_actg_lsb_butterfly_avx512(
     std::string const& seq,
     PackedSequence<Encoding::kACTG, Layout::kLSB>& out
 ) {
-    pack_sequence_simd(seq, WordEncoderButterflyAVX512<Encoding::kACTG, Layout::kLSB>{}, out);
+    pack_sequence_simd(
+        seq, WordEncoderButterflySimd<SimdAVX512, Encoding::kACTG, Layout::kLSB>{}, out
+    );
     return 0;
 }
 

@@ -283,28 +283,28 @@ inline SpacedKmerMode spaced_kmer_selector(
 
     #if defined(FISK_HAS_SSE2)
     benchmark_simd_candidates_(
-        std::type_identity<BitExtractKernelButterflySSE2>{},
+        std::type_identity<BitExtractKernelButterfly<SimdSSE2>>{},
         SpacedKmerMode::kButterflyTableSSE2ByMask, SpacedKmerMode::kButterflyTableSSE2ByPosition
     );
     #endif
 
     #if defined(FISK_HAS_AVX2)
     benchmark_simd_candidates_(
-        std::type_identity<BitExtractKernelButterflyAVX2>{},
+        std::type_identity<BitExtractKernelButterfly<SimdAVX2>>{},
         SpacedKmerMode::kButterflyTableAVX2ByMask, SpacedKmerMode::kButterflyTableAVX2ByPosition
     );
     #endif
 
     #if defined(FISK_HAS_AVX512)
     benchmark_simd_candidates_(
-        std::type_identity<BitExtractKernelButterflyAVX512>{},
+        std::type_identity<BitExtractKernelButterfly<SimdAVX512>>{},
         SpacedKmerMode::kButterflyTableAVX512ByMask, SpacedKmerMode::kButterflyTableAVX512ByPosition
     );
     #endif
 
     #if defined(FISK_HAS_NEON)
     benchmark_simd_candidates_(
-        std::type_identity<BitExtractKernelButterflyNEON>{},
+        std::type_identity<BitExtractKernelButterfly<SimdNEON>>{},
         SpacedKmerMode::kButterflyTableNeonByMask, SpacedKmerMode::kButterflyTableNeonByPosition
     );
     #endif

@@ -13,6 +13,7 @@
 #include "fisk/core/kmer_hash.hpp"
 #include "fisk/core/cpu_runtime.hpp"
 #include "fisk/core/random.hpp"
+#include "fisk/core/simd.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/types.hpp"
 

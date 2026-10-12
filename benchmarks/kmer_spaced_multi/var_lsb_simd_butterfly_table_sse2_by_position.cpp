@@ -13,7 +13,7 @@ using namespace fisk;
 std::uint64_t run_var_simd_butterfly_table_sse2_by_position(
     std::string const& seq,
     BitExtractKernelDispatcher<
-        SpacedKmerMask<Layout::kLSB, BitExtractKernelButterflySSE2>
+        SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdSSE2>>
     > const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {

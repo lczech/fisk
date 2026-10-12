@@ -47,32 +47,32 @@ static void bench_kmer_spaced_single_layout_(
 
     // simd kernels
     auto const simd_bf_scalar_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(bit_ext_mask);
     auto const simd_bt_scalar_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelBlockScalar<>>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdScalar>>(bit_ext_mask);
     #if defined(FISK_HAS_SSE2)
     auto const simd_bf_sse2_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelButterflySSE2>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdSSE2>>(bit_ext_mask);
     auto const simd_bt_sse2_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelBlockSSE2<>>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdSSE2>>(bit_ext_mask);
     #endif
     #if defined(FISK_HAS_AVX2)
     auto const simd_bf_avx2_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelButterflyAVX2>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdAVX2>>(bit_ext_mask);
     auto const simd_bt_avx2_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelBlockAVX2<>>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdAVX2>>(bit_ext_mask);
     #endif
     #if defined(FISK_HAS_AVX512)
     auto const simd_bf_avx512_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelButterflyAVX512>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdAVX512>>(bit_ext_mask);
     auto const simd_bt_avx512_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelBlockAVX512<>>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdAVX512>>(bit_ext_mask);
     #endif
     #if defined(FISK_HAS_NEON)
     auto const simd_bf_neon_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelButterflyNEON>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdNEON>>(bit_ext_mask);
     auto const simd_bt_neon_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelBlockNEON<>>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdNEON>>(bit_ext_mask);
     #endif
     #if defined(FISK_HAS_BMI2)
     auto const simd_pext_kernel

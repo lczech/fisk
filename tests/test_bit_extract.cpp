@@ -184,7 +184,7 @@ TEST(BitExtract, Pext)
 // =================================================================================================
 
 // All simd.hpp kernels share the same structural interface (a `simd_vector` type, a `lanes`
-// constant, static load()/store(), a bit_extract(simd_vector) SIMD path, a bit_extract(uint64_t)
+// constant, static load()/store(), a bit_extract(simd_vector) SIMD path, a bit_extract_scalar()
 // scalar fallback path, and construction from a single uint64_t mask), so one generic helper
 // covers all of them. Checks both paths against the same bit_extract_oracle() used above, for
 // every mask in the shared edge-case + random mask set.
@@ -211,7 +211,7 @@ static void check_kernel()
 
         // Scalar fallback path: every value checked directly.
         for (auto const value : values) {
-            EXPECT_EQ(kernel.bit_extract(value), bit_extract_oracle(value, mask));
+            EXPECT_EQ(kernel.bit_extract_scalar(value), bit_extract_oracle(value, mask));
         }
 
         // SIMD-lane path: values processed in chunks of `lanes`, wrapping around to fill the
@@ -238,34 +238,34 @@ static void check_kernel()
 
 TEST(BitExtractSimd, KernelButterflyScalar)
 {
-    check_kernel<BitExtractKernelButterflyScalar>();
+    check_kernel<BitExtractKernelButterfly<SimdScalar>>();
 }
 
 #ifdef FISK_HAS_SSE2
 TEST(BitExtractSimd, KernelButterflySSE2)
 {
-    check_kernel<BitExtractKernelButterflySSE2>();
+    check_kernel<BitExtractKernelButterfly<SimdSSE2>>();
 }
 #endif
 
 #ifdef FISK_HAS_AVX2
 TEST(BitExtractSimd, KernelButterflyAVX2)
 {
-    check_kernel<BitExtractKernelButterflyAVX2>();
+    check_kernel<BitExtractKernelButterfly<SimdAVX2>>();
 }
 #endif
 
 #ifdef FISK_HAS_AVX512
 TEST(BitExtractSimd, KernelButterflyAVX512)
 {
-    check_kernel<BitExtractKernelButterflyAVX512>();
+    check_kernel<BitExtractKernelButterfly<SimdAVX512>>();
 }
 #endif
 
 #ifdef FISK_HAS_NEON
 TEST(BitExtractSimd, KernelButterflyNEON)
 {
-    check_kernel<BitExtractKernelButterflyNEON>();
+    check_kernel<BitExtractKernelButterfly<SimdNEON>>();
 }
 #endif
 
@@ -278,44 +278,44 @@ TEST(BitExtractSimd, KernelButterflyNEON)
 
 TEST(BitExtractSimd, KernelBlockScalar)
 {
-    check_kernel<BitExtractKernelBlockScalar<1>>();
-    check_kernel<BitExtractKernelBlockScalar<8>>();
-    check_kernel<BitExtractKernelBlockScalar<32>>();
+    check_kernel<BitExtractKernelBlock<SimdScalar, 1>>();
+    check_kernel<BitExtractKernelBlock<SimdScalar, 8>>();
+    check_kernel<BitExtractKernelBlock<SimdScalar, 32>>();
 }
 
 #ifdef FISK_HAS_SSE2
 TEST(BitExtractSimd, KernelBlockSSE2)
 {
-    check_kernel<BitExtractKernelBlockSSE2<1>>();
-    check_kernel<BitExtractKernelBlockSSE2<8>>();
-    check_kernel<BitExtractKernelBlockSSE2<32>>();
+    check_kernel<BitExtractKernelBlock<SimdSSE2, 1>>();
+    check_kernel<BitExtractKernelBlock<SimdSSE2, 8>>();
+    check_kernel<BitExtractKernelBlock<SimdSSE2, 32>>();
 }
 #endif
 
 #ifdef FISK_HAS_AVX2
 TEST(BitExtractSimd, KernelBlockAVX2)
 {
-    check_kernel<BitExtractKernelBlockAVX2<1>>();
-    check_kernel<BitExtractKernelBlockAVX2<8>>();
-    check_kernel<BitExtractKernelBlockAVX2<32>>();
+    check_kernel<BitExtractKernelBlock<SimdAVX2, 1>>();
+    check_kernel<BitExtractKernelBlock<SimdAVX2, 8>>();
+    check_kernel<BitExtractKernelBlock<SimdAVX2, 32>>();
 }
 #endif
 
 #ifdef FISK_HAS_AVX512
 TEST(BitExtractSimd, KernelBlockAVX512)
 {
-    check_kernel<BitExtractKernelBlockAVX512<1>>();
-    check_kernel<BitExtractKernelBlockAVX512<8>>();
-    check_kernel<BitExtractKernelBlockAVX512<32>>();
+    check_kernel<BitExtractKernelBlock<SimdAVX512, 1>>();
+    check_kernel<BitExtractKernelBlock<SimdAVX512, 8>>();
+    check_kernel<BitExtractKernelBlock<SimdAVX512, 32>>();
 }
 #endif
 
 #ifdef FISK_HAS_NEON
 TEST(BitExtractSimd, KernelBlockNEON)
 {
-    check_kernel<BitExtractKernelBlockNEON<1>>();
-    check_kernel<BitExtractKernelBlockNEON<8>>();
-    check_kernel<BitExtractKernelBlockNEON<32>>();
+    check_kernel<BitExtractKernelBlock<SimdNEON, 1>>();
+    check_kernel<BitExtractKernelBlock<SimdNEON, 8>>();
+    check_kernel<BitExtractKernelBlock<SimdNEON, 32>>();
 }
 #endif
 
@@ -409,7 +409,7 @@ TEST(BitExtractSelector, SmokeTest)
 
 // BitExtractKernelDispatcher is independent of which Kernel type is plugged in,
 // so a single kernel type is enough here.
-using DispatcherTestKernel = BitExtractKernelButterflyScalar;
+using DispatcherTestKernel = BitExtractKernelButterfly<SimdScalar>;
 
 TEST(BitExtractDispatcher, RoundTrip)
 {

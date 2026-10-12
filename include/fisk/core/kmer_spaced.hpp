@@ -200,9 +200,9 @@ inline std::size_t spaced_kmer_cast_unchecked(Vec vec, SpacedKmer<E, L>* out) no
  * with the Layout of the spaced k-mers that it extracts, and with its span.
  *
  * `M` is a bit extraction mask, table, or SIMD kernel, such as BitExtractMask,
- * BitExtractButterflyTable, or BitExtractKernelButterflyAVX2. As this derives from `M`, it can be
- * passed to the generic bit extraction functions as is. The spaced k-mer extraction functions on
- * the other hand only accept masks tagged this way, and use the tag as the Layout of the rolling
+ * BitExtractButterflyTable, or BitExtractKernelButterfly<SimdAVX2>. As this derives from `M`, it
+ * can be passed to the generic bit extraction functions as is. The spaced k-mer extraction functions
+ * on the other hand only accept masks tagged this way, and use the tag as the Layout of the rolling
  * window and of the emitted spaced k-mers. Hence, the bits of the mask have to be arranged for that
  * Layout.
  *

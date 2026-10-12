@@ -10,7 +10,7 @@ using namespace fisk;
 
 std::uint64_t run_var_simd_butterfly_table_scalar_by_mask(
     std::string const& seq,
-    SpacedKmerMask<Layout::kLSB, BitExtractKernelButterflyScalar> const& kernel,
+    SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdScalar>> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
