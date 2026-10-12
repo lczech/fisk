@@ -23,7 +23,8 @@ void bench_kmer_spaced_multi(
 // prepared once per mask set in bench.cpp and threaded in here, so that setup cost never enters
 // the timed region. Guarded to match the ISA availability of the kernel each one benchmarks (see
 // fisk/core/intrinsics.hpp). The ones taking spaced k-mer masks are overloaded for both Layouts,
-// defined in var_msb_*.cpp and var_lsb_*.cpp, respectively.
+// defined in var_msb_*.cpp and var_lsb_*.cpp, respectively. The ones taking a dispatcher create
+// their sink inside of its run(), see BitExtractKernelDispatcher::run().
 std::uint64_t run_var_naive(
     std::string const& seq,
     std::size_t k,

@@ -17,16 +17,18 @@ std::uint64_t run_var_simd_butterfly_table_avx2_by_mask(
     > const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    auto sink = make_sink(sink_buffer);
+    std::uint64_t result = 0;
     kernel.run([&](auto const& kernels_arr) {
+        auto sink = make_sink(sink_buffer);
         for_each_spaced_kmer_simd_by_mask(
             std::string_view(seq), kernels_arr, CharEncoderTable<Encoding::kACGT>{},
             [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& wmer) {
                 sink.consume(kmer_value(wmer));
             }
         );
+        result = sink.finalize();
     });
-    return sink.finalize();
+    return result;
 }
 
 #endif // FISK_HAS_AVX2

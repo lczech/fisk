@@ -384,6 +384,11 @@ public:
      * `F` must be invocable with a single argument of type `std::array<Kernel, N> const&`
      * for all N in [1..16], because std::visit requires the visitor to be valid for every
      * alternative. The return type of @p f is forwarded back to the caller.
+     *
+     * State that is updated per extracted value, such as an accumulator, should be created inside
+     * of `f`, and only its result be passed out. Captured by reference instead, it is only
+     * reachable through a pointer in the out-of-line alternatives of std::visit, so that every
+     * update goes through memory, which can make the extraction several times slower.
      */
     template <class F>
     decltype(auto) run(F&& f) const
