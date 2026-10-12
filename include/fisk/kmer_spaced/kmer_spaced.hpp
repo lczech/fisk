@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cassert>
 #include <string>
 #include <string_view>
 #include <cstdint>
@@ -535,11 +536,14 @@ inline void for_each_spaced_kmer_(
     std::size_t const seq_len = seq.size();
     char const*       data    = seq.data();
 
-    // Full-span rolling mask for MSB: low 2*k bits are used, overhang from shift is removed.
-    // For LSB, new bases are shifted in at the top of the span instead, and shifted out below.
-    std::uint64_t const span_mask = (span_k == 32)
-        ? ~std::uint64_t{0}
-        : ((std::uint64_t{1} << (2 * span_k)) - 1u);
+    // MSB shifts new bases in at the bottom, and keeps the old ones above the span, as the bit
+    // extraction and the validity check below only look at the bits of the mask. Hence, the masks
+    // must not have bits above the span, and `bit_ext` must ignore all bits outside of the mask.
+    // LSB shifts new bases in at the top of the span instead, and shifts them out below.
+    for_each_mask(masks, [&]([[maybe_unused]] auto const& mask) {
+        assert(is_valid_spaced_kmer_mask(mask));
+        assert(bit_ext(~std::uint64_t{0}, mask) == bit_ext(spaced_kmer_mask_bits_(mask), mask));
+    });
     std::size_t const top_shift = 2 * (span_k - 1);
 
     // The sequence is scanned as overlapping windows of length `k` (the full span).
@@ -562,9 +566,9 @@ inline void for_each_spaced_kmer_(
         // For invalid bases, the low 2 bits are irrelevant, because validity is tested
         // separately before emission.
         if constexpr (L == Layout::kMSB) {
-            kmer_bits = ((kmer_bits << 2) & span_mask) | (code & 0x03u);
+            kmer_bits = (kmer_bits << 2) | (code & 0x03u);
             valid_bits
-                = ((valid_bits << 2) & span_mask)
+                = (valid_bits << 2)
                 | (static_cast<std::uint64_t>(code < 4) * 0x03u)
             ;
         } else if constexpr (L == Layout::kLSB) {
@@ -616,7 +620,8 @@ inline void for_each_spaced_kmer_(
  *                  BitExtractMask, BitExtractBlockTable, or BitExtractButterflyTable.
  *                  Its span must be in [1, 32].
  * @param enc       Encoder functor.
- * @param bit_ext   Bit extraction functor, called as bit_ext(word, mask).
+ * @param bit_ext   Bit extraction functor, called as bit_ext(word, mask). It must ignore all bits
+ *                  of `word` outside of the mask, as PEXT and all fisk bit extraction functions do.
  * @param callback  Callback functor, called as callback(pos, mask_idx, spaced_kmer), or as
  *                  callback(pos, spaced_kmer). `pos` is the start index of the spaced k-mer's
  *                  span (into `seq`). See invoke_spaced_kmer_callback().

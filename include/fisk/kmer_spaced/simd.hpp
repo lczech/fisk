@@ -2,6 +2,7 @@
 
 #include <array>
 #include <bit>
+#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -32,25 +33,15 @@ namespace fisk {
     #define FISK_PRAGMA_UNROLL_16
 #endif
 
-// Return the mask that keeps the lowest 2 * span_k bits, for span_k in [1, 32].
-FISK_ALWAYS_INLINE
-inline std::uint64_t spaced_kmer_simd_span_mask_(std::size_t span_k)
-{
-    return (span_k == 32)
-        ? ~std::uint64_t{0}
-        : ((std::uint64_t{1} << (2 * span_k)) - 1u)
-    ;
-}
-
 // Shift the next character into the rolling k-mer, and its validity into the rolling valid bits,
-// in Layout `L`. MSB shifts in at the bottom and uses `span_mask` to remove the overhang, while
-// LSB shifts in at `top_shift`, i.e., the top of the span.
+// in Layout `L`. MSB shifts in at the bottom, and keeps the old bases above the span, as the bit
+// extraction and the validity check only look at the bits of the mask. LSB shifts in at
+// `top_shift`, i.e., the top of the span.
 template<Layout L, typename Enc>
 FISK_ALWAYS_INLINE
 inline void spaced_kmer_simd_shift_in_(
     char c,
     Enc&& enc,
-    std::uint64_t span_mask,
     std::size_t top_shift,
     std::uint64_t& rolling_kmer,
     std::uint64_t& rolling_valid_pos
@@ -64,8 +55,8 @@ inline void spaced_kmer_simd_shift_in_(
     // inline in the expression below made the by_mask extraction up to 30% slower with GCC 14.
     std::uint64_t const valid = static_cast<std::uint64_t>(code < 4) * 0x03u;
     if constexpr (L == Layout::kMSB) {
-        rolling_kmer      = ((rolling_kmer      << 2) & span_mask) | (code & 0x03u);
-        rolling_valid_pos = ((rolling_valid_pos << 2) & span_mask) | valid;
+        rolling_kmer      = (rolling_kmer      << 2) | (code & 0x03u);
+        rolling_valid_pos = (rolling_valid_pos << 2) | valid;
     } else if constexpr (L == Layout::kLSB) {
         rolling_kmer      = (rolling_kmer      >> 2) | (std::uint64_t{code & 0x03u} << top_shift);
         // rolling_valid_pos = (rolling_valid_pos >> 2) | (valid << top_shift);
@@ -86,7 +77,6 @@ inline void spaced_kmer_simd_tail_(
     std::string_view seq,
     std::size_t i,
     std::size_t span_k,
-    std::uint64_t span_mask,
     std::size_t top_shift,
     std::array<Kernel, NMasks> const& kernels,
     Enc&& enc,
@@ -96,7 +86,7 @@ inline void spaced_kmer_simd_tail_(
 ) {
     for (; i < seq.size(); ++i) {
         spaced_kmer_simd_shift_in_<Kernel::layout>(
-            seq[i], enc, span_mask, top_shift, rolling_kmer, rolling_valid_pos
+            seq[i], enc, top_shift, rolling_kmer, rolling_valid_pos
         );
 
         // Apply the callback for all masks that are satisfied at this position.
@@ -212,9 +202,12 @@ inline void for_each_spaced_kmer_simd_by_mask(
 ) {
     static_assert(NMasks > 0, "Need at least one kernel.");
 
-    // Input boundary checks, and mask to keep only the lowest 2*k bits.
+    // Input boundary checks. The masks must not have bits above the span, see
+    // spaced_kmer_simd_shift_in_().
     std::size_t const span_k = common_spaced_kmer_span_(kernels);
-    std::uint64_t const span_mask = spaced_kmer_simd_span_mask_(span_k);
+    for ([[maybe_unused]] auto const& kernel : kernels) {
+        assert(is_valid_spaced_kmer_mask(kernel));
+    }
     std::size_t const top_shift = 2 * (span_k - 1);
     if (seq.size() < span_k) {
         return;
@@ -249,7 +242,7 @@ inline void for_each_spaced_kmer_simd_by_mask(
         FISK_PRAGMA_UNROLL_16
         for (std::size_t lane = 0; lane < L; ++lane) {
             spaced_kmer_simd_shift_in_<Kernel::layout>(
-                data[i + lane], enc, span_mask, top_shift, rolling_kmer, rolling_valid_pos
+                data[i + lane], enc, top_shift, rolling_kmer, rolling_valid_pos
             );
             simd_buffer[lane] = rolling_kmer;
             simd_valids[lane] = rolling_valid_pos;
@@ -289,8 +282,7 @@ inline void for_each_spaced_kmer_simd_by_mask(
 
     // Tail loop for the final scalar remainder.
     spaced_kmer_simd_tail_(
-        seq, i, span_k, span_mask, top_shift, kernels, enc,
-        rolling_kmer, rolling_valid_pos, callback
+        seq, i, span_k, top_shift, kernels, enc, rolling_kmer, rolling_valid_pos, callback
     );
 }
 
@@ -364,7 +356,9 @@ inline void for_each_spaced_kmer_simd_by_position(
     static_assert(NMasks > 0, "Need at least one kernel.");
 
     std::size_t const span_k = common_spaced_kmer_span_(kernels);
-    std::uint64_t const span_mask = spaced_kmer_simd_span_mask_(span_k);
+    for ([[maybe_unused]] auto const& kernel : kernels) {
+        assert(is_valid_spaced_kmer_mask(kernel));
+    }
     std::size_t const top_shift = 2 * (span_k - 1);
     if (seq.size() < span_k) {
         return;
@@ -386,7 +380,7 @@ inline void for_each_spaced_kmer_simd_by_position(
         FISK_PRAGMA_UNROLL_16
         for (std::size_t lane = 0; lane < L; ++lane) {
             spaced_kmer_simd_shift_in_<Kernel::layout>(
-                data[i + lane], enc, span_mask, top_shift, rolling_kmer, rolling_valid_pos
+                data[i + lane], enc, top_shift, rolling_kmer, rolling_valid_pos
             );
             simd_buffer[lane] = rolling_kmer;
             simd_valids[lane] = rolling_valid_pos;
@@ -434,8 +428,7 @@ inline void for_each_spaced_kmer_simd_by_position(
 
     // Tail loop for the final scalar remainder, which is position-major by construction.
     spaced_kmer_simd_tail_(
-        seq, i, span_k, span_mask, top_shift, kernels, enc,
-        rolling_kmer, rolling_valid_pos, callback
+        seq, i, span_k, top_shift, kernels, enc, rolling_kmer, rolling_valid_pos, callback
     );
 }
 
