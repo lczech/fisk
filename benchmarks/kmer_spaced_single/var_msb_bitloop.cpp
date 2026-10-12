@@ -9,7 +9,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_bitloop(
+std::uint64_t run_var_bitloop(
     std::string const& seq,
     SpacedKmerMask<Layout::kMSB, BitExtractMask> const& mask,
     std::vector<std::uint64_t>& sink_buffer

@@ -11,7 +11,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_pext(
+std::uint64_t run_var_pext(
     std::string const& seq,
     std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>> const& masks,
     std::vector<std::uint64_t>& sink_buffer

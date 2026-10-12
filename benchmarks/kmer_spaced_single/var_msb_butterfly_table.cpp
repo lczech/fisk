@@ -9,7 +9,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_butterfly_table(
+std::uint64_t run_var_butterfly_table(
     std::string const& seq,
     SpacedKmerMask<Layout::kMSB, BitExtractButterflyTable> const& mask,
     std::vector<std::uint64_t>& sink_buffer

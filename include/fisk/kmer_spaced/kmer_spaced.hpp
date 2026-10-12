@@ -167,15 +167,20 @@ inline std::vector<SpacedKmerMask<L, M>> convert_spaced_kmer_masks_(
  *
  * Positions marked `1` are kept, `0` or `*` are skipped. The first and last position must be kept,
  * and the length of the string is the span of the mask, which must be in [1, 32]. Throws otherwise.
+ *
+ * The first position of the span is in the highest bits of the mask for kMSB, and in the lowest
+ * bits for kLSB, matching the rolling window of the extraction in that Layout. As bit extraction
+ * keeps the order of the bits, the kept bases then end up in that Layout as well.
  */
 template <Layout L = Layout::kMSB>
 inline SpacedKmerMask<L, BitExtractMask> make_spaced_kmer_mask(std::string const& mask)
 {
-    std::uint64_t const bits = parse_spaced_kmer_mask_(mask);
-
     SpacedKmerMask<L, BitExtractMask> result;
     if constexpr (L == Layout::kMSB) {
-        static_cast<BitExtractMask&>(result) = BitExtractMask(bits);
+        static_cast<BitExtractMask&>(result) = BitExtractMask(parse_spaced_kmer_mask_(mask));
+    } else if constexpr (L == Layout::kLSB) {
+        std::string const mirrored(mask.rbegin(), mask.rend());
+        static_cast<BitExtractMask&>(result) = BitExtractMask(parse_spaced_kmer_mask_(mirrored));
     } else {
         static_assert(dependent_false_v<L>, "Unhandled Layout in make_spaced_kmer_mask()");
     }
@@ -310,9 +315,8 @@ inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k 
         throw std::invalid_argument( "Invalid spaced k-mer mask size not in [1,32]" );
     }
 
-    // Check that the first and last positions are kept (11).
-    // Position 0 in the span corresponds to the highest 2-bit lane,
-    // position span_k-1 to the lowest 2-bit lane.
+    // Check that the first and last positions are kept (11), i.e., the highest and lowest 2-bit
+    // lane of the span, in either order depending on the Layout.
     bool const first_kept = ((mask >> (2 * (k - 1))) & 0x3u) == 0x3u;
     bool const last_kept  = (mask & 0x3u) == 0x3u;
     if (!first_kept || !last_kept) {
@@ -360,6 +364,9 @@ inline std::string spaced_kmer_mask_string(Mask const& mask)
     std::uint64_t const bits = spaced_kmer_mask_bits_(mask);
     if constexpr (Mask::layout == Layout::kMSB) {
         return format_spaced_kmer_mask_(bits, mask.span_k);
+    } else if constexpr (Mask::layout == Layout::kLSB) {
+        std::string const mirrored = format_spaced_kmer_mask_(bits, mask.span_k);
+        return std::string(mirrored.rbegin(), mirrored.rend());
     } else {
         static_assert(
             dependent_false_v<Mask::layout>, "Unhandled Layout in spaced_kmer_mask_string()"
@@ -528,10 +535,12 @@ inline void for_each_spaced_kmer_(
     std::size_t const seq_len = seq.size();
     char const*       data    = seq.data();
 
-    // Full-span rolling mask: low 2*k bits are used, overhang from shift is removed.
+    // Full-span rolling mask for MSB: low 2*k bits are used, overhang from shift is removed.
+    // For LSB, new bases are shifted in at the top of the span instead, and shifted out below.
     std::uint64_t const span_mask = (span_k == 32)
         ? ~std::uint64_t{0}
         : ((std::uint64_t{1} << (2 * span_k)) - 1u);
+    std::size_t const top_shift = 2 * (span_k - 1);
 
     // The sequence is scanned as overlapping windows of length `k` (the full span).
     // A rolling 2-bit packed representation of the span is maintained in `kmer_bits`.
@@ -557,6 +566,12 @@ inline void for_each_spaced_kmer_(
             valid_bits
                 = ((valid_bits << 2) & span_mask)
                 | (static_cast<std::uint64_t>(code < 4) * 0x03u)
+            ;
+        } else if constexpr (L == Layout::kLSB) {
+            kmer_bits = (kmer_bits >> 2) | (std::uint64_t{code & 0x03u} << top_shift);
+            valid_bits
+                = (valid_bits >> 2)
+                | ((static_cast<std::uint64_t>(code < 4) * 0x03u) << top_shift)
             ;
         } else {
             static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_spaced_kmer_()");

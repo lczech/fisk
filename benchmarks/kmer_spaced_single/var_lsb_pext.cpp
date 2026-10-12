@@ -1,0 +1,29 @@
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+#include "fisk/core/char_encoder.hpp"
+#include "fisk/kmer_spaced/kmer_spaced.hpp"
+#include "kmer_spaced_single/bench.hpp"
+
+#if defined(FISK_HAS_BMI2)
+
+using namespace fisk;
+
+std::uint64_t run_var_pext(
+    std::string const& seq,
+    SpacedKmerMask<Layout::kLSB, BitExtractMask> const& mask,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
+    for_each_spaced_kmer(
+        std::string_view(seq), mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_pext,
+        [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer) {
+            sink.consume(kmer_value(spaced_kmer));
+        }
+    );
+    return sink.finalize();
+}
+
+#endif // FISK_HAS_BMI2

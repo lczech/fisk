@@ -10,7 +10,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_simd_block_table_avx2_by_mask(
+std::uint64_t run_var_simd_block_table_avx2_by_mask(
     std::string const& seq,
     SpacedKmerMask<Layout::kMSB, BitExtractKernelBlockAVX2<>> const& kernel,
     std::vector<std::uint64_t>& sink_buffer

@@ -9,7 +9,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_block_table_unrolled4(
+std::uint64_t run_var_block_table_unrolled4(
     std::string const& seq,
     std::vector<SpacedKmerMask<Layout::kMSB, BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer

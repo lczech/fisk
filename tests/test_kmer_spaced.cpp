@@ -39,8 +39,9 @@ struct SpacedEvent
 };
 
 // Builds the public spaced-k-mer contract from characters, without any rolling word or bit-extract
-// helper: each output event is (full-span start position, mask index, packed selected bases).
-template <Encoding E>
+// helper: each output event is (full-span start position, mask index, packed selected bases), with
+// the first selected base in the highest bits for MSB, and in the lowest bits for LSB.
+template <Encoding E, Layout L>
 static std::vector<SpacedEvent> oracle_events(
     std::string const& seq, std::vector<std::string> const& masks
 ) {
@@ -53,6 +54,7 @@ static std::vector<SpacedEvent> oracle_events(
     for (std::size_t pos = 0; pos + span_k <= seq.size(); ++pos) {
         for (std::size_t mask_idx = 0; mask_idx < masks.size(); ++mask_idx) {
             std::uint64_t value = 0;
+            std::size_t kept = 0;
             bool valid = true;
             for (std::size_t i = 0; i < span_k; ++i) {
                 if (masks[mask_idx][i] != '1') {
@@ -63,7 +65,12 @@ static std::vector<SpacedEvent> oracle_events(
                     valid = false;
                     break;
                 }
-                value = (value << 2) | code;
+                if constexpr (L == Layout::kMSB) {
+                    value = (value << 2) | code;
+                } else {
+                    value |= std::uint64_t{code} << (2 * kept);
+                }
+                ++kept;
             }
             if (valid) {
                 out.push_back({pos, mask_idx, value});
@@ -231,17 +238,21 @@ static std::string mask_for_span(std::size_t span_k)
 // Runs `extract`, called as `extract(callback)`, once with a `callback(pos, mask_idx, value)`, and,
 // if SingleMask, once more with the `callback(pos, value)` shorthand, which is only accepted for a
 // single mask known at compile time (see invoke_spaced_kmer_callback()). Returns the events of
-// each run, to be checked against the same expected events.
-template <bool SingleMask, typename Extract>
+// each run, to be checked against the same expected events. The spaced k-mers have to be in `L`.
+template <Layout L, bool SingleMask, typename Extract>
 static std::vector<std::vector<SpacedEvent>> collect_callback_forms(Extract&& extract)
 {
     std::vector<std::vector<SpacedEvent>> runs(1);
     extract([&](std::size_t pos, std::size_t mask_idx, auto const& value) {
+        static_assert(std::remove_cvref_t<decltype(value)>::layout == L);
         runs[0].push_back({pos, mask_idx, kmer_value(value)});
     });
     if constexpr (SingleMask) {
         runs.emplace_back();
-        extract([&](std::size_t pos, auto const& value) { runs[1].push_back({pos, 0, kmer_value(value)}); });
+        extract([&](std::size_t pos, auto const& value) {
+            static_assert(std::remove_cvref_t<decltype(value)>::layout == L);
+            runs[1].push_back({pos, 0, kmer_value(value)});
+        });
     }
     return runs;
 }
@@ -261,8 +272,8 @@ static void check_scalar_variant(
 ) {
     std::size_t const span_k = mask_strings.front().size();
     for (auto const& seq : sequence_corpus(span_k, 8)) {
-        auto const expected = oracle_events<Enc::encoding>(seq, mask_strings);
-        auto const runs = collect_callback_forms<false>([&](auto const& callback) {
+        auto const expected = oracle_events<Enc::encoding, Mask::layout>(seq, mask_strings);
+        auto const runs = collect_callback_forms<Mask::layout, false>([&](auto const& callback) {
             for_each_spaced_kmer(seq, masks, enc, bit_extract, callback);
         });
         for (auto const& got : runs) {
@@ -270,9 +281,11 @@ static void check_scalar_variant(
         }
 
         if (masks.size() == 1) {
-            auto const single_runs = collect_callback_forms<true>([&](auto const& callback) {
-                for_each_spaced_kmer(seq, masks.front(), enc, bit_extract, callback);
-            });
+            auto const single_runs = collect_callback_forms<Mask::layout, true>(
+                [&](auto const& callback) {
+                    for_each_spaced_kmer(seq, masks.front(), enc, bit_extract, callback);
+                }
+            );
             for (auto const& got : single_runs) {
                 check_events(got, expected);
             }
@@ -280,11 +293,11 @@ static void check_scalar_variant(
     }
 }
 
-template <typename Enc>
+template <Layout L, typename Enc>
 static void check_all_scalar_variants(
     std::vector<std::string> const& mask_strings, Enc const& enc
 ) {
-    auto const direct_masks = make_spaced_kmer_masks(mask_strings);
+    auto const direct_masks = make_spaced_kmer_masks<L>(mask_strings);
     auto const block_masks = make_spaced_kmer_block_tables(direct_masks);
     auto const butterfly_masks = make_spaced_kmer_butterfly_tables(direct_masks);
 
@@ -335,25 +348,29 @@ static void check_all_scalar_variants(
     #endif
 }
 
-template <typename Enc>
-static void check_scalar_all_spans(Enc const& enc)
+template <Layout L, typename Enc>
+static void check_scalar_masks(Enc const& enc)
 {
     for (std::size_t span_k = 1; span_k <= 32; ++span_k) {
-        check_all_scalar_variants(std::vector<std::string>{mask_for_span(span_k)}, enc);
+        check_all_scalar_variants<L>(std::vector<std::string>{mask_for_span(span_k)}, enc);
     }
+    check_all_scalar_variants<L>({"1"}, enc);
+    check_all_scalar_variants<L>({"10101", "11111", "10001"}, enc);
+    check_all_scalar_variants<L>({"11011", "11101", "10111"}, enc);
+    check_all_scalar_variants<L>({"10000000000000000000000000000001"}, enc);
 }
 
 // =================================================================================================
 //     SIMD Extraction
 // =================================================================================================
 
-template <typename Kernel, std::size_t N>
-static std::array<SpacedKmerMask<Layout::kMSB, Kernel>, N> make_kernels(
+template <typename Kernel, Layout L, std::size_t N>
+static std::array<SpacedKmerMask<L, Kernel>, N> make_kernels(
     std::array<std::string, N> const& masks
 ) {
-    std::array<SpacedKmerMask<Layout::kMSB, Kernel>, N> kernels{};
+    std::array<SpacedKmerMask<L, Kernel>, N> kernels{};
     for (std::size_t i = 0; i < N; ++i) {
-        kernels[i] = make_spaced_kmer_kernel<Kernel>(masks[i]);
+        kernels[i] = make_spaced_kmer_kernel<Kernel, L>(masks[i]);
     }
     return kernels;
 }
@@ -361,23 +378,23 @@ static std::array<SpacedKmerMask<Layout::kMSB, Kernel>, N> make_kernels(
 // Checks both SIMD emission orders for one set of masks, for every sequence in the corpus: exact
 // order for by_position, and per-mask order for by_mask (see check_by_mask_events()). For a single
 // mask, also through the single-kernel overloads.
-template <typename Kernel, std::size_t N, typename Enc>
+template <typename Kernel, Layout L, std::size_t N, typename Enc>
 static void check_simd_set(std::array<std::string, N> const& mask_array, Enc const& enc)
 {
     std::vector<std::string> const masks = to_vector(mask_array);
-    auto const kernels = make_kernels<Kernel>(mask_array);
+    auto const kernels = make_kernels<Kernel, L>(mask_array);
     std::size_t const span_k = masks.front().size();
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
-        auto const expected = oracle_events<Enc::encoding>(seq, masks);
+        auto const expected = oracle_events<Enc::encoding, L>(seq, masks);
 
-        auto const by_position = collect_callback_forms<N == 1>([&](auto const& callback) {
+        auto const by_position = collect_callback_forms<L, N == 1>([&](auto const& callback) {
             for_each_spaced_kmer_simd_by_position(seq, kernels, enc, callback);
         });
         for (auto const& got : by_position) {
             check_events(got, expected);
         }
-        auto const by_mask = collect_callback_forms<N == 1>([&](auto const& callback) {
+        auto const by_mask = collect_callback_forms<L, N == 1>([&](auto const& callback) {
             for_each_spaced_kmer_simd_by_mask(seq, kernels, enc, callback);
         });
         for (auto const& got : by_mask) {
@@ -385,13 +402,15 @@ static void check_simd_set(std::array<std::string, N> const& mask_array, Enc con
         }
 
         if constexpr (N == 1) {
-            auto const single_by_position = collect_callback_forms<true>([&](auto const& callback) {
-                for_each_spaced_kmer_simd_by_position(seq, kernels[0], enc, callback);
-            });
+            auto const single_by_position = collect_callback_forms<L, true>(
+                [&](auto const& callback) {
+                    for_each_spaced_kmer_simd_by_position(seq, kernels[0], enc, callback);
+                }
+            );
             for (auto const& got : single_by_position) {
                 check_events(got, expected);
             }
-            auto const single_by_mask = collect_callback_forms<true>([&](auto const& callback) {
+            auto const single_by_mask = collect_callback_forms<L, true>([&](auto const& callback) {
                 for_each_spaced_kmer_simd_by_mask(seq, kernels[0], enc, callback);
             });
             for (auto const& got : single_by_mask) {
@@ -401,28 +420,35 @@ static void check_simd_set(std::array<std::string, N> const& mask_array, Enc con
     }
 }
 
-template <typename Kernel>
-static void check_simd_kernel()
+template <typename Kernel, Layout L>
+static void check_simd_kernel_in_layout()
 {
     for (std::size_t span_k = 1; span_k <= 32; ++span_k) {
-        check_simd_set<Kernel>(
+        check_simd_set<Kernel, L>(
             std::array<std::string, 1>{mask_for_span(span_k)},
             CharEncoderTable<Encoding::kACGT>{}
         );
     }
-    check_simd_set<Kernel>(generated_masks<3>(), CharEncoderTable<Encoding::kACGT>{});
+    check_simd_set<Kernel, L>(generated_masks<3>(), CharEncoderTable<Encoding::kACGT>{});
 }
 
 template <typename Kernel>
-static void check_simd_dispatcher(std::vector<std::string> const& masks)
+static void check_simd_kernel()
 {
-    BitExtractKernelDispatcher<SpacedKmerMask<Layout::kMSB, Kernel>> const dispatcher(
-        make_spaced_kmer_kernels<Kernel>(make_spaced_kmer_masks(masks))
+    check_simd_kernel_in_layout<Kernel, Layout::kMSB>();
+    check_simd_kernel_in_layout<Kernel, Layout::kLSB>();
+}
+
+template <typename Kernel, Layout L>
+static void check_simd_dispatcher_in_layout(std::vector<std::string> const& masks)
+{
+    BitExtractKernelDispatcher<SpacedKmerMask<L, Kernel>> const dispatcher(
+        make_spaced_kmer_kernels<Kernel>(make_spaced_kmer_masks<L>(masks))
     );
     std::size_t const span_k = masks.front().size();
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
-        auto const expected = oracle_events<Encoding::kACGT>(seq, masks);
+        auto const expected = oracle_events<Encoding::kACGT, L>(seq, masks);
         std::vector<SpacedEvent> by_position;
         dispatcher.run([&](auto const& kernels) {
             for_each_spaced_kmer_simd_by_position(
@@ -445,6 +471,13 @@ static void check_simd_dispatcher(std::vector<std::string> const& masks)
         });
         check_by_mask_events(by_mask, expected, masks.size());
     }
+}
+
+template <typename Kernel>
+static void check_simd_dispatcher(std::vector<std::string> const& masks)
+{
+    check_simd_dispatcher_in_layout<Kernel, Layout::kMSB>(masks);
+    check_simd_dispatcher_in_layout<Kernel, Layout::kLSB>(masks);
 }
 
 // =================================================================================================
@@ -487,6 +520,11 @@ static_assert(!std::is_aggregate_v<SpacedKmerMask<Layout::kMSB, BitExtractMask>>
 static_assert(CanExtractWith<SpacedKmerMask<Layout::kMSB, BitExtractMask>>);
 static_assert(!CanExtractWith<BitExtractMask>);
 static_assert(decltype(make_spaced_kmer_mask("1"))::layout == Layout::kMSB);
+static_assert(decltype(make_spaced_kmer_mask<Layout::kLSB>("1"))::layout == Layout::kLSB);
+static_assert(std::is_same_v<
+    decltype(make_spaced_kmer_kernel<BitExtractKernelButterflyScalar, Layout::kLSB>("1")),
+    SpacedKmerMask<Layout::kLSB, BitExtractKernelButterflyScalar>
+>);
 static_assert(!CanReverse<SpacedKmerAcgtMsb> && !CanReverseComplement<SpacedKmerAcgtMsb>);
 static_assert(!CanCanonical<SpacedKmerAcgtMsb>);
 
@@ -672,6 +710,10 @@ static_assert(std::is_same_v<
     decltype(spaced_kmer_encode<Encoding::kACTG>("A", make_spaced_kmer_mask("1"))),
     SpacedKmerActgMsb
 >);
+static_assert(std::is_same_v<
+    decltype(spaced_kmer_encode("A", make_spaced_kmer_mask<Layout::kLSB>("1"))),
+    SpacedKmerAcgtLsb
+>);
 static_assert(!DecodableWithMask<KmerAcgtMsb>);
 
 TEST(SpacedKmer, EncodeWithMaskDefaults)
@@ -701,6 +743,16 @@ TEST(SpacedKmer, DecodeWithMask)
         spaced_kmer_encode<Encoding::kACTG>("ACGTA", mask),
         spaced_kmer_encode<SpacedKmerActgMsb>("ACGTA", "10101")
     );
+
+    // An LSB mask encodes to an LSB spaced k-mer, but shows the same span.
+    auto const lsb_kmer = spaced_kmer_encode<SpacedKmerAcgtLsb>("ACGTT", "11001");
+    auto const lsb_mask = make_spaced_kmer_mask<Layout::kLSB>("11001");
+    auto const lsb_kernel = make_spaced_kmer_kernel<BitExtractKernelButterflyScalar>(lsb_mask);
+    EXPECT_EQ(spaced_kmer_encode("ACGTT", lsb_mask), lsb_kmer);
+    EXPECT_EQ(spaced_kmer_encode("ACGTT", lsb_kernel), lsb_kmer);
+    EXPECT_EQ(spaced_kmer_decode(lsb_kmer, lsb_mask), "AC--T");
+    EXPECT_EQ(spaced_kmer_decode(lsb_kmer, lsb_kernel), "AC--T");
+    EXPECT_EQ(kmer_value(lsb_kmer), std::uint64_t{0x34});
 
     EXPECT_THROW((void) spaced_kmer_decode(kmer, ""), std::invalid_argument);
     EXPECT_THROW((void) spaced_kmer_decode(kmer, "01101"), std::invalid_argument);
@@ -757,15 +809,16 @@ TEST(KmerSpaced, Weight)
     EXPECT_ANY_THROW(spaced_kmer_weight(std::string("010")));
 }
 
-// Emitted values are typed k-mers under the encoder's encoding and MSB layout. Decoding one with the
-// weight of its mask must give exactly the bases kept by that mask, with no bits above the weight,
-// and it must equal spaced_kmer_encode() of the same window and mask, given as string or as the
-// tagged mask used for extraction. Decoding it with its mask gives the window, with gaps.
-TEST(KmerSpaced, EmittedKmersAreTypedAndDecodeToKeptBases)
+// Emitted values are typed k-mers under the encoder's encoding and the mask's layout. Decoding one
+// with the weight of its mask must give exactly the bases kept by that mask, with no bits above the
+// weight, and it must equal spaced_kmer_encode() of the same window and mask, given as string or as
+// the tagged mask used for extraction. Decoding it with its mask gives the window, with gaps.
+template <Layout L>
+static void check_emitted_kmers()
 {
     std::vector<std::string> const mask_strings = {"1011", "1001"};
     std::size_t const span_k = 4;
-    auto const masks = make_spaced_kmer_masks(mask_strings);
+    auto const masks = make_spaced_kmer_masks<L>(mask_strings);
 
     std::size_t emitted = 0;
     for (auto const& seq : sequence_corpus(span_k, 8)) {
@@ -773,11 +826,10 @@ TEST(KmerSpaced, EmittedKmersAreTypedAndDecodeToKeptBases)
             std::string_view(seq), masks, CharEncoderTable<Encoding::kACGT>{},
             bit_extract_bitloop,
             [&](std::size_t pos, std::size_t mask_idx, auto const& kmer) {
-                static_assert(
-                    std::is_same_v<std::remove_cvref_t<decltype(kmer)>, SpacedKmerAcgtMsb>
-                );
+                using K = SpacedKmer<Encoding::kACGT, L>;
+                static_assert(std::is_same_v<std::remove_cvref_t<decltype(kmer)>, K>);
                 auto const window = seq.substr(pos, span_k);
-                EXPECT_EQ(kmer, spaced_kmer_encode(window, mask_strings[mask_idx]));
+                EXPECT_EQ(kmer, spaced_kmer_encode<K>(window, mask_strings[mask_idx]));
                 EXPECT_EQ(kmer, spaced_kmer_encode(window, masks[mask_idx]));
 
                 auto const weight = spaced_kmer_weight(mask_strings[mask_idx]);
@@ -802,6 +854,51 @@ TEST(KmerSpaced, EmittedKmersAreTypedAndDecodeToKeptBases)
         );
     }
     EXPECT_TRUE(emitted > 0);
+}
+
+TEST(KmerSpaced, EmittedKmersAreTypedAndDecodeToKeptBases)
+{
+    check_emitted_kmers<Layout::kMSB>();
+    check_emitted_kmers<Layout::kLSB>();
+}
+
+// The same extraction in both layouts emits at the same positions, and each LSB spaced k-mer is
+// the layout conversion of the MSB one. The mask bits of both layouts only agree for palindromic
+// masks, while the values differ for any mask of weight above 1.
+TEST(KmerSpaced, LayoutsAgreeViaConversion)
+{
+    std::vector<std::string> const mask_strings = {"11101", "10101", "11011", "10001", "1100111"};
+    for (auto const& mask_string : mask_strings) {
+        auto const msb_mask = make_spaced_kmer_mask<Layout::kMSB>(mask_string);
+        auto const lsb_mask = make_spaced_kmer_mask<Layout::kLSB>(mask_string);
+        std::size_t const weight = spaced_kmer_weight(mask_string);
+        std::string const reversed(mask_string.rbegin(), mask_string.rend());
+        EXPECT_EQ(msb_mask.mask == lsb_mask.mask, reversed == mask_string);
+
+        bool any_differ = false;
+        for (auto const& seq : sequence_corpus(mask_string.size(), 8)) {
+            std::vector<std::pair<std::size_t, SpacedKmerAcgtMsb>> msb;
+            std::vector<std::pair<std::size_t, SpacedKmerAcgtLsb>> lsb;
+            for_each_spaced_kmer(
+                std::string_view(seq), msb_mask, CharEncoderTable<Encoding::kACGT>{},
+                bit_extract_bitloop,
+                [&](std::size_t pos, auto const& kmer) { msb.emplace_back(pos, kmer); }
+            );
+            for_each_spaced_kmer(
+                std::string_view(seq), lsb_mask, CharEncoderTable<Encoding::kACGT>{},
+                bit_extract_bitloop,
+                [&](std::size_t pos, auto const& kmer) { lsb.emplace_back(pos, kmer); }
+            );
+
+            ASSERT_EQ(msb.size(), lsb.size());
+            for (std::size_t i = 0; i < msb.size(); ++i) {
+                EXPECT_EQ(msb[i].first, lsb[i].first);
+                EXPECT_EQ(kmer_convert<Layout::kLSB>(msb[i].second, weight), lsb[i].second);
+                any_differ |= (kmer_value(msb[i].second) != kmer_value(lsb[i].second));
+            }
+        }
+        EXPECT_TRUE(any_differ);
+    }
 }
 
 // A mask that keeps every position is the contiguous k-mer, so the emitted spaced k-mers must match
@@ -841,6 +938,15 @@ TEST(KmerSpaced, MaskHelpers)
     EXPECT_EQ(make_spaced_kmer_mask(std::string(32, '1')).mask, ~std::uint64_t{0});
     EXPECT_EQ(make_spaced_kmer_mask(std::string(32, '1')).span_k, std::size_t{32});
 
+    // LSB masks are mirrored, with the first position of the span in the lowest bits.
+    EXPECT_EQ(make_spaced_kmer_mask<Layout::kLSB>("1011").mask, std::uint64_t{0xF3});
+    EXPECT_EQ(make_spaced_kmer_mask<Layout::kLSB>("1011").span_k, std::size_t{4});
+    EXPECT_EQ(make_spaced_kmer_mask<Layout::kLSB>("1101").mask, std::uint64_t{0xCF});
+    EXPECT_EQ(make_spaced_kmer_mask<Layout::kLSB>("1*1").mask, std::uint64_t{0x33});
+    EXPECT_EQ(make_spaced_kmer_mask<Layout::kLSB>(std::string(32, '1')).mask, ~std::uint64_t{0});
+    EXPECT_ANY_THROW(make_spaced_kmer_mask<Layout::kLSB>("010"));
+    EXPECT_ANY_THROW(make_spaced_kmer_mask<Layout::kLSB>("1x1"));
+
     EXPECT_ANY_THROW(spaced_kmer_mask_positions(""));
     EXPECT_ANY_THROW(spaced_kmer_mask_positions(std::string(33, '1')));
     EXPECT_ANY_THROW(spaced_kmer_mask_positions("010"));
@@ -856,10 +962,11 @@ TEST(KmerSpaced, MaskHelpers)
 
 // All representations of a mask carry the same Layout, span and bits, and the vector overloads
 // create the same masks as the single ones.
-TEST(KmerSpaced, MaskFactories)
+template <Layout L>
+static void check_mask_factories()
 {
     std::vector<std::string> const strings = {"1011", "1*0011"};
-    auto const masks = make_spaced_kmer_masks(strings);
+    auto const masks = make_spaced_kmer_masks<L>(strings);
     auto const butterfly_tables = make_spaced_kmer_butterfly_tables(masks);
     auto const block_tables = make_spaced_kmer_block_tables(masks);
     auto const kernels = make_spaced_kmer_kernels<BitExtractKernelBlockScalar<>>(masks);
@@ -867,12 +974,18 @@ TEST(KmerSpaced, MaskFactories)
 
     for (std::size_t i = 0; i < strings.size(); ++i) {
         auto const& mask = masks[i];
-        EXPECT_EQ(mask.mask, make_spaced_kmer_mask(strings[i]).mask);
+        EXPECT_EQ(mask.mask, make_spaced_kmer_mask<L>(strings[i]).mask);
         EXPECT_EQ(mask.span_k, strings[i].size());
 
-        auto const butterfly_table = make_spaced_kmer_butterfly_table(strings[i]);
-        auto const block_table = make_spaced_kmer_block_table(strings[i]);
-        auto const kernel = make_spaced_kmer_kernel<BitExtractKernelBlockScalar<>>(strings[i]);
+        auto const butterfly_table = make_spaced_kmer_butterfly_table<L>(strings[i]);
+        auto const block_table = make_spaced_kmer_block_table<L>(strings[i]);
+        auto const kernel = make_spaced_kmer_kernel<BitExtractKernelBlockScalar<>, L>(strings[i]);
+        static_assert(decltype(butterfly_table)::layout == L);
+        static_assert(decltype(block_table)::layout == L);
+        static_assert(decltype(kernel)::layout == L);
+        static_assert(std::remove_cvref_t<decltype(butterfly_tables[i])>::layout == L);
+        static_assert(std::remove_cvref_t<decltype(block_tables[i])>::layout == L);
+        static_assert(std::remove_cvref_t<decltype(kernels[i])>::layout == L);
         EXPECT_EQ(butterfly_table.span_k, mask.span_k);
         EXPECT_EQ(block_table.span_k, mask.span_k);
         EXPECT_EQ(kernel.span_k, mask.span_k);
@@ -893,14 +1006,22 @@ TEST(KmerSpaced, MaskFactories)
     }
 }
 
-TEST(KmerSpaced, MaskValidationAndFormatting)
+TEST(KmerSpaced, MaskFactories)
+{
+    check_mask_factories<Layout::kMSB>();
+    check_mask_factories<Layout::kLSB>();
+}
+
+// Valid masks are valid and print as their string in either layout.
+template <Layout L>
+static void check_mask_formatting()
 {
     std::vector<std::string> const valid_masks = {
-        "1", "101", "1*01", "11111", "10001",
+        "1", "101", "1*01", "1101", "11111", "10001",
         "10000000000000000000000000000001", std::string(32, '1')
     };
     for (auto const& mask_string : valid_masks) {
-        auto const mask = make_spaced_kmer_mask(mask_string);
+        auto const mask = make_spaced_kmer_mask<L>(mask_string);
         EXPECT_TRUE(is_valid_spaced_kmer_mask(mask));
         EXPECT_TRUE(is_valid_spaced_kmer_mask(mask.mask, mask_string.size()));
 
@@ -916,10 +1037,16 @@ TEST(KmerSpaced, MaskValidationAndFormatting)
 
     for (std::size_t span_k = 1; span_k <= 32; ++span_k) {
         std::string const mask_string = mask_for_span(span_k);
-        auto const mask = make_spaced_kmer_mask(mask_string);
+        auto const mask = make_spaced_kmer_mask<L>(mask_string);
         EXPECT_TRUE(is_valid_spaced_kmer_mask(mask));
         EXPECT_EQ(spaced_kmer_mask_string(mask), mask_string);
     }
+}
+
+TEST(KmerSpaced, MaskValidationAndFormatting)
+{
+    check_mask_formatting<Layout::kMSB>();
+    check_mask_formatting<Layout::kLSB>();
 
     EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0x3}, 2));
     EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0xD}, 2));
@@ -939,36 +1066,14 @@ TEST(KmerSpaced, MaskValidationAndFormatting)
 
 TEST(KmerSpaced, ScalarAcgt)
 {
-    check_scalar_all_spans(CharEncoderTable<Encoding::kACGT>{});
-    check_all_scalar_variants(
-        {"1"},
-        CharEncoderTable<Encoding::kACGT>{}
-    );
-    check_all_scalar_variants(
-        {"10101", "11111", "10001"},
-        CharEncoderTable<Encoding::kACGT>{}
-    );
-    check_all_scalar_variants(
-        {"10000000000000000000000000000001"},
-        CharEncoderTable<Encoding::kACGT>{}
-    );
+    check_scalar_masks<Layout::kMSB>(CharEncoderTable<Encoding::kACGT>{});
+    check_scalar_masks<Layout::kLSB>(CharEncoderTable<Encoding::kACGT>{});
 }
 
 TEST(KmerSpaced, ScalarActg)
 {
-    check_scalar_all_spans(CharEncoderTable<Encoding::kACTG>{});
-    check_all_scalar_variants(
-        {"1"},
-        CharEncoderTable<Encoding::kACTG>{}
-    );
-    check_all_scalar_variants(
-        {"10101", "11111", "10001"},
-        CharEncoderTable<Encoding::kACTG>{}
-    );
-    check_all_scalar_variants(
-        {"10000000000000000000000000000001"},
-        CharEncoderTable<Encoding::kACTG>{}
-    );
+    check_scalar_masks<Layout::kMSB>(CharEncoderTable<Encoding::kACTG>{});
+    check_scalar_masks<Layout::kLSB>(CharEncoderTable<Encoding::kACTG>{});
 }
 
 // The span is set by make_spaced_kmer_mask(), so an invalid one is only possible by setting it by
@@ -1133,9 +1238,12 @@ TEST(KmerSpacedSimd, DispatcherMaskCounts)
 // under both encodings; this verifies the generic SIMD outer loop forwards its encoder unchanged.
 TEST(KmerSpacedSimd, ActgForwarding)
 {
-    check_simd_set<BitExtractKernelButterflyScalar>(
-        std::array<std::string, 3>{"10101", "11111", "10001"},
-        CharEncoderTable<Encoding::kACTG>{}
+    std::array<std::string, 3> const masks{"10101", "11101", "10001"};
+    check_simd_set<BitExtractKernelButterflyScalar, Layout::kMSB>(
+        masks, CharEncoderTable<Encoding::kACTG>{}
+    );
+    check_simd_set<BitExtractKernelButterflyScalar, Layout::kLSB>(
+        masks, CharEncoderTable<Encoding::kACTG>{}
     );
 }
 
@@ -1174,6 +1282,12 @@ TEST(KmerSpacedSelector, ValidationAndAxes)
     }) {
         auto const mode = spaced_kmer_selector(masks, axis, 256);
         EXPECT_TRUE(mode_matches_axis(mode, axis));
+    }
+    auto const lsb_masks = make_spaced_kmer_masks<Layout::kLSB>({"11101", "11111"});
+    for (auto const axis : {
+        SpacedKmerAxis::kByMask, SpacedKmerAxis::kByPosition, SpacedKmerAxis::kEither
+    }) {
+        EXPECT_TRUE(mode_matches_axis(spaced_kmer_selector(lsb_masks, axis, 256), axis));
     }
 
     auto const mask = make_spaced_kmer_mask("10101");

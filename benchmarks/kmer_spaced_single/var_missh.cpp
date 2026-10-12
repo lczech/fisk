@@ -43,7 +43,7 @@ std::uint64_t compute_spaced_kmer_missh(
 
 } // namespace
 
-std::uint64_t run_var_msb_missh(
+std::uint64_t run_var_missh(
     std::string const& seq,
     std::size_t k,
     std::vector<std::size_t> const& naive_mask,

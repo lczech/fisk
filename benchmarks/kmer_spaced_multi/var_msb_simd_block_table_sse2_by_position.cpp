@@ -10,7 +10,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_simd_block_table_sse2_by_position(
+std::uint64_t run_var_simd_block_table_sse2_by_position(
     std::string const& seq,
     BitExtractKernelDispatcher<
         SpacedKmerMask<Layout::kMSB, BitExtractKernelBlockSSE2<>>

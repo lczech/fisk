@@ -119,7 +119,7 @@ Overview of the library headers (in `include/fisk/`), and their most important f
  - `kmer_extract/kmer_extract.hpp`: Basic extraction loop of k-mers from a sequence.
  - `kmer_extract/simd.hpp`: Block-wise variants of the rolling extraction: `for_each_kmer_simd()` encodes and validates 32 characters at a time with AVX2, and is about 5-25% faster than the rolling extraction on typical data; `for_each_kmer_swar()` is its portable counterpart without SIMD instructions.
  - `kmer_extract/packed.hpp`: K-mer extraction reading directly from an already-packed `PackedSequence` (`seq_pack.hpp`), instead of re-deriving codes from ASCII on every call.
- - `kmer_spaced/kmer_spaced.hpp`: Extraction loop for spaced k-mers from a sequence, templated with the bit extract function. Masks are created from a string of 1s and 0s via `make_spaced_kmer_mask()` and the related functions for the bit extraction tables (`make_spaced_kmer_butterfly_table()`, etc.).
+ - `kmer_spaced/kmer_spaced.hpp`: Extraction loop for spaced k-mers from a sequence, templated with the bit extract function. Masks are created from a string of 1s and 0s via `make_spaced_kmer_mask()` and the related functions for the bit extraction tables (`make_spaced_kmer_butterfly_table()`, etc.), for spaced k-mers in either `Layout` (e.g., `make_spaced_kmer_mask<Layout::kLSB>()`).
  - `kmer_spaced/simd.hpp`: SIMD variant of the spaced k-mer extraction, taking one of the `bit_extract/simd.hpp` kernels, created via `make_spaced_kmer_kernel()`.
  - `kmer_spaced/selector.hpp`: Helper that runs a quick benchmark to find the most performant spaced k-mer extraction algorithm for a given mask. Similar to `bit_extract/selector.hpp`.
 

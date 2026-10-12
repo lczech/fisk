@@ -43,13 +43,15 @@ inline std::uint64_t spaced_kmer_simd_span_mask_(std::size_t span_k)
 }
 
 // Shift the next character into the rolling k-mer, and its validity into the rolling valid bits,
-// in Layout `L`.
+// in Layout `L`. MSB shifts in at the bottom and uses `span_mask` to remove the overhang, while
+// LSB shifts in at `top_shift`, i.e., the top of the span.
 template<Layout L, typename Enc>
 FISK_ALWAYS_INLINE
 inline void spaced_kmer_simd_shift_in_(
     char c,
     Enc&& enc,
     std::uint64_t span_mask,
+    std::size_t top_shift,
     std::uint64_t& rolling_kmer,
     std::uint64_t& rolling_valid_pos
 ) {
@@ -64,6 +66,12 @@ inline void spaced_kmer_simd_shift_in_(
     if constexpr (L == Layout::kMSB) {
         rolling_kmer      = ((rolling_kmer      << 2) & span_mask) | (code & 0x03u);
         rolling_valid_pos = ((rolling_valid_pos << 2) & span_mask) | valid;
+    } else if constexpr (L == Layout::kLSB) {
+        rolling_kmer      = (rolling_kmer      >> 2) | (std::uint64_t{code & 0x03u} << top_shift);
+        // rolling_valid_pos = (rolling_valid_pos >> 2) | (valid << top_shift);
+        // Using alternative implementation here: faster with Clang, slightly slower with GCC.
+        rolling_valid_pos = (rolling_valid_pos >> 2)
+            | (static_cast<std::uint64_t>(code < 4) * (std::uint64_t{0x03u} << top_shift));
     } else {
         static_assert(dependent_false_v<L>, "Unhandled Layout in spaced_kmer_simd_shift_in_()");
     }
@@ -79,6 +87,7 @@ inline void spaced_kmer_simd_tail_(
     std::size_t i,
     std::size_t span_k,
     std::uint64_t span_mask,
+    std::size_t top_shift,
     std::array<Kernel, NMasks> const& kernels,
     Enc&& enc,
     std::uint64_t rolling_kmer,
@@ -87,7 +96,7 @@ inline void spaced_kmer_simd_tail_(
 ) {
     for (; i < seq.size(); ++i) {
         spaced_kmer_simd_shift_in_<Kernel::layout>(
-            seq[i], enc, span_mask, rolling_kmer, rolling_valid_pos
+            seq[i], enc, span_mask, top_shift, rolling_kmer, rolling_valid_pos
         );
 
         // Apply the callback for all masks that are satisfied at this position.
@@ -206,6 +215,7 @@ inline void for_each_spaced_kmer_simd_by_mask(
     // Input boundary checks, and mask to keep only the lowest 2*k bits.
     std::size_t const span_k = common_spaced_kmer_span_(kernels);
     std::uint64_t const span_mask = spaced_kmer_simd_span_mask_(span_k);
+    std::size_t const top_shift = 2 * (span_k - 1);
     if (seq.size() < span_k) {
         return;
     }
@@ -239,7 +249,7 @@ inline void for_each_spaced_kmer_simd_by_mask(
         FISK_PRAGMA_UNROLL_16
         for (std::size_t lane = 0; lane < L; ++lane) {
             spaced_kmer_simd_shift_in_<Kernel::layout>(
-                data[i + lane], enc, span_mask, rolling_kmer, rolling_valid_pos
+                data[i + lane], enc, span_mask, top_shift, rolling_kmer, rolling_valid_pos
             );
             simd_buffer[lane] = rolling_kmer;
             simd_valids[lane] = rolling_valid_pos;
@@ -279,7 +289,8 @@ inline void for_each_spaced_kmer_simd_by_mask(
 
     // Tail loop for the final scalar remainder.
     spaced_kmer_simd_tail_(
-        seq, i, span_k, span_mask, kernels, enc, rolling_kmer, rolling_valid_pos, callback
+        seq, i, span_k, span_mask, top_shift, kernels, enc,
+        rolling_kmer, rolling_valid_pos, callback
     );
 }
 
@@ -354,6 +365,7 @@ inline void for_each_spaced_kmer_simd_by_position(
 
     std::size_t const span_k = common_spaced_kmer_span_(kernels);
     std::uint64_t const span_mask = spaced_kmer_simd_span_mask_(span_k);
+    std::size_t const top_shift = 2 * (span_k - 1);
     if (seq.size() < span_k) {
         return;
     }
@@ -374,7 +386,7 @@ inline void for_each_spaced_kmer_simd_by_position(
         FISK_PRAGMA_UNROLL_16
         for (std::size_t lane = 0; lane < L; ++lane) {
             spaced_kmer_simd_shift_in_<Kernel::layout>(
-                data[i + lane], enc, span_mask, rolling_kmer, rolling_valid_pos
+                data[i + lane], enc, span_mask, top_shift, rolling_kmer, rolling_valid_pos
             );
             simd_buffer[lane] = rolling_kmer;
             simd_valids[lane] = rolling_valid_pos;
@@ -422,7 +434,8 @@ inline void for_each_spaced_kmer_simd_by_position(
 
     // Tail loop for the final scalar remainder, which is position-major by construction.
     spaced_kmer_simd_tail_(
-        seq, i, span_k, span_mask, kernels, enc, rolling_kmer, rolling_valid_pos, callback
+        seq, i, span_k, span_mask, top_shift, kernels, enc,
+        rolling_kmer, rolling_valid_pos, callback
     );
 }
 
