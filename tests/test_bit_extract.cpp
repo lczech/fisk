@@ -184,10 +184,10 @@ TEST(BitExtract, Pext)
 // =================================================================================================
 
 // All simd.hpp kernels share the same structural interface (a `simd_vector` type, a `lanes`
-// constant, static load()/store(), a bit_extract(simd_vector) SIMD path, a bit_extract_scalar()
-// scalar fallback path, and construction from a single uint64_t mask), so one generic helper
-// covers all of them. Checks both paths against the same bit_extract_oracle() used above, for
-// every mask in the shared edge-case + random mask set.
+// constant, static load()/store()/from_values(), a bit_extract(simd_vector) SIMD path, a
+// bit_extract_scalar() scalar fallback path, and construction from a single uint64_t mask), so
+// one generic helper covers all of them. Checks all paths against the same bit_extract_oracle()
+// used above, for every mask in the shared edge-case + random mask set.
 template <typename KernelType>
 static void check_kernel()
 {
@@ -225,6 +225,12 @@ static void check_kernel()
             auto const vec = KernelType::load(in_buf.data());
             auto const result = kernel.bit_extract(vec);
             KernelType::store(result, out_buf.data());
+            for (std::size_t i = 0; i < lanes; ++i) {
+                EXPECT_EQ(out_buf[i], bit_extract_oracle(in_buf[i], mask));
+            }
+
+            // Same via from_values(), which builds the vector from lane values.
+            KernelType::store(kernel.bit_extract(KernelType::from_values(in_buf)), out_buf.data());
             for (std::size_t i = 0; i < lanes; ++i) {
                 EXPECT_EQ(out_buf[i], bit_extract_oracle(in_buf[i], mask));
             }

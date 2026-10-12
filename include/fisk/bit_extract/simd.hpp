@@ -25,6 +25,7 @@ namespace fisk {
 // of one mask, and applies it to all lanes of a SIMD vector in parallel.
 //
 // The in and out arguments of load() and store() are expected to be aligned to the vector size.
+// For lane values held in registers, from_values() builds the vector without going through memory.
 // Besides bit_extract() on a whole SIMD vector, bit_extract_scalar() applies the algorithm to a
 // single uint64_t, such that the caller can process the tail of loop iterations with it.
 //
@@ -40,11 +41,13 @@ concept BitExtractKernel = requires(
     typename Kernel::simd_vector const v,
     std::uint64_t const* in,
     std::uint64_t* out,
-    std::uint64_t x
+    std::uint64_t x,
+    std::array<std::uint64_t, Kernel::lanes> values
 ) {
     { Kernel::lanes } -> std::convertible_to<std::size_t>;
     Kernel::load(in);
     Kernel::store(v, out);
+    Kernel::from_values(values);
     kernel.bit_extract(v);
     { kernel.bit_extract_scalar(x) } -> std::same_as<std::uint64_t>;
 } && std::constructible_from<Kernel, std::uint64_t>;
@@ -96,6 +99,11 @@ struct BitExtractKernelPEXT
         for (std::size_t i = 0; i < Lanes; ++i) {
             out[i] = v[i];
         }
+    }
+
+    static simd_vector from_values(simd_vector values) noexcept
+    {
+        return values;
     }
 
     simd_vector bit_extract(simd_vector const& x) const noexcept
@@ -166,6 +174,11 @@ struct BitExtractKernelButterfly
     static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
         Simd::store_aligned(v, out);
+    }
+
+    static simd_vector from_values(std::array<std::uint64_t, lanes> values) noexcept
+    {
+        return Simd::from_values(values);
     }
 
     simd_vector bit_extract(simd_vector x) const noexcept
@@ -246,6 +259,11 @@ struct BitExtractKernelBlock
     static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
         Simd::store_aligned(v, out);
+    }
+
+    static simd_vector from_values(std::array<std::uint64_t, lanes> values) noexcept
+    {
+        return Simd::from_values(values);
     }
 
     simd_vector bit_extract(simd_vector x) const noexcept

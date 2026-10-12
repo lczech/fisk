@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -18,7 +19,10 @@ namespace fisk {
 // kernels in bit_extract/simd.hpp, which implement an algorithm for a given arch. SimdScalar is
 // the trivial arch with a single lane, for the scalar variants of these kernels.
 //
-// Aligned loads and stores expect their memory to be aligned to the vector size.
+// Aligned loads and stores expect their memory to be aligned to the vector size. To build a vector
+// from lane values that are held in registers instead, use from_values(): going through memory
+// with several scalar stores and one vector load stalls the CPU on store forwarding. Conversely,
+// for data in memory, a vector load is a single instruction, and preferable to from_values().
 
 /**
  * @brief Concept for a SIMD arch, such as SimdAVX2.
@@ -30,12 +34,14 @@ concept SimdArch = requires(
     std::uint64_t const* in,
     std::uint64_t* out,
     char* bytes,
-    std::uint64_t value
+    std::uint64_t value,
+    std::array<std::uint64_t, Simd::lanes> values
 ) {
     { Simd::lanes } -> std::convertible_to<std::size_t>;
     Simd::load_aligned(in);
     Simd::load_unaligned(in);
     Simd::store_aligned(v, out);
+    Simd::from_values(values);
     Simd::broadcast(value);
     Simd::zero();
     Simd::bitwise_and(v, v);
@@ -86,6 +92,11 @@ struct SimdScalar
     // -------------------------------------------
     //     Construction
     // -------------------------------------------
+
+    static simd_vector from_values(std::array<std::uint64_t, lanes> values) noexcept
+    {
+        return values[0];
+    }
 
     static simd_vector broadcast(std::uint64_t value) noexcept
     {
@@ -193,6 +204,14 @@ struct SimdSSE2
     // -------------------------------------------
     //     Construction
     // -------------------------------------------
+
+    static simd_vector from_values(std::array<std::uint64_t, lanes> values) noexcept
+    {
+        return _mm_set_epi64x(
+            static_cast<long long>(values[1]),
+            static_cast<long long>(values[0])
+        );
+    }
 
     static simd_vector broadcast(std::uint64_t value) noexcept
     {
@@ -322,6 +341,14 @@ struct SimdAVX2
     //     Construction
     // -------------------------------------------
 
+    static simd_vector from_values(std::array<std::uint64_t, lanes> values) noexcept
+    {
+        return _mm256_set_epi64x(
+            static_cast<long long>(values[3]), static_cast<long long>(values[2]),
+            static_cast<long long>(values[1]), static_cast<long long>(values[0])
+        );
+    }
+
     static simd_vector broadcast(std::uint64_t value) noexcept
     {
         static_assert(sizeof(long long) >= sizeof(std::uint64_t));
@@ -450,6 +477,16 @@ struct SimdAVX512
     // -------------------------------------------
     //     Construction
     // -------------------------------------------
+
+    static simd_vector from_values(std::array<std::uint64_t, lanes> values) noexcept
+    {
+        return _mm512_set_epi64(
+            static_cast<long long>(values[7]), static_cast<long long>(values[6]),
+            static_cast<long long>(values[5]), static_cast<long long>(values[4]),
+            static_cast<long long>(values[3]), static_cast<long long>(values[2]),
+            static_cast<long long>(values[1]), static_cast<long long>(values[0])
+        );
+    }
 
     static simd_vector broadcast(std::uint64_t value) noexcept
     {
@@ -597,6 +634,14 @@ struct SimdNEON
     // -------------------------------------------
     //     Construction
     // -------------------------------------------
+
+    static simd_vector from_values(std::array<std::uint64_t, lanes> values) noexcept
+    {
+        return vcombine_u64(
+            vcreate_u64(values[0]),
+            vcreate_u64(values[1])
+        );
+    }
 
     static simd_vector broadcast(std::uint64_t value) noexcept
     {

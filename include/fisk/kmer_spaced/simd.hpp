@@ -67,6 +67,29 @@ inline void spaced_kmer_simd_shift_in_(
     }
 }
 
+// Shift the next `lanes` characters of `data` into the rolling k-mer and its valid bits, and keep
+// each intermediate state in its lane, for the SIMD extraction functions below.
+template<typename Kernel, typename Enc>
+FISK_ALWAYS_INLINE
+inline void spaced_kmer_simd_fill_lanes_(
+    char const* data,
+    Enc&& enc,
+    std::size_t top_shift,
+    std::uint64_t& rolling_kmer,
+    std::uint64_t& rolling_valid_pos,
+    std::array<std::uint64_t, Kernel::lanes>& lane_kmers,
+    std::uint64_t (&lane_valids)[Kernel::lanes]
+) {
+    FISK_PRAGMA_UNROLL_16
+    for (std::size_t lane = 0; lane < Kernel::lanes; ++lane) {
+        spaced_kmer_simd_shift_in_<Kernel::layout>(
+            data[lane], enc, top_shift, rolling_kmer, rolling_valid_pos
+        );
+        lane_kmers[lane]  = rolling_kmer;
+        lane_valids[lane] = rolling_valid_pos;
+    }
+}
+
 // Process the remaining characters of `seq`, starting at `i`, that do not fill a whole SIMD
 // block, one position at a time. This is position-major by construction, and hence used for
 // both the by_mask and the by_position variants.
@@ -208,10 +231,12 @@ inline void for_each_spaced_kmer_simd_by_mask(
     char const*       data    = seq.data();
     std::size_t const seq_len = seq.size();
 
-    // Set up input and output buffers to transfer to and from the simd kernel.
+    // Set up the lane k-mers and their valid bits, and the output buffer of the simd kernel.
+    // The lane k-mers are held in registers, see Kernel::from_values().
     constexpr std::size_t L = Kernel::lanes;
-    alignas(64) std::uint64_t simd_buffer[L];
+    std::array<std::uint64_t, L> lane_kmers;
     alignas(64) std::uint64_t simd_valids[L];
+    alignas(64) std::uint64_t simd_buffer[L];
 
     // Sliding window kmer along the sequence, and its valid positions
     std::uint64_t rolling_kmer      = 0;
@@ -227,19 +252,10 @@ inline void for_each_spaced_kmer_simd_by_mask(
         // That is, `rolling_kmer` is our rolling k-mer, and in each iteration here
         // its current state (corresponding to one k-mer along the input sequence)
         // gets copied into one of the lanes, until all lanes are filled. Same for the valid bits.
-        // Note: This loop is kept inline on purpose. Moving it into a separate helper function
-        // made GCC produce about 14% slower code for single masks with SSE2.
-        FISK_PRAGMA_UNROLL_16
-        for (std::size_t lane = 0; lane < L; ++lane) {
-            spaced_kmer_simd_shift_in_<Kernel::layout>(
-                data[i + lane], enc, top_shift, rolling_kmer, rolling_valid_pos
-            );
-            simd_buffer[lane] = rolling_kmer;
-            simd_valids[lane] = rolling_valid_pos;
-        }
-
-        // Load vector lanes once from all stored kmers.
-        simd_vector const x = Kernel::load(simd_buffer);
+        spaced_kmer_simd_fill_lanes_<Kernel>(
+            data + i, enc, top_shift, rolling_kmer, rolling_valid_pos, lane_kmers, simd_valids
+        );
+        simd_vector const x = Kernel::from_values(lane_kmers);
 
         // Start position of the spaced k-mer in lane 0. This underflows in the first block(s)
         // while i < span_k - 1. That is fine: a lane can only be valid once span_k characters
@@ -358,7 +374,7 @@ inline void for_each_spaced_kmer_simd_by_position(
     char const*       data    = seq.data();
     std::size_t const seq_len = seq.size();
 
-    alignas(64) std::uint64_t simd_buffer[L];
+    std::array<std::uint64_t, L> lane_kmers;
     alignas(64) std::uint64_t simd_valids[L];
 
     std::uint64_t rolling_kmer      = 0;
@@ -367,15 +383,10 @@ inline void for_each_spaced_kmer_simd_by_position(
     std::size_t i = 0;
     for (; i + L <= seq_len; i += L ) {
         // Build one rolling kmer per lane, as in for_each_spaced_kmer_simd_by_mask() above.
-        FISK_PRAGMA_UNROLL_16
-        for (std::size_t lane = 0; lane < L; ++lane) {
-            spaced_kmer_simd_shift_in_<Kernel::layout>(
-                data[i + lane], enc, top_shift, rolling_kmer, rolling_valid_pos
-            );
-            simd_buffer[lane] = rolling_kmer;
-            simd_valids[lane] = rolling_valid_pos;
-        }
-        simd_vector const x = Kernel::load(simd_buffer);
+        spaced_kmer_simd_fill_lanes_<Kernel>(
+            data + i, enc, top_shift, rolling_kmer, rolling_valid_pos, lane_kmers, simd_valids
+        );
+        simd_vector const x = Kernel::from_values(lane_kmers);
 
         // See for_each_spaced_kmer_simd_by_mask() above for why this wraps safely.
         std::size_t const start_pos = i - (span_k - 1);

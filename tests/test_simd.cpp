@@ -100,6 +100,7 @@ template <SimdArch Simd>
 static void check_simd_memory(Lanes<Simd> const& in)
 {
     EXPECT_TRUE(to_lanes<Simd>(from_lanes<Simd>(in)) == in);
+    EXPECT_TRUE(to_lanes<Simd>(Simd::from_values(in)) == in);
 
     // Unaligned load from an odd offset into a byte buffer.
     alignas(64) unsigned char raw[sizeof(Lanes<Simd>) + 8]{};
