@@ -401,7 +401,7 @@ protected:
     FISK_ALWAYS_INLINE
     static typename S::simd_vector codes_(typename S::simd_vector x) noexcept
     {
-        if constexpr (requires { S::lookup_low_nibbles(x, code_table_); }) {
+        if constexpr (SimdArchWithNibbleLookup<S>) {
             return S::lookup_low_nibbles(x, code_table_);
         } else {
             if constexpr (E == Encoding::kACGT) {
@@ -425,17 +425,14 @@ protected:
  *
  * Storing the packed bytes of two vectors together takes fewer instructions than storing them one
  * after the other, see the overload of `store_two_bit_codes()` for two vectors in core/simd.hpp.
- * This is only available for the archs that have that overload, and is then the fastest word
- * encoder for long sequences.
+ * This is only available for the archs that have that overload, see SimdArchWithDoubleStore, and
+ * is then the fastest word encoder for long sequences.
  *
  * The `simd_vector` here holds two vectors of the arch, and `lanes` is accordingly twice that of
  * the arch. The end of a sequence that does not fill such a pair is left to the call operator on
  * a single word, which makes this slower than WordEncoderDirect for some short sequences.
  */
-template <Encoding E, Layout L, SimdArch Simd>
-requires requires(typename Simd::simd_vector v, char* out) {
-    Simd::template store_two_bit_codes<false>(v, v, out);
-}
+template <Encoding E, Layout L, SimdArchWithDoubleStore Simd>
 struct WordEncoderDirectDouble : WordEncoderDirect<E, L, Simd>
 {
     static constexpr std::size_t lanes = 2 * Simd::lanes;

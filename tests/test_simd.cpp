@@ -23,24 +23,32 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdScalar>>);
 
 #if defined(FISK_HAS_SSE2)
 static_assert(SimdArch<SimdSSE2>);
+#if defined(FISK_HAS_SSSE3)
+static_assert(SimdArchWithNibbleLookup<SimdSSE2>);
+static_assert(SimdArchWithDoubleStore<SimdSSE2>);
+#endif
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdSSE2>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdSSE2>>);
 #endif
 
 #if defined(FISK_HAS_AVX2)
 static_assert(SimdArch<SimdAVX2>);
+static_assert(SimdArchWithNibbleLookup<SimdAVX2>);
+static_assert(SimdArchWithDoubleStore<SimdAVX2>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX2>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX2>>);
 #endif
 
 #if defined(FISK_HAS_AVX512)
 static_assert(SimdArch<SimdAVX512>);
+static_assert(SimdArchWithNibbleLookup<SimdAVX512>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX512>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
 #endif
 
 #if defined(FISK_HAS_NEON)
 static_assert(SimdArch<SimdNEON>);
+static_assert(SimdArchWithNibbleLookup<SimdNEON>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdNEON>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdNEON>>);
 #endif
@@ -224,9 +232,7 @@ static void check_simd_store_two_bit_codes(Lanes<Simd> const& in)
     }
 }
 
-// Only for the archs that have store_two_bit_codes() for two vectors, which is not part of the
-// SimdArch concept.
-template <SimdArch Simd, bool MsbFirst>
+template <SimdArchWithDoubleStore Simd, bool MsbFirst>
 static void check_simd_store_two_bit_codes_double(Lanes<Simd> const& in0, Lanes<Simd> const& in1)
 {
     // Guard bytes after the output, to check that nothing is written past it.
@@ -251,8 +257,7 @@ static void check_simd_store_two_bit_codes_double(Lanes<Simd> const& in0, Lanes<
     }
 }
 
-// Only for the archs that have lookup_low_nibbles(), which is not part of the SimdArch concept.
-template <SimdArch Simd>
+template <SimdArchWithNibbleLookup Simd>
 static void check_simd_lookup_low_nibbles(Lanes<Simd> const& in)
 {
     static constexpr std::array<std::uint8_t, 16> table = {
@@ -299,14 +304,10 @@ static void check_simd_arch()
         check_simd_store_two_bit_codes<Simd, false>(in);
         check_simd_store_two_bit_codes<Simd, true>(in);
 
-        if constexpr (requires(typename Simd::simd_vector v, std::array<std::uint8_t, 16> t) {
-            Simd::lookup_low_nibbles(v, t);
-        }) {
+        if constexpr (SimdArchWithNibbleLookup<Simd>) {
             check_simd_lookup_low_nibbles<Simd>(in);
         }
-        if constexpr (requires(typename Simd::simd_vector v, char* out) {
-            Simd::template store_two_bit_codes<false>(v, v, out);
-        }) {
+        if constexpr (SimdArchWithDoubleStore<Simd>) {
             auto const& other = lanes[(r + 1) % lanes.size()];
             check_simd_store_two_bit_codes_double<Simd, false>(in, other);
             check_simd_store_two_bit_codes_double<Simd, true>(in, other);

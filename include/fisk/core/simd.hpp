@@ -24,10 +24,11 @@ namespace fisk {
 // with several scalar stores and one vector load stalls the CPU on store forwarding. Conversely,
 // for data in memory, a vector load is a single instruction, and preferable to from_values().
 //
-// The archs with a byte shuffle additionally offer lookup_low_nibbles(). As SimdScalar and plain
-// SSE2 lack such an instruction, this is not part of the concept, and needs to be checked for.
-// The same holds for the overload of store_two_bit_codes() that takes two vectors, which only
-// exists for the archs where storing two vectors together is faster than one after the other.
+// Some operations only exist for some of the archs, and hence are not part of the SimdArch
+// concept. Each of them has its own concept that refines SimdArch, to select an implementation
+// by. The archs with a byte shuffle offer lookup_low_nibbles(), which SimdScalar and plain SSE2
+// lack. The overload of store_two_bit_codes() that takes two vectors exists for the archs where
+// storing two vectors together is faster than one after the other.
 
 /**
  * @brief Concept for a SIMD arch, such as SimdAVX2.
@@ -60,6 +61,30 @@ concept SimdArch = requires(
     Simd::template store_truncated_u16<true>(v, bytes);
     Simd::template store_two_bit_codes<false>(v, bytes);
     Simd::template store_two_bit_codes<true>(v, bytes);
+};
+
+/**
+ * @brief Concept for a SIMD arch with a table lookup per byte, see lookup_low_nibbles().
+ */
+template <typename Simd>
+concept SimdArchWithNibbleLookup = SimdArch<Simd> && requires(
+    typename Simd::simd_vector const v,
+    std::array<std::uint8_t, 16> const& table
+) {
+    Simd::lookup_low_nibbles(v, table);
+};
+
+/**
+ * @brief Concept for a SIMD arch that can store the 2-bit codes of two vectors at once, see the
+ * overload of store_two_bit_codes() for two vectors.
+ */
+template <typename Simd>
+concept SimdArchWithDoubleStore = SimdArch<Simd> && requires(
+    typename Simd::simd_vector const v,
+    char* bytes
+) {
+    Simd::template store_two_bit_codes<false>(v, v, bytes);
+    Simd::template store_two_bit_codes<true>(v, v, bytes);
 };
 
 // =================================================================================================
