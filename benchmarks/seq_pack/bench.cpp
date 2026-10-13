@@ -63,6 +63,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_sse2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_fold_sse2(seq, out);
+                }
+            ),
+            bench(
                 "direct_sse2",
                 [&](std::string const& seq) {
                     return run_var_acgt_lsb_direct_sse2(seq, out);
@@ -74,6 +80,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "butterfly_avx2",
                 [&](std::string const& seq) {
                     return run_var_acgt_lsb_butterfly_avx2(seq, out);
+                }
+            ),
+            bench(
+                "fold_avx2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_fold_avx2(seq, out);
                 }
             ),
             bench(
@@ -91,6 +103,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_avx512",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_fold_avx512(seq, out);
+                }
+            ),
+            bench(
                 "direct_avx512",
                 [&](std::string const& seq) {
                     return run_var_acgt_lsb_direct_avx512(seq, out);
@@ -105,12 +123,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_neon",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_fold_neon(seq, out);
+                }
+            ),
+            bench(
                 "direct_neon",
                 [&](std::string const& seq) {
                     return run_var_acgt_lsb_direct_neon(seq, out);
                 }
             ),
             #endif
+            bench(
+                "fold_scalar",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_fold_scalar(seq, out);
+                }
+            ),
             bench(
                 "direct_scalar",
                 [&](std::string const& seq) {
@@ -154,6 +184,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_sse2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_fold_sse2(seq, out);
+                }
+            ),
+            bench(
                 "direct_sse2",
                 [&](std::string const& seq) {
                     return run_var_acgt_msb_direct_sse2(seq, out);
@@ -165,6 +201,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "butterfly_avx2",
                 [&](std::string const& seq) {
                     return run_var_acgt_msb_butterfly_avx2(seq, out);
+                }
+            ),
+            bench(
+                "fold_avx2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_fold_avx2(seq, out);
                 }
             ),
             bench(
@@ -182,6 +224,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_avx512",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_fold_avx512(seq, out);
+                }
+            ),
+            bench(
                 "direct_avx512",
                 [&](std::string const& seq) {
                     return run_var_acgt_msb_direct_avx512(seq, out);
@@ -196,12 +244,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_neon",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_fold_neon(seq, out);
+                }
+            ),
+            bench(
                 "direct_neon",
                 [&](std::string const& seq) {
                     return run_var_acgt_msb_direct_neon(seq, out);
                 }
             ),
             #endif
+            bench(
+                "fold_scalar",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_fold_scalar(seq, out);
+                }
+            ),
             bench(
                 "direct_scalar",
                 [&](std::string const& seq) {
@@ -245,6 +305,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_sse2",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_fold_sse2(seq, out);
+                }
+            ),
+            bench(
                 "direct_sse2",
                 [&](std::string const& seq) {
                     return run_var_actg_lsb_direct_sse2(seq, out);
@@ -256,6 +322,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "butterfly_avx2",
                 [&](std::string const& seq) {
                     return run_var_actg_lsb_butterfly_avx2(seq, out);
+                }
+            ),
+            bench(
+                "fold_avx2",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_fold_avx2(seq, out);
                 }
             ),
             bench(
@@ -273,6 +345,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_avx512",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_fold_avx512(seq, out);
+                }
+            ),
+            bench(
                 "direct_avx512",
                 [&](std::string const& seq) {
                     return run_var_actg_lsb_direct_avx512(seq, out);
@@ -287,12 +365,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_neon",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_fold_neon(seq, out);
+                }
+            ),
+            bench(
                 "direct_neon",
                 [&](std::string const& seq) {
                     return run_var_actg_lsb_direct_neon(seq, out);
                 }
             ),
             #endif
+            bench(
+                "fold_scalar",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_fold_scalar(seq, out);
+                }
+            ),
             bench(
                 "direct_scalar",
                 [&](std::string const& seq) {
@@ -336,6 +426,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_sse2",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_fold_sse2(seq, out);
+                }
+            ),
+            bench(
                 "direct_sse2",
                 [&](std::string const& seq) {
                     return run_var_actg_msb_direct_sse2(seq, out);
@@ -347,6 +443,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "butterfly_avx2",
                 [&](std::string const& seq) {
                     return run_var_actg_msb_butterfly_avx2(seq, out);
+                }
+            ),
+            bench(
+                "fold_avx2",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_fold_avx2(seq, out);
                 }
             ),
             bench(
@@ -364,6 +466,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_avx512",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_fold_avx512(seq, out);
+                }
+            ),
+            bench(
                 "direct_avx512",
                 [&](std::string const& seq) {
                     return run_var_actg_msb_direct_avx512(seq, out);
@@ -378,12 +486,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 }
             ),
             bench(
+                "fold_neon",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_fold_neon(seq, out);
+                }
+            ),
+            bench(
                 "direct_neon",
                 [&](std::string const& seq) {
                     return run_var_actg_msb_direct_neon(seq, out);
                 }
             ),
             #endif
+            bench(
+                "fold_scalar",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_fold_scalar(seq, out);
+                }
+            ),
             bench(
                 "direct_scalar",
                 [&](std::string const& seq) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -21,9 +22,10 @@ namespace fisk {
 // packed as an arbitrary code at its own position, without affecting any other position.
 //
 // WordEncoderPext and WordEncoderButterfly gather the code bits under a mask, via hardware PEXT
-// or the software butterfly network. WordEncoderDirect instead packs the codes with instructions
-// specific to the SIMD arch, and is the fastest of them. The latter two are templated on a SIMD
-// arch (core/simd.hpp), with which they encode `lanes` words at once.
+// or the software butterfly network. WordEncoderFold and WordEncoderDirect instead move the codes
+// of each word together: the former with shifts and masks, the latter with instructions specific
+// to the SIMD arch, which makes it the fastest of them. All but WordEncoderPext are templated on a
+// SIMD arch (core/simd.hpp), with which they encode `lanes` words at once.
 
 // -----------------------------------------------------------------------------
 //     Helper Functions
@@ -50,9 +52,8 @@ concept WordEncoder = requires(T const encoder, std::uint64_t word) {
 /**
  * @brief Mask selecting the two code-bearing bits of every ASCII byte, for a given encoding.
  *
- * This is where the two bits end up after pack_fold_codes_(): bits 0-1 of every byte for ACGT,
- * which its SWAR fold computes explicitly; bits 1-2 for ACTG, which sit there in the raw byte
- * already, without needing pack_fold_codes_ to do anything.
+ * This is where the two bits end up after pack_prepare_codes_(): bits 0-1 of every byte for ACGT,
+ * which it computes explicitly; bits 1-2 for ACTG, which sit there in the raw byte already.
  */
 template <Encoding E>
 inline constexpr std::uint64_t pack_mask_() noexcept
@@ -73,19 +74,20 @@ inline constexpr std::uint64_t pack_mask_v = pack_mask_<E>();
 /**
  * @brief Apply the per-encoding pre-transform that puts the 2-bit codes under pack_mask_v.
  *
- * A no-op for ACTG, whose codes already sit under its mask; the SWAR fold for ACGT. ACTG needs no
- * shift down to bits 0-1 either: the extraction step (PEXT or the butterfly network) that gathers
- * the bits under pack_mask_v does that implicitly, as part of packing the gathered bits together.
+ * A no-op for ACTG, whose codes already sit under its mask; a SWAR bit trick for ACGT. ACTG needs
+ * no shift down to bits 0-1 either: the extraction step (PEXT or the butterfly network) that
+ * gathers the bits under pack_mask_v does that implicitly, as part of packing the gathered bits
+ * together.
  */
 template <Encoding E>
-inline constexpr std::uint64_t pack_fold_codes_(std::uint64_t word) noexcept
+inline constexpr std::uint64_t pack_prepare_codes_(std::uint64_t word) noexcept
 {
     if constexpr (E == Encoding::kACGT) {
         return ((word >> 1) ^ (word >> 2)) & pack_mask_v<E>;
     } else if constexpr (E == Encoding::kACTG) {
         return word;
     } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in pack_fold_codes_()");
+        static_assert(dependent_false_v<E>, "Unhandled Encoding in pack_prepare_codes_()");
         return 0;
     }
 }
@@ -109,9 +111,9 @@ inline constexpr std::uint64_t pack_orient_chunk_(std::uint64_t word) noexcept
     }
 }
 
-// -----------------------------------------------------------------------------
+// =================================================================================================
 //     Word Encoder Pext
-// -----------------------------------------------------------------------------
+// =================================================================================================
 
 #if defined(FISK_HAS_BMI2)
 
@@ -127,16 +129,16 @@ struct WordEncoderPext
 
     inline std::uint64_t operator()(std::uint64_t word) const noexcept
     {
-        word = pack_fold_codes_<E>(pack_orient_chunk_<L>(word));
+        word = pack_prepare_codes_<E>(pack_orient_chunk_<L>(word));
         return bit_extract_pext(word, BitExtractMask(pack_mask_v<E>));
     }
 };
 
 #endif // FISK_HAS_BMI2
 
-// -----------------------------------------------------------------------------
+// =================================================================================================
 //     Word Encoder Butterfly
-// -----------------------------------------------------------------------------
+// =================================================================================================
 
 /**
  * @brief Same as WordEncoderPext, via the software butterfly network instead of PEXT.
@@ -203,7 +205,7 @@ struct WordEncoderButterfly
             simd_vector const acgt_mask = Simd::broadcast(pack_mask_v<Encoding::kACGT>);
             x = Simd::bitwise_and(Simd::bitwise_xor(s1, s2), acgt_mask);
         } else if constexpr (E == Encoding::kACTG) {
-            // The codes already sit in bits 1-2 of each byte, see pack_fold_codes_().
+            // The codes already sit in bits 1-2 of each byte, see pack_prepare_codes_().
         } else {
             static_assert(
                 dependent_false_v<E>, "Unhandled Encoding in WordEncoderButterfly::operator()"
@@ -215,13 +217,113 @@ struct WordEncoderButterfly
     FISK_ALWAYS_INLINE
     std::uint64_t operator()(std::uint64_t word) const noexcept
     {
-        return bit_extract_butterfly_table(pack_fold_codes_<E>(pack_orient_chunk_<L>(word)), table);
+        return bit_extract_butterfly_table(
+            pack_prepare_codes_<E>(pack_orient_chunk_<L>(word)), table
+        );
     }
 };
 
-// -----------------------------------------------------------------------------
+// =================================================================================================
+//     Word Encoder Fold
+// =================================================================================================
+
+/**
+ * @brief Encode ASCII characters into packed 2-bit codes by folding them together pairwise.
+ *
+ * Three rounds of shifting and masking move the codes next to each other: first the two codes of
+ * each two bytes, then the resulting pairs, and then the two halves of each word. This only uses
+ * the operations that every SIMD arch provides (see core/simd.hpp), without any code specific to
+ * an arch. It is faster than WordEncoderButterfly, but slower than WordEncoderDirect on all archs
+ * measured, and is kept as a simple reference to compare against.
+ *
+ * As for WordEncoderButterfly, the call operator on a whole `simd_vector` processes `lanes` words
+ * at once, and the one on a single word the words at the end that do not fill a whole vector.
+ */
+template <Encoding E, Layout L, SimdArch Simd = SimdScalar>
+struct WordEncoderFold
+{
+    static constexpr Encoding encoding = E;
+    static constexpr Layout layout = L;
+    static constexpr std::size_t lanes = Simd::lanes;
+    using simd_vector = typename Simd::simd_vector;
+
+    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    {
+        return Simd::load_unaligned(a);
+    }
+
+    // Each lane holds the 8 bases of its chunk in its low 16 bits, see write_two_bit_chunk_().
+    static void store_packed(simd_vector const& v, char* out) noexcept
+    {
+        if constexpr (L == Layout::kMSB) {
+            Simd::template store_truncated_u16<true>(v, out);
+        } else if constexpr (L == Layout::kLSB) {
+            Simd::template store_truncated_u16<false>(v, out);
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in WordEncoderFold::store_packed()"
+            );
+        }
+    }
+
+    // For SimdScalar, the vector is a single word, which is encoded by the call operator below.
+    FISK_ALWAYS_INLINE
+    simd_vector operator()(simd_vector x) const noexcept
+    requires (lanes > 1)
+    {
+        return fold_<Simd>(x);
+    }
+
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(std::uint64_t word) const noexcept
+    {
+        return fold_<SimdScalar>(word) & 0xFFFF;
+    }
+
+private:
+
+    // The result is in the low 16 bits of each lane; the bits above them are not cleared.
+    template <SimdArch S>
+    FISK_ALWAYS_INLINE
+    static typename S::simd_vector fold_(typename S::simd_vector x) noexcept
+    {
+        if constexpr (L == Layout::kMSB) {
+            x = S::byte_swap_lanes(x);
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(dependent_false_v<L>, "Unhandled Layout in WordEncoderFold");
+        }
+        if constexpr (E == Encoding::kACGT) {
+            x = S::bitwise_xor(S::template shift_right<1>(x), S::template shift_right<2>(x));
+        } else if constexpr (E == Encoding::kACTG) {
+            // The codes already sit in bits 1-2 of each byte, see pack_prepare_codes_().
+        } else {
+            static_assert(dependent_false_v<E>, "Unhandled Encoding in WordEncoderFold");
+        }
+
+        // Bit offset of the codes within their bytes, which the folded codes keep until the end.
+        constexpr int offset = std::countr_zero(pack_mask_v<E>);
+        x = S::bitwise_and(x, S::broadcast(pack_mask_v<E>));
+        x = S::bitwise_and(
+            S::bitwise_or(x, S::template shift_right<6>(x)),
+            S::broadcast(0x000F000F000F000FULL << offset)
+        );
+        x = S::bitwise_and(
+            S::bitwise_or(x, S::template shift_right<12>(x)),
+            S::broadcast(0x000000FF000000FFULL << offset)
+        );
+        x = S::bitwise_or(x, S::template shift_right<24>(x));
+        if constexpr (offset != 0) {
+            x = S::template shift_right<offset>(x);
+        }
+        return x;
+    }
+};
+
+// =================================================================================================
 //     Word Encoder Direct
-// -----------------------------------------------------------------------------
+// =================================================================================================
 
 /**
  * @brief Encode ASCII characters into packed 2-bit codes via the direct code packing of the arch.

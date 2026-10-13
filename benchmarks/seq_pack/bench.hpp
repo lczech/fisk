@@ -33,6 +33,18 @@ std::uint64_t run_var_actg_lsb_butterfly_scalar(
 std::uint64_t run_var_actg_msb_butterfly_scalar(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
+std::uint64_t run_var_acgt_lsb_fold_scalar(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_fold_scalar(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_fold_scalar(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_fold_scalar(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
 std::uint64_t run_var_acgt_lsb_direct_scalar(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
 );
@@ -74,6 +86,18 @@ std::uint64_t run_var_actg_lsb_butterfly_sse2(
 std::uint64_t run_var_actg_msb_butterfly_sse2(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
+std::uint64_t run_var_acgt_lsb_fold_sse2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_fold_sse2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_fold_sse2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_fold_sse2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
 std::uint64_t run_var_acgt_lsb_direct_sse2(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
 );
@@ -99,6 +123,18 @@ std::uint64_t run_var_actg_lsb_butterfly_avx2(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
 );
 std::uint64_t run_var_actg_msb_butterfly_avx2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_acgt_lsb_fold_avx2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_fold_avx2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_fold_avx2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_fold_avx2(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
 std::uint64_t run_var_acgt_lsb_direct_avx2(
@@ -128,6 +164,18 @@ std::uint64_t run_var_actg_lsb_butterfly_avx512(
 std::uint64_t run_var_actg_msb_butterfly_avx512(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
+std::uint64_t run_var_acgt_lsb_fold_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_fold_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_fold_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_fold_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
 std::uint64_t run_var_acgt_lsb_direct_avx512(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
 );
@@ -153,6 +201,18 @@ std::uint64_t run_var_actg_lsb_butterfly_neon(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
 );
 std::uint64_t run_var_actg_msb_butterfly_neon(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_acgt_lsb_fold_neon(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_fold_neon(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_fold_neon(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_fold_neon(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
 std::uint64_t run_var_acgt_lsb_direct_neon(
