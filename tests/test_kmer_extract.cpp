@@ -196,7 +196,7 @@ TEST(KmerExtract, InvalidCharacterPlacement)
         "A",
         // Longer placements, so that k=16 and k=32 below exercise invalid-run-skipping and the
         // window refill too, rather than degenerating into a "sequence shorter than k" check.
-        "N" + std::string(45, 'A'),
+        std::string("N").append(45, 'A'),
         std::string(45, 'A') + "N",
         std::string(20, 'A') + "N" + std::string(20, 'A'),
         std::string(20, 'A') + "NNN" + std::string(20, 'A'),
