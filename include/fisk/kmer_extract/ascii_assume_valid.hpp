@@ -122,7 +122,7 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
  * @param seq        Input sequence.
  * @param k          K-mer size, in [1, 32].
  * @param encoder    Word encoder selecting the Encoding and Layout, e.g. WordEncoderButterfly
- *                   or WordEncoderPext (seq_pack.hpp).
+ *                   or WordEncoderPext (seq_pack/word_encoder.hpp).
  * @param chunk_size Number of bases processed per chunk; must be > 0.
  * @param scratch    Reusable temporary packed storage for this call.
  * @param func       Callback function to be called for each k-mer.
