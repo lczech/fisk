@@ -288,6 +288,13 @@ inline bool msvc_cpu_sse2_() noexcept
     return (regs[3] & (1 << 26)) != 0; // EDX.SSE2
 }
 
+inline bool msvc_cpu_ssse3_() noexcept
+{
+    int regs[4] = {};
+    cpuidex_(regs, 1, 0);
+    return (regs[2] & (1 << 9)) != 0; // ECX.SSSE3
+}
+
 inline bool msvc_cpu_avx2_() noexcept
 {
     if (!os_avx_state_enabled_()) {
@@ -328,6 +335,15 @@ inline bool compiled_bmi2() noexcept
 inline bool compiled_sse2() noexcept
 {
 #ifdef FISK_HAS_SSE2
+    return true;
+#else
+    return false;
+#endif
+}
+
+inline bool compiled_ssse3() noexcept
+{
+#ifdef FISK_HAS_SSSE3
     return true;
 #else
     return false;
@@ -389,6 +405,18 @@ inline bool cpu_sse2() noexcept
     #endif
 }
 
+inline bool cpu_ssse3() noexcept
+{
+    #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
+        ensure_cpu_init_();
+        return __builtin_cpu_supports("ssse3");
+    #elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+        return msvc_cpu_ssse3_();
+    #else
+        return false;
+    #endif
+}
+
 inline bool cpu_avx2() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
@@ -432,9 +460,16 @@ inline bool bmi2_enabled() noexcept
     return enabled;
 }
 
+inline bool ssse3_enabled() noexcept
+{
+    static bool const enabled = compiled_ssse3() && cpu_ssse3();
+    return enabled;
+}
+
+// SimdSSE2 uses SSSE3 where that is compiled in, so that it then needs a CPU that has it.
 inline bool sse2_enabled() noexcept
 {
-    static bool const enabled = compiled_sse2() && cpu_sse2();
+    static bool const enabled = compiled_sse2() && cpu_sse2() && (!compiled_ssse3() || cpu_ssse3());
     return enabled;
 }
 
@@ -476,6 +511,7 @@ inline void info_print_intrinsics(std::ostream& os)
     os << "Instruction sets:\n";
     print_one_feature("BMI2",   compiled_bmi2(),   cpu_bmi2());
     print_one_feature("SSE2",   compiled_sse2(),   cpu_sse2());
+    print_one_feature("SSSE3",  compiled_ssse3(),  cpu_ssse3());
     print_one_feature("AVX2",   compiled_avx2(),   cpu_avx2());
     print_one_feature("AVX512", compiled_avx512(), cpu_avx512());
     print_one_feature("NEON",   compiled_neon(),   cpu_neon());

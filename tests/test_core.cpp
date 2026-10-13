@@ -31,6 +31,12 @@ TEST(CpuRuntime, CompiledFlagsMatchMacros)
     EXPECT_FALSE(compiled_sse2());
 #endif
 
+#ifdef FISK_HAS_SSSE3
+    EXPECT_TRUE(compiled_ssse3());
+#else
+    EXPECT_FALSE(compiled_ssse3());
+#endif
+
 #ifdef FISK_HAS_AVX2
     EXPECT_TRUE(compiled_avx2());
 #else
@@ -56,6 +62,7 @@ TEST(CpuRuntime, EnabledImpliesCompiled)
     // code path was actually compiled in, regardless of what the CPU running the test supports.
     EXPECT_TRUE(!bmi2_enabled()   || compiled_bmi2());
     EXPECT_TRUE(!sse2_enabled()   || compiled_sse2());
+    EXPECT_TRUE(!ssse3_enabled()  || compiled_ssse3());
     EXPECT_TRUE(!avx2_enabled()   || compiled_avx2());
     EXPECT_TRUE(!avx512_enabled() || compiled_avx512());
     EXPECT_TRUE(!neon_enabled()   || compiled_neon());

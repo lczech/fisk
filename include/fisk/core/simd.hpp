@@ -175,6 +175,8 @@ struct SimdScalar
 
 /**
  * @brief SSE2 SIMD arch, with two lanes.
+ *
+ * Uses the byte shuffle of SSSE3 where the build enables it.
  */
 struct SimdSSE2
 {
@@ -268,19 +270,38 @@ struct SimdSSE2
     //     Bytes
     // -------------------------------------------
 
+    static simd_vector byte_swap_lanes(simd_vector v) noexcept
+    {
+        #if defined(FISK_HAS_SSSE3)
+            return byte_swap_lanes_ssse3_(v);
+        #else
+            return byte_swap_lanes_sse2_(v);
+        #endif
+    }
+
+    // Store the low 16 bits of each lane contiguously.
+    template <bool ByteSwap>
+    static void store_truncated_u16(simd_vector v, char* out) noexcept
+    {
+        #if defined(FISK_HAS_SSSE3)
+            store_truncated_u16_ssse3_<ByteSwap>(v, out);
+        #else
+            store_truncated_u16_sse2_<ByteSwap>(v, out);
+        #endif
+    }
+
     // SSE2 has no byte shuffle, so this swaps the two bytes of each 16-bit word, and then reverses
     // the order of the four words of each lane.
-    static simd_vector byte_swap_lanes(simd_vector v) noexcept
+    static simd_vector byte_swap_lanes_sse2_(simd_vector v) noexcept
     {
         v = _mm_or_si128(_mm_slli_epi16(v, 8), _mm_srli_epi16(v, 8));
         v = _mm_shufflelo_epi16(v, _MM_SHUFFLE(0, 1, 2, 3));
         return _mm_shufflehi_epi16(v, _MM_SHUFFLE(0, 1, 2, 3));
     }
 
-    // Store the low 16 bits of each lane contiguously. SSE2 has no byte shuffle, but a mask,
-    // 16-bit byte swap, and byte shift are sufficient here.
+    // SSE2 has no byte shuffle, but a mask, 16-bit byte swap, and byte shift are sufficient here.
     template <bool ByteSwap>
-    static void store_truncated_u16(simd_vector v, char* out) noexcept
+    static void store_truncated_u16_sse2_(simd_vector v, char* out) noexcept
     {
         __m128i low = _mm_and_si128(v, _mm_set1_epi64x(0xFFFF));
         if constexpr (ByteSwap) {
@@ -290,6 +311,37 @@ struct SimdSSE2
         std::uint32_t const packed = static_cast<std::uint32_t>(_mm_cvtsi128_si32(low));
         std::memcpy(out, &packed, sizeof(packed));
     }
+
+    #if defined(FISK_HAS_SSSE3)
+
+    static simd_vector byte_swap_lanes_ssse3_(simd_vector v) noexcept
+    {
+        return _mm_shuffle_epi8(
+            v, _mm_setr_epi8(7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)
+        );
+    }
+
+    template <bool ByteSwap>
+    static void store_truncated_u16_ssse3_(simd_vector v, char* out) noexcept
+    {
+        __m128i const pack_control = [] {
+            if constexpr (ByteSwap) {
+                return _mm_setr_epi8(
+                    1, 0, 9, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+                );
+            } else {
+                return _mm_setr_epi8(
+                    0, 1, 8, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+                );
+            }
+        }();
+        std::uint32_t const packed = static_cast<std::uint32_t>(
+            _mm_cvtsi128_si32(_mm_shuffle_epi8(v, pack_control))
+        );
+        std::memcpy(out, &packed, sizeof(packed));
+    }
+
+    #endif // FISK_HAS_SSSE3
 };
 
 #endif // FISK_HAS_SSE2

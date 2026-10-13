@@ -55,6 +55,7 @@ target_compile_features(fisk INTERFACE cxx_std_20)
 # MSVC has no per-extension flags the way GCC/Clang do -- only /arch: tiers that bundle several
 # extensions together, so the checks and the flags applied below differ for it:
 #   - SSE2 is the x64 baseline (always present), so it needs no flag and no check.
+#   - SSSE3 has no gating flag on MSVC either, and is treated the same way as PCLMUL below.
 #   - PCLMUL has no gating flag on MSVC at all; the intrinsic header is available unconditionally,
 #     so it is treated as always "supported" here and relies purely on FISK_ENABLE_PCLMUL's own
 #     opt-in warning, same trust model the option already documents for every compiler.
@@ -88,12 +89,14 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     check_cxx_compiler_flag("/arch:AVX512" COMPILER_SUPPORTS_AVX512)
     set(COMPILER_SUPPORTS_BMI2 ${COMPILER_SUPPORTS_AVX2})
     set(COMPILER_SUPPORTS_SSE2 TRUE)
+    set(COMPILER_SUPPORTS_SSSE3 TRUE)
     set(COMPILER_SUPPORTS_PCLMUL TRUE)
     set(COMPILER_SUPPORTS_AVX512BW ${COMPILER_SUPPORTS_AVX512})
 else()
     check_cxx_compiler_flag("-mbmi2"     COMPILER_SUPPORTS_BMI2)
     check_cxx_compiler_flag("-mpclmul"   COMPILER_SUPPORTS_PCLMUL)
     check_cxx_compiler_flag("-msse2"     COMPILER_SUPPORTS_SSE2)
+    check_cxx_compiler_flag("-mssse3"    COMPILER_SUPPORTS_SSSE3)
     check_cxx_compiler_flag("-mavx2"     COMPILER_SUPPORTS_AVX2)
     check_cxx_compiler_flag("-mavx512f"  COMPILER_SUPPORTS_AVX512)
     check_cxx_compiler_flag("-mavx512bw" COMPILER_SUPPORTS_AVX512BW)
@@ -102,6 +105,7 @@ endif()
 option(FISK_ENABLE_BMI2   "Force-enable fisk's BMI2-accelerated code paths (PEXT); only safe if the deployment target actually has BMI2" OFF)
 option(FISK_ENABLE_PCLMUL "Force-enable fisk's PCLMUL-accelerated code paths; only safe if the deployment target actually has PCLMUL" OFF)
 option(FISK_ENABLE_SSE2   "Force-enable fisk's SSE2-accelerated code paths; only safe if the deployment target actually has SSE2" OFF)
+option(FISK_ENABLE_SSSE3  "Force-enable fisk's SSSE3-accelerated code paths; only safe if the deployment target actually has SSSE3" OFF)
 option(FISK_ENABLE_AVX2   "Force-enable fisk's AVX2-accelerated code paths; only safe if the deployment target actually has AVX2" OFF)
 option(FISK_ENABLE_AVX512 "Force-enable fisk's AVX512-accelerated code paths; only safe if the deployment target actually has AVX512" OFF)
 option(FISK_ENABLE_NEON   "Force-enable fisk's NEON-accelerated code paths (ARM64); only safe if the deployment target actually has NEON" OFF)
@@ -127,6 +131,13 @@ if (FISK_ENABLE_SSE2 AND COMPILER_SUPPORTS_SSE2)
         target_compile_options(fisk INTERFACE "-msse2")
     endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_SSE2=1)
+endif()
+
+if (FISK_ENABLE_SSSE3 AND COMPILER_SUPPORTS_SSSE3)
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        target_compile_options(fisk INTERFACE "-mssse3")
+    endif()
+    target_compile_definitions(fisk INTERFACE FISK_HAS_SSSE3=1)
 endif()
 
 if (FISK_ENABLE_AVX2 AND COMPILER_SUPPORTS_AVX2)

@@ -220,6 +220,40 @@ TEST(SimdArch, SSE2)
 {
     check_simd_arch<SimdSSE2>();
 }
+
+// SimdSSE2 picks one of each of these per build, so that the test above only covers those.
+TEST(SimdArch, SSE2ByteHelpers)
+{
+    using Simd = SimdSSE2;
+    auto const check_swap = [](auto const& swap, Lanes<Simd> const& in) {
+        auto const out = to_lanes<Simd>(swap(from_lanes<Simd>(in)));
+        for (std::size_t i = 0; i < Simd::lanes; ++i) {
+            EXPECT_EQ(out[i], byte_swap_64(in[i]));
+        }
+    };
+    auto const check_store = [](auto const& store, bool byte_swap, Lanes<Simd> const& in) {
+        char out[2 * Simd::lanes];
+        store(from_lanes<Simd>(in), out);
+        for (std::size_t i = 0; i < Simd::lanes; ++i) {
+            std::uint16_t const low = static_cast<std::uint16_t>(in[i]);
+            std::uint16_t actual;
+            std::memcpy(&actual, out + 2 * i, sizeof(actual));
+            EXPECT_EQ(actual, byte_swap ? byte_swap_16(low) : low);
+        }
+    };
+
+    for (auto const& in : random_lanes<Simd>(42)) {
+        check_swap(Simd::byte_swap_lanes_sse2_, in);
+        check_store(Simd::store_truncated_u16_sse2_<false>, false, in);
+        check_store(Simd::store_truncated_u16_sse2_<true>, true, in);
+
+        #if defined(FISK_HAS_SSSE3)
+            check_swap(Simd::byte_swap_lanes_ssse3_, in);
+            check_store(Simd::store_truncated_u16_ssse3_<false>, false, in);
+            check_store(Simd::store_truncated_u16_ssse3_<true>, true, in);
+        #endif
+    }
+}
 #endif
 
 #if defined(FISK_HAS_AVX2)
