@@ -183,11 +183,16 @@ static_assert(WordEncoderPext<Encoding::kACGT, Layout::kMSB>::lanes == 1);
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
 static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
 static_assert(WordEncoderFold<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
+#if defined(FISK_HAS_SSSE3)
+static_assert(WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 4);
+#endif
 #endif
 #if defined(FISK_HAS_AVX2)
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX2>::lanes == 4);
 static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX2>::lanes == 4);
 static_assert(WordEncoderFold<Encoding::kACGT, Layout::kMSB, SimdAVX2>::lanes == 4);
+static_assert(WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdAVX2>::lanes == 8);
+static_assert( WordEncoder<WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdAVX2>>);
 #endif
 #if defined(FISK_HAS_AVX512)
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 8);
@@ -372,6 +377,24 @@ TEST(SeqPackSimd, Sse2DirectAcgtMsb)
 {
     check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdSSE2>>();
 }
+#if defined(FISK_HAS_SSSE3)
+TEST(SeqPackSimd, Sse2DirectDoubleActgLsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACTG, Layout::kLSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2DirectDoubleActgMsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACTG, Layout::kMSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2DirectDoubleAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kLSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2DirectDoubleAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdSSE2>>();
+}
+#endif // FISK_HAS_SSSE3
 
 #endif // FISK_HAS_SSE2
 
@@ -424,6 +447,22 @@ TEST(SeqPackSimd, Avx2DirectAcgtLsb)
 TEST(SeqPackSimd, Avx2DirectAcgtMsb)
 {
     check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2DirectDoubleActgLsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACTG, Layout::kLSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2DirectDoubleActgMsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACTG, Layout::kMSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2DirectDoubleAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kLSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2DirectDoubleAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdAVX2>>();
 }
 
 #endif // FISK_HAS_AVX2

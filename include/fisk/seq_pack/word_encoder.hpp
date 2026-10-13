@@ -26,7 +26,8 @@ namespace fisk {
 // or the software butterfly network. WordEncoderFold and WordEncoderDirect instead move the codes
 // of each word together: the former with shifts and masks, the latter with instructions specific
 // to the SIMD arch, which makes it the fastest of them. All but WordEncoderPext are templated on a
-// SIMD arch (core/simd.hpp), with which they encode `lanes` words at once.
+// SIMD arch (core/simd.hpp), with which they encode `lanes` words at once. WordEncoderDirectDouble
+// is a variant of WordEncoderDirect that processes two vectors of the arch per step.
 
 // -----------------------------------------------------------------------------
 //     Helper Functions
@@ -380,7 +381,7 @@ struct WordEncoderDirect
         return SimdScalar::pack_two_bit_codes_(codes_<SimdScalar>(pack_orient_chunk_<L>(word)));
     }
 
-private:
+protected:
 
     // The code of a character, for each value of its low four bits, which are all that the code
     // depends on.
@@ -413,6 +414,67 @@ private:
             return S::bitwise_and(x, S::broadcast(0x0303030303030303ULL));
         }
     }
+};
+
+// -----------------------------------------------------------------------------
+//     Word Encoder Direct Double
+// -----------------------------------------------------------------------------
+
+/**
+ * @brief Same as WordEncoderDirect, but processing two vectors of the SIMD arch per step.
+ *
+ * Storing the packed bytes of two vectors together takes fewer instructions than storing them one
+ * after the other, see the overload of `store_two_bit_codes()` for two vectors in core/simd.hpp.
+ * This is only available for the archs that have that overload, and is then the fastest word
+ * encoder for long sequences.
+ *
+ * The `simd_vector` here holds two vectors of the arch, and `lanes` is accordingly twice that of
+ * the arch. The end of a sequence that does not fill such a pair is left to the call operator on
+ * a single word, which makes this slower than WordEncoderDirect for some short sequences.
+ */
+template <Encoding E, Layout L, SimdArch Simd>
+requires requires(typename Simd::simd_vector v, char* out) {
+    Simd::template store_two_bit_codes<false>(v, v, out);
+}
+struct WordEncoderDirectDouble : WordEncoderDirect<E, L, Simd>
+{
+    static constexpr std::size_t lanes = 2 * Simd::lanes;
+
+    // Not a std::array, as GCC warns about vector types as template arguments.
+    struct simd_vector
+    {
+        typename Simd::simd_vector v[2];
+    };
+
+    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    {
+        return {{Simd::load_unaligned(a), Simd::load_unaligned(a + Simd::lanes)}};
+    }
+
+    static void store_packed(simd_vector const& v, char* out) noexcept
+    {
+        if constexpr (L == Layout::kMSB) {
+            Simd::template store_two_bit_codes<true>(v.v[0], v.v[1], out);
+        } else if constexpr (L == Layout::kLSB) {
+            Simd::template store_two_bit_codes<false>(v.v[0], v.v[1], out);
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in WordEncoderDirectDouble::store_packed()"
+            );
+        }
+    }
+
+    FISK_ALWAYS_INLINE
+    simd_vector operator()(simd_vector const& x) const noexcept
+    {
+        return {{
+            WordEncoderDirect<E, L, Simd>::template codes_<Simd>(x.v[0]),
+            WordEncoderDirect<E, L, Simd>::template codes_<Simd>(x.v[1])
+        }};
+    }
+
+    // The call operator on a single word.
+    using WordEncoderDirect<E, L, Simd>::operator();
 };
 
 } // namespace fisk

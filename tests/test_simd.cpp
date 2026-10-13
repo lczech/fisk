@@ -224,6 +224,33 @@ static void check_simd_store_two_bit_codes(Lanes<Simd> const& in)
     }
 }
 
+// Only for the archs that have store_two_bit_codes() for two vectors, which is not part of the
+// SimdArch concept.
+template <SimdArch Simd, bool MsbFirst>
+static void check_simd_store_two_bit_codes_double(Lanes<Simd> const& in0, Lanes<Simd> const& in1)
+{
+    // Guard bytes after the output, to check that nothing is written past it.
+    constexpr std::size_t n_bytes = 4 * Simd::lanes;
+    constexpr unsigned char guard = 0xAB;
+    unsigned char out[n_bytes + 16];
+    std::memset(out, guard, sizeof(out));
+    auto const codes0 = two_bit_codes<Simd>(in0);
+    auto const codes1 = two_bit_codes<Simd>(in1);
+    Simd::template store_two_bit_codes<MsbFirst>(
+        from_lanes<Simd>(codes0), from_lanes<Simd>(codes1), reinterpret_cast<char*>(out)
+    );
+
+    auto const expected0 = packed_two_bit_codes<Simd>(codes0, MsbFirst);
+    auto const expected1 = packed_two_bit_codes<Simd>(codes1, MsbFirst);
+    for (std::size_t i = 0; i < n_bytes / 2; ++i) {
+        EXPECT_EQ(out[i], expected0[i]);
+        EXPECT_EQ(out[n_bytes / 2 + i], expected1[i]);
+    }
+    for (std::size_t i = n_bytes; i < sizeof(out); ++i) {
+        EXPECT_EQ(out[i], guard);
+    }
+}
+
 // Only for the archs that have lookup_low_nibbles(), which is not part of the SimdArch concept.
 template <SimdArch Simd>
 static void check_simd_lookup_low_nibbles(Lanes<Simd> const& in)
@@ -276,6 +303,13 @@ static void check_simd_arch()
             Simd::lookup_low_nibbles(v, t);
         }) {
             check_simd_lookup_low_nibbles<Simd>(in);
+        }
+        if constexpr (requires(typename Simd::simd_vector v, char* out) {
+            Simd::template store_two_bit_codes<false>(v, v, out);
+        }) {
+            auto const& other = lanes[(r + 1) % lanes.size()];
+            check_simd_store_two_bit_codes_double<Simd, false>(in, other);
+            check_simd_store_two_bit_codes_double<Simd, true>(in, other);
         }
     }
 }

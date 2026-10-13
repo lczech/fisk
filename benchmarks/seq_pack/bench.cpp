@@ -74,6 +74,14 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_lsb_direct_sse2(seq, out);
                 }
             ),
+            #if defined(FISK_HAS_SSSE3)
+            bench(
+                "direct_double_sse2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_double_sse2(seq, out);
+                }
+            ),
+            #endif
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
@@ -92,6 +100,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "direct_avx2",
                 [&](std::string const& seq) {
                     return run_var_acgt_lsb_direct_avx2(seq, out);
+                }
+            ),
+            bench(
+                "direct_double_avx2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_double_avx2(seq, out);
                 }
             ),
             #endif
@@ -195,6 +209,14 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_msb_direct_sse2(seq, out);
                 }
             ),
+            #if defined(FISK_HAS_SSSE3)
+            bench(
+                "direct_double_sse2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_double_sse2(seq, out);
+                }
+            ),
+            #endif
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
@@ -213,6 +235,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "direct_avx2",
                 [&](std::string const& seq) {
                     return run_var_acgt_msb_direct_avx2(seq, out);
+                }
+            ),
+            bench(
+                "direct_double_avx2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_double_avx2(seq, out);
                 }
             ),
             #endif
@@ -316,6 +344,14 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_lsb_direct_sse2(seq, out);
                 }
             ),
+            #if defined(FISK_HAS_SSSE3)
+            bench(
+                "direct_double_sse2",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_double_sse2(seq, out);
+                }
+            ),
+            #endif
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
@@ -334,6 +370,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "direct_avx2",
                 [&](std::string const& seq) {
                     return run_var_actg_lsb_direct_avx2(seq, out);
+                }
+            ),
+            bench(
+                "direct_double_avx2",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_double_avx2(seq, out);
                 }
             ),
             #endif
@@ -437,6 +479,14 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_msb_direct_sse2(seq, out);
                 }
             ),
+            #if defined(FISK_HAS_SSSE3)
+            bench(
+                "direct_double_sse2",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_double_sse2(seq, out);
+                }
+            ),
+            #endif
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
@@ -455,6 +505,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "direct_avx2",
                 [&](std::string const& seq) {
                     return run_var_actg_msb_direct_avx2(seq, out);
+                }
+            ),
+            bench(
+                "direct_double_avx2",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_double_avx2(seq, out);
                 }
             ),
             #endif

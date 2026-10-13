@@ -26,6 +26,8 @@ namespace fisk {
 //
 // The archs with a byte shuffle additionally offer lookup_low_nibbles(). As SimdScalar and plain
 // SSE2 lack such an instruction, this is not part of the concept, and needs to be checked for.
+// The same holds for the overload of store_two_bit_codes() that takes two vectors, which only
+// exists for the archs where storing two vectors together is faster than one after the other.
 
 /**
  * @brief Concept for a SIMD arch, such as SimdAVX2.
@@ -427,6 +429,19 @@ struct SimdSSE2
         std::memcpy(out, &packed, sizeof(packed));
     }
 
+    // Same as store_two_bit_codes() for one vector, but for two at once. Narrowing the 16-bit
+    // elements of both vectors together saves the shuffle that collects the packed bytes.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v0, simd_vector v1, char* out) noexcept
+    {
+        __m128i const weights = _mm_set1_epi32(MsbFirst ? 0x01041040 : 0x40100401);
+        __m128i const halves = _mm_packus_epi16(
+            _mm_maddubs_epi16(v0, weights), _mm_maddubs_epi16(v1, weights)
+        );
+        __m128i const words = _mm_maddubs_epi16(halves, _mm_set1_epi8(1));
+        _mm_storel_epi64(reinterpret_cast<__m128i*>(out), _mm_packus_epi16(words, words));
+    }
+
     #endif // FISK_HAS_SSSE3
 };
 
@@ -597,6 +612,26 @@ struct SimdAVX2
         _mm_storel_epi64(
             reinterpret_cast<__m128i*>(out),
             _mm_unpacklo_epi32(_mm256_castsi256_si128(bytes), _mm256_extracti128_si256(bytes, 1))
+        );
+    }
+
+    // Same as store_two_bit_codes() for one vector, but for two at once. Narrowing the 16-bit
+    // elements of both vectors together saves most of the steps that collect the packed bytes
+    // from the 128-bit halves. It leaves the four bytes of each half of each vector in separate
+    // 32-bit elements, which the final permutation brings into order.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v0, simd_vector v1, char* out) noexcept
+    {
+        __m256i const weights = _mm256_set1_epi32(MsbFirst ? 0x01041040 : 0x40100401);
+        __m256i const halves = _mm256_packus_epi16(
+            _mm256_maddubs_epi16(v0, weights), _mm256_maddubs_epi16(v1, weights)
+        );
+        __m256i const words = _mm256_maddubs_epi16(halves, _mm256_set1_epi8(1));
+        __m256i const bytes = _mm256_packus_epi16(words, words);
+        __m256i const order = _mm256_setr_epi32(0, 4, 1, 5, 0, 0, 0, 0);
+        _mm_storeu_si128(
+            reinterpret_cast<__m128i*>(out),
+            _mm256_castsi256_si128(_mm256_permutevar8x32_epi32(bytes, order))
         );
     }
 };
