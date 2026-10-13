@@ -268,22 +268,13 @@ struct SimdSSE2
     //     Bytes
     // -------------------------------------------
 
-    // SSE2 has no byte shuffle, so this swaps the 32-bit, 16-bit, and 8-bit halves in turn.
+    // SSE2 has no byte shuffle, so this swaps the two bytes of each 16-bit word, and then reverses
+    // the order of the four words of each lane.
     static simd_vector byte_swap_lanes(simd_vector v) noexcept
     {
-        simd_vector const m32 = broadcast(0x00000000FFFFFFFFULL);
-        v = _mm_or_si128(
-            _mm_slli_epi64(_mm_and_si128(v, m32), 32), _mm_srli_epi64(_mm_andnot_si128(m32, v), 32)
-        );
-        simd_vector const m16 = broadcast(0x0000FFFF0000FFFFULL);
-        v = _mm_or_si128(
-            _mm_slli_epi64(_mm_and_si128(v, m16), 16), _mm_srli_epi64(_mm_andnot_si128(m16, v), 16)
-        );
-        simd_vector const m8 = broadcast(0x00FF00FF00FF00FFULL);
-        v = _mm_or_si128(
-            _mm_slli_epi64(_mm_and_si128(v, m8), 8), _mm_srli_epi64(_mm_andnot_si128(m8, v), 8)
-        );
-        return v;
+        v = _mm_or_si128(_mm_slli_epi16(v, 8), _mm_srli_epi16(v, 8));
+        v = _mm_shufflelo_epi16(v, _MM_SHUFFLE(0, 1, 2, 3));
+        return _mm_shufflehi_epi16(v, _MM_SHUFFLE(0, 1, 2, 3));
     }
 
     // Store the low 16 bits of each lane contiguously. SSE2 has no byte shuffle, but a mask,
