@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <bit>
 #include <concepts>
 #include <cstddef>
@@ -332,6 +333,9 @@ private:
  * packs each four codes into a byte with a few instructions that are specific to the SIMD arch,
  * see `store_two_bit_codes()` in core/simd.hpp. This is the fastest word encoder on every arch.
  *
+ * Where the arch has a byte shuffle, the codes are looked up in a table. For invalid characters
+ * of 128 and above, this can give a different code than the other word encoders do.
+ *
  * As for WordEncoderButterfly, the call operator on a whole `simd_vector` processes `lanes` words
  * at once, and the one on a single word the words at the end that do not fill a whole vector.
  */
@@ -378,20 +382,36 @@ struct WordEncoderDirect
 
 private:
 
-    // Reduce each byte to its 2-bit code, in its two lowest bits. The shifts are per lane, but
-    // what they move across byte boundaries is masked out.
+    // The code of a character, for each value of its low four bits, which are all that the code
+    // depends on.
+    static constexpr std::array<std::uint8_t, 16> code_table_ = [] {
+        std::array<std::uint8_t, 16> table{};
+        for (std::uint64_t nibble = 0; nibble < table.size(); ++nibble) {
+            std::uint64_t const code = pack_prepare_codes_<E>(nibble) & pack_mask_v<E>;
+            table[nibble] = static_cast<std::uint8_t>(code >> std::countr_zero(pack_mask_v<E>));
+        }
+        return table;
+    }();
+
+    // Reduce each byte to its 2-bit code, in its two lowest bits: with a table lookup where the
+    // arch has one, and with shifts otherwise. The shifts are per lane, but what they move across
+    // byte boundaries is masked out.
     template <SimdArch S>
     FISK_ALWAYS_INLINE
     static typename S::simd_vector codes_(typename S::simd_vector x) noexcept
     {
-        if constexpr (E == Encoding::kACGT) {
-            x = S::bitwise_xor(S::template shift_right<1>(x), S::template shift_right<2>(x));
-        } else if constexpr (E == Encoding::kACTG) {
-            x = S::template shift_right<1>(x);
+        if constexpr (requires { S::lookup_low_nibbles(x, code_table_); }) {
+            return S::lookup_low_nibbles(x, code_table_);
         } else {
-            static_assert(dependent_false_v<E>, "Unhandled Encoding in WordEncoderDirect");
+            if constexpr (E == Encoding::kACGT) {
+                x = S::bitwise_xor(S::template shift_right<1>(x), S::template shift_right<2>(x));
+            } else if constexpr (E == Encoding::kACTG) {
+                x = S::template shift_right<1>(x);
+            } else {
+                static_assert(dependent_false_v<E>, "Unhandled Encoding in WordEncoderDirect");
+            }
+            return S::bitwise_and(x, S::broadcast(0x0303030303030303ULL));
         }
-        return S::bitwise_and(x, S::broadcast(0x0303030303030303ULL));
     }
 };
 

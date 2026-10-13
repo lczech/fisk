@@ -23,6 +23,9 @@ namespace fisk {
 // from lane values that are held in registers instead, use from_values(): going through memory
 // with several scalar stores and one vector load stalls the CPU on store forwarding. Conversely,
 // for data in memory, a vector load is a single instruction, and preferable to from_values().
+//
+// The archs with a byte shuffle additionally offer lookup_low_nibbles(). As SimdScalar and plain
+// SSE2 lack such an instruction, this is not part of the concept, and needs to be checked for.
 
 /**
  * @brief Concept for a SIMD arch, such as SimdAVX2.
@@ -378,6 +381,16 @@ struct SimdSSE2
         );
     }
 
+    // For each byte, look up its low four bits in the table. Bytes of 128 and above give zero.
+    static simd_vector lookup_low_nibbles(
+        simd_vector v, std::array<std::uint8_t, 16> const& table
+    ) noexcept
+    {
+        return _mm_shuffle_epi8(
+            _mm_loadu_si128(reinterpret_cast<__m128i const*>(table.data())), v
+        );
+    }
+
     template <bool ByteSwap>
     static void store_truncated_u16_ssse3_(simd_vector v, char* out) noexcept
     {
@@ -530,6 +543,19 @@ struct SimdAVX2
         };
         simd_vector const ctrl = _mm256_loadu_si256(reinterpret_cast<__m256i const*>(pattern));
         return _mm256_shuffle_epi8(v, ctrl);
+    }
+
+    // For each byte, look up its low four bits in the table. Bytes of 128 and above give zero.
+    static simd_vector lookup_low_nibbles(
+        simd_vector v, std::array<std::uint8_t, 16> const& table
+    ) noexcept
+    {
+        return _mm256_shuffle_epi8(
+            _mm256_broadcastsi128_si256(
+                _mm_loadu_si128(reinterpret_cast<__m128i const*>(table.data()))
+            ),
+            v
+        );
     }
 
     // Store the low 16 bits of each lane contiguously. AVX2 can select both low words per 128-bit
@@ -696,6 +722,19 @@ struct SimdAVX512
         return _mm512_shuffle_epi8(v, ctrl);
     }
 
+    // For each byte, look up its low four bits in the table. Bytes of 128 and above give zero.
+    static simd_vector lookup_low_nibbles(
+        simd_vector v, std::array<std::uint8_t, 16> const& table
+    ) noexcept
+    {
+        return _mm512_shuffle_epi8(
+            _mm512_broadcast_i32x4(
+                _mm_loadu_si128(reinterpret_cast<__m128i const*>(table.data()))
+            ),
+            v
+        );
+    }
+
     // Store the low 16 bits of each lane contiguously.
     template <bool ByteSwap>
     static void store_truncated_u16(simd_vector v, char* out) noexcept
@@ -851,6 +890,16 @@ struct SimdNEON
     static simd_vector byte_swap_lanes(simd_vector v) noexcept
     {
         return vreinterpretq_u64_u8(vrev64q_u8(vreinterpretq_u8_u64(v)));
+    }
+
+    // For each byte, look up its low four bits in the table. The table lookup of NEON indexes by
+    // the whole byte, so that the other bits are masked out first.
+    static simd_vector lookup_low_nibbles(
+        simd_vector v, std::array<std::uint8_t, 16> const& table
+    ) noexcept
+    {
+        uint8x16_t const nibbles = vandq_u8(vreinterpretq_u8_u64(v), vdupq_n_u8(0x0F));
+        return vreinterpretq_u64_u8(vqtbl1q_u8(vld1q_u8(table.data()), nibbles));
     }
 
     // Store the low 16 bits of each lane contiguously.

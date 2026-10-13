@@ -224,6 +224,26 @@ static void check_simd_store_two_bit_codes(Lanes<Simd> const& in)
     }
 }
 
+// Only for the archs that have lookup_low_nibbles(), which is not part of the SimdArch concept.
+template <SimdArch Simd>
+static void check_simd_lookup_low_nibbles(Lanes<Simd> const& in)
+{
+    static constexpr std::array<std::uint8_t, 16> table = {
+        0x9E, 0x37, 0x79, 0xB9, 0x7F, 0x4A, 0x7C, 0x15,
+        0xF3, 0x9C, 0xC0, 0x60, 0x5C, 0xED, 0xC8, 0x34
+    };
+    auto const out = to_lanes<Simd>(Simd::lookup_low_nibbles(from_lanes<Simd>(in), table));
+    for (std::size_t i = 0; i < 8 * Simd::lanes; ++i) {
+        std::uint8_t const byte   = static_cast<std::uint8_t>(in[i / 8] >> (8 * (i % 8)));
+        std::uint8_t const actual = static_cast<std::uint8_t>(out[i / 8] >> (8 * (i % 8)));
+
+        // Bytes of 128 and above give zero on the x86 archs, and are looked up as well on NEON.
+        if (byte < 128 || actual != 0) {
+            EXPECT_EQ(actual, table[byte & 0x0F]);
+        }
+    }
+}
+
 template <SimdArch Simd>
 static void check_simd_arch()
 {
@@ -251,6 +271,12 @@ static void check_simd_arch()
         check_simd_store_truncated<Simd, true>(in);
         check_simd_store_two_bit_codes<Simd, false>(in);
         check_simd_store_two_bit_codes<Simd, true>(in);
+
+        if constexpr (requires(typename Simd::simd_vector v, std::array<std::uint8_t, 16> t) {
+            Simd::lookup_low_nibbles(v, t);
+        }) {
+            check_simd_lookup_low_nibbles<Simd>(in);
+        }
     }
 }
 
