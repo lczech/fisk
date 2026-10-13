@@ -15,8 +15,8 @@ using PackedLsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB
 
 /**
  * @brief Benchmark k-mer extraction directly from a PackedSequence (kmer_extract/packed.hpp),
- * across both Layout conventions and both accumulator widths (narrow: single 64-bit register,
- * k<=29; wide: 128-bit-equivalent, k<=32).
+ * across both Layout conventions and both accumulator widths (narrow-width: single 64-bit
+ * register, k<=29; full-width: 128-bit-equivalent, k<=32).
  *
  * Packing is done once per sequence, outside the timed region: real usage would already have the
  * sequence packed ahead of time, so packing cost should not count against extraction cost here.
@@ -36,9 +36,10 @@ void bench_kmer_extract_packed(
 );
 
 // Kernels compared above, each defined in its own translation unit (var_*.cpp). "aligned" and
-// "rolling" cover the full k in [1, 32] range themselves; the SIMD kernels are split into narrow
-// (k<=29) and wide (k in [30,32]) tiers plus an undecorated dispatcher that picks between them at
-// runtime, matching the library's own for_each_kmer_packed_simd_<isa>() split.
+// "rolling" cover the full k in [1, 32] range themselves; the SIMD kernels are split into
+// narrow-width (k<=29) and full-width (k in [30,32]) tiers plus an undecorated dispatcher that
+// picks between them at runtime, matching the library's own for_each_kmer_packed_simd_<isa>()
+// split.
 //
 // Each one constructs its own local Sink (see sink.hpp) via make_sink(sink_buffer), so that Sum's
 // accumulation can still auto-vectorize the way the original manual `acc = _mm256_add_epi64(...)`
@@ -71,12 +72,12 @@ std::uint64_t run_var_lsb_rolling(
 );
 
 #if defined(FISK_HAS_SSE2)
-std::uint64_t run_var_msb_simd_narrow_sse2(
+std::uint64_t run_var_msb_simd_narrow_width_sse2(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_msb_simd_wide_sse2(
+std::uint64_t run_var_msb_simd_full_width_sse2(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -86,12 +87,12 @@ std::uint64_t run_var_msb_simd_sse2(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_lsb_simd_narrow_sse2(
+std::uint64_t run_var_lsb_simd_narrow_width_sse2(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_lsb_simd_wide_sse2(
+std::uint64_t run_var_lsb_simd_full_width_sse2(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -104,12 +105,12 @@ std::uint64_t run_var_lsb_simd_sse2(
 #endif
 
 #if defined(FISK_HAS_AVX2)
-std::uint64_t run_var_msb_simd_narrow_avx2(
+std::uint64_t run_var_msb_simd_narrow_width_avx2(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_msb_simd_wide_avx2(
+std::uint64_t run_var_msb_simd_full_width_avx2(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -119,12 +120,12 @@ std::uint64_t run_var_msb_simd_avx2(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_lsb_simd_narrow_avx2(
+std::uint64_t run_var_lsb_simd_narrow_width_avx2(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_lsb_simd_wide_avx2(
+std::uint64_t run_var_lsb_simd_full_width_avx2(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -137,12 +138,12 @@ std::uint64_t run_var_lsb_simd_avx2(
 #endif
 
 #if defined(FISK_HAS_AVX512)
-std::uint64_t run_var_msb_simd_narrow_avx512(
+std::uint64_t run_var_msb_simd_narrow_width_avx512(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_msb_simd_wide_avx512(
+std::uint64_t run_var_msb_simd_full_width_avx512(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -152,12 +153,12 @@ std::uint64_t run_var_msb_simd_avx512(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_lsb_simd_narrow_avx512(
+std::uint64_t run_var_lsb_simd_narrow_width_avx512(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_lsb_simd_wide_avx512(
+std::uint64_t run_var_lsb_simd_full_width_avx512(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -170,12 +171,12 @@ std::uint64_t run_var_lsb_simd_avx512(
 #endif
 
 #if defined(FISK_HAS_NEON)
-std::uint64_t run_var_msb_simd_narrow_neon(
+std::uint64_t run_var_msb_simd_narrow_width_neon(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_msb_simd_wide_neon(
+std::uint64_t run_var_msb_simd_full_width_neon(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -185,12 +186,12 @@ std::uint64_t run_var_msb_simd_neon(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_lsb_simd_narrow_neon(
+std::uint64_t run_var_lsb_simd_narrow_width_neon(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_lsb_simd_wide_neon(
+std::uint64_t run_var_lsb_simd_full_width_neon(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer

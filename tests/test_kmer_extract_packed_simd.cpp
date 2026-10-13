@@ -120,23 +120,27 @@ static void check_simd_callbacks(
     check_emitted_kmers(expected, k, values, nullptr);
 }
 
-// Checks the narrow (k in [1, 29]) and wide (k in [1, 32]) internal helpers and the public
-// dispatcher of one ISA, each called as `extract(packed, k, callback)`, under the conventions of E
-// and L, against the same oracle output, plus their invalid-k contracts.
-template <std::size_t Lanes, Encoding E, Layout L, typename Narrow, typename Wide, typename Dispatch>
-static void check_simd_isa(Narrow const& narrow, Wide const& wide, Dispatch const& dispatch)
-{
+// Checks the narrow-width (k in [1, 29]) and full-width (k in [1, 32]) internal helpers and the
+// public dispatcher of one ISA, each called as `extract(packed, k, callback)`, under the
+// conventions of E and L, against the same oracle output, plus their invalid-k contracts.
+template <
+    std::size_t Lanes, Encoding E, Layout L, typename NarrowWidth, typename FullWidth,
+    typename Dispatch
+>
+static void check_simd_isa(
+    NarrowWidth const& narrow_width, FullWidth const& full_width, Dispatch const& dispatch
+) {
     WordEncoderButterfly<E, L> const encoder;
     sweep_packed_extractors(
         encoder, test_sequences(), 32,
         [&](std::string const&, auto const& packed, std::size_t k, auto const& expected) {
             if (k <= 29) {
                 check_simd_callbacks<Lanes>(expected, k, [&](auto const& callback) {
-                    narrow(packed, k, callback);
+                    narrow_width(packed, k, callback);
                 });
             }
             check_simd_callbacks<Lanes>(expected, k, [&](auto const& callback) {
-                wide(packed, k, callback);
+                full_width(packed, k, callback);
             });
             check_simd_callbacks<Lanes>(expected, k, [&](auto const& callback) {
                 dispatch(packed, k, callback);
@@ -149,8 +153,8 @@ static void check_simd_isa(Narrow const& narrow, Wide const& wide, Dispatch cons
             extract(pack_sequence(seq, encoder), k, [](auto, std::size_t) {});
         });
     };
-    throws_for(narrow, 29);
-    throws_for(wide, 32);
+    throws_for(narrow_width, 29);
+    throws_for(full_width, 32);
     throws_for(dispatch, 32);
 }
 
@@ -162,11 +166,11 @@ static void check_simd_isa(Narrow const& narrow, Wide const& wide, Dispatch cons
 
 #if defined(FISK_HAS_SSE2)
 
-static constexpr auto sse2_narrow = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_simd_narrow_sse2_(seq, k, func);
+static constexpr auto sse2_narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_narrow_width_sse2_(seq, k, func);
 };
-static constexpr auto sse2_wide = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_simd_wide_sse2_(seq, k, func);
+static constexpr auto sse2_full_width = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_full_width_sse2_(seq, k, func);
 };
 static constexpr auto sse2_dispatch = [](auto const& seq, std::size_t k, auto const& func) {
     for_each_kmer_packed_simd_sse2(seq, k, func);
@@ -174,22 +178,30 @@ static constexpr auto sse2_dispatch = [](auto const& seq, std::size_t k, auto co
 
 TEST(KmerExtractPackedSimd, Sse2AcgtMsb)
 {
-    check_simd_isa<2, Encoding::kACGT, Layout::kMSB>(sse2_narrow, sse2_wide, sse2_dispatch);
+    check_simd_isa<2, Encoding::kACGT, Layout::kMSB>(
+        sse2_narrow_width, sse2_full_width, sse2_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Sse2AcgtLsb)
 {
-    check_simd_isa<2, Encoding::kACGT, Layout::kLSB>(sse2_narrow, sse2_wide, sse2_dispatch);
+    check_simd_isa<2, Encoding::kACGT, Layout::kLSB>(
+        sse2_narrow_width, sse2_full_width, sse2_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Sse2ActgMsb)
 {
-    check_simd_isa<2, Encoding::kACTG, Layout::kMSB>(sse2_narrow, sse2_wide, sse2_dispatch);
+    check_simd_isa<2, Encoding::kACTG, Layout::kMSB>(
+        sse2_narrow_width, sse2_full_width, sse2_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Sse2ActgLsb)
 {
-    check_simd_isa<2, Encoding::kACTG, Layout::kLSB>(sse2_narrow, sse2_wide, sse2_dispatch);
+    check_simd_isa<2, Encoding::kACTG, Layout::kLSB>(
+        sse2_narrow_width, sse2_full_width, sse2_dispatch
+    );
 }
 
 #endif // FISK_HAS_SSE2
@@ -200,11 +212,11 @@ TEST(KmerExtractPackedSimd, Sse2ActgLsb)
 
 #if defined(FISK_HAS_NEON)
 
-static constexpr auto neon_narrow = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_simd_narrow_neon_(seq, k, func);
+static constexpr auto neon_narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_narrow_width_neon_(seq, k, func);
 };
-static constexpr auto neon_wide = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_simd_wide_neon_(seq, k, func);
+static constexpr auto neon_full_width = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_full_width_neon_(seq, k, func);
 };
 static constexpr auto neon_dispatch = [](auto const& seq, std::size_t k, auto const& func) {
     for_each_kmer_packed_simd_neon(seq, k, func);
@@ -212,22 +224,30 @@ static constexpr auto neon_dispatch = [](auto const& seq, std::size_t k, auto co
 
 TEST(KmerExtractPackedSimd, NeonAcgtMsb)
 {
-    check_simd_isa<2, Encoding::kACGT, Layout::kMSB>(neon_narrow, neon_wide, neon_dispatch);
+    check_simd_isa<2, Encoding::kACGT, Layout::kMSB>(
+        neon_narrow_width, neon_full_width, neon_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, NeonAcgtLsb)
 {
-    check_simd_isa<2, Encoding::kACGT, Layout::kLSB>(neon_narrow, neon_wide, neon_dispatch);
+    check_simd_isa<2, Encoding::kACGT, Layout::kLSB>(
+        neon_narrow_width, neon_full_width, neon_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, NeonActgMsb)
 {
-    check_simd_isa<2, Encoding::kACTG, Layout::kMSB>(neon_narrow, neon_wide, neon_dispatch);
+    check_simd_isa<2, Encoding::kACTG, Layout::kMSB>(
+        neon_narrow_width, neon_full_width, neon_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, NeonActgLsb)
 {
-    check_simd_isa<2, Encoding::kACTG, Layout::kLSB>(neon_narrow, neon_wide, neon_dispatch);
+    check_simd_isa<2, Encoding::kACTG, Layout::kLSB>(
+        neon_narrow_width, neon_full_width, neon_dispatch
+    );
 }
 
 #endif // FISK_HAS_NEON
@@ -238,11 +258,11 @@ TEST(KmerExtractPackedSimd, NeonActgLsb)
 
 #if defined(FISK_HAS_AVX2)
 
-static constexpr auto avx2_narrow = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_simd_narrow_avx2_(seq, k, func);
+static constexpr auto avx2_narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_narrow_width_avx2_(seq, k, func);
 };
-static constexpr auto avx2_wide = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_simd_wide_avx2_(seq, k, func);
+static constexpr auto avx2_full_width = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_full_width_avx2_(seq, k, func);
 };
 static constexpr auto avx2_dispatch = [](auto const& seq, std::size_t k, auto const& func) {
     for_each_kmer_packed_simd_avx2(seq, k, func);
@@ -250,22 +270,30 @@ static constexpr auto avx2_dispatch = [](auto const& seq, std::size_t k, auto co
 
 TEST(KmerExtractPackedSimd, Avx2AcgtMsb)
 {
-    check_simd_isa<4, Encoding::kACGT, Layout::kMSB>(avx2_narrow, avx2_wide, avx2_dispatch);
+    check_simd_isa<4, Encoding::kACGT, Layout::kMSB>(
+        avx2_narrow_width, avx2_full_width, avx2_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Avx2AcgtLsb)
 {
-    check_simd_isa<4, Encoding::kACGT, Layout::kLSB>(avx2_narrow, avx2_wide, avx2_dispatch);
+    check_simd_isa<4, Encoding::kACGT, Layout::kLSB>(
+        avx2_narrow_width, avx2_full_width, avx2_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Avx2ActgMsb)
 {
-    check_simd_isa<4, Encoding::kACTG, Layout::kMSB>(avx2_narrow, avx2_wide, avx2_dispatch);
+    check_simd_isa<4, Encoding::kACTG, Layout::kMSB>(
+        avx2_narrow_width, avx2_full_width, avx2_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Avx2ActgLsb)
 {
-    check_simd_isa<4, Encoding::kACTG, Layout::kLSB>(avx2_narrow, avx2_wide, avx2_dispatch);
+    check_simd_isa<4, Encoding::kACTG, Layout::kLSB>(
+        avx2_narrow_width, avx2_full_width, avx2_dispatch
+    );
 }
 
 #endif // FISK_HAS_AVX2
@@ -276,11 +304,11 @@ TEST(KmerExtractPackedSimd, Avx2ActgLsb)
 
 #if defined(FISK_HAS_AVX512)
 
-static constexpr auto avx512_narrow = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_simd_narrow_avx512_(seq, k, func);
+static constexpr auto avx512_narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_narrow_width_avx512_(seq, k, func);
 };
-static constexpr auto avx512_wide = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_simd_wide_avx512_(seq, k, func);
+static constexpr auto avx512_full_width = [](auto const& seq, std::size_t k, auto const& func) {
+    for_each_kmer_packed_simd_full_width_avx512_(seq, k, func);
 };
 static constexpr auto avx512_dispatch = [](auto const& seq, std::size_t k, auto const& func) {
     for_each_kmer_packed_simd_avx512(seq, k, func);
@@ -288,22 +316,30 @@ static constexpr auto avx512_dispatch = [](auto const& seq, std::size_t k, auto 
 
 TEST(KmerExtractPackedSimd, Avx512AcgtMsb)
 {
-    check_simd_isa<8, Encoding::kACGT, Layout::kMSB>(avx512_narrow, avx512_wide, avx512_dispatch);
+    check_simd_isa<8, Encoding::kACGT, Layout::kMSB>(
+        avx512_narrow_width, avx512_full_width, avx512_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Avx512AcgtLsb)
 {
-    check_simd_isa<8, Encoding::kACGT, Layout::kLSB>(avx512_narrow, avx512_wide, avx512_dispatch);
+    check_simd_isa<8, Encoding::kACGT, Layout::kLSB>(
+        avx512_narrow_width, avx512_full_width, avx512_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Avx512ActgMsb)
 {
-    check_simd_isa<8, Encoding::kACTG, Layout::kMSB>(avx512_narrow, avx512_wide, avx512_dispatch);
+    check_simd_isa<8, Encoding::kACTG, Layout::kMSB>(
+        avx512_narrow_width, avx512_full_width, avx512_dispatch
+    );
 }
 
 TEST(KmerExtractPackedSimd, Avx512ActgLsb)
 {
-    check_simd_isa<8, Encoding::kACTG, Layout::kLSB>(avx512_narrow, avx512_wide, avx512_dispatch);
+    check_simd_isa<8, Encoding::kACTG, Layout::kLSB>(
+        avx512_narrow_width, avx512_full_width, avx512_dispatch
+    );
 }
 
 #endif // FISK_HAS_AVX512

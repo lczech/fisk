@@ -32,7 +32,7 @@ Usage examples:
   # Restrict to rows whose "case" column (e.g. "layout=msb;k=17") matches given fields:
   python plot_bars_per_cpu.py --glob "results/*/kmer_extract_packed.csv" \
       --case-filter "layout=msb" --case-filter "k<=29" --reduced \
-      --out kmer_extract_packed_msb_narrow.png
+      --out kmer_extract_packed_msb_narrow_width.png
 
 If --out is omitted, shows interactively.
 """

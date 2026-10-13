@@ -290,12 +290,13 @@ for combo in "${COMBOS[@]}"; do
   fi
 
   # Regular: reduced variant set (scalar baseline + each ISA's dispatcher only), matching the
-  # per-CPU line plots' default and the narrow/wide tier plots below -- a summary, not full detail.
+  # per-CPU line plots' default and the narrow-width/full-width tier plots below -- a summary, not
+  # full detail.
   run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
     --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
     --out "${OUT}/kmer_extract_packed_per_cpu.png"
 
-  # Extended: every variant, including narrow/wide/rolling, for internal checking.
+  # Extended: every variant, including narrow-width/full-width/rolling, for internal checking.
   run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
     --extended --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_EXTENDED" \
     --out "${OUT}/kmer_extract_packed_per_cpu_ext.png"
@@ -310,9 +311,10 @@ wait
 #   --out-dir "$OUT"
 
 # Same per-CPU grouped-bar style as the summary above (bars = platform/compiler, x-axis =
-# implementation), but split by Layout and narrow/wide k-tier instead of blending everything into
-# one mean. Reduced by default: at a fixed tier, each ISA's dispatcher bench already resolves to
-# whichever of narrow/wide applies, so the narrow/wide/rolling detail rows would be redundant here.
+# implementation), but split by Layout and narrow-width/full-width k-tier instead of blending
+# everything into one mean. Reduced by default: at a fixed tier, each ISA's dispatcher bench already
+# resolves to whichever of narrow-width/full-width applies, so the narrow-width/full-width/rolling
+# detail rows would be redundant here.
 for layout in msb lsb; do
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
@@ -326,12 +328,12 @@ for layout in msb lsb; do
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
       --case-filter "layout=${layout}" --case-filter "k<=29" \
       --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
-      --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_narrow.png"
+      --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_narrow_width.png"
 
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
       --case-filter "layout=${layout}" --case-filter "k>=30" --case-filter "k<=32" \
       --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
-      --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_wide.png"
+      --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_full_width.png"
   done
 done
 wait

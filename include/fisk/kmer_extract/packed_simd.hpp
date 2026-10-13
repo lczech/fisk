@@ -26,7 +26,7 @@ namespace fisk {
 // the ISA's native integer vector, see invoke_kmer_vector_callback(): `pos` is the start position
 // of the k-mer in lane 0, and lane `j` holds the one starting at `pos + j`. Full vectors have
 // `valid_count == lane_count`; the final vector may be zero-padded in high lanes.
-// The suffixed narrow/wide functions are internal helpers used by the dispatchers.
+// The suffixed narrow-width/full-width functions are internal helpers used by the dispatchers.
 //
 // Unlike the scalar extractors in packed.hpp, these hand out raw vectors rather than Kmer values
 // (core/kmer.hpp): a vector holds several k-mers at once, so the scalar wrapper does not apply to
@@ -71,7 +71,7 @@ inline void emit_tail_packed_(
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_narrow_sse2_(
+inline void for_each_kmer_packed_simd_narrow_width_sse2_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 29) {
@@ -113,7 +113,8 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
             return 2u * local;
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_sse2_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_sse2_()"
             );
         }
     };
@@ -138,7 +139,8 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
             // A little-endian load already has the bases in order.
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_sse2_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_sse2_()"
             );
         }
         __m128i const pair = _mm_set_epi64x(
@@ -184,7 +186,7 @@ inline void for_each_kmer_packed_simd_narrow_sse2_(
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_wide_sse2_(
+inline void for_each_kmer_packed_simd_full_width_sse2_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
@@ -203,8 +205,8 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
     // The bound keeps both 8-byte loads and both extra-byte reads within the packed input.
     std::size_t const fast_bytes = (num_bytes >= 9) ? std::min(full_bytes, num_bytes - 9)
                                                      : std::size_t{0};
-    // See for_each_kmer_packed_simd_narrow_sse2_()'s comment: rounds down for pairing, with any
-    // resulting single trailing byte left to the scalar tail below.
+    // See for_each_kmer_packed_simd_narrow_width_sse2_()'s comment: rounds down for pairing, with
+    // any resulting single trailing byte left to the scalar tail below.
     std::size_t const paired_fast_bytes = fast_bytes - (fast_bytes % 2);
 
     __m128i const mask_v = _mm_set1_epi64x(static_cast<std::int64_t>(mask));
@@ -218,7 +220,8 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
             return 2u * local;
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_sse2_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_full_width_sse2_()"
             );
         }
     };
@@ -274,7 +277,8 @@ inline void for_each_kmer_packed_simd_wide_sse2_(
             // A little-endian load already has the bases in order.
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_sse2_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_full_width_sse2_()"
             );
         }
         __m128i const lo_pair = _mm_set_epi64x(
@@ -324,9 +328,9 @@ inline void for_each_kmer_packed_simd_sse2(
         throw_invalid_kmer_k_(32);
     }
     if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_sse2_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_narrow_width_sse2_(seq, k, std::forward<Func>(func));
     } else {
-        for_each_kmer_packed_simd_wide_sse2_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_full_width_sse2_(seq, k, std::forward<Func>(func));
     }
 }
 
@@ -345,7 +349,7 @@ inline void for_each_kmer_packed_simd_sse2(
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_narrow_avx2_(
+inline void for_each_kmer_packed_simd_narrow_width_avx2_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 29) {
@@ -376,7 +380,8 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
             shifts[local] = 2u * local;
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_avx2_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_avx2_()"
             );
         }
     }
@@ -394,7 +399,8 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
             // A little-endian load already has the bases in order.
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_avx2_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_avx2_()"
             );
         }
         __m256i const bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(word));
@@ -423,7 +429,7 @@ inline void for_each_kmer_packed_simd_narrow_avx2_(
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_wide_avx2_(
+inline void for_each_kmer_packed_simd_full_width_avx2_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
@@ -452,7 +458,8 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
             starts[local] = 2u * local;
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_avx2_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_full_width_avx2_()"
             );
         }
     }
@@ -476,7 +483,8 @@ inline void for_each_kmer_packed_simd_wide_avx2_(
             // A little-endian load already has the bases in order.
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_avx2_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_full_width_avx2_()"
             );
         }
         __m256i const lo_bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(lo));
@@ -517,9 +525,9 @@ inline void for_each_kmer_packed_simd_avx2(
         throw_invalid_kmer_k_(32);
     }
     if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_avx2_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_narrow_width_avx2_(seq, k, std::forward<Func>(func));
     } else {
-        for_each_kmer_packed_simd_wide_avx2_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_full_width_avx2_(seq, k, std::forward<Func>(func));
     }
 }
 
@@ -540,7 +548,7 @@ inline void for_each_kmer_packed_simd_avx2(
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_narrow_avx512_(
+inline void for_each_kmer_packed_simd_narrow_width_avx512_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 29) {
@@ -579,7 +587,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_avx512_()"
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_avx512_()"
             );
         }
     }
@@ -602,7 +610,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_avx512_()"
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_avx512_()"
             );
         }
         __m512i const dbcast = _mm512_set_epi64(
@@ -636,7 +644,7 @@ inline void for_each_kmer_packed_simd_narrow_avx512_(
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_wide_avx512_(
+inline void for_each_kmer_packed_simd_full_width_avx512_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
@@ -670,7 +678,8 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
             starts[local] = 2u * local;
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_avx512_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_full_width_avx512_()"
             );
         }
     }
@@ -709,7 +718,8 @@ inline void for_each_kmer_packed_simd_wide_avx512_(
             // A little-endian load already has the bases in order.
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_avx512_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_full_width_avx512_()"
             );
         }
         __m512i const lo_dbcast = _mm512_set_epi64(
@@ -756,9 +766,9 @@ inline void for_each_kmer_packed_simd_avx512(
         throw_invalid_kmer_k_(32);
     }
     if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_avx512_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_narrow_width_avx512_(seq, k, std::forward<Func>(func));
     } else {
-        for_each_kmer_packed_simd_wide_avx512_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_full_width_avx512_(seq, k, std::forward<Func>(func));
     }
 }
 
@@ -775,7 +785,7 @@ inline void for_each_kmer_packed_simd_avx512(
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_narrow_neon_(
+inline void for_each_kmer_packed_simd_narrow_width_neon_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     // Unlike SSE2, NEON's ushl (vshlq_u64) takes a genuine per-lane
@@ -813,7 +823,8 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
             s = 2u * local;
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_neon_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_neon_()"
             );
         }
         return -static_cast<std::int64_t>(s);
@@ -832,7 +843,8 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
             // A little-endian load already has the bases in order.
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_narrow_neon_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_neon_()"
             );
         }
         uint64x2_t const bcast = vdupq_n_u64(word);
@@ -861,10 +873,10 @@ inline void for_each_kmer_packed_simd_narrow_neon_(
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_wide_neon_(
+inline void for_each_kmer_packed_simd_full_width_neon_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
-    // The same per-byte, no-transpose arrangement as the narrow path is used. The lo:hi
+    // The same per-byte, no-transpose arrangement as the narrow-width path is used. The lo:hi
     // boundary-spanning window collapses to a single ushl each for the lo and hi contribution,
     // since ushl's signed shift count already encodes direction: shifting `lo` right by `start`
     // and `hi` "left" by `64-start` (which naturally becomes a right shift once `64-start` goes
@@ -896,7 +908,8 @@ inline void for_each_kmer_packed_simd_wide_neon_(
             return 2u * local;
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_neon_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_full_width_neon_()"
             );
         }
     };
@@ -933,7 +946,8 @@ inline void for_each_kmer_packed_simd_wide_neon_(
             // A little-endian load already has the bases in order.
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_packed_simd_wide_neon_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_simd_full_width_neon_()"
             );
         }
         uint64x2_t const lo_bcast = vdupq_n_u64(lo);
@@ -974,9 +988,9 @@ inline void for_each_kmer_packed_simd_neon(
         throw_invalid_kmer_k_(32);
     }
     if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_neon_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_narrow_width_neon_(seq, k, std::forward<Func>(func));
     } else {
-        for_each_kmer_packed_simd_wide_neon_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_full_width_neon_(seq, k, std::forward<Func>(func));
     }
 }
 

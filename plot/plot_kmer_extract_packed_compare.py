@@ -25,12 +25,13 @@ from plot_common import (
 VARIANT_ORDER = PACKED_KMER_VARIANT_ORDER
 VARIANT_COLORS = PACKED_KMER_VARIANT_COLORS
 
-# Direct narrow/wide rows are useful while tuning, but the dispatcher rows are the default user-facing
-# comparison. Pass --show-direct to include the helper rows as well.
+# Direct narrow-width/full-width rows are useful while tuning, but the dispatcher rows are the
+# default user-facing comparison. Pass --show-direct to include the helper rows as well.
 DIRECT_SIMD_VARIANTS = {
-    v for v in VARIANT_ORDER if v.startswith("simd_") and ("_narrow_" in v or "_wide_" in v)
+    v for v in VARIANT_ORDER
+    if v.startswith("simd_") and ("_narrow_width_" in v or "_full_width_" in v)
 }
-ROLLING_VARIANTS = {"rolling", "narrow_rolling", "wide_rolling"}
+ROLLING_VARIANTS = {"rolling", "narrow_width_rolling", "full_width_rolling"}
 
 # (layout, k) combos to produce one heatmap + one bar chart for each.
 COMBOS = [("msb", 29), ("msb", 32), ("lsb", 29), ("lsb", 32)]
@@ -228,7 +229,7 @@ def main():
     parser.add_argument(
         "--show-direct",
         action="store_true",
-        help="Include direct narrow/wide SIMD helper rows (hidden by default)",
+        help="Include direct narrow-width/full-width SIMD helper rows (hidden by default)",
     )
     parser.add_argument(
         "--show-heatmaps",

@@ -105,8 +105,9 @@ inline std::vector<std::string> invalid_injected_sequences(
 // =================================================================================================
 
 // k values spanning the full supported range [1, 32], concentrated around word and byte boundaries
-// and around the narrow (k <= 29) / wide (k in [30, 32]) split of the packed extractors. Functions
-// that dispatch every k to its own compile-time specialization need all of 1..32 instead.
+// and around the narrow-width (k <= 29) / full-width (k in [30, 32]) split of the packed
+// extractors. Functions that dispatch every k to its own compile-time specialization need all of
+// 1..32 instead.
 inline std::vector<std::size_t> const& test_ks()
 {
     static std::vector<std::size_t> const ks = {

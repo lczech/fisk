@@ -129,15 +129,15 @@ std::size_t collect_kmers_packed_tail_(
 // =================================================================================================
 
 // k <= 29 fits in a single 8-byte load, independently of which of the four nucleotides within
-// a byte we are starting with. This "narrow" case can thus be optimized compared to the "wide"
-// case below (k <= 32), which needs to read an extra byte.
+// a byte we are starting with. This "narrow-width" case can thus be optimized compared to the
+// "full-width" case below (k <= 32), which needs to read an extra byte.
 //
 // K is a template parameter, so that all shifts and masks are compile-time constants regardless of
 // the call site; with a runtime k, this was measured up to ~1.25x slower on Clang (about the same
 // on GCC). The cost is one instantiation per K in for_each_kmer_packed_aligned()'s dispatch.
 template <Encoding E, Layout L, unsigned K, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_narrow_(
+inline void for_each_kmer_packed_aligned_narrow_width_(
     PackedSequence<E, L> const& seq, Func&& func
 ) {
     static_assert(K >= 1 && K <= 29, "K must be in [1, 29]");
@@ -161,7 +161,7 @@ inline void for_each_kmer_packed_aligned_narrow_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_()"
+                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_width_()"
             );
         }
         std::uint64_t v0, v1, v2, v3;
@@ -178,7 +178,7 @@ inline void for_each_kmer_packed_aligned_narrow_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_()"
+                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_width_()"
             );
         }
 
@@ -215,7 +215,7 @@ inline void for_each_kmer_packed_aligned_narrow_(
     }
 }
 
-// k in [30, 32] needs a 9th margin byte beyond the main 8-byte word, which breaks the narrow
+// k in [30, 32] needs a 9th margin byte beyond the main 8-byte word, which breaks the narrow-width
 // single-shift exploit above. These three cases instead get their own specializations, where every
 // shift is a compile-time constant via the K template parameter for best optimization potential.
 template <Layout L, unsigned K>
@@ -244,7 +244,7 @@ inline std::uint64_t aligned_boundary_window_(
 
 template <Encoding E, Layout L, unsigned K, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_wide_(PackedSequence<E, L> const& seq, Func&& func)
+inline void for_each_kmer_packed_aligned_full_width_(PackedSequence<E, L> const& seq, Func&& func)
 {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
 
@@ -275,7 +275,7 @@ inline void for_each_kmer_packed_aligned_wide_(PackedSequence<E, L> const& seq, 
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_aligned_wide_()"
+                "Unhandled Layout in for_each_kmer_packed_aligned_full_width_()"
             );
         }
 
@@ -333,58 +333,58 @@ inline void for_each_kmer_packed_aligned(
         return;
     }
 
-    // Local X-macro, undefined right below: the 29 narrow cases are otherwise identical aside
+    // Local X-macro, undefined right below: the 29 narrow-width cases are otherwise identical aside
     // from their K, and spelling each out longhand would bury that in repetition.
-    #define FISK_PACKED_ALIGNED_NARROW_CASE_(K_) \
+    #define FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(K_) \
         case K_: \
-            for_each_kmer_packed_aligned_narrow_<E, L, K_>(seq, std::forward<Func>(func)); \
+            for_each_kmer_packed_aligned_narrow_width_<E, L, K_>(seq, std::forward<Func>(func)); \
             break;
 
     switch (k) {
-        FISK_PACKED_ALIGNED_NARROW_CASE_(1)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(2)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(3)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(4)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(5)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(6)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(7)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(8)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(9)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(10)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(11)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(12)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(13)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(14)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(15)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(16)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(17)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(18)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(19)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(20)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(21)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(22)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(23)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(24)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(25)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(26)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(27)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(28)
-        FISK_PACKED_ALIGNED_NARROW_CASE_(29)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(1)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(2)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(3)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(4)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(5)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(6)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(7)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(8)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(9)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(10)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(11)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(12)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(13)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(14)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(15)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(16)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(17)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(18)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(19)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(20)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(21)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(22)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(23)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(24)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(25)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(26)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(27)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(28)
+        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(29)
         case 30: {
-            for_each_kmer_packed_aligned_wide_<E, L, 30>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_full_width_<E, L, 30>(seq, std::forward<Func>(func));
             break;
         }
         case 31: {
-            for_each_kmer_packed_aligned_wide_<E, L, 31>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_full_width_<E, L, 31>(seq, std::forward<Func>(func));
             break;
         }
         case 32: {
-            for_each_kmer_packed_aligned_wide_<E, L, 32>(seq, std::forward<Func>(func));
+            for_each_kmer_packed_aligned_full_width_<E, L, 32>(seq, std::forward<Func>(func));
             break;
         }
     }
 
-    #undef FISK_PACKED_ALIGNED_NARROW_CASE_
+    #undef FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_
 }
 
 // =================================================================================================
@@ -396,7 +396,7 @@ inline void for_each_kmer_packed_aligned(
 // That serial dependency chain is what makes this version slower.
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_narrow_(
+inline void for_each_kmer_packed_rolling_narrow_width_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
@@ -411,7 +411,7 @@ inline void for_each_kmer_packed_rolling_narrow_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_narrow_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_narrow_width_()"
             );
         }
     };
@@ -439,7 +439,7 @@ inline void for_each_kmer_packed_rolling_narrow_(
             } else {
                 static_assert(
                     dependent_false_v<L>,
-                    "Unhandled Layout in for_each_kmer_packed_rolling_narrow_()"
+                    "Unhandled Layout in for_each_kmer_packed_rolling_narrow_width_()"
                 );
             }
             auto const word = (acc >> shift) & mask;
@@ -450,11 +450,12 @@ inline void for_each_kmer_packed_rolling_narrow_(
 }
 
 // k > 29 needs more than 64 bits of accumulator, so this variant folds into a hi:lo pair instead
-// of narrow's single 64-bit `acc`; correct for any k in [1, 32], just with more bookkeeping per
-// byte, which is why the narrow impl above still exists as the faster choice for k <= 29.
+// of the narrow-width impl's single 64-bit `acc`; correct for any k in [1, 32], just with more
+// bookkeeping per byte, which is why the narrow-width impl above still exists as the faster choice
+// for k <= 29.
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_wide_(
+inline void for_each_kmer_packed_rolling_full_width_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     std::uint64_t const mask = (k == 32)
@@ -479,7 +480,7 @@ inline void for_each_kmer_packed_rolling_wide_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_wide_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
             );
         }
         int case_id;
@@ -508,7 +509,7 @@ inline void for_each_kmer_packed_rolling_wide_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_wide_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
             );
         }
     };
@@ -549,8 +550,8 @@ inline void for_each_kmer_packed_rolling_wide_(
  * Kept only as a slower algorithmic comparison baseline; prefer for_each_kmer_packed_aligned()
  * for production use.
  *
- * For k <= 29, delegates to for_each_kmer_packed_rolling_narrow_() (single 64-bit
- * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_wide_() (hi:lo pair)
+ * For k <= 29, delegates to for_each_kmer_packed_rolling_narrow_width_() (single 64-bit
+ * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_full_width_() (hi:lo pair)
  * instead, since a single 64-bit accumulator no longer fits.
  *
  * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
@@ -568,9 +569,9 @@ inline void for_each_kmer_packed_rolling(
         return;
     }
     if (k <= 29) {
-        for_each_kmer_packed_rolling_narrow_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_rolling_narrow_width_(seq, k, std::forward<Func>(func));
     } else {
-        for_each_kmer_packed_rolling_wide_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_rolling_full_width_(seq, k, std::forward<Func>(func));
     }
 }
 

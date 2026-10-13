@@ -18,9 +18,10 @@ from plot_common import *
 # by position, so a given uncurated name still gets a stable color within one run at least.
 FALLBACK_PALETTE = plt.get_cmap("tab20").colors
 
-# Narrow/wide implementation-detail rows: present in PACKED_KMER_VARIANT_ORDER but not in the
-# headline PACKED_KMER_VARIANT_ORDER_REDUCED subset (which is just the scalar baseline + each ISA's
-# public dispatcher). Hidden by default, same as plot_kmer_extract_packed_compare.py's --show-direct.
+# Narrow-width/full-width implementation-detail rows: present in PACKED_KMER_VARIANT_ORDER but not
+# in the headline PACKED_KMER_VARIANT_ORDER_REDUCED subset (which is just the scalar baseline + each
+# ISA's public dispatcher). Hidden by default, same as plot_kmer_extract_packed_compare.py's
+# --show-direct.
 DIRECT_SIMD_VARIANTS = {
     v for v in PACKED_KMER_VARIANT_ORDER
     if v not in PACKED_KMER_VARIANT_ORDER_REDUCED and v != "rolling"
@@ -88,7 +89,7 @@ def main():
     parser.add_argument(
         "--show-direct",
         action="store_true",
-        help="Also show the narrow/wide implementation-detail lines (hidden by default)",
+        help="Also show the narrow-width/full-width implementation-detail lines (hidden by default)",
     )
     parser.add_argument(
         "--show-rolling",
@@ -128,7 +129,8 @@ def main():
     # Curated allowlist rather than "everything present": an old CSV can still carry benchmark
     # names that no longer exist in the code (past renames/removals), and those should just
     # disappear rather than clutter the plot. Reduced (dispatcher + scalar baseline only) by
-    # default; --show-direct/--show-rolling opt back into the narrow/wide/rolling detail rows.
+    # default; --show-direct/--show-rolling opt back into the narrow-width/full-width/rolling detail
+    # rows.
     allowed = set(PACKED_KMER_VARIANT_ORDER_REDUCED)
     if args.show_direct:
         allowed |= DIRECT_SIMD_VARIANTS

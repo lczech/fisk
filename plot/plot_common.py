@@ -356,20 +356,20 @@ BENCHMARK_RENAMES = {
     "simd_block_table_scalar_by_position"     : "SIMD Block Table scalar (by position)",
 
     # Kmer extract packed
-    "aligned"              : "Scalar",
-    "rolling"              : "Rolling",
-    "simd_narrow_sse2"     : "SIMD Narrow SSE2",
-    "simd_wide_sse2"       : "SIMD Wide SSE2",
-    "simd_sse2"            : "SIMD SSE2",
-    "simd_narrow_avx2"     : "SIMD Narrow AVX2",
-    "simd_wide_avx2"       : "SIMD Wide AVX2",
-    "simd_avx2"            : "SIMD AVX2",
-    "simd_narrow_avx512"   : "SIMD Narrow AVX512",
-    "simd_wide_avx512"     : "SIMD Wide AVX512",
-    "simd_avx512"          : "SIMD AVX512",
-    "simd_narrow_neon"     : "SIMD Narrow Neon",
-    "simd_wide_neon"       : "SIMD Wide Neon",
-    "simd_neon"            : "SIMD Neon",
+    "aligned"                  : "Scalar",
+    "rolling"                  : "Rolling",
+    "simd_narrow_width_sse2"   : "SIMD Narrow-Width SSE2",
+    "simd_full_width_sse2"     : "SIMD Full-Width SSE2",
+    "simd_sse2"                : "SIMD SSE2",
+    "simd_narrow_width_avx2"   : "SIMD Narrow-Width AVX2",
+    "simd_full_width_avx2"     : "SIMD Full-Width AVX2",
+    "simd_avx2"                : "SIMD AVX2",
+    "simd_narrow_width_avx512" : "SIMD Narrow-Width AVX512",
+    "simd_full_width_avx512"   : "SIMD Full-Width AVX512",
+    "simd_avx512"              : "SIMD AVX512",
+    "simd_narrow_width_neon"   : "SIMD Narrow-Width Neon",
+    "simd_full_width_neon"     : "SIMD Full-Width Neon",
+    "simd_neon"                : "SIMD Neon",
 }
 
 # "Reduced" names for the main manuscript, to keep it simple.
@@ -532,21 +532,21 @@ BENCHMARK_ORDER = [
 
 # Stable order and colors for the kmer_extract_packed benchmark family (packed.hpp), kept as its
 # own dict rather than folded into BENCHMARK_COLORS/BENCHMARK_ORDER above since it's a distinct
-# naming scheme. Direct narrow/wide rows are retained for code-generation comparisons; dispatchers
-# are the user-facing entry points.
+# naming scheme. Direct narrow-width/full-width rows are retained for code-generation comparisons;
+# dispatchers are the user-facing entry points.
 PACKED_KMER_VARIANT_ORDER = [
     "aligned",
-    "simd_narrow_sse2",
-    "simd_wide_sse2",
+    "simd_narrow_width_sse2",
+    "simd_full_width_sse2",
     "simd_sse2",
-    "simd_narrow_avx2",
-    "simd_wide_avx2",
+    "simd_narrow_width_avx2",
+    "simd_full_width_avx2",
     "simd_avx2",
-    "simd_narrow_avx512",
-    "simd_wide_avx512",
+    "simd_narrow_width_avx512",
+    "simd_full_width_avx512",
     "simd_avx512",
-    "simd_narrow_neon",
-    "simd_wide_neon",
+    "simd_narrow_width_neon",
+    "simd_full_width_neon",
     "simd_neon",
     "rolling",
 ]
@@ -554,29 +554,30 @@ PACKED_KMER_VARIANT_ORDER = [
 PACKED_KMER_VARIANT_COLORS = {
     "aligned" : "#107D84",
     "rolling" : "#636363",  # grey
-    # SSE2: purple shades, ordered narrow -> wide -> dispatcher.
-    "simd_narrow_sse2" : "#c5b0d5",
-    "simd_wide_sse2" : "#9467bd",
+    # SSE2: purple shades, ordered narrow-width -> full-width -> dispatcher.
+    "simd_narrow_width_sse2" : "#c5b0d5",
+    "simd_full_width_sse2" : "#9467bd",
     "simd_sse2" : "#5C338A",
-    # AVX2: green shades, ordered narrow -> wide -> dispatcher.
-    "simd_narrow_avx2" : "#78c679",
-    "simd_wide_avx2" : "#2ca02c",
+    # AVX2: green shades, ordered narrow-width -> full-width -> dispatcher.
+    "simd_narrow_width_avx2" : "#78c679",
+    "simd_full_width_avx2" : "#2ca02c",
     "simd_avx2" : "#207542",
-    # AVX-512: red shades, ordered narrow -> wide -> dispatcher.
-    "simd_narrow_avx512" : "#fb6a4a",
-    "simd_wide_avx512" : "#d62728",
+    # AVX-512: red shades, ordered narrow-width -> full-width -> dispatcher.
+    "simd_narrow_width_avx512" : "#fb6a4a",
+    "simd_full_width_avx512" : "#d62728",
     "simd_avx512" : "#a23236",
-    # NEON: blue shades, ordered narrow -> wide -> dispatcher.
-    "simd_narrow_neon" : "#9ecae1",
-    "simd_wide_neon" : "#6baed6",
+    # NEON: blue shades, ordered narrow-width -> full-width -> dispatcher.
+    "simd_narrow_width_neon" : "#9ecae1",
+    "simd_full_width_neon" : "#6baed6",
     "simd_neon" : "#23609d",
 }
 
 # Headline subset of PACKED_KMER_VARIANT_ORDER: the scalar baseline plus each ISA's public
-# dispatcher only -- no narrow/wide/rolling implementation detail. Each dispatcher already picks
-# narrow or wide internally depending on k, so a chart already split by k-tier (e.g. one figure per
-# narrow/wide range) loses nothing by showing only the dispatcher row: it *is* whichever of
-# narrow/wide applies at that k. Used as the default (non---extended) comparison view.
+# dispatcher only -- no narrow-width/full-width/rolling implementation detail. Each dispatcher
+# already picks narrow-width or full-width internally depending on k, so a chart already split by
+# k-tier (e.g. one figure per narrow-width/full-width range) loses nothing by showing only the
+# dispatcher row: it *is* whichever of the two applies at that k. Used as the default
+# (non---extended) comparison view.
 PACKED_KMER_VARIANT_ORDER_REDUCED = [
     "aligned",
     "simd_sse2",

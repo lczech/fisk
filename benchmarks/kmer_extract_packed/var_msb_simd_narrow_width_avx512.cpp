@@ -9,13 +9,13 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_msb_simd_narrow_avx512(
+std::uint64_t run_var_msb_simd_narrow_width_avx512(
     PackedMsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_simd_narrow_avx512_(seq, k, [&](__m512i v, std::size_t) noexcept {
+    for_each_kmer_packed_simd_narrow_width_avx512_(seq, k, [&](__m512i v, std::size_t) noexcept {
         sink.consume(v);
     });
     return sink.finalize();
