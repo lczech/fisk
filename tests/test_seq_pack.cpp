@@ -139,8 +139,10 @@ static_assert( WordEncoder<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>>)
 #if defined(FISK_HAS_BMI2)
 static_assert( WordEncoder<WordEncoderPext<Encoding::kACGT, Layout::kLSB>>);
 #endif
+static_assert( WordEncoder<WordEncoderDirect<Encoding::kACGT, Layout::kLSB>>);
 #if defined(FISK_HAS_SSE2)
 static_assert( WordEncoder<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB, SimdSSE2>>);
+static_assert( WordEncoder<WordEncoderDirect<Encoding::kACTG, Layout::kMSB, SimdSSE2>>);
 #endif
 static_assert(!WordEncoder<CharEncoderTable<Encoding::kACGT>>);
 static_assert(!WordEncoder<UntaggedWordEncoder>);
@@ -170,20 +172,25 @@ static_assert(tagged_as<WordEncoderPext<Encoding::kACGT, Layout::kMSB>, Encoding
 
 // The number of lanes is what selects the vector loop of pack_sequence().
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>::lanes == 1);
+static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB>::lanes == 1);
 #if defined(FISK_HAS_BMI2)
 static_assert(WordEncoderPext<Encoding::kACGT, Layout::kMSB>::lanes == 1);
 #endif
 #if defined(FISK_HAS_SSE2)
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
+static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
 #endif
 #if defined(FISK_HAS_AVX2)
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX2>::lanes == 4);
+static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX2>::lanes == 4);
 #endif
 #if defined(FISK_HAS_AVX512)
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 8);
+static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 8);
 #endif
 #if defined(FISK_HAS_NEON)
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdNEON>::lanes == 2);
+static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdNEON>::lanes == 2);
 #endif
 
 // The packed sequence type follows the encoder's tags.
@@ -226,6 +233,30 @@ TEST(SeqPack, ScalarButterflyAcgtLsb)
 TEST(SeqPack, ScalarButterflyAcgtMsb)
 {
     check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>>();
+}
+
+// -----------------------------------------------------------------------------
+//     Direct
+// -----------------------------------------------------------------------------
+
+TEST(SeqPack, ScalarDirectActgLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kLSB>>();
+}
+
+TEST(SeqPack, ScalarDirectActgMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kMSB>>();
+}
+
+TEST(SeqPack, ScalarDirectAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kLSB>>();
+}
+
+TEST(SeqPack, ScalarDirectAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB>>();
 }
 
 // -----------------------------------------------------------------------------
@@ -278,6 +309,22 @@ TEST(SeqPackSimd, Sse2AcgtMsb)
 {
     check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdSSE2>>();
 }
+TEST(SeqPackSimd, Sse2DirectActgLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kLSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2DirectActgMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kMSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2DirectAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kLSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2DirectAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdSSE2>>();
+}
 
 #endif // FISK_HAS_SSE2
 
@@ -298,6 +345,22 @@ TEST(SeqPackSimd, Avx2AcgtLsb)
 TEST(SeqPackSimd, Avx2AcgtMsb)
 {
     check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2DirectActgLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kLSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2DirectActgMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kMSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2DirectAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kLSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2DirectAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX2>>();
 }
 
 #endif // FISK_HAS_AVX2
@@ -320,6 +383,22 @@ TEST(SeqPackSimd, Avx512AcgtMsb)
 {
     check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX512>>();
 }
+TEST(SeqPackSimd, Avx512DirectActgLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kLSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512DirectActgMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kMSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512DirectAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kLSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512DirectAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX512>>();
+}
 
 #endif // FISK_HAS_AVX512
 
@@ -340,6 +419,22 @@ TEST(SeqPackSimd, NeonAcgtLsb)
 TEST(SeqPackSimd, NeonAcgtMsb)
 {
     check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdNEON>>();
+}
+TEST(SeqPackSimd, NeonDirectActgLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kLSB, SimdNEON>>();
+}
+TEST(SeqPackSimd, NeonDirectActgMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACTG, Layout::kMSB, SimdNEON>>();
+}
+TEST(SeqPackSimd, NeonDirectAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kLSB, SimdNEON>>();
+}
+TEST(SeqPackSimd, NeonDirectAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdNEON>>();
 }
 
 #endif // FISK_HAS_NEON

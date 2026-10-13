@@ -178,6 +178,52 @@ static void check_simd_store_truncated(Lanes<Simd> const& in)
     }
 }
 
+// Expected output of store_two_bit_codes() for the 2-bit codes in the bytes of the given lanes.
+template <SimdArch Simd>
+static std::array<unsigned char, 2 * Simd::lanes> packed_two_bit_codes(
+    Lanes<Simd> const& codes, bool msb_first
+) {
+    std::array<unsigned char, 2 * Simd::lanes> packed{};
+    for (std::size_t i = 0; i < 8 * Simd::lanes; ++i) {
+        unsigned const code = (codes[i / 8] >> (8 * (i % 8))) & 0x3;
+        unsigned const shift = static_cast<unsigned>(msb_first ? 6 - 2 * (i % 4) : 2 * (i % 4));
+        packed[i / 4] = static_cast<unsigned char>(packed[i / 4] | (code << shift));
+    }
+    return packed;
+}
+
+// Lanes with a 2-bit code in each byte, as store_two_bit_codes() expects them.
+template <SimdArch Simd>
+static Lanes<Simd> two_bit_codes(Lanes<Simd> lanes)
+{
+    for (auto& lane : lanes) {
+        lane &= 0x0303030303030303ULL;
+    }
+    return lanes;
+}
+
+template <SimdArch Simd, bool MsbFirst>
+static void check_simd_store_two_bit_codes(Lanes<Simd> const& in)
+{
+    // Guard bytes after the output, to check that nothing is written past it.
+    constexpr std::size_t n_bytes = 2 * Simd::lanes;
+    constexpr unsigned char guard = 0xAB;
+    unsigned char out[n_bytes + 16];
+    std::memset(out, guard, sizeof(out));
+    auto const codes = two_bit_codes<Simd>(in);
+    Simd::template store_two_bit_codes<MsbFirst>(
+        from_lanes<Simd>(codes), reinterpret_cast<char*>(out)
+    );
+
+    auto const expected = packed_two_bit_codes<Simd>(codes, MsbFirst);
+    for (std::size_t i = 0; i < n_bytes; ++i) {
+        EXPECT_EQ(out[i], expected[i]);
+    }
+    for (std::size_t i = n_bytes; i < sizeof(out); ++i) {
+        EXPECT_EQ(out[i], guard);
+    }
+}
+
 template <SimdArch Simd>
 static void check_simd_arch()
 {
@@ -203,6 +249,8 @@ static void check_simd_arch()
 
         check_simd_store_truncated<Simd, false>(in);
         check_simd_store_truncated<Simd, true>(in);
+        check_simd_store_two_bit_codes<Simd, false>(in);
+        check_simd_store_two_bit_codes<Simd, true>(in);
     }
 }
 
@@ -242,15 +290,29 @@ TEST(SimdArch, SSE2ByteHelpers)
         }
     };
 
+    auto const check_codes = [](auto const& store, bool msb_first, Lanes<Simd> const& in) {
+        auto const codes = two_bit_codes<Simd>(in);
+        char out[2 * Simd::lanes];
+        store(from_lanes<Simd>(codes), out);
+        auto const expected = packed_two_bit_codes<Simd>(codes, msb_first);
+        for (std::size_t i = 0; i < sizeof(out); ++i) {
+            EXPECT_EQ(static_cast<unsigned char>(out[i]), expected[i]);
+        }
+    };
+
     for (auto const& in : random_lanes<Simd>(42)) {
         check_swap(Simd::byte_swap_lanes_sse2_, in);
         check_store(Simd::store_truncated_u16_sse2_<false>, false, in);
         check_store(Simd::store_truncated_u16_sse2_<true>, true, in);
+        check_codes(Simd::store_two_bit_codes_sse2_<false>, false, in);
+        check_codes(Simd::store_two_bit_codes_sse2_<true>, true, in);
 
         #if defined(FISK_HAS_SSSE3)
             check_swap(Simd::byte_swap_lanes_ssse3_, in);
             check_store(Simd::store_truncated_u16_ssse3_<false>, false, in);
             check_store(Simd::store_truncated_u16_ssse3_<true>, true, in);
+            check_codes(Simd::store_two_bit_codes_ssse3_<false>, false, in);
+            check_codes(Simd::store_two_bit_codes_ssse3_<true>, true, in);
         #endif
     }
 }

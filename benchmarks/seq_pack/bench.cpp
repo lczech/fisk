@@ -62,12 +62,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_lsb_butterfly_sse2(seq, out);
                 }
             ),
+            bench(
+                "direct_sse2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_sse2(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
                 "butterfly_avx2",
                 [&](std::string const& seq) {
                     return run_var_acgt_lsb_butterfly_avx2(seq, out);
+                }
+            ),
+            bench(
+                "direct_avx2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_avx2(seq, out);
                 }
             ),
             #endif
@@ -78,6 +90,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_lsb_butterfly_avx512(seq, out);
                 }
             ),
+            bench(
+                "direct_avx512",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_avx512(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
@@ -86,7 +104,19 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_lsb_butterfly_neon(seq, out);
                 }
             ),
+            bench(
+                "direct_neon",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_neon(seq, out);
+                }
+            ),
             #endif
+            bench(
+                "direct_scalar",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_scalar(seq, out);
+                }
+            ),
             bench(
                 "butterfly_scalar",
                 [&](std::string const& seq) {
@@ -123,12 +153,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_msb_butterfly_sse2(seq, out);
                 }
             ),
+            bench(
+                "direct_sse2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_sse2(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
                 "butterfly_avx2",
                 [&](std::string const& seq) {
                     return run_var_acgt_msb_butterfly_avx2(seq, out);
+                }
+            ),
+            bench(
+                "direct_avx2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_avx2(seq, out);
                 }
             ),
             #endif
@@ -139,6 +181,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_msb_butterfly_avx512(seq, out);
                 }
             ),
+            bench(
+                "direct_avx512",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_avx512(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
@@ -147,7 +195,19 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_msb_butterfly_neon(seq, out);
                 }
             ),
+            bench(
+                "direct_neon",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_neon(seq, out);
+                }
+            ),
             #endif
+            bench(
+                "direct_scalar",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_scalar(seq, out);
+                }
+            ),
             bench(
                 "butterfly_scalar",
                 [&](std::string const& seq) {
@@ -184,12 +244,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_lsb_butterfly_sse2(seq, out);
                 }
             ),
+            bench(
+                "direct_sse2",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_sse2(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
                 "butterfly_avx2",
                 [&](std::string const& seq) {
                     return run_var_actg_lsb_butterfly_avx2(seq, out);
+                }
+            ),
+            bench(
+                "direct_avx2",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_avx2(seq, out);
                 }
             ),
             #endif
@@ -200,6 +272,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_lsb_butterfly_avx512(seq, out);
                 }
             ),
+            bench(
+                "direct_avx512",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_avx512(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
@@ -208,7 +286,19 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_lsb_butterfly_neon(seq, out);
                 }
             ),
+            bench(
+                "direct_neon",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_neon(seq, out);
+                }
+            ),
             #endif
+            bench(
+                "direct_scalar",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_scalar(seq, out);
+                }
+            ),
             bench(
                 "butterfly_scalar",
                 [&](std::string const& seq) {
@@ -245,12 +335,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_msb_butterfly_sse2(seq, out);
                 }
             ),
+            bench(
+                "direct_sse2",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_sse2(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_AVX2)
             bench(
                 "butterfly_avx2",
                 [&](std::string const& seq) {
                     return run_var_actg_msb_butterfly_avx2(seq, out);
+                }
+            ),
+            bench(
+                "direct_avx2",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_avx2(seq, out);
                 }
             ),
             #endif
@@ -261,6 +363,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_msb_butterfly_avx512(seq, out);
                 }
             ),
+            bench(
+                "direct_avx512",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_avx512(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
@@ -269,7 +377,19 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_msb_butterfly_neon(seq, out);
                 }
             ),
+            bench(
+                "direct_neon",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_neon(seq, out);
+                }
+            ),
             #endif
+            bench(
+                "direct_scalar",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_scalar(seq, out);
+                }
+            ),
             bench(
                 "butterfly_scalar",
                 [&](std::string const& seq) {

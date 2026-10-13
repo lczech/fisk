@@ -18,27 +18,18 @@ namespace fisk {
 //     Word Encoders
 // =================================================================================================
 
-// Each of these encodes 8 ASCII characters (one uint64_t word, little-endian-loaded via memcpy)
-// into their packed 2-bit codes, and is usable directly as the `Encoder` argument to
-// pack_sequence() below. They are the word-at-a-time counterparts of the per-character encoders in
-// core/char_encoder.hpp, and assume valid input: unlike those, they have no way to report an
-// invalid character. Such a character is packed as an arbitrary code at its own position, leaving
-// every other position unaffected. Both are templated on the two conventions they produce, and
-// expose them as `encoding` and `layout` static members right next to the logic that implements
-// them, so that the tags and the bits cannot silently drift apart. What distinguishes the two is
-// only how the selected bits are gathered: hardware PEXT, or the portable software butterfly
-// network. The latter is additionally templated on a SIMD arch (core/simd.hpp), with which it
-// encodes `lanes` words at once.
+// Each of these encodes 8 ASCII characters, loaded as one little-endian word, into their packed
+// 2-bit codes, for use with pack_sequence(). They assume valid input: an invalid character is
+// packed as an arbitrary code at its own position, without affecting any other position.
 //
-// Both conventions enter the same way, and only in one place each. The encoding picks which bits
-// of every ASCII byte hold the code, and hence the extraction mask; ACGT additionally needs a SWAR
-// pre-transform to fold its two bits into place (see ascii_bits_to_code_() in core/char_encoder.hpp
-// for the scalar version of the same trick). ACTG needs no such fold: its two code bits already sit
-// at bits 1-2 of every raw (lowercased) ASCII byte, so pack_mask_v alone selects them, and the bit
-// extraction (PEXT or the butterfly network) shifts them down to bits 0-1 of the result as part of
-// gathering them - no separate shift is needed either way. The layout picks whether the chunk is
-// byte-swapped first, so that its first character lands in the high bits of the result instead of
-// the low bits; see Layout in core/types.hpp.
+// WordEncoderPext and WordEncoderButterfly gather the code bits under a mask, via hardware PEXT
+// or the software butterfly network. WordEncoderDirect instead packs the codes with instructions
+// specific to the SIMD arch, and is the fastest of them. The latter two are templated on a SIMD
+// arch (core/simd.hpp), with which they encode `lanes` words at once.
+
+// -----------------------------------------------------------------------------
+//     Helper Functions
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Concept for anything usable as a word encoder for pack_sequence().
@@ -48,7 +39,7 @@ namespace fisk {
  *
  * It also states the number of `lanes`, that is, words that it encodes at once. With more than
  * one, pack_sequence() additionally uses `simd_vector`, `load_unaligned()`, `store_packed()`, and
- * the call operator on a whole vector, as provided by WordEncoderButterfly with a SIMD arch.
+ * the call operator on a whole vector, as provided by the encoders that take a SIMD arch.
  */
 template <typename T>
 concept WordEncoder = requires(T const encoder, std::uint64_t word) {
@@ -120,6 +111,10 @@ inline constexpr std::uint64_t pack_orient_chunk_(std::uint64_t word) noexcept
     }
 }
 
+// -----------------------------------------------------------------------------
+//     Word Encoder Pext
+// -----------------------------------------------------------------------------
+
 #if defined(FISK_HAS_BMI2)
 
 /**
@@ -140,6 +135,10 @@ struct WordEncoderPext
 };
 
 #endif // FISK_HAS_BMI2
+
+// -----------------------------------------------------------------------------
+//     Word Encoder Butterfly
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Same as WordEncoderPext, via the software butterfly network instead of PEXT.
@@ -222,9 +221,87 @@ struct WordEncoderButterfly
     }
 };
 
+// -----------------------------------------------------------------------------
+//     Word Encoder Direct
+// -----------------------------------------------------------------------------
+
+/**
+ * @brief Encode ASCII characters into packed 2-bit codes via the direct code packing of the arch.
+ *
+ * Instead of gathering bits under a mask, this reduces each character to its 2-bit code, and then
+ * packs each four codes into a byte with a few instructions that are specific to the SIMD arch,
+ * see `store_two_bit_codes()` in core/simd.hpp. This is the fastest word encoder on every arch.
+ *
+ * As for WordEncoderButterfly, the call operator on a whole `simd_vector` processes `lanes` words
+ * at once, and the one on a single word the words at the end that do not fill a whole vector.
+ */
+template <Encoding E, Layout L, SimdArch Simd = SimdScalar>
+struct WordEncoderDirect
+{
+    static constexpr Encoding encoding = E;
+    static constexpr Layout layout = L;
+    static constexpr std::size_t lanes = Simd::lanes;
+    using simd_vector = typename Simd::simd_vector;
+
+    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    {
+        return Simd::load_unaligned(a);
+    }
+
+    // Each byte holds the code of its base, see the call operator below.
+    static void store_packed(simd_vector const& v, char* out) noexcept
+    {
+        if constexpr (L == Layout::kMSB) {
+            Simd::template store_two_bit_codes<true>(v, out);
+        } else if constexpr (L == Layout::kLSB) {
+            Simd::template store_two_bit_codes<false>(v, out);
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in WordEncoderDirect::store_packed()"
+            );
+        }
+    }
+
+    // For SimdScalar, the vector is a single word, which is encoded by the call operator below.
+    FISK_ALWAYS_INLINE
+    simd_vector operator()(simd_vector x) const noexcept
+    requires (lanes > 1)
+    {
+        return codes_<Simd>(x);
+    }
+
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(std::uint64_t word) const noexcept
+    {
+        return SimdScalar::pack_two_bit_codes_(codes_<SimdScalar>(pack_orient_chunk_<L>(word)));
+    }
+
+private:
+
+    // Reduce each byte to its 2-bit code, in its two lowest bits. The shifts are per lane, but
+    // what they move across byte boundaries is masked out.
+    template <SimdArch S>
+    FISK_ALWAYS_INLINE
+    static typename S::simd_vector codes_(typename S::simd_vector x) noexcept
+    {
+        if constexpr (E == Encoding::kACGT) {
+            x = S::bitwise_xor(S::template shift_right<1>(x), S::template shift_right<2>(x));
+        } else if constexpr (E == Encoding::kACTG) {
+            x = S::template shift_right<1>(x);
+        } else {
+            static_assert(dependent_false_v<E>, "Unhandled Encoding in WordEncoderDirect");
+        }
+        return S::bitwise_and(x, S::broadcast(0x0303030303030303ULL));
+    }
+};
+
 // =================================================================================================
+//     Pack Sequence
+// =================================================================================================
+
+// -----------------------------------------------------------------------------
 //     Chunk Write Helper
-// =================================================================================================
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Write the packed bases of one encoder call to `dest`, respecting `L`.
@@ -259,9 +336,9 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
     std::memcpy(dest, &v16, Bytes);
 }
 
-// =================================================================================================
-//     pack_sequence()
-// =================================================================================================
+// -----------------------------------------------------------------------------
+//     Pack Sequence
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Pack a whole ASCII sequence into a PackedSequence, reusing existing storage.

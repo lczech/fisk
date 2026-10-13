@@ -53,6 +53,8 @@ concept SimdArch = requires(
     Simd::byte_swap_lanes(v);
     Simd::template store_truncated_u16<false>(v, bytes);
     Simd::template store_truncated_u16<true>(v, bytes);
+    Simd::template store_two_bit_codes<false>(v, bytes);
+    Simd::template store_two_bit_codes<true>(v, bytes);
 };
 
 // =================================================================================================
@@ -164,6 +166,30 @@ struct SimdScalar
             v16 = byte_swap_16(v16);
         }
         std::memcpy(out, &v16, sizeof(v16));
+    }
+
+    // Each byte of the vector holds a 2-bit code. Store them packed, four codes per byte, with
+    // the first code of each four in the lowest bits of its byte, or in the highest for MsbFirst.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v, char* out) noexcept
+    {
+        if constexpr (MsbFirst) {
+            v = byte_swap_64(v);
+        }
+        std::uint16_t v16 = static_cast<std::uint16_t>(pack_two_bit_codes_(v));
+        if constexpr (MsbFirst) {
+            v16 = byte_swap_16(v16);
+        }
+        std::memcpy(out, &v16, sizeof(v16));
+    }
+
+    // Gather the 2-bit codes of the eight bytes into the low 16 bits, with the first code lowest.
+    // Combining each two codes leaves four 4-bit values, 16 bits apart. The multiplication then
+    // adds up shifted copies of them, such that they end up next to each other in bits 36 to 51.
+    static std::uint64_t pack_two_bit_codes_(std::uint64_t v) noexcept
+    {
+        std::uint64_t const pairs = (v | (v >> 6)) & 0x000F000F000F000FULL;
+        return ((pairs * 0x0000001001001001ULL) >> 36) & 0xFFFF;
     }
 };
 
@@ -290,6 +316,17 @@ struct SimdSSE2
         #endif
     }
 
+    // Each byte holds a 2-bit code. Store them packed, four codes per byte, see SimdScalar.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v, char* out) noexcept
+    {
+        #if defined(FISK_HAS_SSSE3)
+            store_two_bit_codes_ssse3_<MsbFirst>(v, out);
+        #else
+            store_two_bit_codes_sse2_<MsbFirst>(v, out);
+        #endif
+    }
+
     // SSE2 has no byte shuffle, so this swaps the two bytes of each 16-bit word, and then reverses
     // the order of the four words of each lane.
     static simd_vector byte_swap_lanes_sse2_(simd_vector v) noexcept
@@ -309,6 +346,26 @@ struct SimdSSE2
         }
         low = _mm_or_si128(low, _mm_srli_si128(low, 6));
         std::uint32_t const packed = static_cast<std::uint32_t>(_mm_cvtsi128_si32(low));
+        std::memcpy(out, &packed, sizeof(packed));
+    }
+
+    // SSE2 has no multiply-add of bytes. Instead, multiplying each 16-bit element moves its two
+    // codes next to each other into its high byte: into the low half of that byte for the first
+    // element of each pair, and into the high half for the second, so that adding the two gives
+    // the packed byte. The two multipliers differing also keeps the compilers from replacing the
+    // multiplication by several shifts.
+    template <bool MsbFirst>
+    static void store_two_bit_codes_sse2_(simd_vector v, char* out) noexcept
+    {
+        __m128i const factors = _mm_set1_epi32(MsbFirst ? 0x04014010 : 0x10400104);
+        __m128i const halves = _mm_srli_epi16(_mm_mullo_epi16(v, factors), 8);
+        __m128i const quads = _mm_madd_epi16(halves, _mm_set1_epi16(1));
+
+        // Each 32-bit element now holds one packed byte.
+        __m128i const words = _mm_packs_epi32(quads, quads);
+        std::uint32_t const packed = static_cast<std::uint32_t>(
+            _mm_cvtsi128_si32(_mm_packus_epi16(words, words))
+        );
         std::memcpy(out, &packed, sizeof(packed));
     }
 
@@ -337,6 +394,22 @@ struct SimdSSE2
         }();
         std::uint32_t const packed = static_cast<std::uint32_t>(
             _mm_cvtsi128_si32(_mm_shuffle_epi8(v, pack_control))
+        );
+        std::memcpy(out, &packed, sizeof(packed));
+    }
+
+    // Two multiply-adds weigh the four codes of each 32-bit element by 1, 4, 16, and 64 (or the
+    // reverse for MsbFirst) and add them up, into one packed byte per element.
+    template <bool MsbFirst>
+    static void store_two_bit_codes_ssse3_(simd_vector v, char* out) noexcept
+    {
+        __m128i const weights = _mm_set1_epi32(MsbFirst ? 0x01041040 : 0x40100401);
+        __m128i const quads = _mm_madd_epi16(_mm_maddubs_epi16(v, weights), _mm_set1_epi16(1));
+        __m128i const pack_control = _mm_setr_epi8(
+            0, 4, 8, 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+        );
+        std::uint32_t const packed = static_cast<std::uint32_t>(
+            _mm_cvtsi128_si32(_mm_shuffle_epi8(quads, pack_control))
         );
         std::memcpy(out, &packed, sizeof(packed));
     }
@@ -478,6 +551,27 @@ struct SimdAVX2
         __m128i const lo = _mm_shuffle_epi8(_mm256_castsi256_si128(v), pack_control);
         __m128i const hi = _mm_shuffle_epi8(_mm256_extracti128_si256(v, 1), pack_control);
         _mm_storel_epi64(reinterpret_cast<__m128i*>(out), _mm_unpacklo_epi32(lo, hi));
+    }
+
+    // Each byte holds a 2-bit code. Store them packed, four codes per byte, see SimdScalar. Two
+    // multiply-adds weigh the four codes of each 32-bit element by 1, 4, 16, and 64 (or the
+    // reverse for MsbFirst) and add them up, into one packed byte per element.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v, char* out) noexcept
+    {
+        __m256i const weights = _mm256_set1_epi32(MsbFirst ? 0x01041040 : 0x40100401);
+        __m256i const quads = _mm256_madd_epi16(
+            _mm256_maddubs_epi16(v, weights), _mm256_set1_epi16(1)
+        );
+        __m256i const pack_control = _mm256_setr_epi8(
+            0, 4, 8, 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            0, 4, 8, 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
+        );
+        __m256i const bytes = _mm256_shuffle_epi8(quads, pack_control);
+        _mm_storel_epi64(
+            reinterpret_cast<__m128i*>(out),
+            _mm_unpacklo_epi32(_mm256_castsi256_si128(bytes), _mm256_extracti128_si256(bytes, 1))
+        );
     }
 };
 
@@ -636,6 +730,19 @@ struct SimdAVX512
         );
         _mm_storeu_si128(reinterpret_cast<__m128i*>(out), _mm512_castsi512_si128(compacted));
     }
+
+    // Each byte holds a 2-bit code. Store them packed, four codes per byte, see SimdScalar. Two
+    // multiply-adds weigh the four codes of each 32-bit element by 1, 4, 16, and 64 (or the
+    // reverse for MsbFirst) and add them up, into one packed byte per element.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v, char* out) noexcept
+    {
+        __m512i const weights = _mm512_set1_epi32(MsbFirst ? 0x01041040 : 0x40100401);
+        __m512i const quads = _mm512_madd_epi16(
+            _mm512_maddubs_epi16(v, weights), _mm512_set1_epi16(1)
+        );
+        _mm_storeu_si128(reinterpret_cast<__m128i*>(out), _mm512_cvtepi32_epi8(quads));
+    }
 };
 
 #endif // FISK_HAS_AVX512
@@ -757,6 +864,31 @@ struct SimdNEON
         std::uint32_t const packed =
             static_cast<std::uint32_t>(vget_lane_u16(vget_low_u16(low), 0))
             | (static_cast<std::uint32_t>(vget_lane_u16(vget_high_u16(low), 0)) << 16);
+        std::memcpy(out, &packed, sizeof(packed));
+    }
+
+    // Each byte holds a 2-bit code. Store them packed, four codes per byte, see SimdScalar. Two
+    // shifts with accumulation or insertion combine first the two codes of each 16-bit element,
+    // and then the two halves of each 32-bit element, into one packed byte per element. That
+    // byte is its lowest one, or its third one for MsbFirst.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v, char* out) noexcept
+    {
+        uint16x8_t const codes = vreinterpretq_u16_u64(v);
+        uint16x4_t words;
+        if constexpr (MsbFirst) {
+            uint32x4_t const halves = vreinterpretq_u32_u16(
+                vsraq_n_u16(vshlq_n_u16(codes, 2), codes, 8)
+            );
+            words = vshrn_n_u32(vsliq_n_u32(halves, halves, 20), 16);
+        } else {
+            uint32x4_t const halves = vreinterpretq_u32_u16(vsraq_n_u16(codes, codes, 6));
+            words = vmovn_u32(vsraq_n_u32(halves, halves, 12));
+        }
+
+        // The packed bytes are the low bytes of the four 16-bit elements.
+        uint8x8_t const bytes = vreinterpret_u8_u16(words);
+        std::uint32_t const packed = vget_lane_u32(vreinterpret_u32_u8(vuzp1_u8(bytes, bytes)), 0);
         std::memcpy(out, &packed, sizeof(packed));
     }
 };
