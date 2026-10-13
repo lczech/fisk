@@ -18,6 +18,7 @@ using namespace fisk;
 // =================================================================================================
 
 static_assert(SimdArch<SimdScalar>);
+static_assert(SimdArchWithLaneShifts<SimdScalar>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdScalar>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdScalar>>);
 
@@ -33,6 +34,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdSSE2>>);
 
 #if defined(FISK_HAS_AVX2)
 static_assert(SimdArch<SimdAVX2>);
+static_assert(SimdArchWithLaneShifts<SimdAVX2>);
 static_assert(SimdArchWithNibbleLookup<SimdAVX2>);
 static_assert(SimdArchWithDoubleStore<SimdAVX2>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX2>>);
@@ -41,6 +43,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX2>>);
 
 #if defined(FISK_HAS_AVX512)
 static_assert(SimdArch<SimdAVX512>);
+static_assert(SimdArchWithLaneShifts<SimdAVX512>);
 static_assert(SimdArchWithNibbleLookup<SimdAVX512>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX512>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
@@ -48,6 +51,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
 
 #if defined(FISK_HAS_NEON)
 static_assert(SimdArch<SimdNEON>);
+static_assert(SimdArchWithLaneShifts<SimdNEON>);
 static_assert(SimdArchWithNibbleLookup<SimdNEON>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdNEON>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdNEON>>);
@@ -232,6 +236,26 @@ static void check_simd_store_two_bit_codes(Lanes<Simd> const& in)
     }
 }
 
+// Shift by counts that differ between the lanes, starting at each count in [0, 63] for lane 0.
+template <SimdArchWithLaneShifts Simd>
+static void check_simd_lane_shifts(Lanes<Simd> const& in)
+{
+    auto const v = from_lanes<Simd>(in);
+    for (std::uint64_t n = 0; n < 64; ++n) {
+        Lanes<Simd> counts;
+        for (std::size_t i = 0; i < Simd::lanes; ++i) {
+            counts[i] = (n + 7 * i) % 64;
+        }
+        auto const c = from_lanes<Simd>(counts);
+        auto const out_right = to_lanes<Simd>(Simd::shift_right_lanes(v, c));
+        auto const out_left  = to_lanes<Simd>(Simd::shift_left_lanes(v, c));
+        for (std::size_t i = 0; i < Simd::lanes; ++i) {
+            EXPECT_EQ(out_right[i], in[i] >> counts[i]);
+            EXPECT_EQ(out_left[i],  in[i] << counts[i]);
+        }
+    }
+}
+
 template <SimdArchWithDoubleStore Simd, bool MsbFirst>
 static void check_simd_store_two_bit_codes_double(Lanes<Simd> const& in0, Lanes<Simd> const& in1)
 {
@@ -293,6 +317,9 @@ static void check_simd_arch()
         check_simd_memory<Simd>(in);
         check_simd_bitwise<Simd>(in, lanes[(r + 1) % lanes.size()]);
         check_simd_shifts<Simd>(in);
+        if constexpr (SimdArchWithLaneShifts<Simd>) {
+            check_simd_lane_shifts<Simd>(in);
+        }
 
         auto const swapped = to_lanes<Simd>(Simd::byte_swap_lanes(from_lanes<Simd>(in)));
         for (std::size_t i = 0; i < Simd::lanes; ++i) {
@@ -328,6 +355,29 @@ TEST(SimdArch, Scalar)
 TEST(SimdArch, SSE2)
 {
     check_simd_arch<SimdSSE2>();
+}
+
+// The operations that SimdSSE2 has in place of the shifts per lane.
+TEST(SimdArch, SSE2LaneHelpers)
+{
+    using Simd = SimdSSE2;
+    auto const lanes = random_lanes<Simd>(42);
+    for (std::size_t r = 0; r < lanes.size(); ++r) {
+        auto const& a = lanes[r];
+        auto const& b = lanes[(r + 1) % lanes.size()];
+        auto const va = from_lanes<Simd>(a);
+        auto const vb = from_lanes<Simd>(b);
+
+        EXPECT_TRUE(to_lanes<Simd>(Simd::interleave_low(va, vb))  == (Lanes<Simd>{a[0], b[0]}));
+        EXPECT_TRUE(to_lanes<Simd>(Simd::interleave_high(va, vb)) == (Lanes<Simd>{a[1], b[1]}));
+
+        for (std::uint64_t n = 0; n < 64; ++n) {
+            auto const out = to_lanes<Simd>(Simd::shift_left(va, Simd::make_shift_count(n)));
+            for (std::size_t i = 0; i < Simd::lanes; ++i) {
+                EXPECT_EQ(out[i], a[i] << n);
+            }
+        }
+    }
 }
 
 // SimdSSE2 picks one of each of these per build, so that the test above only covers those.

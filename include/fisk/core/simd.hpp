@@ -29,6 +29,9 @@ namespace fisk {
 // by. The archs with a byte shuffle offer lookup_low_nibbles(), which SimdScalar and plain SSE2
 // lack. The overload of store_two_bit_codes() that takes two vectors exists for the archs where
 // storing two vectors together is faster than one after the other.
+// All archs but SSE2 can shift each lane by its own count, with shift_right_lanes() and
+// shift_left_lanes(). SimdSSE2 has interleave_low() and interleave_high() instead, to pick lanes
+// from vectors that were shifted as a whole.
 
 /**
  * @brief Concept for a SIMD arch, such as SimdAVX2.
@@ -85,6 +88,16 @@ concept SimdArchWithDoubleStore = SimdArch<Simd> && requires(
 ) {
     Simd::template store_two_bit_codes<false>(v, v, bytes);
     Simd::template store_two_bit_codes<true>(v, v, bytes);
+};
+
+/**
+ * @brief Concept for a SIMD arch that can shift each lane by its own count, see
+ * shift_right_lanes() and shift_left_lanes().
+ */
+template <typename Simd>
+concept SimdArchWithLaneShifts = SimdArch<Simd> && requires(typename Simd::simd_vector const v) {
+    Simd::shift_right_lanes(v, v);
+    Simd::shift_left_lanes(v, v);
 };
 
 // =================================================================================================
@@ -177,6 +190,18 @@ struct SimdScalar
     static simd_vector shift_right(simd_vector v, shift_count count) noexcept
     {
         return v >> count;
+    }
+
+    // Shift each lane by its own count, which needs to be below 64. With a single lane, these are
+    // plain shifts.
+    static simd_vector shift_right_lanes(simd_vector v, simd_vector counts) noexcept
+    {
+        return v >> counts;
+    }
+
+    static simd_vector shift_left_lanes(simd_vector v, simd_vector counts) noexcept
+    {
+        return v << counts;
     }
 
     // -------------------------------------------
@@ -320,6 +345,28 @@ struct SimdSSE2
     static simd_vector shift_right(simd_vector v, shift_count count) noexcept
     {
         return _mm_srl_epi64(v, count);
+    }
+
+    static simd_vector shift_left(simd_vector v, shift_count count) noexcept
+    {
+        return _mm_sll_epi64(v, count);
+    }
+
+    // -------------------------------------------
+    //     Lanes
+    // -------------------------------------------
+
+    // SSE2 can not shift each lane by its own count, see SimdArchWithLaneShifts. Lanes that need
+    // different shifts are instead taken from two vectors that are each shifted as a whole:
+    // lane 0 of `a` and of `b`, or lane 1 of `a` and of `b`.
+    static simd_vector interleave_low(simd_vector a, simd_vector b) noexcept
+    {
+        return _mm_unpacklo_epi64(a, b);
+    }
+
+    static simd_vector interleave_high(simd_vector a, simd_vector b) noexcept
+    {
+        return _mm_unpackhi_epi64(a, b);
     }
 
     // -------------------------------------------
@@ -569,6 +616,17 @@ struct SimdAVX2
         return _mm256_srl_epi64(v, count);
     }
 
+    // Shift each lane by its own count, which needs to be below 64.
+    static simd_vector shift_right_lanes(simd_vector v, simd_vector counts) noexcept
+    {
+        return _mm256_srlv_epi64(v, counts);
+    }
+
+    static simd_vector shift_left_lanes(simd_vector v, simd_vector counts) noexcept
+    {
+        return _mm256_sllv_epi64(v, counts);
+    }
+
     // -------------------------------------------
     //     Bytes
     // -------------------------------------------
@@ -764,6 +822,17 @@ struct SimdAVX512
         return _mm512_srl_epi64(v, count);
     }
 
+    // Shift each lane by its own count, which needs to be below 64.
+    static simd_vector shift_right_lanes(simd_vector v, simd_vector counts) noexcept
+    {
+        return _mm512_srlv_epi64(v, counts);
+    }
+
+    static simd_vector shift_left_lanes(simd_vector v, simd_vector counts) noexcept
+    {
+        return _mm512_sllv_epi64(v, counts);
+    }
+
     // -------------------------------------------
     //     Bytes
     // -------------------------------------------
@@ -941,6 +1010,18 @@ struct SimdNEON
     static simd_vector shift_right(simd_vector v, shift_count count) noexcept
     {
         return vshlq_u64(v, count);
+    }
+
+    // Shift each lane by its own count, which needs to be below 64. As above, vshlq_u64() shifts
+    // right for negative counts.
+    static simd_vector shift_right_lanes(simd_vector v, simd_vector counts) noexcept
+    {
+        return vshlq_u64(v, vnegq_s64(vreinterpretq_s64_u64(counts)));
+    }
+
+    static simd_vector shift_left_lanes(simd_vector v, simd_vector counts) noexcept
+    {
+        return vshlq_u64(v, vreinterpretq_s64_u64(counts));
     }
 
     // -------------------------------------------
