@@ -401,7 +401,7 @@ protected:
     FISK_ALWAYS_INLINE
     static typename S::simd_vector codes_(typename S::simd_vector x) noexcept
     {
-        if constexpr (SimdArchWithNibbleLookup<S>) {
+        if constexpr (SimdArchWithByteShuffle<S>) {
             return S::lookup_low_nibbles(x, code_table_);
         } else {
             if constexpr (E == Encoding::kACGT) {

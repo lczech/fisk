@@ -15,9 +15,9 @@ std::uint64_t run_var_msb_simd_narrow_width_avx512(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_simd_narrow_width_avx512_(seq, k, [&](__m512i v, std::size_t) noexcept {
-        sink.consume(v);
-    });
+    for_each_kmer_packed_simd_narrow_width_<SimdAVX512>(
+        seq, k, [&](__m512i v, std::size_t) noexcept { sink.consume(v); }
+    );
     return sink.finalize();
 }
 

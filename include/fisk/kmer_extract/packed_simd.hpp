@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cassert>
 #include <array>
 #include <cstdint>
 #include <cstddef>
@@ -11,6 +10,7 @@
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_callback.hpp"
+#include "fisk/core/simd.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/kmer_extract.hpp"
 #include "fisk/kmer_extract/packed.hpp"
@@ -21,57 +21,196 @@ namespace fisk {
 //     K-mer Extraction from a PackedSequence, SIMD
 // =================================================================================================
 
-// Per-ISA extractors for PackedSequence values. Each public dispatcher accepts k in [1, 32]
-// and calls `func(pos, vec, valid_count)` or `func(vec, valid_count)` with consecutive k-mers in
-// the ISA's native integer vector, see invoke_kmer_vector_callback(): `pos` is the start position
-// of the k-mer in lane 0, and lane `j` holds the one starting at `pos + j`. Full vectors have
-// `valid_count == lane_count`; the final vector may be zero-padded in high lanes.
-// The suffixed narrow-width/full-width functions are internal helpers used by the dispatchers.
+// Extractors for PackedSequence values, generic over the SIMD arch, see core/simd.hpp.
+// for_each_kmer_packed_simd() accepts k in [1, 32] and calls `func(pos, vec, valid_count)` or
+// `func(vec, valid_count)` with consecutive k-mers in the vector of the arch: `pos` is the start
+// position of the k-mer in lane 0, and lane `j` holds the one starting at `pos + j`. Full vectors
+// have `valid_count == Simd::lanes`; the final vector may be zero-padded in high lanes.
 //
-// Unlike the scalar extractors in packed.hpp, these hand out raw vectors rather than Kmer values
-// (core/kmer.hpp): a vector holds several k-mers at once, so the scalar wrapper does not apply to
-// it, and wrapping the vector itself would buy a guarantee the ABI is not reliably asked to
-// honour. These callbacks are therefore the one seam in the k-mer API where the conventions are
-// carried by the PackedSequence's type rather than by the emitted value. The vector overloads
-// of kmer_cast() (core/kmer.hpp) are the sanctioned way back across it.
+// The vectors hold raw k-mer words rather than Kmer values (core/kmer.hpp), with the conventions
+// of the PackedSequence. Use the vector overloads of kmer_cast() to get Kmer values from them.
 
-// =================================================================================================
-//     Shared tail packing
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
+//     Helpers
+// -------------------------------------------------------------------------------------------------
 
-// Packs scalar tail k-mers into native-width vectors, zero-padding the last vector. `vals[0]` is
-// the k-mer starting at sequence position `base`, and the following ones are consecutive.
-template <std::size_t Lanes, typename LoadFn, typename Func>
+// Four k-mers start in each byte of a packed sequence, at the positions 0 to 3 of that starting
+// byte, and are extracted from the word of 8 bytes loaded there. Archs with shifts per lane, see
+// SimdArchWithLaneShifts, hold consecutive k-mers in their lanes: the word of a starting byte is
+// in four lanes, each shifted by the position of its k-mer. SSE2 can only shift all lanes by the
+// same count. Its lanes hold the words of two consecutive starting bytes instead, which are
+// shifted once per position, and then interleaved into the order of the k-mers.
+
+// Number of lanes that hold k-mers of the same starting byte, as far as the arch has that many.
+template <SimdArch Simd>
+inline constexpr std::size_t packed_simd_lanes_per_byte_v = SimdArchWithLaneShifts<Simd> ? 4 : 1;
+
+// Number of starting bytes that an iteration of the extraction loops consumes, and number of
+// vectors that it emits.
+template <SimdArch Simd>
+inline constexpr std::size_t packed_simd_step_bytes_v
+    = (Simd::lanes + packed_simd_lanes_per_byte_v<Simd> - 1) / packed_simd_lanes_per_byte_v<Simd>;
+template <SimdArch Simd>
+inline constexpr std::size_t packed_simd_step_vectors_v
+    = 4 * packed_simd_step_bytes_v<Simd> / Simd::lanes;
+
+// The 8 bytes at `p` as a word with the bases in order: the first base is in the lowest bits for
+// kLSB, and in the highest bits for kMSB.
+template <Layout L>
+FISK_ALWAYS_INLINE
+inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
+{
+    std::uint64_t word;
+    std::memcpy(&word, p, 8);
+    if constexpr (L == Layout::kMSB) {
+        return byte_swap_64(word);
+    } else if constexpr (L == Layout::kLSB) {
+        return word;
+    } else {
+        static_assert(dependent_false_v<L>, "Unhandled Layout in load_packed_word_()");
+    }
+}
+
+// The words of the starting bytes of an iteration, see load_packed_word_(): lane `j` has the word
+// that starts `j / packed_simd_lanes_per_byte_v` bytes after `p`.
+template <SimdArch Simd, Layout L>
+FISK_ALWAYS_INLINE
+inline typename Simd::simd_vector load_packed_words_(std::uint8_t const* p) noexcept
+{
+    constexpr std::size_t lanes_per_byte = packed_simd_lanes_per_byte_v<Simd>;
+
+    // With a byte shuffle, swapping the bytes for kMSB is a single instruction on the vector, and
+    // leaves the words to be loaded from memory as they are. Otherwise, swap each word on its own.
+    constexpr Layout load_layout = SimdArchWithByteShuffle<Simd> ? Layout::kLSB : L;
+
+    typename Simd::simd_vector words;
+    if constexpr (Simd::lanes <= lanes_per_byte) {
+        words = Simd::broadcast(load_packed_word_<load_layout>(p));
+    } else {
+        std::array<std::uint64_t, Simd::lanes> lane_words;
+        for (std::size_t j = 0; j < Simd::lanes; ++j) {
+            lane_words[j] = load_packed_word_<load_layout>(p + j / lanes_per_byte);
+        }
+        words = Simd::from_values(lane_words);
+    }
+    if constexpr (load_layout != L) {
+        words = Simd::byte_swap_lanes(words);
+    }
+    return words;
+}
+
+// Shift counts for the vectors of an iteration, from the count for each position `local` in
+// [0, 4) of a starting byte. With shifts per lane, `at[v]` has the counts for the lanes of vector
+// `v` of the iteration. Otherwise, `at[local]` is the count for all lanes at that position.
+template <SimdArch Simd, typename CountOf>
+FISK_ALWAYS_INLINE
+inline auto make_packed_simd_counts_(CountOf&& count_of)
+{
+    constexpr std::size_t vectors = packed_simd_step_vectors_v<Simd>;
+    if constexpr (SimdArchWithLaneShifts<Simd>) {
+        // Not a std::array, as GCC warns about vector types as template arguments.
+        struct Counts { typename Simd::simd_vector at[vectors]; } counts;
+        for (std::size_t v = 0; v < vectors; ++v) {
+            std::array<std::uint64_t, Simd::lanes> lane_counts;
+            for (std::size_t j = 0; j < Simd::lanes; ++j) {
+                lane_counts[j] = count_of((v * Simd::lanes + j) % 4);
+            }
+            counts.at[v] = Simd::from_values(lane_counts);
+        }
+        return counts;
+    } else {
+        static_assert(vectors == 4, "Without shifts per lane, each vector is one position.");
+        struct Counts { typename Simd::shift_count at[vectors]; } counts;
+        for (std::size_t local = 0; local < vectors; ++local) {
+            counts.at[local] = Simd::make_shift_count(count_of(local));
+        }
+        return counts;
+    }
+}
+
+// Shift by a count of make_packed_simd_counts_().
+template <SimdArch Simd, typename Count>
+FISK_ALWAYS_INLINE
+inline typename Simd::simd_vector packed_simd_shift_right_(
+    typename Simd::simd_vector v, Count const& count
+) noexcept {
+    if constexpr (SimdArchWithLaneShifts<Simd>) {
+        return Simd::shift_right_lanes(v, count);
+    } else {
+        return Simd::shift_right(v, count);
+    }
+}
+
+template <SimdArch Simd, typename Count>
+FISK_ALWAYS_INLINE
+inline typename Simd::simd_vector packed_simd_shift_left_(
+    typename Simd::simd_vector v, Count const& count
+) noexcept {
+    if constexpr (SimdArchWithLaneShifts<Simd>) {
+        return Simd::shift_left_lanes(v, count);
+    } else {
+        return Simd::shift_left(v, count);
+    }
+}
+
+// Emit the vectors of the iteration that starts at position `pos`, where `kmers(i)` computes them
+// from the shift counts at index `i`, see make_packed_simd_counts_(). With shifts per lane, that
+// is vector `i` of the iteration. Otherwise, it has position `i` of two starting bytes, and is
+// interleaved with the next position to get consecutive k-mers.
+template <SimdArch Simd, typename Kmers, typename Func>
+FISK_ALWAYS_INLINE
+inline void emit_packed_simd_step_(std::size_t pos, Kmers&& kmers, Func&& func)
+{
+    constexpr std::size_t lanes = Simd::lanes;
+    if constexpr (SimdArchWithLaneShifts<Simd>) {
+        for (std::size_t v = 0; v < packed_simd_step_vectors_v<Simd>; ++v) {
+            invoke_kmer_vector_callback(func, pos + v * lanes, kmers(v), lanes);
+        }
+    } else {
+        static_assert(lanes == 2, "Interleaving the positions needs an arch with two lanes.");
+        auto const k0 = kmers(0);
+        auto const k1 = kmers(1);
+        auto const k2 = kmers(2);
+        auto const k3 = kmers(3);
+        invoke_kmer_vector_callback(func, pos + 0, Simd::interleave_low(k0, k1), lanes);
+        invoke_kmer_vector_callback(func, pos + 2, Simd::interleave_low(k2, k3), lanes);
+        invoke_kmer_vector_callback(func, pos + 4, Simd::interleave_high(k0, k1), lanes);
+        invoke_kmer_vector_callback(func, pos + 6, Simd::interleave_high(k2, k3), lanes);
+    }
+}
+
+// Emit the k-mers at the end of the sequence, which the extraction loops leave out, zero-padding
+// the last vector. `vals[0]` is the k-mer starting at sequence position `base`, and the following
+// ones are consecutive.
+template <SimdArch Simd, typename Func>
 inline void emit_tail_packed_(
-    std::uint64_t const* vals, std::size_t n, std::size_t base, LoadFn&& load, Func&& func
+    std::uint64_t const* vals, std::size_t n, std::size_t base, Func&& func
 ) {
+    constexpr std::size_t lanes = Simd::lanes;
     std::size_t i = 0;
     while (i < n) {
-        std::size_t const chunk = std::min(Lanes, n - i);
-        std::array<std::uint64_t, Lanes> buf{};
+        std::size_t const chunk = std::min(lanes, n - i);
+        std::array<std::uint64_t, lanes> buf{};
         for (std::size_t j = 0; j < chunk; ++j) {
             buf[j] = vals[i + j];
         }
-        invoke_kmer_vector_callback(func, base + i, load(buf), chunk);
+        invoke_kmer_vector_callback(func, base + i, Simd::from_values(buf), chunk);
         i += chunk;
     }
 }
 
-// =================================================================================================
-//     SSE2 (2 lanes)
-// =================================================================================================
-
-#if defined(FISK_HAS_SSE2)
+// -------------------------------------------------------------------------------------------------
+//     Narrow Width
+// -------------------------------------------------------------------------------------------------
 
 /**
- * @brief Extracts k in [1, 29] as pairs of k-mers in __m128i registers.
+ * @brief Extracts k in [1, 29] as vectors of k-mers.
  *
- * SSE2 shifts both lanes by one count, so each pair uses the same local position from adjacent
- * starting bytes.
+ * Any such k-mer is within the word of its starting byte, which needs one shift and a mask.
  */
-template <Encoding E, Layout L, typename Func>
+template <SimdArch Simd, Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_narrow_width_sse2_(
+inline void for_each_kmer_packed_simd_narrow_width_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 29) {
@@ -81,10 +220,8 @@ inline void for_each_kmer_packed_simd_narrow_width_sse2_(
         return;
     }
 
-    // SSE2 does not have variable shifts per lane, so instead of using the two lanes for two
-    // consecutive k-mers, we use a pair of lanes for each of the four positions within two
-    // consecutive bytes. The shift amount is then a per-register constant for each of the four
-    // positions, and we can unpack the k-mers from the pair of bytes using these shifts.
+    using simd_vector = typename Simd::simd_vector;
+    constexpr std::size_t step_bytes = packed_simd_step_bytes_v<Simd>;
 
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
     unsigned const k32 = static_cast<unsigned>(k);
@@ -92,21 +229,16 @@ inline void for_each_kmer_packed_simd_narrow_width_sse2_(
     std::size_t const p_max = seq.length - k;
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes  = (seq.length + 3) / 4;
-    // Every fast-loop starting byte has a safe 8-byte read; paired b+1 is covered by the same
-    // bound.
-    std::size_t const fast_bytes = std::min(
+    // Every starting byte of the loop has a safe 8-byte read. Starting bytes that do not fill a
+    // whole iteration are left to the tail.
+    std::size_t fast_bytes = std::min(
         full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
     );
-    // Byte-paired main loop below consumes two starting bytes per iteration, so round the cutoff
-    // down to an even count; if that excludes one trailing fully-valid byte (fast_bytes odd), it
-    // is left to the scalar tail below.
-    std::size_t const paired_fast_bytes = fast_bytes - (fast_bytes % 2);
+    fast_bytes -= fast_bytes % step_bytes;
 
-    __m128i const mask_v = _mm_set1_epi64x(static_cast<std::int64_t>(mask));
-
-    // Precomputed shift amount shared by both lanes of a byte-paired register: LSB is
-    // a compile-time-shaped constant per `local`; MSB depends on runtime `k`.
-    auto shift_of = [&](unsigned local) -> std::uint64_t {
+    // Right shift that moves the k-mer at position `local` of a starting byte to the low bits.
+    simd_vector const mask_v = Simd::broadcast(mask);
+    auto const counts = make_packed_simd_counts_<Simd>([&](std::size_t local) -> std::uint64_t {
         if constexpr (L == Layout::kMSB) {
             return (64u - 2u * k32) - 2u * local;
         } else if constexpr (L == Layout::kLSB) {
@@ -114,79 +246,37 @@ inline void for_each_kmer_packed_simd_narrow_width_sse2_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_sse2_()"
+                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_()"
             );
         }
-    };
-    std::uint64_t const shift0 = shift_of(0);
-    std::uint64_t const shift1 = shift_of(1);
-    std::uint64_t const shift2 = shift_of(2);
-    std::uint64_t const shift3 = shift_of(3);
+    });
 
-    auto extract = [&](__m128i pair, std::uint64_t shift) -> __m128i {
-        __m128i const cnt = _mm_cvtsi64_si128(static_cast<std::int64_t>(shift));
-        return _mm_and_si128(_mm_srl_epi64(pair, cnt), mask_v);
-    };
-
-    for (std::size_t b = 0; b < paired_fast_bytes; b += 2) {
-        std::uint64_t word0, word1;
-        std::memcpy(&word0, &seq.data[b],     8);
-        std::memcpy(&word1, &seq.data[b + 1], 8);
-        if constexpr (L == Layout::kMSB) {
-            word0 = byte_swap_64(word0);
-            word1 = byte_swap_64(word1);
-        } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_sse2_()"
-            );
-        }
-        __m128i const pair = _mm_set_epi64x(
-            static_cast<std::int64_t>(word1), static_cast<std::int64_t>(word0)
-        );
-
-        __m128i const r0 = extract(pair, shift0);
-        __m128i const r1 = extract(pair, shift1);
-        __m128i const r2 = extract(pair, shift2);
-        __m128i const r3 = extract(pair, shift3);
-
-        // Transpose from "lane = which byte, grouped by local" back to "lane = which local,
-        // grouped by byte", so k-mers are still emitted in strict sequence-position order despite
-        // the byte-paired computation above: byte b locals 0,1 and 2,3, then byte b+1 locals 0,1
-        // and 2,3. In-register shuffles only, no cross-lane traffic.
-        invoke_kmer_vector_callback(func, 4 * b + 0, _mm_unpacklo_epi64(r0, r1), std::size_t{2});
-        invoke_kmer_vector_callback(func, 4 * b + 2, _mm_unpacklo_epi64(r2, r3), std::size_t{2});
-        invoke_kmer_vector_callback(func, 4 * b + 4, _mm_unpackhi_epi64(r0, r1), std::size_t{2});
-        invoke_kmer_vector_callback(func, 4 * b + 6, _mm_unpackhi_epi64(r2, r3), std::size_t{2});
+    for (std::size_t b = 0; b < fast_bytes; b += step_bytes) {
+        simd_vector const words = load_packed_words_<Simd, L>(&seq.data[b]);
+        emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {
+            return Simd::bitwise_and(packed_simd_shift_right_<Simd>(words, counts.at[i]), mask_v);
+        }, func);
     }
 
-    // Any byte excluded purely by the parity rounding above (fast_bytes odd) is still safe to
-    // fast-read but has no partner to pair with. It is left to the scalar tail.
     std::array<std::uint64_t, 64> tail_vals;
     std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
-        seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
+        seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
-    emit_tail_packed_<2>(
-        tail_vals.data(), tail_n, 4 * paired_fast_bytes,
-        [](std::array<std::uint64_t, 2> const& buf) {
-            return _mm_set_epi64x(
-                static_cast<std::int64_t>(buf[1]), static_cast<std::int64_t>(buf[0])
-            );
-        },
-        func
-    );
+    emit_tail_packed_<Simd>(tail_vals.data(), tail_n, 4 * fast_bytes, func);
 }
 
+// -------------------------------------------------------------------------------------------------
+//     Full Width
+// -------------------------------------------------------------------------------------------------
+
 /**
- * @brief Extracts k in [1, 32] as pairs of k-mers in __m128i registers.
+ * @brief Extracts k in [1, 32] as vectors of k-mers.
  *
- * Builds boundary-spanning windows from adjacent 64-bit words before applying the SSE2 shifts.
+ * A k-mer of more than 29 bases can reach into a ninth byte, so that this combines two words.
  */
-template <Encoding E, Layout L, typename Func>
+template <SimdArch Simd, Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_full_width_sse2_(
+inline void for_each_kmer_packed_simd_full_width_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
@@ -195,6 +285,9 @@ inline void for_each_kmer_packed_simd_full_width_sse2_(
     if (seq.length < k) {
         return;
     }
+
+    using simd_vector = typename Simd::simd_vector;
+    constexpr std::size_t step_bytes = packed_simd_step_bytes_v<Simd>;
 
     std::uint64_t const mask = (k == 32) ? ~std::uint64_t{0} : ((std::uint64_t{1} << (2 * k)) - 1u);
     unsigned const k32 = static_cast<unsigned>(k);
@@ -202,798 +295,99 @@ inline void for_each_kmer_packed_simd_full_width_sse2_(
     std::size_t const p_max = seq.length - k;
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes  = (seq.length + 3) / 4;
-    // The bound keeps both 8-byte loads and both extra-byte reads within the packed input.
-    std::size_t const fast_bytes = (num_bytes >= 9) ? std::min(full_bytes, num_bytes - 9)
-                                                     : std::size_t{0};
-    // See for_each_kmer_packed_simd_narrow_width_sse2_()'s comment: rounds down for pairing, with
-    // any resulting single trailing byte left to the scalar tail below.
-    std::size_t const paired_fast_bytes = fast_bytes - (fast_bytes % 2);
+    // An iteration also loads the words of the next iteration, see below. The bound keeps these
+    // 8-byte reads within the packed input.
+    std::size_t fast_bytes = (num_bytes >= 7 + step_bytes)
+        ? std::min(full_bytes, num_bytes - 7 - step_bytes)
+        : std::size_t{0}
+    ;
+    fast_bytes -= fast_bytes % step_bytes;
 
-    __m128i const mask_v = _mm_set1_epi64x(static_cast<std::int64_t>(mask));
-
-    // Per-local start of the 2k-bit window in the combined 128-bit (hi:lo) value. Both lanes
-    // share the same start for each byte pair.
-    auto start_of = [&](unsigned local) -> std::uint64_t {
-        if constexpr (L == Layout::kMSB) {
-            return 128u - 2u * local - 2u * k32;
-        } else if constexpr (L == Layout::kLSB) {
-            return 2u * local;
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_full_width_sse2_()"
-            );
-        }
-    };
-    // Per-local shift-count vectors, precomputed: cnt_lo is `start`, cnt_hi_l is `64-start`.
-    // cnt_hi_r (`start-64`) is deliberately not a third precomputed invariant here: it is the
-    // two's-complement negate of cnt_hi_l, cheap to derive with one vector op inside extract().
-    // With 4 locals in flight at once, keeping all three as independent __m128i invariants needs
-    // 12 simultaneously-live XMM registers, which exceeds SSE2's 16-register file once the mask,
-    // working pair registers, and accumulator are added in, forcing the compiler to spill count
-    // registers to the stack every iteration; deriving cnt_hi_r on the fly cuts that to 8
-    // invariants, comfortably within budget.
-    __m128i const cnt_lo0 = _mm_cvtsi64_si128(static_cast<std::int64_t>(start_of(0)));
-    __m128i const cnt_lo1 = _mm_cvtsi64_si128(static_cast<std::int64_t>(start_of(1)));
-    __m128i const cnt_lo2 = _mm_cvtsi64_si128(static_cast<std::int64_t>(start_of(2)));
-    __m128i const cnt_lo3 = _mm_cvtsi64_si128(static_cast<std::int64_t>(start_of(3)));
-    __m128i const cnt_hl0 = _mm_cvtsi64_si128(static_cast<std::int64_t>(64u - start_of(0)));
-    __m128i const cnt_hl1 = _mm_cvtsi64_si128(static_cast<std::int64_t>(64u - start_of(1)));
-    __m128i const cnt_hl2 = _mm_cvtsi64_si128(static_cast<std::int64_t>(64u - start_of(2)));
-    __m128i const cnt_hl3 = _mm_cvtsi64_si128(static_cast<std::int64_t>(64u - start_of(3)));
-    __m128i const zero_v = _mm_setzero_si128();
-
-    // Funnel-shift emulation via three uniform-count shifts: `lo >> start` contributes the window
-    // when start < 64, `hi << (64-start)` contributes it when start < 64 too (the overlapping-span
-    // case), and `hi >> (start-64)` contributes it when start >= 64. `64-start` and `start-64` are
-    // computed as plain std::uint64_t subtraction, which wraps on "underflow" exactly the way the
-    // shift instruction out-of-range (>=64) rule zeroes the result; so whichever term does not
-    // apply to a given `start` self-cancels with no branch, blend, or special-casing of
-    // start==0 needed.
-    auto extract = [&](
-        __m128i lo_pair, __m128i hi_pair, __m128i cnt_lo, __m128i cnt_hi_l
-    ) -> __m128i {
-        __m128i const cnt_hi_r = _mm_sub_epi64(zero_v, cnt_hi_l); // start - 64 == -(64 - start)
-        __m128i const lo_contrib = _mm_srl_epi64(lo_pair, cnt_lo);
-        __m128i const hi_contrib = _mm_or_si128(
-            _mm_sll_epi64(hi_pair, cnt_hi_l), _mm_srl_epi64(hi_pair, cnt_hi_r)
-        );
-        return _mm_and_si128(_mm_or_si128(lo_contrib, hi_contrib), mask_v);
-    };
-
-    for (std::size_t b = 0; b < paired_fast_bytes; b += 2) {
-        std::uint64_t lo0, lo1;
-        std::memcpy(&lo0, &seq.data[b],     8);
-        std::memcpy(&lo1, &seq.data[b + 1], 8);
-        std::uint64_t hi0 = static_cast<std::uint64_t>(seq.data[b + 8]);
-        std::uint64_t hi1 = static_cast<std::uint64_t>(seq.data[b + 9]);
-        if constexpr (L == Layout::kMSB) {
-            // Byte-swap each paired word before combining it with its extra byte.
-            std::uint64_t const swapped_lo0 = byte_swap_64(lo0);
-            std::uint64_t const swapped_lo1 = byte_swap_64(lo1);
-            lo0 = hi0 << 56; hi0 = swapped_lo0;
-            lo1 = hi1 << 56; hi1 = swapped_lo1;
-        } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_full_width_sse2_()"
-            );
-        }
-        __m128i const lo_pair = _mm_set_epi64x(
-            static_cast<std::int64_t>(lo1), static_cast<std::int64_t>(lo0)
-        );
-        __m128i const hi_pair = _mm_set_epi64x(
-            static_cast<std::int64_t>(hi1), static_cast<std::int64_t>(hi0)
-        );
-
-        __m128i const r0 = extract(lo_pair, hi_pair, cnt_lo0, cnt_hl0);
-        __m128i const r1 = extract(lo_pair, hi_pair, cnt_lo1, cnt_hl1);
-        __m128i const r2 = extract(lo_pair, hi_pair, cnt_lo2, cnt_hl2);
-        __m128i const r3 = extract(lo_pair, hi_pair, cnt_lo3, cnt_hl3);
-
-        invoke_kmer_vector_callback(func, 4 * b + 0, _mm_unpacklo_epi64(r0, r1), std::size_t{2});
-        invoke_kmer_vector_callback(func, 4 * b + 2, _mm_unpacklo_epi64(r2, r3), std::size_t{2});
-        invoke_kmer_vector_callback(func, 4 * b + 4, _mm_unpackhi_epi64(r0, r1), std::size_t{2});
-        invoke_kmer_vector_callback(func, 4 * b + 6, _mm_unpackhi_epi64(r2, r3), std::size_t{2});
-    }
-
-    // Any odd trailing byte is left to the scalar tail.
-    std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
-        seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
+    // The k-mer at position `local` of a starting byte spans up to nine bytes: the word at the
+    // starting byte, and a ninth byte, for which we take the word `step_bytes` after it. That is
+    // the word of the same lane in the next iteration, so that each iteration only loads one
+    // vector of words. The word is shifted by `2 * local`, so that the k-mer starts at the first
+    // base, and the next word by the remaining `8 * step_bytes - 2 * local` in the other
+    // direction, which fills in the bases that the first shift made room for. Where the two
+    // overlap, they hold the same bases.
+    //
+    // kLSB has the first base in the lowest bits, and masks what exceeds the k-mer. kMSB has it
+    // in the highest bits, and moves the k-mer down by `64 - 2k`, which leaves nothing above it.
+    simd_vector const mask_v = Simd::broadcast(mask);
+    auto const word_counts = make_packed_simd_counts_<Simd>(
+        [](std::size_t local) -> std::uint64_t { return 2 * local; }
     );
-    emit_tail_packed_<2>(
-        tail_vals.data(), tail_n, 4 * paired_fast_bytes,
-        [](std::array<std::uint64_t, 2> const& buf) {
-            return _mm_set_epi64x(
-                static_cast<std::int64_t>(buf[1]), static_cast<std::int64_t>(buf[0])
-            );
-        },
-        func
+    auto const next_counts = make_packed_simd_counts_<Simd>(
+        [](std::size_t local) -> std::uint64_t { return 8 * step_bytes - 2 * local; }
     );
-}
-
-/**
- * @brief Extracts all k-mers for k in [1, 32] from a bitpacked sequence with SSE2,
- * yielding k-mers directly in SIMD vectors.
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_sse2(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
-    }
-    if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_sse2_(seq, k, std::forward<Func>(func));
-    } else {
-        for_each_kmer_packed_simd_full_width_sse2_(seq, k, std::forward<Func>(func));
-    }
-}
-
-#endif // FISK_HAS_SSE2
-
-// =================================================================================================
-//     AVX2 (4 lanes)
-// =================================================================================================
-
-#if defined(FISK_HAS_AVX2)
-
-/**
- * @brief Extracts k in [1, 29] as four k-mers in one __m256i register.
- *
- * AVX2's per-lane variable shift maps one byte's four local positions directly onto the lanes.
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_narrow_width_avx2_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    if (k == 0 || k > 29) {
-        throw_invalid_kmer_k_(29);
-    }
-    if (seq.length < k) {
-        return;
-    }
-
-    std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
-    unsigned const k32 = static_cast<unsigned>(k);
-
-    std::size_t const p_max = seq.length - k;
-    std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes  = (seq.length + 3) / 4;
-    std::size_t const fast_bytes = std::min(
-        full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
+    auto const down_counts = make_packed_simd_counts_<Simd>(
+        [&](std::size_t) -> std::uint64_t { return 64u - 2u * k32; }
     );
 
-    __m256i const mask_v = _mm256_set1_epi64x(static_cast<std::int64_t>(mask));
-
-    // Per-lane shift-count vector {shift(0), shift(1), shift(2), shift(3)}, loop-invariant.
-    std::uint64_t shifts[4];
-    for (unsigned local = 0; local < 4; ++local) {
-        if constexpr (L == Layout::kMSB) {
-            shifts[local] = (64u - 2u * k32) - 2u * local;
-        } else if constexpr (L == Layout::kLSB) {
-            shifts[local] = 2u * local;
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_avx2_()"
-            );
+    if (fast_bytes > 0) {
+        simd_vector next = load_packed_words_<Simd, L>(&seq.data[0]);
+        for (std::size_t b = 0; b < fast_bytes; b += step_bytes) {
+            simd_vector const words = next;
+            next = load_packed_words_<Simd, L>(&seq.data[b + step_bytes]);
+            emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {
+                // Without shifts per lane, the first vector has position 0 of the starting bytes
+                // in all lanes, where the words hold the whole k-mer already.
+                bool const whole = !SimdArchWithLaneShifts<Simd> && i == 0;
+                if constexpr (L == Layout::kMSB) {
+                    simd_vector const kmers = whole ? words : Simd::bitwise_or(
+                        packed_simd_shift_left_<Simd>(words, word_counts.at[i]),
+                        packed_simd_shift_right_<Simd>(next, next_counts.at[i])
+                    );
+                    return packed_simd_shift_right_<Simd>(kmers, down_counts.at[i]);
+                } else if constexpr (L == Layout::kLSB) {
+                    simd_vector const kmers = whole ? words : Simd::bitwise_or(
+                        packed_simd_shift_right_<Simd>(words, word_counts.at[i]),
+                        packed_simd_shift_left_<Simd>(next, next_counts.at[i])
+                    );
+                    return Simd::bitwise_and(kmers, mask_v);
+                } else {
+                    static_assert(
+                        dependent_false_v<L>,
+                        "Unhandled Layout in for_each_kmer_packed_simd_full_width_()"
+                    );
+                }
+            }, func);
         }
-    }
-    __m256i const shift_v = _mm256_set_epi64x(
-        static_cast<std::int64_t>(shifts[3]), static_cast<std::int64_t>(shifts[2]),
-        static_cast<std::int64_t>(shifts[1]), static_cast<std::int64_t>(shifts[0])
-    );
-
-    for (std::size_t b = 0; b < fast_bytes; ++b) {
-        std::uint64_t word;
-        std::memcpy(&word, &seq.data[b], 8);
-        if constexpr (L == Layout::kMSB) {
-            word = byte_swap_64(word);
-        } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_avx2_()"
-            );
-        }
-        __m256i const bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(word));
-        __m256i const r = _mm256_and_si256(_mm256_srlv_epi64(bcast, shift_v), mask_v);
-
-        invoke_kmer_vector_callback(func, 4 * b, r, std::size_t{4});
     }
 
     std::array<std::uint64_t, 64> tail_vals;
     std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
-    emit_tail_packed_<4>(
-        tail_vals.data(), tail_n, 4 * fast_bytes,
-        [](std::array<std::uint64_t, 4> const& buf) {
-            return _mm256_loadu_si256(reinterpret_cast<__m256i const*>(buf.data()));
-        },
-        func
-    );
+    emit_tail_packed_<Simd>(tail_vals.data(), tail_n, 4 * fast_bytes, func);
 }
 
+// -------------------------------------------------------------------------------------------------
+//     Dispatch
+// -------------------------------------------------------------------------------------------------
+
 /**
- * @brief Extracts k in [1, 32] as four k-mers in one __m256i register.
+ * @brief Extracts all k-mers for k in [1, 32] from a PackedSequence with the given SIMD arch,
+ * yielding consecutive k-mers in the vectors of that arch.
  *
- * Three per-lane shifts combine the two words that may contain a k-mer.
+ * Func may be called either as `func(pos, vec, valid_count)` or as `func(vec, valid_count)`, see
+ * invoke_kmer_vector_callback().
+ *
+ * @tparam Simd  SIMD arch, such as SimdAVX2, to be given explicitly.
  */
-template <Encoding E, Layout L, typename Func>
+template <SimdArch Simd, Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_full_width_avx2_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
-    }
-    if (seq.length < k) {
-        return;
-    }
-
-    std::uint64_t const mask = (k == 32) ? ~std::uint64_t{0} : ((std::uint64_t{1} << (2 * k)) - 1u);
-    unsigned const k32 = static_cast<unsigned>(k);
-
-    std::size_t const p_max = seq.length - k;
-    std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes  = (seq.length + 3) / 4;
-    std::size_t const fast_bytes = (num_bytes >= 9) ? std::min(full_bytes, num_bytes - 9)
-                                                     : std::size_t{0};
-
-    __m256i const mask_v = _mm256_set1_epi64x(static_cast<std::int64_t>(mask));
-
-    std::uint64_t starts[4];
-    for (unsigned local = 0; local < 4; ++local) {
-        if constexpr (L == Layout::kMSB) {
-            starts[local] = 128u - 2u * local - 2u * k32;
-        } else if constexpr (L == Layout::kLSB) {
-            starts[local] = 2u * local;
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_full_width_avx2_()"
-            );
-        }
-    }
-    __m256i const lo_shift_v = _mm256_set_epi64x(
-        static_cast<std::int64_t>(starts[3]), static_cast<std::int64_t>(starts[2]),
-        static_cast<std::int64_t>(starts[1]), static_cast<std::int64_t>(starts[0])
-    );
-    __m256i const sixtyfour_v = _mm256_set1_epi64x(64);
-    __m256i const hi_shift_l_v = _mm256_sub_epi64(sixtyfour_v, lo_shift_v); // 64 - start
-    __m256i const hi_shift_r_v = _mm256_sub_epi64(lo_shift_v, sixtyfour_v); // start - 64
-
-    for (std::size_t b = 0; b < fast_bytes; ++b) {
-        std::uint64_t lo;
-        std::memcpy(&lo, &seq.data[b], 8);
-        std::uint64_t hi = static_cast<std::uint64_t>(seq.data[b + 8]);
-        if constexpr (L == Layout::kMSB) {
-            std::uint64_t const swapped_lo = byte_swap_64(lo);
-            lo = hi << 56;
-            hi = swapped_lo;
-        } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_full_width_avx2_()"
-            );
-        }
-        __m256i const lo_bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(lo));
-        __m256i const hi_bcast = _mm256_set1_epi64x(static_cast<std::int64_t>(hi));
-
-        __m256i const lo_contrib = _mm256_srlv_epi64(lo_bcast, lo_shift_v);
-        __m256i const hi_contrib = _mm256_or_si256(
-            _mm256_sllv_epi64(hi_bcast, hi_shift_l_v), _mm256_srlv_epi64(hi_bcast, hi_shift_r_v)
-        );
-        __m256i const r = _mm256_and_si256(_mm256_or_si256(lo_contrib, hi_contrib), mask_v);
-
-        invoke_kmer_vector_callback(func, 4 * b, r, std::size_t{4});
-    }
-
-    std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
-        seq, 4 * fast_bytes, p_max, k32, tail_vals
-    );
-    emit_tail_packed_<4>(
-        tail_vals.data(), tail_n, 4 * fast_bytes,
-        [](std::array<std::uint64_t, 4> const& buf) {
-            return _mm256_loadu_si256(reinterpret_cast<__m256i const*>(buf.data()));
-        },
-        func
-    );
-}
-
-/**
- * @brief Extracts all k-mers for k in [1, 32] from a bitpacked sequence with AVX2,
- * yielding k-mers directly in SIMD vectors.
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_avx2(
+inline void for_each_kmer_packed_simd(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
     if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_avx2_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, std::forward<Func>(func));
     } else {
-        for_each_kmer_packed_simd_full_width_avx2_(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_full_width_<Simd>(seq, k, std::forward<Func>(func));
     }
 }
-
-#endif // FISK_HAS_AVX2
-
-// =================================================================================================
-//     AVX-512 (8 lanes)
-// =================================================================================================
-
-// AVX-512F + AVX-512BW are sufficient here; VBMI2 is optional and is not required by this path.
-
-#if defined(FISK_HAS_AVX512)
-
-/**
- * @brief Extracts k in [1, 29] as eight k-mers in one __m512i register.
- *
- * Two adjacent starting bytes are replicated into the register's two four-lane halves.
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_narrow_width_avx512_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    if (k == 0 || k > 29) {
-        throw_invalid_kmer_k_(29);
-    }
-    if (seq.length < k) {
-        return;
-    }
-
-    std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
-    unsigned const k32 = static_cast<unsigned>(k);
-
-    std::size_t const p_max = seq.length - k;
-    std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes  = (seq.length + 3) / 4;
-    // Every fast-loop starting byte has a safe 8-byte read; paired b+1 is covered by the same
-    // bound.
-    std::size_t const fast_bytes = std::min(
-        full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
-    );
-    // Each fast vector covers two starting bytes. Leave an odd byte for the zero-padded scalar tail
-    // so every fast callback has eight valid lanes; consumers may then safely ignore valid_count
-    // for associative reductions such as the benchmark hash.
-    std::size_t const paired_fast_bytes = fast_bytes - (fast_bytes % 2);
-
-    __m512i const mask_v = _mm512_set1_epi64(static_cast<std::int64_t>(mask));
-
-    // Per-lane shift-count vector, the 4-local pattern tiled twice (same shift regardless of which
-    // of the two paired bytes a lane belongs to).
-    std::uint64_t shifts[4];
-    for (unsigned local = 0; local < 4; ++local) {
-        if constexpr (L == Layout::kMSB) {
-            shifts[local] = (64u - 2u * k32) - 2u * local;
-        } else if constexpr (L == Layout::kLSB) {
-            shifts[local] = 2u * local;
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_avx512_()"
-            );
-        }
-    }
-    __m512i const shift_v = _mm512_set_epi64(
-        static_cast<std::int64_t>(shifts[3]), static_cast<std::int64_t>(shifts[2]),
-        static_cast<std::int64_t>(shifts[1]), static_cast<std::int64_t>(shifts[0]),
-        static_cast<std::int64_t>(shifts[3]), static_cast<std::int64_t>(shifts[2]),
-        static_cast<std::int64_t>(shifts[1]), static_cast<std::int64_t>(shifts[0])
-    );
-
-    for (std::size_t b = 0; b < paired_fast_bytes; b += 2) {
-        std::uint64_t word0, word1;
-        std::memcpy(&word0, &seq.data[b],     8);
-        std::memcpy(&word1, &seq.data[b + 1], 8);
-        if constexpr (L == Layout::kMSB) {
-            word0 = byte_swap_64(word0);
-            word1 = byte_swap_64(word1);
-        } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_avx512_()"
-            );
-        }
-        __m512i const dbcast = _mm512_set_epi64(
-            static_cast<std::int64_t>(word1), static_cast<std::int64_t>(word1),
-            static_cast<std::int64_t>(word1), static_cast<std::int64_t>(word1),
-            static_cast<std::int64_t>(word0), static_cast<std::int64_t>(word0),
-            static_cast<std::int64_t>(word0), static_cast<std::int64_t>(word0)
-        );
-        __m512i const r = _mm512_and_si512(_mm512_srlv_epi64(dbcast, shift_v), mask_v);
-
-        invoke_kmer_vector_callback(func, 4 * b, r, std::size_t{8});
-    }
-
-    std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
-        seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
-    );
-    emit_tail_packed_<8>(
-        tail_vals.data(), tail_n, 4 * paired_fast_bytes,
-        [](std::array<std::uint64_t, 8> const& buf) {
-            return _mm512_loadu_si512(buf.data());
-        },
-        func
-    );
-}
-
-/**
- * @brief Extracts k in [1, 32] as eight k-mers in one __m512i register.
- *
- * Two adjacent 128-bit windows are combined with three per-lane shifts.
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_full_width_avx512_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
-    }
-    if (seq.length < k) {
-        return;
-    }
-
-    std::uint64_t const mask = (k == 32) ? ~std::uint64_t{0} : ((std::uint64_t{1} << (2 * k)) - 1u);
-    unsigned const k32 = static_cast<unsigned>(k);
-
-    std::size_t const p_max = seq.length - k;
-    std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes  = (seq.length + 3) / 4;
-    // The bound keeps both 8-byte loads and both extra-byte reads within the packed input.
-    std::size_t const fast_bytes = (num_bytes >= 9) ? std::min(full_bytes, num_bytes - 9)
-                                                     : std::size_t{0};
-    // Each fast vector covers two starting bytes. Leave an odd byte for the zero-padded scalar tail
-    // so every fast callback has eight valid lanes; consumers may then safely ignore valid_count
-    // for associative reductions such as the benchmark hash.
-    std::size_t const paired_fast_bytes = fast_bytes - (fast_bytes % 2);
-
-    __m512i const mask_v = _mm512_set1_epi64(static_cast<std::int64_t>(mask));
-
-    std::uint64_t starts[4];
-    for (unsigned local = 0; local < 4; ++local) {
-        if constexpr (L == Layout::kMSB) {
-            starts[local] = 128u - 2u * local - 2u * k32;
-        } else if constexpr (L == Layout::kLSB) {
-            starts[local] = 2u * local;
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_full_width_avx512_()"
-            );
-        }
-    }
-    __m512i const lo_shift_v = _mm512_set_epi64(
-        static_cast<std::int64_t>(starts[3]), static_cast<std::int64_t>(starts[2]),
-        static_cast<std::int64_t>(starts[1]), static_cast<std::int64_t>(starts[0]),
-        static_cast<std::int64_t>(starts[3]), static_cast<std::int64_t>(starts[2]),
-        static_cast<std::int64_t>(starts[1]), static_cast<std::int64_t>(starts[0])
-    );
-    __m512i const sixtyfour_v = _mm512_set1_epi64(64);
-    __m512i const hi_shift_l_v = _mm512_sub_epi64(sixtyfour_v, lo_shift_v);
-    __m512i const hi_shift_r_v = _mm512_sub_epi64(lo_shift_v, sixtyfour_v);
-
-    auto window_avx512_ = [&](__m512i lo_d, __m512i hi_d) -> __m512i {
-        // Counts >= 64 already zero a lane for VPSRLVQ/VPSLLVQ, including the start==0 and
-        // start==64 boundaries. VPTERNLOGQ then combines the three contributions in one OR.
-        __m512i const lo_contrib = _mm512_srlv_epi64(lo_d, lo_shift_v);
-        __m512i const hi_l = _mm512_sllv_epi64(hi_d, hi_shift_l_v);
-        __m512i const hi_r = _mm512_srlv_epi64(hi_d, hi_shift_r_v);
-        __m512i const merged = _mm512_ternarylogic_epi64(lo_contrib, hi_l, hi_r, 0xFE);
-        return _mm512_and_si512(merged, mask_v);
-    };
-
-    for (std::size_t b = 0; b < paired_fast_bytes; b += 2) {
-        std::uint64_t lo0, lo1;
-        std::memcpy(&lo0, &seq.data[b],     8);
-        std::memcpy(&lo1, &seq.data[b + 1], 8);
-        std::uint64_t hi0 = static_cast<std::uint64_t>(seq.data[b + 8]);
-        std::uint64_t hi1 = static_cast<std::uint64_t>(seq.data[b + 9]);
-        if constexpr (L == Layout::kMSB) {
-            std::uint64_t const swapped_lo0 = byte_swap_64(lo0);
-            std::uint64_t const swapped_lo1 = byte_swap_64(lo1);
-            lo0 = hi0 << 56; hi0 = swapped_lo0;
-            lo1 = hi1 << 56; hi1 = swapped_lo1;
-        } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_full_width_avx512_()"
-            );
-        }
-        __m512i const lo_dbcast = _mm512_set_epi64(
-            static_cast<std::int64_t>(lo1), static_cast<std::int64_t>(lo1),
-            static_cast<std::int64_t>(lo1), static_cast<std::int64_t>(lo1),
-            static_cast<std::int64_t>(lo0), static_cast<std::int64_t>(lo0),
-            static_cast<std::int64_t>(lo0), static_cast<std::int64_t>(lo0)
-        );
-        __m512i const hi_dbcast = _mm512_set_epi64(
-            static_cast<std::int64_t>(hi1), static_cast<std::int64_t>(hi1),
-            static_cast<std::int64_t>(hi1), static_cast<std::int64_t>(hi1),
-            static_cast<std::int64_t>(hi0), static_cast<std::int64_t>(hi0),
-            static_cast<std::int64_t>(hi0), static_cast<std::int64_t>(hi0)
-        );
-
-        __m512i const r = window_avx512_(lo_dbcast, hi_dbcast);
-
-        invoke_kmer_vector_callback(func, 4 * b, r, std::size_t{8});
-    }
-
-    std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
-        seq, 4 * paired_fast_bytes, p_max, k32, tail_vals
-    );
-    emit_tail_packed_<8>(
-        tail_vals.data(), tail_n, 4 * paired_fast_bytes,
-        [](std::array<std::uint64_t, 8> const& buf) {
-            return _mm512_loadu_si512(buf.data());
-        },
-        func
-    );
-}
-
-/**
- * @brief Extracts all k-mers for k in [1, 32] from a bitpacked sequence with AVX-5
- * 12, yielding k-mers directly in SIMD vectors.
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_avx512(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
-    }
-    if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_avx512_(seq, k, std::forward<Func>(func));
-    } else {
-        for_each_kmer_packed_simd_full_width_avx512_(seq, k, std::forward<Func>(func));
-    }
-}
-
-#endif // FISK_HAS_AVX512
-
-// =================================================================================================
-//     NEON (2 lanes)
-// =================================================================================================
-
-#if defined(FISK_HAS_NEON)
-
-/**
- * @brief Extracts k in [1, 29] as two k-mers per uint64x2_t register.
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_narrow_width_neon_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    // Unlike SSE2, NEON's ushl (vshlq_u64) takes a genuine per-lane
-    // signed shift-count vector, so one byte's 4 locals split cleanly into two registers
-    // (locals 0,1 and locals 2,3), both broadcasting the same word. No byte-pairing or transpose
-    // needed, results come out in strict sequence order directly.
-
-    if (k == 0 || k > 29) {
-        throw_invalid_kmer_k_(29);
-    }
-    if (seq.length < k) {
-        return;
-    }
-
-    std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
-    unsigned const k32 = static_cast<unsigned>(k);
-
-    std::size_t const p_max = seq.length - k;
-    std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes  = (seq.length + 3) / 4;
-    std::size_t const fast_bytes = std::min(
-        full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
-    );
-
-    uint64x2_t const mask_v = vdupq_n_u64(mask);
-
-    // Per-lane shift-count vectors, negated (right shift): {-shift(local0), -shift(local1)} and
-    // {-shift(local2), -shift(local3)}. Loop-invariant regardless of L -- LSB's is a
-    // compile-time-shaped constant, MSB's depends on runtime k -- so built once, not per byte.
-    auto shift_of = [&](unsigned local) -> std::int64_t {
-        std::uint64_t s;
-        if constexpr (L == Layout::kMSB) {
-            s = (64u - 2u * k32) - 2u * local;
-        } else if constexpr (L == Layout::kLSB) {
-            s = 2u * local;
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_neon_()"
-            );
-        }
-        return -static_cast<std::int64_t>(s);
-    };
-    std::int64_t const neg_shift_lo[2] = { shift_of(0), shift_of(1) };
-    std::int64_t const neg_shift_hi[2] = { shift_of(2), shift_of(3) };
-    int64x2_t const shift_vec_lo = vld1q_s64(neg_shift_lo);
-    int64x2_t const shift_vec_hi = vld1q_s64(neg_shift_hi);
-
-    for (std::size_t b = 0; b < fast_bytes; ++b) {
-        std::uint64_t word;
-        std::memcpy(&word, &seq.data[b], 8);
-        if constexpr (L == Layout::kMSB) {
-            word = byte_swap_64(word);
-        } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_narrow_width_neon_()"
-            );
-        }
-        uint64x2_t const bcast = vdupq_n_u64(word);
-
-        uint64x2_t const r_lo = vandq_u64(vshlq_u64(bcast, shift_vec_lo), mask_v); // locals 0,1
-        uint64x2_t const r_hi = vandq_u64(vshlq_u64(bcast, shift_vec_hi), mask_v); // locals 2,3
-
-        invoke_kmer_vector_callback(func, 4 * b + 0, r_lo, std::size_t{2});
-        invoke_kmer_vector_callback(func, 4 * b + 2, r_hi, std::size_t{2});
-    }
-
-    std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
-        seq, 4 * fast_bytes, p_max, k32, tail_vals
-    );
-    emit_tail_packed_<2>(
-        tail_vals.data(), tail_n, 4 * fast_bytes,
-        [](std::array<std::uint64_t, 2> const& buf) { return vld1q_u64(buf.data()); },
-        func
-    );
-}
-
-/**
- * @brief Extracts k in [1, 32] as two k-mers per uint64x2_t register.
- *
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_full_width_neon_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    // The same per-byte, no-transpose arrangement as the narrow-width path is used. The lo:hi
-    // boundary-spanning window collapses to a single ushl each for the lo and hi contribution,
-    // since ushl's signed shift count already encodes direction: shifting `lo` right by `start`
-    // and `hi` "left" by `64-start` (which naturally becomes a right shift once `64-start` goes
-    // negative, i.e. once start > 64) reproduces the exact same funnel-shift semantics the other
-    // tiers need two differently-signed shift instructions for.
-
-    if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
-    }
-    if (seq.length < k) {
-        return;
-    }
-
-    std::uint64_t const mask = (k == 32) ? ~std::uint64_t{0} : ((std::uint64_t{1} << (2 * k)) - 1u);
-    unsigned const k32 = static_cast<unsigned>(k);
-
-    std::size_t const p_max = seq.length - k;
-    std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes  = (seq.length + 3) / 4;
-    std::size_t const fast_bytes = (num_bytes >= 9) ? std::min(full_bytes, num_bytes - 9)
-                                                     : std::size_t{0};
-
-    uint64x2_t const mask_v = vdupq_n_u64(mask);
-
-    auto start_of = [&](unsigned local) -> std::uint64_t {
-        if constexpr (L == Layout::kMSB) {
-            return 128u - 2u * local - 2u * k32;
-        } else if constexpr (L == Layout::kLSB) {
-            return 2u * local;
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_full_width_neon_()"
-            );
-        }
-    };
-    // lo contribution: shift right by `start`, i.e. signed count -start.
-    // hi contribution: shift "left" by (64-start); this is signed, so it silently becomes a right
-    // shift by (start-64) once start > 64, exactly matching the hi-only regime -- see this
-    // function's own docs above.
-    std::int64_t const neg_start_lo[2] = {
-        -static_cast<std::int64_t>(start_of(0)), -static_cast<std::int64_t>(start_of(1))
-    };
-    std::int64_t const neg_start_hi[2] = {
-        -static_cast<std::int64_t>(start_of(2)), -static_cast<std::int64_t>(start_of(3))
-    };
-    std::int64_t const hi_shift_lo[2] = {
-        64 - static_cast<std::int64_t>(start_of(0)), 64 - static_cast<std::int64_t>(start_of(1))
-    };
-    std::int64_t const hi_shift_hi[2] = {
-        64 - static_cast<std::int64_t>(start_of(2)), 64 - static_cast<std::int64_t>(start_of(3))
-    };
-    int64x2_t const lo_cnt_lo = vld1q_s64(neg_start_lo);
-    int64x2_t const lo_cnt_hi = vld1q_s64(neg_start_hi);
-    int64x2_t const hi_cnt_lo = vld1q_s64(hi_shift_lo);
-    int64x2_t const hi_cnt_hi = vld1q_s64(hi_shift_hi);
-
-    for (std::size_t b = 0; b < fast_bytes; ++b) {
-        std::uint64_t lo;
-        std::memcpy(&lo, &seq.data[b], 8);
-        std::uint64_t hi = static_cast<std::uint64_t>(seq.data[b + 8]);
-        if constexpr (L == Layout::kMSB) {
-            std::uint64_t const swapped_lo = byte_swap_64(lo);
-            lo = hi << 56;
-            hi = swapped_lo;
-        } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_simd_full_width_neon_()"
-            );
-        }
-        uint64x2_t const lo_bcast = vdupq_n_u64(lo);
-        uint64x2_t const hi_bcast = vdupq_n_u64(hi);
-
-        uint64x2_t const r_lo = vandq_u64(
-            vorrq_u64(vshlq_u64(lo_bcast, lo_cnt_lo), vshlq_u64(hi_bcast, hi_cnt_lo)), mask_v
-        );
-        uint64x2_t const r_hi = vandq_u64(
-            vorrq_u64(vshlq_u64(lo_bcast, lo_cnt_hi), vshlq_u64(hi_bcast, hi_cnt_hi)), mask_v
-        );
-
-        invoke_kmer_vector_callback(func, 4 * b + 0, r_lo, std::size_t{2});
-        invoke_kmer_vector_callback(func, 4 * b + 2, r_hi, std::size_t{2});
-    }
-
-    std::array<std::uint64_t, 64> tail_vals;
-    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
-        seq, 4 * fast_bytes, p_max, k32, tail_vals
-    );
-    emit_tail_packed_<2>(
-        tail_vals.data(), tail_n, 4 * fast_bytes,
-        [](std::array<std::uint64_t, 2> const& buf) { return vld1q_u64(buf.data()); },
-        func
-    );
-}
-
-/**
- * @brief Extracts all k-mers for k in [1, 32] from a bitpacked sequence with NEON,
- * yielding k-mers directly in SIMD vectors.
- */
-template <Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd_neon(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
-    if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
-    }
-    if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_neon_(seq, k, std::forward<Func>(func));
-    } else {
-        for_each_kmer_packed_simd_full_width_neon_(seq, k, std::forward<Func>(func));
-    }
-}
-
-#endif // FISK_HAS_NEON
 
 } // namespace fisk

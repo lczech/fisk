@@ -38,7 +38,7 @@ void bench_kmer_extract_packed(
 // Kernels compared above, each defined in its own translation unit (var_*.cpp). "aligned" and
 // "rolling" cover the full k in [1, 32] range themselves; the SIMD kernels are split into
 // narrow-width (k<=29) and full-width (k in [30,32]) tiers plus an undecorated dispatcher that
-// picks between them at runtime, matching the library's own for_each_kmer_packed_simd_<isa>()
+// picks between them at runtime, matching the library's own for_each_kmer_packed_simd()
 // split.
 //
 // Each one constructs its own local Sink (see sink.hpp) via make_sink(sink_buffer), so that Sum's

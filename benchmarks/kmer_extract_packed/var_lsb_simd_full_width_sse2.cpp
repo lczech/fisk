@@ -15,9 +15,9 @@ std::uint64_t run_var_lsb_simd_full_width_sse2(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_simd_full_width_sse2_(seq, k, [&](__m128i v, std::size_t) noexcept {
-        sink.consume(v);
-    });
+    for_each_kmer_packed_simd_full_width_<SimdSSE2>(
+        seq, k, [&](__m128i v, std::size_t) noexcept { sink.consume(v); }
+    );
     return sink.finalize();
 }
 

@@ -25,7 +25,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdScalar>>);
 #if defined(FISK_HAS_SSE2)
 static_assert(SimdArch<SimdSSE2>);
 #if defined(FISK_HAS_SSSE3)
-static_assert(SimdArchWithNibbleLookup<SimdSSE2>);
+static_assert(SimdArchWithByteShuffle<SimdSSE2>);
 static_assert(SimdArchWithDoubleStore<SimdSSE2>);
 #endif
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdSSE2>>);
@@ -35,7 +35,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdSSE2>>);
 #if defined(FISK_HAS_AVX2)
 static_assert(SimdArch<SimdAVX2>);
 static_assert(SimdArchWithLaneShifts<SimdAVX2>);
-static_assert(SimdArchWithNibbleLookup<SimdAVX2>);
+static_assert(SimdArchWithByteShuffle<SimdAVX2>);
 static_assert(SimdArchWithDoubleStore<SimdAVX2>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX2>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX2>>);
@@ -44,7 +44,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX2>>);
 #if defined(FISK_HAS_AVX512)
 static_assert(SimdArch<SimdAVX512>);
 static_assert(SimdArchWithLaneShifts<SimdAVX512>);
-static_assert(SimdArchWithNibbleLookup<SimdAVX512>);
+static_assert(SimdArchWithByteShuffle<SimdAVX512>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX512>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
 #endif
@@ -52,7 +52,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
 #if defined(FISK_HAS_NEON)
 static_assert(SimdArch<SimdNEON>);
 static_assert(SimdArchWithLaneShifts<SimdNEON>);
-static_assert(SimdArchWithNibbleLookup<SimdNEON>);
+static_assert(SimdArchWithByteShuffle<SimdNEON>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdNEON>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdNEON>>);
 #endif
@@ -281,7 +281,7 @@ static void check_simd_store_two_bit_codes_double(Lanes<Simd> const& in0, Lanes<
     }
 }
 
-template <SimdArchWithNibbleLookup Simd>
+template <SimdArchWithByteShuffle Simd>
 static void check_simd_lookup_low_nibbles(Lanes<Simd> const& in)
 {
     static constexpr std::array<std::uint8_t, 16> table = {
@@ -331,7 +331,7 @@ static void check_simd_arch()
         check_simd_store_two_bit_codes<Simd, false>(in);
         check_simd_store_two_bit_codes<Simd, true>(in);
 
-        if constexpr (SimdArchWithNibbleLookup<Simd>) {
+        if constexpr (SimdArchWithByteShuffle<Simd>) {
             check_simd_lookup_low_nibbles<Simd>(in);
         }
         if constexpr (SimdArchWithDoubleStore<Simd>) {

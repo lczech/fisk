@@ -67,10 +67,13 @@ concept SimdArch = requires(
 };
 
 /**
- * @brief Concept for a SIMD arch with a table lookup per byte, see lookup_low_nibbles().
+ * @brief Concept for a SIMD arch with a byte shuffle instruction.
+ *
+ * These archs offer lookup_low_nibbles(), which the concept checks for, and their
+ * byte_swap_lanes() is a single instruction.
  */
 template <typename Simd>
-concept SimdArchWithNibbleLookup = SimdArch<Simd> && requires(
+concept SimdArchWithByteShuffle = SimdArch<Simd> && requires(
     typename Simd::simd_vector const v,
     std::array<std::uint8_t, 16> const& table
 ) {
