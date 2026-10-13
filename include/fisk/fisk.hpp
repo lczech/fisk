@@ -24,7 +24,6 @@
 
 // Sequence packing
 #include "fisk/seq_pack/seq_pack.hpp"
-#include "fisk/seq_pack/simd.hpp"
 
 // K-mer extraction
 #include "fisk/kmer_extract/kmer_extract.hpp"

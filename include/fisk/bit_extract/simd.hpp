@@ -183,14 +183,11 @@ struct BitExtractKernelButterfly
 
     simd_vector bit_extract(simd_vector x) const noexcept
     {
-        x = Simd::bitwise_and(x, mask_simd);
-        step_< 1>(x, sieves_simd[0]);
-        step_< 2>(x, sieves_simd[1]);
-        step_< 4>(x, sieves_simd[2]);
-        step_< 8>(x, sieves_simd[3]);
-        step_<16>(x, sieves_simd[4]);
-        step_<32>(x, sieves_simd[5]);
-        return x;
+        return bit_extract_(
+            x, mask_simd,
+            sieves_simd[0], sieves_simd[1], sieves_simd[2],
+            sieves_simd[3], sieves_simd[4], sieves_simd[5]
+        );
     }
 
     std::uint64_t bit_extract_scalar(std::uint64_t x) const noexcept
@@ -198,7 +195,42 @@ struct BitExtractKernelButterfly
         return bit_extract_butterfly_table(x, mask);
     }
 
+    /**
+     * @brief Same as bit_extract(), but without a kernel instance, broadcasting the given table on
+     * each call instead.
+     *
+     * Meant for a table that is a compile-time constant, see make_bit_extract_butterfly_table(),
+     * whose broadcasts then become constants that the compiler can keep in registers.
+     */
+    static simd_vector bit_extract(simd_vector x, BitExtractButterflyTable const& table) noexcept
+    {
+        return bit_extract_(
+            x, Simd::broadcast(table.mask),
+            Simd::broadcast(table.sieves[0]), Simd::broadcast(table.sieves[1]),
+            Simd::broadcast(table.sieves[2]), Simd::broadcast(table.sieves[3]),
+            Simd::broadcast(table.sieves[4]), Simd::broadcast(table.sieves[5])
+        );
+    }
+
 private:
+
+    // The butterfly network, shared by both overloads of bit_extract(). Forced inline, so that
+    // passing the vectors by value never becomes an actual call.
+    FISK_ALWAYS_INLINE
+    static simd_vector bit_extract_(
+        simd_vector x, simd_vector mask_vec,
+        simd_vector sieve0, simd_vector sieve1, simd_vector sieve2,
+        simd_vector sieve3, simd_vector sieve4, simd_vector sieve5
+    ) noexcept {
+        x = Simd::bitwise_and(x, mask_vec);
+        step_< 1>(x, sieve0);
+        step_< 2>(x, sieve1);
+        step_< 4>(x, sieve2);
+        step_< 8>(x, sieve3);
+        step_<16>(x, sieve4);
+        step_<32>(x, sieve5);
+        return x;
+    }
 
     template <int S>
     static void step_(simd_vector& x, simd_vector sieve) noexcept

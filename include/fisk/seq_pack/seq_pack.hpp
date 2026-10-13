@@ -1,13 +1,16 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string_view>
 
 #include "fisk/core/intrinsics.hpp"
+#include "fisk/core/simd.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
+#include "fisk/bit_extract/simd.hpp"
 
 namespace fisk {
 
@@ -24,7 +27,8 @@ namespace fisk {
 // expose them as `encoding` and `layout` static members right next to the logic that implements
 // them, so that the tags and the bits cannot silently drift apart. What distinguishes the two is
 // only how the selected bits are gathered: hardware PEXT, or the portable software butterfly
-// network.
+// network. The latter is additionally templated on a SIMD arch (core/simd.hpp), with which it
+// encodes `lanes` words at once.
 //
 // Both conventions enter the same way, and only in one place each. The encoding picks which bits
 // of every ASCII byte hold the code, and hence the extraction mask; ACGT additionally needs a SWAR
@@ -41,12 +45,16 @@ namespace fisk {
  *
  * Requires the encoder to state both conventions its output is in, from which pack_sequence()
  * derives the type of the PackedSequence it fills, and to encode one 8-character word at a time.
- * The SIMD word encoders (seq_pack/simd.hpp) satisfy this too, through their scalar call operator.
+ *
+ * It also states the number of `lanes`, that is, words that it encodes at once. With more than
+ * one, pack_sequence() additionally uses `simd_vector`, `load_unaligned()`, `store_packed()`, and
+ * the call operator on a whole vector, as provided by WordEncoderButterfly with a SIMD arch.
  */
 template <typename T>
 concept WordEncoder = requires(T const encoder, std::uint64_t word) {
     { T::encoding } -> std::convertible_to<Encoding>;
     { T::layout }   -> std::convertible_to<Layout>;
+    { T::lanes }    -> std::convertible_to<std::size_t>;
     { encoder(word) } -> std::convertible_to<std::uint64_t>;
 };
 
@@ -122,6 +130,7 @@ struct WordEncoderPext
 {
     static constexpr Encoding encoding = E;
     static constexpr Layout layout = L;
+    static constexpr std::size_t lanes = 1;
 
     inline std::uint64_t operator()(std::uint64_t word) const noexcept
     {
@@ -136,21 +145,80 @@ struct WordEncoderPext
  * @brief Same as WordEncoderPext, via the software butterfly network instead of PEXT.
  *
  * The fallback tier for hardware without fast PEXT (e.g. pre-Zen3 AMD, where PEXT/PDEP are
- * microcoded and slow), or without PEXT at all. The mask is fixed for a given encoding, so the
- * corresponding BitExtractButterflyTable is precomputed once via a function-local static.
+ * microcoded and slow), or without PEXT at all.
+ *
+ * With a SIMD arch other than SimdScalar (see core/simd.hpp), the call operator on a whole
+ * `simd_vector` encodes `lanes` words at once, applying the same steps to each lane. The call
+ * operator on a single word remains, for the words at the end that do not fill a whole vector.
+ *
+ * The encoder is stateless: its butterfly table is a compile-time constant, so that the compiler
+ * can keep it in registers. A table in the encoder object instead would have to be reloaded after
+ * each store of packed bytes, which might alias it. For the same reason, the call operators are
+ * forced inline, as otherwise the constants would be rebuilt on each call.
  */
-template <Encoding E, Layout L>
+template <Encoding E, Layout L, SimdArch Simd = SimdScalar>
 struct WordEncoderButterfly
 {
     static constexpr Encoding encoding = E;
     static constexpr Layout layout = L;
+    static constexpr std::size_t lanes = Simd::lanes;
+    using simd_vector = typename Simd::simd_vector;
 
-    inline std::uint64_t operator()(std::uint64_t word) const noexcept
+    static constexpr BitExtractButterflyTable table =
+        make_bit_extract_butterfly_table(pack_mask_v<E>);
+
+    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
     {
-        static const BitExtractButterflyTable table =
-            make_bit_extract_butterfly_table(pack_mask_v<E>);
-        word = pack_fold_codes_<E>(pack_orient_chunk_<L>(word));
-        return bit_extract_butterfly_table(word, table);
+        return Simd::load_unaligned(a);
+    }
+
+    // Each lane holds the 8 bases of its chunk in its low 16 bits, see write_two_bit_chunk_().
+    static void store_packed(simd_vector const& v, char* out) noexcept
+    {
+        if constexpr (L == Layout::kMSB) {
+            Simd::template store_truncated_u16<true>(v, out);
+        } else if constexpr (L == Layout::kLSB) {
+            Simd::template store_truncated_u16<false>(v, out);
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in WordEncoderButterfly::store_packed()"
+            );
+        }
+    }
+
+    // For SimdScalar, the vector is a single word, which is encoded by the call operator below.
+    FISK_ALWAYS_INLINE
+    simd_vector operator()(simd_vector x) const noexcept
+    requires (lanes > 1)
+    {
+        if constexpr (L == Layout::kMSB) {
+            x = Simd::byte_swap_lanes(x);
+        } else if constexpr (L == Layout::kLSB) {
+            // A little-endian load already has the bases in order.
+        } else {
+            static_assert(
+                dependent_false_v<L>, "Unhandled Layout in WordEncoderButterfly::operator()"
+            );
+        }
+        if constexpr (E == Encoding::kACGT) {
+            simd_vector const s1 = Simd::template shift_right<1>(x);
+            simd_vector const s2 = Simd::template shift_right<2>(x);
+            simd_vector const acgt_mask = Simd::broadcast(pack_mask_v<Encoding::kACGT>);
+            x = Simd::bitwise_and(Simd::bitwise_xor(s1, s2), acgt_mask);
+        } else if constexpr (E == Encoding::kACTG) {
+            // The codes already sit in bits 1-2 of each byte, see pack_fold_codes_().
+        } else {
+            static_assert(
+                dependent_false_v<E>, "Unhandled Encoding in WordEncoderButterfly::operator()"
+            );
+        }
+        return BitExtractKernelButterfly<Simd>::bit_extract(x, table);
+    }
+
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(std::uint64_t word) const noexcept
+    {
+        return bit_extract_butterfly_table(pack_fold_codes_<E>(pack_orient_chunk_<L>(word)), table);
     }
 };
 
@@ -201,13 +269,18 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
  * Processes the sequence in 8-byte chunks via `encoder` (see the word encoders above), writing
  * each chunk's 16-bit result to its 2 sequential output bytes at `out.data[i/4 .. i/4+1]`, where
  * `i` is the chunk's starting byte offset into `seq` (see write_two_bit_chunk_() for the per-byte
- * ordering).
+ * ordering). Encoders with more than one lane process `lanes` chunks at once, and only the chunks
+ * at the end that do not fill a whole vector one at a time.
  *
  * `Encoder::encoding` and `Encoder::layout` (see Encoding and Layout in core/types.hpp) select
  * the out type. Passing an encoder whose encoding or layout differs from `out`'s is a compile
  * error.
+ *
+ * Forced inline, as the compilers otherwise tend to keep this out of line, where they optimize
+ * the loops less well for the given encoder.
  */
 template <WordEncoder Encoder>
+FISK_ALWAYS_INLINE
 inline void pack_sequence(
     std::string_view seq,
     Encoder const& encoder,
@@ -235,6 +308,17 @@ inline void pack_sequence(
 
     // byte offset into seq
     std::size_t i = 0;
+
+    // Full vectors of `lanes` chunks.
+    if constexpr (Encoder::lanes > 1) {
+        constexpr std::size_t vec_bytes = Encoder::lanes * 8;
+        for (; i + vec_bytes <= seq_len; i += vec_bytes) {
+            auto const x = encoder(
+                Encoder::load_unaligned(reinterpret_cast<std::uint64_t const*>(data + i))
+            );
+            Encoder::store_packed(x, out_bytes + i / 4);
+        }
+    }
 
     // Full 8-base chunks.
     for (; i + 8 <= seq_len; i += 8) {

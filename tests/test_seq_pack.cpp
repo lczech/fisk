@@ -9,7 +9,6 @@
 #include "fisk/core/random.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
-#include "fisk/seq_pack/simd.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
@@ -24,7 +23,7 @@ using namespace fisk;
 // under test.
 
 // Decode base `i` per PackedSequence's documented contract (see Layout in core/types.hpp),
-// independent of pack_sequence()/pack_sequence_simd()'s internals.
+// independent of pack_sequence()'s internals.
 template <Encoding E, Layout L>
 static int decode_base(PackedSequence<E, L> const& s, std::size_t i)
 {
@@ -85,9 +84,9 @@ static void check_packed(std::string const& seq, PackedSequence<E, L> const& pac
 }
 
 // Checks pack_sequence() -- both overloads, and reuse of one PackedSequence across calls -- for a
-// given scalar word encoder, on valid and invalid input.
+// given word encoder, on valid and invalid input.
 template <typename Encoder>
-static void check_scalar_pack()
+static void check_seq_pack()
 {
     Encoder encoder{};
     PackedSequence<Encoder::encoding, Encoder::layout> out;
@@ -107,35 +106,6 @@ static void check_scalar_pack()
     pack_sequence(std::string("AC"), encoder, out);
     check_packed(std::string("AC"), out);
 }
-
-#if defined(FISK_HAS_SSE2)   || \
-    defined(FISK_HAS_AVX2)   || \
-    defined(FISK_HAS_AVX512) || \
-    defined(FISK_HAS_NEON)
-
-// Same as check_scalar_pack(), but for pack_sequence_simd() and a SIMD word encoder.
-template <typename Encoder>
-static void check_simd_pack()
-{
-    Encoder encoder{};
-    PackedSequence<Encoder::encoding, Encoder::layout> out;
-
-    for (auto const* seqs : {&test_sequences(), &invalid_sequences()}) {
-        for (auto const& seq : *seqs) {
-            pack_sequence_simd(seq, encoder, out);
-            check_packed(seq, out);
-
-            auto const out2 = pack_sequence_simd(seq, encoder);
-            check_packed(seq, out2);
-        }
-    }
-
-    pack_sequence_simd(std::string(100, 'T'), encoder, out);
-    pack_sequence_simd(std::string("AC"), encoder, out);
-    check_packed(std::string("AC"), out);
-}
-
-#endif
 
 // =================================================================================================
 //     Compile-Time Conventions
@@ -170,7 +140,7 @@ static_assert( WordEncoder<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>>)
 static_assert( WordEncoder<WordEncoderPext<Encoding::kACGT, Layout::kLSB>>);
 #endif
 #if defined(FISK_HAS_SSE2)
-static_assert( WordEncoder<WordEncoderButterflySimd<SimdSSE2, Encoding::kACTG, Layout::kMSB>>);
+static_assert( WordEncoder<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB, SimdSSE2>>);
 #endif
 static_assert(!WordEncoder<CharEncoderTable<Encoding::kACGT>>);
 static_assert(!WordEncoder<UntaggedWordEncoder>);
@@ -198,6 +168,24 @@ static_assert(tagged_as<WordEncoderPext<Encoding::kACGT, Layout::kLSB>, Encoding
 static_assert(tagged_as<WordEncoderPext<Encoding::kACGT, Layout::kMSB>, Encoding::kACGT, Layout::kMSB>);
 #endif // FISK_HAS_BMI2
 
+// The number of lanes is what selects the vector loop of pack_sequence().
+static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>::lanes == 1);
+#if defined(FISK_HAS_BMI2)
+static_assert(WordEncoderPext<Encoding::kACGT, Layout::kMSB>::lanes == 1);
+#endif
+#if defined(FISK_HAS_SSE2)
+static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
+#endif
+#if defined(FISK_HAS_AVX2)
+static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX2>::lanes == 4);
+#endif
+#if defined(FISK_HAS_AVX512)
+static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 8);
+#endif
+#if defined(FISK_HAS_NEON)
+static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdNEON>::lanes == 2);
+#endif
+
 // The packed sequence type follows the encoder's tags.
 static_assert(std::is_same_v<
     decltype(pack_sequence("", WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{})),
@@ -213,7 +201,7 @@ static_assert(!PackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>,
 static_assert(!std::is_convertible_v<ActgMsb const&, AcgtMsb const&>);
 
 // =================================================================================================
-//     Scalar pack_sequence()
+//     Scalar Word Encoders
 // =================================================================================================
 
 // -----------------------------------------------------------------------------
@@ -222,22 +210,22 @@ static_assert(!std::is_convertible_v<ActgMsb const&, AcgtMsb const&>);
 
 TEST(SeqPack, ScalarButterflyActgLsb)
 {
-    check_scalar_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>>();
 }
 
 TEST(SeqPack, ScalarButterflyActgMsb)
 {
-    check_scalar_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB>>();
 }
 
 TEST(SeqPack, ScalarButterflyAcgtLsb)
 {
-    check_scalar_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>>();
 }
 
 TEST(SeqPack, ScalarButterflyAcgtMsb)
 {
-    check_scalar_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>>();
 }
 
 // -----------------------------------------------------------------------------
@@ -248,47 +236,47 @@ TEST(SeqPack, ScalarButterflyAcgtMsb)
 
 TEST(SeqPack, ScalarPextActgLsb)
 {
-    check_scalar_pack<WordEncoderPext<Encoding::kACTG, Layout::kLSB>>();
+    check_seq_pack<WordEncoderPext<Encoding::kACTG, Layout::kLSB>>();
 }
 
 TEST(SeqPack, ScalarPextActgMsb)
 {
-    check_scalar_pack<WordEncoderPext<Encoding::kACTG, Layout::kMSB>>();
+    check_seq_pack<WordEncoderPext<Encoding::kACTG, Layout::kMSB>>();
 }
 
 TEST(SeqPack, ScalarPextAcgtLsb)
 {
-    check_scalar_pack<WordEncoderPext<Encoding::kACGT, Layout::kLSB>>();
+    check_seq_pack<WordEncoderPext<Encoding::kACGT, Layout::kLSB>>();
 }
 
 TEST(SeqPack, ScalarPextAcgtMsb)
 {
-    check_scalar_pack<WordEncoderPext<Encoding::kACGT, Layout::kMSB>>();
+    check_seq_pack<WordEncoderPext<Encoding::kACGT, Layout::kMSB>>();
 }
 
 #endif // FISK_HAS_BMI2
 
 // =================================================================================================
-//     SIMD pack_sequence_simd()
+//     SIMD Word Encoders
 // =================================================================================================
 
 #if defined(FISK_HAS_SSE2)
 
 TEST(SeqPackSimd, Sse2ActgLsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdSSE2, Encoding::kACTG, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB, SimdSSE2>>();
 }
 TEST(SeqPackSimd, Sse2ActgMsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdSSE2, Encoding::kACTG, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB, SimdSSE2>>();
 }
 TEST(SeqPackSimd, Sse2AcgtLsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdSSE2, Encoding::kACGT, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kLSB, SimdSSE2>>();
 }
 TEST(SeqPackSimd, Sse2AcgtMsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdSSE2, Encoding::kACGT, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdSSE2>>();
 }
 
 #endif // FISK_HAS_SSE2
@@ -297,19 +285,19 @@ TEST(SeqPackSimd, Sse2AcgtMsb)
 
 TEST(SeqPackSimd, Avx2ActgLsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdAVX2, Encoding::kACTG, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB, SimdAVX2>>();
 }
 TEST(SeqPackSimd, Avx2ActgMsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdAVX2, Encoding::kACTG, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB, SimdAVX2>>();
 }
 TEST(SeqPackSimd, Avx2AcgtLsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdAVX2, Encoding::kACGT, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kLSB, SimdAVX2>>();
 }
 TEST(SeqPackSimd, Avx2AcgtMsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdAVX2, Encoding::kACGT, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX2>>();
 }
 
 #endif // FISK_HAS_AVX2
@@ -318,19 +306,19 @@ TEST(SeqPackSimd, Avx2AcgtMsb)
 
 TEST(SeqPackSimd, Avx512ActgLsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdAVX512, Encoding::kACTG, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB, SimdAVX512>>();
 }
 TEST(SeqPackSimd, Avx512ActgMsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdAVX512, Encoding::kACTG, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB, SimdAVX512>>();
 }
 TEST(SeqPackSimd, Avx512AcgtLsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdAVX512, Encoding::kACGT, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kLSB, SimdAVX512>>();
 }
 TEST(SeqPackSimd, Avx512AcgtMsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdAVX512, Encoding::kACGT, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX512>>();
 }
 
 #endif // FISK_HAS_AVX512
@@ -339,19 +327,19 @@ TEST(SeqPackSimd, Avx512AcgtMsb)
 
 TEST(SeqPackSimd, NeonActgLsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdNEON, Encoding::kACTG, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB, SimdNEON>>();
 }
 TEST(SeqPackSimd, NeonActgMsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdNEON, Encoding::kACTG, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACTG, Layout::kMSB, SimdNEON>>();
 }
 TEST(SeqPackSimd, NeonAcgtLsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdNEON, Encoding::kACGT, Layout::kLSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kLSB, SimdNEON>>();
 }
 TEST(SeqPackSimd, NeonAcgtMsb)
 {
-    check_simd_pack<WordEncoderButterflySimd<SimdNEON, Encoding::kACGT, Layout::kMSB>>();
+    check_seq_pack<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdNEON>>();
 }
 
 #endif // FISK_HAS_NEON

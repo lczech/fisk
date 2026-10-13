@@ -234,6 +234,14 @@ static void check_kernel()
             for (std::size_t i = 0; i < lanes; ++i) {
                 EXPECT_EQ(out_buf[i], bit_extract_oracle(in_buf[i], mask));
             }
+
+            // Same via the static overload that takes the table instead, for kernels that have it.
+            if constexpr (requires { KernelType::bit_extract(vec, kernel.mask); }) {
+                KernelType::store(KernelType::bit_extract(vec, kernel.mask), out_buf.data());
+                for (std::size_t i = 0; i < lanes; ++i) {
+                    EXPECT_EQ(out_buf[i], bit_extract_oracle(in_buf[i], mask));
+                }
+            }
         }
     }
 }

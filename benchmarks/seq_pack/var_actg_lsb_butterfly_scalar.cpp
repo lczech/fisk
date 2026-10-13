@@ -6,7 +6,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_actg_lsb_butterfly(
+std::uint64_t run_var_actg_lsb_butterfly_scalar(
     std::string const& seq,
     PackedSequence<Encoding::kACTG, Layout::kLSB>& out
 ) {

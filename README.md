@@ -114,8 +114,7 @@ Overview of the library headers (in `include/fisk/`), and their most important f
  - `bit_extract/simd.hpp`: SIMD kernels of the bit extract algorithms, templated on the SIMD arch (e.g., `BitExtractKernelButterfly<SimdAVX2>`).
  - `bit_extract/selector.hpp`: Helper that runs a quick benchmark to find the most performant bit extraction algorithm for a given mask.
  - `bit_extract/adaptive.hpp`, `instlatx64.hpp`, `zp7.hpp`: Alternative implementations of the selector and of bit extraction algorithms. Not recommended, but kept here for reference.
- - `seq_pack/seq_pack.hpp`: Packs an ASCII sequence into a compact 2-bit-per-base representation (`PackedSequence`), 8 characters at a time via the `WordEncoder` family, using the same PEXT/butterfly building blocks as bit extraction.
- - `seq_pack/simd.hpp`: SIMD implementation of sequence packing.
+ - `seq_pack/seq_pack.hpp`: Packs an ASCII sequence into a compact 2-bit-per-base representation (`PackedSequence`), 8 characters at a time via the `WordEncoder` family, using the same PEXT/butterfly building blocks as bit extraction. The butterfly encoder is templated on the SIMD arch, to pack several words at once (e.g., `WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX2>`).
  - `kmer_extract/kmer_extract.hpp`: Basic extraction loop of k-mers from a sequence.
  - `kmer_extract/simd.hpp`: Block-wise variants of the rolling extraction: `for_each_kmer_simd()` encodes and validates 32 characters at a time with AVX2, and is about 5-25% faster than the rolling extraction on typical data; `for_each_kmer_swar()` is its portable counterpart without SIMD instructions.
  - `kmer_extract/packed.hpp`: K-mer extraction reading directly from an already-packed `PackedSequence` (`seq_pack.hpp`), instead of re-deriving codes from ASCII on every call.

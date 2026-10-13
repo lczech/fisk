@@ -88,9 +88,9 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
             ),
             #endif
             bench(
-                "butterfly",
+                "butterfly_scalar",
                 [&](std::string const& seq) {
-                    return run_var_acgt_lsb_butterfly(seq, out);
+                    return run_var_acgt_lsb_butterfly_scalar(seq, out);
                 }
             )
         );
@@ -149,9 +149,9 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
             ),
             #endif
             bench(
-                "butterfly",
+                "butterfly_scalar",
                 [&](std::string const& seq) {
-                    return run_var_acgt_msb_butterfly(seq, out);
+                    return run_var_acgt_msb_butterfly_scalar(seq, out);
                 }
             )
         );
@@ -210,9 +210,9 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
             ),
             #endif
             bench(
-                "butterfly",
+                "butterfly_scalar",
                 [&](std::string const& seq) {
-                    return run_var_actg_lsb_butterfly(seq, out);
+                    return run_var_actg_lsb_butterfly_scalar(seq, out);
                 }
             )
         );
@@ -271,9 +271,9 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
             ),
             #endif
             bench(
-                "butterfly",
+                "butterfly_scalar",
                 [&](std::string const& seq) {
-                    return run_var_actg_msb_butterfly(seq, out);
+                    return run_var_actg_msb_butterfly_scalar(seq, out);
                 }
             )
         );

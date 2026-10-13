@@ -394,8 +394,10 @@ struct BitExtractButterflyTable
 
 /**
  * @brief Compute the `mv` table for a given @p mask for bit extraction via butterfly network.
+ *
+ * Usable at compile time, for masks that are known then.
  */
-inline BitExtractButterflyTable make_bit_extract_butterfly_table( std::uint64_t mask )
+inline constexpr BitExtractButterflyTable make_bit_extract_butterfly_table( std::uint64_t mask )
 {
     BitExtractButterflyTable out{};
     out.mask = mask;

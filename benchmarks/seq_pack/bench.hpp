@@ -21,16 +21,16 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
 // itself, so that summing it into a sink can happen once, in Microbench::finalize(), outside the
 // timed region. Guarded to match the ISA availability of the word encoder each one benchmarks
 // (see fisk/core/intrinsics.hpp).
-std::uint64_t run_var_acgt_lsb_butterfly(
+std::uint64_t run_var_acgt_lsb_butterfly_scalar(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
 );
-std::uint64_t run_var_acgt_msb_butterfly(
+std::uint64_t run_var_acgt_msb_butterfly_scalar(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
 );
-std::uint64_t run_var_actg_lsb_butterfly(
+std::uint64_t run_var_actg_lsb_butterfly_scalar(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
 );
-std::uint64_t run_var_actg_msb_butterfly(
+std::uint64_t run_var_actg_msb_butterfly_scalar(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
 
