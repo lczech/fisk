@@ -94,6 +94,15 @@ inline void encode_lut(std::string_view seq, std::uint8_t* out) noexcept
 
 #if defined(FISK_HAS_BMI2)
 
+#define FASTDNA_STR(x) #x
+#if defined(__clang__)
+    #define FASTDNA_UNROLL(n) _Pragma(FASTDNA_STR(clang loop unroll_count(n)))
+#elif defined(__GNUC__)
+    #define FASTDNA_UNROLL(n) _Pragma(FASTDNA_STR(GCC unroll n))
+#else
+    #define FASTDNA_UNROLL(n)
+#endif
+
 /**
  * @brief Encode eight bases per PEXT, preserving the original loop and unroll boundary.
  * @pre Output has room for ceil(seq.size() / 4) bytes.
@@ -107,12 +116,7 @@ inline void encode_pext(std::string_view seq, std::uint8_t* out) noexcept
     constexpr std::size_t block_size = 8 * Unroll;
     std::size_t const limit = (seq.size() / block_size) * block_size;
 
-    #if defined(__clang__)
-    #pragma clang loop unroll_count(Unroll)
-    #elif defined(__GNUC__)
-    #pragma GCC unroll Unroll
-    #endif
-    for (std::size_t i = 0; i < limit; i += 8) {
+    auto const step = [&](std::size_t i) {
         std::uint64_t word;
         std::memcpy(&word, seq.data() + i, sizeof(word));
         if constexpr (L == fisk::Layout::kMSB) {
@@ -124,9 +128,30 @@ inline void encode_pext(std::string_view seq, std::uint8_t* out) noexcept
             std::memcpy(out, &encoded, sizeof(encoded));
             out += sizeof(encoded);
         }
+    };
+
+    // GCC < 14 rejects template parameters in unroll pragmas, so dispatch to literal factors.
+    if constexpr (Unroll == 1) {
+        FASTDNA_UNROLL(1)
+        for (std::size_t i = 0; i < limit; i += 8) {
+            step(i);
+        }
+    } else if constexpr (Unroll == 2) {
+        FASTDNA_UNROLL(2)
+        for (std::size_t i = 0; i < limit; i += 8) {
+            step(i);
+        }
+    } else {
+        FASTDNA_UNROLL(4)
+        for (std::size_t i = 0; i < limit; i += 8) {
+            step(i);
+        }
     }
     encode_lut<L>(seq.substr(limit), out);
 }
+
+#undef FASTDNA_UNROLL
+#undef FASTDNA_STR
 
 #endif // FISK_HAS_BMI2
 
