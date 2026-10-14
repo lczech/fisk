@@ -129,6 +129,7 @@ def plot_views(files, views, limits, args):
         title = f"{heading}: {encoding.upper()} / {layout.upper()}"
         if args.summary:
             argv = [
+                "--legend-outside",
                 "--suite", "seq_pack", "--case-filter", f"encoding={encoding}",
                 "--case-filter", f"layout={layout}", "--unit", args.unit, "--scale", args.scale,
                 "--y-min", str(y_min), "--y-max", str(y_max), "--title", title, "--out", out,

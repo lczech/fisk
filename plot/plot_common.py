@@ -35,6 +35,7 @@ PLATFORM_ORDER = [
     "Epyc",
     "Ryzen",
     "Xeon",
+    "Core 7",
     "M1",
     "M2",
     "M3",

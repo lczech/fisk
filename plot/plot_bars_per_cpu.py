@@ -103,13 +103,15 @@ def load_one(
 
 def color_for_platform(platform: str) -> str:
     platform_colors = {
-        "Epyc":  "#08aa72",  # green
-        "Ryzen": "#fb6516",  # orange
-        "Xeon":  "#0874d1",  # blue
-        "M1":    "#979797",  # gray
-        "M2":    "#979797",  # gray
-        "M3":    "#979797",  # gray
-        "Other": "#b0b0b0",  # fallback
+        "Epyc":   "#08aa72",  # green
+        "Ryzen":  "#fb6516",  # orange
+        # "Xeon":   "#0874d1",  # blue old
+        "Xeon":   "#013364",  # blue
+        "Core 7": "#0874d1",  # blue
+        "M1":     "#979797",  # gray
+        "M2":     "#979797",  # gray
+        "M3":     "#979797",  # gray
+        "Other":  "#b0b0b0",  # fallback
     }
     return platform_colors.get(platform, "grey")
 
@@ -276,6 +278,10 @@ def main(argv=None) -> None:
         "--no-legend",
         action="store_true",
         help="Hide legend in the plot.",
+    )
+    ap.add_argument(
+        "--legend-outside", action="store_true",
+        help="Place the legend above the axes, below the title.",
     )
     ap.add_argument(
         "--title",
@@ -554,12 +560,18 @@ def main(argv=None) -> None:
 
     handles, leg_labels = ax.get_legend_handles_labels()
     if not args.no_legend:
+        columns = 2 if len(leg_labels) > 5 else 3
+        placement = {"loc": "upper right"}
+        if args.legend_outside:
+            placement = {"loc": "lower center", "bbox_to_anchor": (0.5, 1.02)}
+            rows = math.ceil(len(leg_labels) / columns)
+            ax.set_title(title, pad=56 + 20 * rows)
         ax.legend(
             handles,
             leg_labels,
             title="CPU / Compiler",
-            loc="upper right",
-            ncol=2 if len(leg_labels) > 5 else 3
+            ncol=columns,
+            **placement,
         )
 
     # ax.margins(x=0)
