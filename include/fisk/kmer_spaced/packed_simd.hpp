@@ -4,7 +4,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 #include <utility>
 
 #include "fisk/bit_extract/simd.hpp"
@@ -53,15 +52,13 @@ inline void emit_spaced_kmers_packed_simd_(
     std::array<Kernel, N> const& kernels, std::size_t pos, Vector windows,
     std::size_t valid_count, Callback& callback
 ) {
-    using Value = SpacedKmer<E, L>;
-    if constexpr (std::is_invocable_v<Callback&, std::size_t, std::size_t, Vector, std::size_t>) {
+    if constexpr (SpacedKmerVectorCallback<Callback&, Vector>) {
         [&]<std::size_t... M>(std::index_sequence<M...>) {
-            (callback(pos, M, kernels[M].bit_extract(windows), valid_count), ...);
+            (invoke_spaced_kmer_vector_callback(
+                callback, M, pos, kernels[M].bit_extract(windows), valid_count
+            ), ...);
         }(std::make_index_sequence<N>{});
-    } else if constexpr (
-        std::is_invocable_v<Callback&, std::size_t, std::size_t, Value const&> ||
-        (N == 1 && std::is_invocable_v<Callback&, std::size_t, Value const&>)
-    ) {
+    } else if constexpr (SpacedKmerCallback<Callback&, E, L, N == 1>) {
         alignas(64) std::uint64_t spaced[N][Kernel::lanes];
         [&]<std::size_t... M>(std::index_sequence<M...>) {
             (Kernel::store(kernels[M].bit_extract(windows), spaced[M]), ...);
@@ -76,7 +73,8 @@ inline void emit_spaced_kmers_packed_simd_(
         }
     } else {
         static_assert(
-            dependent_false_v<E>,
+            SpacedKmerVectorCallback<Callback&, Vector> ||
+                SpacedKmerCallback<Callback&, E, L, N == 1>,
             "Callback must be callable as callback(pos, mask_idx, vec, valid_count), as "
             "callback(pos, mask_idx, spaced_kmer), or, for a single kernel, as "
             "callback(pos, spaced_kmer)."
