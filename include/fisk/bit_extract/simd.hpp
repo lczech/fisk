@@ -52,6 +52,16 @@ concept BitExtractKernel = requires(
     { kernel.bit_extract_scalar(x) } -> std::same_as<std::uint64_t>;
 } && std::constructible_from<Kernel, std::uint64_t>;
 
+/**
+ * @brief Concept for a bit extraction kernel that is built on a SIMD arch, which it names as
+ * `simd_arch`, such as BitExtractKernelButterfly<SimdAVX2>.
+ *
+ * For functions that fill the vectors of the kernel with operations of that arch. The PEXT kernel
+ * is not built on an arch, and hence does not model this.
+ */
+template <typename Kernel>
+concept BitExtractKernelWithArch = BitExtractKernel<Kernel> && SimdArch<typename Kernel::simd_arch>;
+
 // =================================================================================================
 //     Pseudo-SIMD Kernels for PEXT
 // =================================================================================================
@@ -149,6 +159,7 @@ struct BitExtractKernelPEXT
 template <SimdArch Simd>
 struct BitExtractKernelButterfly
 {
+    using simd_arch = Simd;
     using simd_vector = typename Simd::simd_vector;
     static constexpr std::size_t lanes = Simd::lanes;
     BitExtractButterflyTable mask{};
@@ -263,6 +274,7 @@ struct BitExtractKernelBlock
     static_assert(UF <= 32, "UF must be <= 32");
     static_assert((32 % UF) == 0, "UF must divide 32");
 
+    using simd_arch = Simd;
     using simd_vector = typename Simd::simd_vector;
     using shift_count = typename Simd::shift_count;
     static constexpr std::size_t lanes = Simd::lanes;
