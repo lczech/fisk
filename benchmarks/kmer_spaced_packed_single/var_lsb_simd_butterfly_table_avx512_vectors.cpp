@@ -1,0 +1,30 @@
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
+#include "fisk/kmer_spaced/packed_simd.hpp"
+#include "kmer_spaced_packed_single/bench.hpp"
+
+#if defined(FISK_HAS_AVX512)
+
+using namespace fisk;
+
+std::uint64_t run_var_simd_butterfly_table_avx512_vectors(
+    PackedLsb const& seq,
+    SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdAVX512>> const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+) {
+    auto sink = make_sink(sink_buffer);
+    for_each_spaced_kmer_packed_simd(
+        seq, kernel,
+        [&](
+            std::size_t /*pos*/, std::size_t /*mask_idx*/, __m512i spaced_kmers,
+            std::size_t /*valid_count*/
+        ) {
+            sink.consume(spaced_kmers);
+        }
+    );
+    return sink.finalize();
+}
+
+#endif // FISK_HAS_AVX512

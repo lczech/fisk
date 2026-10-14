@@ -52,6 +52,36 @@ static void bench_kmer_spaced_packed_single_layout_(
     auto const bit_ext_block_mask = make_spaced_kmer_block_table(bit_ext_mask);
     auto const bit_ext_butterfly_table = make_spaced_kmer_butterfly_table(bit_ext_mask);
 
+    // simd kernels
+    auto const simd_bf_scalar_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(bit_ext_mask);
+    auto const simd_bt_scalar_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdScalar>>(bit_ext_mask);
+    #if defined(FISK_HAS_SSE2)
+    auto const simd_bf_sse2_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdSSE2>>(bit_ext_mask);
+    auto const simd_bt_sse2_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdSSE2>>(bit_ext_mask);
+    #endif
+    #if defined(FISK_HAS_AVX2)
+    auto const simd_bf_avx2_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdAVX2>>(bit_ext_mask);
+    auto const simd_bt_avx2_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdAVX2>>(bit_ext_mask);
+    #endif
+    #if defined(FISK_HAS_AVX512)
+    auto const simd_bf_avx512_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdAVX512>>(bit_ext_mask);
+    auto const simd_bt_avx512_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdAVX512>>(bit_ext_mask);
+    #endif
+    #if defined(FISK_HAS_NEON)
+    auto const simd_bf_neon_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdNEON>>(bit_ext_mask);
+    auto const simd_bt_neon_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdNEON>>(bit_ext_mask);
+    #endif
+
     // Run the benchmark for all algorithms
     auto results = suite.run(
         sequences,
@@ -104,6 +134,176 @@ static void bench_kmer_spaced_packed_single_layout_(
             [&](Packed const& seq) {
                 return run_var_butterfly_table(seq, bit_ext_butterfly_table, sink_buffer);
             }
+        ),
+
+        // simd kernels
+        #if defined(FISK_HAS_SSE2)
+        bench(
+            name("simd_butterfly_table_sse2_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_sse2_vectors(
+                    seq, simd_bf_sse2_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_butterfly_table_sse2_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_sse2_scalars(
+                    seq, simd_bf_sse2_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_sse2_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_sse2_vectors(
+                    seq, simd_bt_sse2_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_sse2_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_sse2_scalars(
+                    seq, simd_bt_sse2_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX2)
+        bench(
+            name("simd_butterfly_table_avx2_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_avx2_vectors(
+                    seq, simd_bf_avx2_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_butterfly_table_avx2_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_avx2_scalars(
+                    seq, simd_bf_avx2_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_avx2_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_avx2_vectors(
+                    seq, simd_bt_avx2_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_avx2_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_avx2_scalars(
+                    seq, simd_bt_avx2_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX512)
+        bench(
+            name("simd_butterfly_table_avx512_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_avx512_vectors(
+                    seq, simd_bf_avx512_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_butterfly_table_avx512_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_avx512_scalars(
+                    seq, simd_bf_avx512_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_avx512_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_avx512_vectors(
+                    seq, simd_bt_avx512_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_avx512_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_avx512_scalars(
+                    seq, simd_bt_avx512_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_NEON)
+        bench(
+            name("simd_butterfly_table_neon_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_neon_vectors(
+                    seq, simd_bf_neon_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_butterfly_table_neon_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_neon_scalars(
+                    seq, simd_bf_neon_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_neon_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_neon_vectors(
+                    seq, simd_bt_neon_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_neon_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_neon_scalars(
+                    seq, simd_bt_neon_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        bench(
+            name("simd_butterfly_table_scalar_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_scalar_vectors(
+                    seq, simd_bf_scalar_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_butterfly_table_scalar_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_butterfly_table_scalar_scalars(
+                    seq, simd_bf_scalar_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_scalar_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_scalar_vectors(
+                    seq, simd_bt_scalar_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_scalar_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_block_table_scalar_scalars(
+                    seq, simd_bt_scalar_kernel, sink_buffer
+                );
+            }
         )
     );
     write_csv_rows(csv_os, suite_title, case_label, results, kSinkName);
@@ -140,14 +340,13 @@ void bench_kmer_spaced_packed_single(
 
     // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
     // benchmarked (rounded up to a power of two) so that no call here ever wraps it, as in
-    // bench_kmer_spaced_single().
+    // bench_kmer_spaced_single(). The `_vectors` variants also write the zero lanes that pad
+    // their last vector, at most 8.
     std::size_t max_seq_len = 0;
     for (auto const& seq : sequences) {
         max_seq_len = std::max(max_seq_len, seq.size());
     }
-    std::vector<std::uint64_t> sink_buffer(
-        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
-    );
+    std::vector<std::uint64_t> sink_buffer(std::bit_ceil(max_seq_len + 8), 0);
 
     // Run a benchmark for each mask, in both Layouts
     for (std::size_t m = 0; m < masks.size(); ++m) {

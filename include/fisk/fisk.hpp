@@ -37,4 +37,5 @@
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
 #include "fisk/kmer_spaced/simd.hpp"
 #include "fisk/kmer_spaced/packed.hpp"
+#include "fisk/kmer_spaced/packed_simd.hpp"
 #include "fisk/kmer_spaced/selector.hpp"
