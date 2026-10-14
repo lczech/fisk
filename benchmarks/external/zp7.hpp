@@ -12,17 +12,25 @@
 // These are the three instances of static_cast<> in the code below.
 // Furthermore, we add `inline` to all functions here, to allow more compiler optimizations,
 // and use the C++20 std::popcount function instead of intrinsics or fallback.
-// We also bridge our own FISK_HAS_CLMUL flag (set by CMakeLists.txt's FISK_ENABLE_PCLMUL option)
-// to this file's own HAVE_CLMUL flag below, so that we do not need to touch its translation logic.
-#ifdef FISK_HAS_CLMUL
-    #define HAVE_CLMUL 1
+// We bridge fisk and the original feature flags to private FISK_ZP7_* flags below.
+// These internal flags are undefined at the end of this header.
+
+#include "fisk/core/intrinsics.hpp"
+
+// =================================================================================================
+//     Feature Flags
+// =================================================================================================
+
+#if defined(FISK_HAS_CLMUL) || defined(HAVE_CLMUL) || defined(HAS_CLMUL)
+    #define FISK_ZP7_HAS_CLMUL 1
 #endif
 
-// We need to translate from our preprocessor flag to theirs. Note that we are not setting
-// `HAS_BZHI` or `HAS_POPCNT` here, as those are only needed for the implemtation of PDEP,
-// which we do not use here. If you need this, make sure to set the preprocessor flags accordingly.
-#ifdef HAVE_CLMUL
-    #define HAS_CLMUL 1
+// HAS_BZHI and HAS_POPCNT remain optional inputs for the original PDEP configuration.
+#ifdef HAS_BZHI
+    #define FISK_ZP7_HAS_BZHI 1
+#endif
+#ifdef HAS_POPCNT
+    #define FISK_ZP7_HAS_POPCNT 1
 #endif
 
 // Our finding is that this approach was rather slow in our first round of benchmarking, where it
@@ -63,7 +71,7 @@
 
 #include <stdint.h>
 
-#if defined(HAS_CLMUL) || defined(HAS_BZHI) || defined(HAS_POPCNT)
+#if defined(FISK_ZP7_HAS_CLMUL) || defined(FISK_ZP7_HAS_BZHI) || defined(FISK_ZP7_HAS_POPCNT)
 #   include <immintrin.h>
 #endif
 
@@ -105,7 +113,7 @@
 //
 // For processors with the CLMUL instructions (most x86 CPUs since ~2010), we
 // can do the parallel prefix XOR and left shift in one instruction, by
-// doing a carry-less multiply by -2. This is enabled with the HAS_CLMUL define.
+// doing a carry-less multiply by -2. This is enabled with the FISK_ZP7_HAS_CLMUL define.
 //
 // Anyways, once we have these six 64-bit values of the PPP, we can use each
 // PPP bit to shift input bits by a power of two. That is, input bits that are
@@ -126,24 +134,29 @@
 // (input &= mask), but for PDEP we have to mask out everything but the low N
 // bits, where N is the population count of the mask.
 
-#define N_BITS      (6)
+namespace zp7 {
+
+/**
+ * @brief Number of prefix-count bit planes for a 64-bit word.
+ */
+inline constexpr int n_bits = 6;
 
 typedef struct {
     uint64_t mask;
-    uint64_t ppp_bit[N_BITS];
+    uint64_t ppp_bit[n_bits];
 } zp7_masks_64_t;
 
-#ifndef HAS_CLMUL
+#ifndef FISK_ZP7_HAS_CLMUL
 // If we don't have access to the CLMUL instruction, emulate it with
 // shifts and XORs
 static inline uint64_t prefix_sum(uint64_t x) {
-    for (int i = 0; i < N_BITS; i++)
+    for (int i = 0; i < n_bits; i++)
         x ^= x << (1 << i);
     return x;
 }
 #endif
 
-#ifndef HAS_POPCNT
+#ifndef FISK_ZP7_HAS_POPCNT
 // POPCNT polyfill. See this page for information about the algorithm:
 // https://www.chessprogramming.org/Population_Count#SWAR-Popcount
 inline uint64_t popcnt_64(uint64_t x) {
@@ -168,11 +181,11 @@ inline zp7_masks_64_t zp7_ppp_64(uint64_t mask) {
     // Count *unset* bits
     mask = ~mask;
 
-#ifdef HAS_CLMUL
+#ifdef FISK_ZP7_HAS_CLMUL
     // Move the mask and -2 to XMM registers for CLMUL
     __m128i m = _mm_cvtsi64_si128(static_cast<int64_t>(mask));
     __m128i neg_2 = _mm_cvtsi64_si128(-2LL);
-    for (int i = 0; i < N_BITS - 1; i++) {
+    for (int i = 0; i < n_bits - 1; i++) {
         // Do a 1-bit parallel prefix popcount, shifted left by 1,
         // in one carry-less multiply by -2.
         __m128i bit = _mm_clmulepi64_si128(m, neg_2, 0);
@@ -189,9 +202,9 @@ inline zp7_masks_64_t zp7_ppp_64(uint64_t mask) {
     // has at most two bits set in it, when mask is zero and thus there are 64
     // bits set in ~mask. If two bits are set, one of them is the top bit, which
     // gets shifted out, since we're counting bits below each mask bit.
-    r.ppp_bit[N_BITS - 1] = -(static_cast<uint64_t>(_mm_cvtsi128_si64(m))) << 1;
+    r.ppp_bit[n_bits - 1] = -(static_cast<uint64_t>(_mm_cvtsi128_si64(m))) << 1;
 #else
-    for (int i = 0; i < N_BITS - 1; i++) {
+    for (int i = 0; i < n_bits - 1; i++) {
         // Do a 1-bit parallel prefix popcount, shifted left by 1
         uint64_t bit = prefix_sum(mask << 1);
         r.ppp_bit[i] = bit;
@@ -202,7 +215,7 @@ inline zp7_masks_64_t zp7_ppp_64(uint64_t mask) {
     }
     // The last iteration won't carry, so just use neg/shift. See the CLMUL
     // case above for justification.
-    r.ppp_bit[N_BITS - 1] = -mask << 1;
+    r.ppp_bit[n_bits - 1] = -mask << 1;
 #endif
 
     return r;
@@ -217,7 +230,7 @@ inline uint64_t zp7_pext_pre_64(uint64_t a, const zp7_masks_64_t *masks) {
 
     // For each bit in the PPP, shift right only those bits that are set in
     // that bit's mask
-    for (int i = 0; i < N_BITS; i++) {
+    for (int i = 0; i < n_bits; i++) {
         uint64_t shift = 1 << i;
         uint64_t bit = masks->ppp_bit[i];
         // Shift only the input bits that are set in
@@ -234,7 +247,7 @@ inline uint64_t zp7_pext_64(uint64_t a, uint64_t mask) {
 // PDEP
 
 inline uint64_t zp7_pdep_pre_64(uint64_t a, const zp7_masks_64_t *masks) {
-// #ifdef HAS_POPCNT
+// #ifdef FISK_ZP7_HAS_POPCNT
 //     uint64_t popcnt = _popcnt64(masks->mask);
 // #else
 //     uint64_t popcnt = popcnt_64(masks->mask);
@@ -250,7 +263,7 @@ inline uint64_t zp7_pdep_pre_64(uint64_t a, const zp7_masks_64_t *masks) {
     // this should be -1. The BZHI instruction (introduced with BMI2, the same
     // instructions as PEXT/PDEP) handles this properly, but isn't portable.
 
-#ifdef HAS_BZHI
+#ifdef FISK_ZP7_HAS_BZHI
     a = _bzhi_u64(a, popcnt);
 #else
     // If we don't have BZHI, use a portable workaround.  Since (mask == -1)
@@ -262,7 +275,7 @@ inline uint64_t zp7_pdep_pre_64(uint64_t a, const zp7_masks_64_t *masks) {
 
     // For each bit in the PPP, shift left only those bits that are set in
     // that bit's mask. We do this in the opposite order compared to PEXT
-    for (int i = N_BITS - 1; i >= 0; i--) {
+    for (int i = n_bits - 1; i >= 0; i--) {
         uint64_t shift = 1 << i;
         uint64_t bit = masks->ppp_bit[i] >> shift;
         // Micro-optimization: the bits that get shifted and those that don't
@@ -277,3 +290,9 @@ inline uint64_t zp7_pdep_64(uint64_t a, uint64_t mask) {
     zp7_masks_64_t masks = zp7_ppp_64(mask);
     return zp7_pdep_pre_64(a, &masks);
 }
+
+} // namespace zp7
+
+#undef FISK_ZP7_HAS_CLMUL
+#undef FISK_ZP7_HAS_BZHI
+#undef FISK_ZP7_HAS_POPCNT

@@ -16,7 +16,7 @@
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/char_encoder.hpp"
 
-using namespace fisk;
+namespace clark {
 
 // =================================================================================================
 //     CLARK Original
@@ -415,7 +415,7 @@ inline void clark_getSpacedSeed_improved(
 
 inline std::uint64_t clark_improved(
     std::string const& seq,
-    std::vector<BitExtractMask> const& masks
+    std::vector<fisk::BitExtractMask> const& masks
 ) {
     // Compute all spaced kmers across the sequence, and sum their hashes, for our checking.
     std::uint64_t hash = 0;
@@ -437,7 +437,7 @@ inline std::uint64_t clark_improved(
     std::uint64_t valid_bits = 0;
     for( std::size_t i = 0; i < seq_len; ++i ) {
         std::uint8_t const code = static_cast<std::uint8_t>(
-            CharEncoderTable<Encoding::kACGT>{}(data[i])
+            fisk::CharEncoderTable<fisk::Encoding::kACGT>{}(data[i])
         );
 
         // Shift in the base. For invalid bases, the low 2 bits are irrelevant,
@@ -472,3 +472,5 @@ inline std::uint64_t clark_improved(
     }
     return hash;
 }
+
+} // namespace clark

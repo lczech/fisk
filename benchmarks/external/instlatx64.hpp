@@ -29,6 +29,8 @@
 #include <cassert>
 #include <bit>
 
+namespace instlatx64 {
+
 constexpr std::uint32_t bextr_u32(
     std::uint32_t x,
     unsigned start,
@@ -532,5 +534,7 @@ inline void PEXT_PDEP_Emu_Test()
         assert(_pdep_u64(all_64, y) == pdep64_emu(all_64, y));
     }
 }
+
+} // namespace instlatx64
 
 #endif // PLATFORM_X86_64 && FISK_HAS_CLMUL

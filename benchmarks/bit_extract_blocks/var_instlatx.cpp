@@ -20,7 +20,7 @@ std::uint64_t run_var_instlatx(
     for (std::size_t r = 0; r < rounds; ++r) {
         clobber_memory(batch.values.data());
         for (std::size_t i = 0; i < batch.values.size(); ++i) {
-            sink.consume(pext64_emu(batch.values[i], batch.masks[i].mask));
+            sink.consume(instlatx64::pext64_emu(batch.values[i], batch.masks[i].mask));
         }
     }
     return sink.finalize();
