@@ -254,3 +254,30 @@ std::uint64_t run_var_actg_msb_direct_neon(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
 #endif
+
+// =================================================================================================
+//     FastDNA References
+// =================================================================================================
+
+/**
+ * @brief Adapted paper kernels; see external/fastdna.hpp for the format adjustments.
+ */
+std::uint64_t run_var_fastdna_lut(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
+
+#if defined(FISK_HAS_BMI2)
+std::uint64_t run_var_fastdna_pext_ordered(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_fastdna_pext_unordered(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_fastdna_pext_unordered_unroll2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_fastdna_pext_unordered_unroll4(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+
+#endif // FISK_HAS_BMI2

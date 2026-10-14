@@ -4,6 +4,7 @@
 
 #include "microbench.hpp"
 #include "seq_pack/bench.hpp"
+#include "seq_pack/validate_fastdna.hpp"
 
 using namespace fisk;
 
@@ -33,6 +34,8 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
     std::string const suite_title = "seq_pack";
     std::cout << "\n=== sequence pack ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
+
+    fastdna_validation::validate(sequences);
 
     write_csv_header(csv_os);
 
@@ -319,6 +322,24 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
             sequences,
             #if defined(FISK_HAS_BMI2)
             bench(
+                "fastdna_pext_unordered",
+                [&](std::string const& seq) {
+                    return run_var_fastdna_pext_unordered(seq, out);
+                }
+            ),
+            bench(
+                "fastdna_pext_unordered_unroll2",
+                [&](std::string const& seq) {
+                    return run_var_fastdna_pext_unordered_unroll2(seq, out);
+                }
+            ),
+            bench(
+                "fastdna_pext_unordered_unroll4",
+                [&](std::string const& seq) {
+                    return run_var_fastdna_pext_unordered_unroll4(seq, out);
+                }
+            ),
+            bench(
                 "pext",
                 [&](std::string const& seq) {
                     return run_var_actg_lsb_pext(seq, out);
@@ -452,7 +473,19 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
             .finalize([&out]() { return pack_sequence_sink(out); });
         auto results = suite.run(
             sequences,
+            bench(
+                "fastdna_lut",
+                [&](std::string const& seq) {
+                    return run_var_fastdna_lut(seq, out);
+                }
+            ),
             #if defined(FISK_HAS_BMI2)
+            bench(
+                "fastdna_pext_ordered",
+                [&](std::string const& seq) {
+                    return run_var_fastdna_pext_ordered(seq, out);
+                }
+            ),
             bench(
                 "pext",
                 [&](std::string const& seq) {
