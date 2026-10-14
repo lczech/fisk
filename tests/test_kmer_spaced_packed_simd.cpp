@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "fisk/bit_extract/simd.hpp"
@@ -103,8 +104,8 @@ static std::vector<SpacedEvent> collect_vector_events(std::size_t mask_count, Ex
         }
     });
     EXPECT_EQ(expected_mask, std::size_t{0});
-    std::stable_sort(events.begin(), events.end(), [](auto const& lhs, auto const& rhs) {
-        return lhs.pos < rhs.pos;
+    std::sort(events.begin(), events.end(), [](auto const& lhs, auto const& rhs) {
+        return std::tie(lhs.pos, lhs.mask_idx) < std::tie(rhs.pos, rhs.mask_idx);
     });
     return events;
 }
@@ -188,8 +189,10 @@ static void check_extraction()
         check_all_kernels<E, L>(random_masks<3>(rng, span_k));
     }
     check_all_kernels<E, L, 1>({ std::string(32, '1') });
-    check_all_kernels<E, L, 2>({ std::string(29, '1'), "1" + std::string(27, '0') + "1" });
-    check_all_kernels<E, L, 1>({ "1" + std::string(30, '0') + "1" });
+    check_all_kernels<E, L, 2>(
+        { std::string(29, '1'), std::string("1").append(27, '0').append("1") }
+    );
+    check_all_kernels<E, L, 1>({ std::string("1").append(30, '0').append("1") });
 }
 
 // =================================================================================================

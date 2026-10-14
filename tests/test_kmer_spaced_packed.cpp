@@ -59,8 +59,8 @@ static std::vector<std::vector<std::string>> const& test_mask_sets()
             out.push_back({ random_mask(span_k), random_mask(span_k), random_mask(span_k) });
         }
         out.push_back({ std::string(32, '1') });
-        out.push_back({ std::string(29, '1'), "1" + std::string(27, '0') + "1" });
-        out.push_back({ "1" + std::string(30, '0') + "1" });
+        out.push_back({ std::string(29, '1'), std::string("1").append(27, '0').append("1") });
+        out.push_back({ std::string("1").append(30, '0').append("1") });
         return out;
     }();
     return sets;
