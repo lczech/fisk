@@ -57,6 +57,7 @@ def make_impl_summary_plot(
     scale: str = "log",
     y_min: Optional[float] = None,
     y_max: Optional[float] = None,
+    show_range: bool = True,
 ):
     # Filter for this suite (if given)
     if suite is not None:
@@ -113,16 +114,17 @@ def make_impl_summary_plot(
 
     ax.bar(x, means, width=width, label="mean", color=bar_colors)
 
-    ax.errorbar(
-        x,
-        means,
-        yerr=[lower_err, upper_err],
-        fmt="none",
-        ecolor="black",
-        elinewidth=1,
-        capsize=4,
-        label="min/max",
-    )
+    if show_range:
+        ax.errorbar(
+            x,
+            means,
+            yerr=[lower_err, upper_err],
+            fmt="none",
+            ecolor="black",
+            elinewidth=1,
+            capsize=4,
+            label="min/max",
+        )
 
     axis_y_min, axis_y_max = compute_axis_limits(
         np.concatenate([means, lo_disp, hi_disp]), scale
@@ -166,7 +168,8 @@ def make_impl_summary_plot(
     ax.set_ylim(axis_y_min, axis_y_max)
 
     ax.grid(axis="y", linestyle="--", alpha=0.3)
-    ax.legend(loc="upper right")
+    if show_range:
+        ax.legend(loc="upper right")
 
     # Fix layout such that white space does not differ if we have inputs here
     # with different benchmarks. Tight layout would otherwise cause the bottom axis
@@ -178,7 +181,8 @@ def make_impl_summary_plot(
     # are typically sub-1 decimals (e.g. "0.05", "0.2"), whose wider tick labels need more room or
     # the y-axis label gets clipped off the left edge of the figure.
     left = 0.085 if unit == "ops" else 0.06
-    fig.subplots_adjust(left=left, right=0.99, bottom=0.30, top=0.96)
+    top = 0.90 if "\n" in title else 0.96
+    fig.subplots_adjust(left=left, right=0.99, bottom=0.30, top=top)
 
     if outpath:
         fig.savefig(outpath, dpi=200)

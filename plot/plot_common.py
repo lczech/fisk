@@ -707,6 +707,78 @@ BENCHMARKS_KEEP_EXTENDED += PACKED_KMER_VARIANT_ORDER
 BENCHMARKS_KEEP_REDUCED += PACKED_KMER_VARIANT_ORDER_REDUCED
 
 
+# -------------------------------------------------------------------------------------------------
+#     Sequence Packing
+# -------------------------------------------------------------------------------------------------
+
+SEQ_PACK_ORDER = [
+    "fastdna_lut",
+    "fastdna_pext_ordered",
+    "fastdna_pext_unordered",
+    "fastdna_pext_unordered_unroll2",
+    "fastdna_pext_unordered_unroll4",
+    "pext",
+    "butterfly_scalar", "butterfly_sse2", "butterfly_avx2", "butterfly_avx512", "butterfly_neon",
+    "fold_scalar", "fold_sse2", "fold_avx2", "fold_avx512", "fold_neon",
+    "direct_scalar", "direct_sse2", "direct_double_sse2",
+    "direct_avx2", "direct_double_avx2", "direct_avx512", "direct_neon",
+]
+
+# Explicit focused selection, easy to trim after collecting measurements.
+SEQ_PACK_FOCUSED = [
+    "fastdna_lut",
+    "fastdna_pext_ordered",
+    "fastdna_pext_unordered",
+    "fastdna_pext_unordered_unroll2",
+    "fastdna_pext_unordered_unroll4",
+    "direct_scalar",
+    "direct_sse2", "direct_double_sse2",
+    "direct_avx2", "direct_double_avx2",
+    "direct_avx512", "direct_neon",
+]
+
+BENCHMARK_RENAMES.update({
+    "fastdna_lut": "FastDNA\nLUT",
+    "fastdna_pext_ordered": "FastDNA\nordered PEXT",
+    "fastdna_pext_unordered": "FastDNA\nunordered PEXT",
+    "fastdna_pext_unordered_unroll2": "FastDNA\nunordered PEXT (2x)",
+    "fastdna_pext_unordered_unroll4": "FastDNA\nunordered PEXT (4x)",
+    "butterfly": "Butterfly scalar (legacy)",
+})
+
+SEQ_PACK_COLORS = {
+    "fastdna_lut": "#D9A066",
+    "fastdna_pext_ordered": "#A65D23",
+    "fastdna_pext_unordered": "#FFBB78",
+    "fastdna_pext_unordered_unroll2": "#FF7F0E",
+    "fastdna_pext_unordered_unroll4": "#B55B0B",
+    "pext": BENCHMARK_COLORS["pext"],
+    "butterfly": "#BB2F98",
+}
+
+
+def _register_seq_pack_labels():
+    """Keep architecture labels consistent without exporting temporary loop variables."""
+    for family, label, color in [
+        ("butterfly", "Butterfly", "#BB2F98"),
+        ("fold", "Fold", "#74C476"),
+        ("direct", "Direct", "#3182BD"),
+    ]:
+        for arch in ["scalar", "sse2", "avx2", "avx512", "neon"]:
+            name = f"{family}_{arch}"
+            arch_label = "scalar" if arch == "scalar" else arch.upper()
+            BENCHMARK_RENAMES[name] = f"{label} {arch_label}"
+            SEQ_PACK_COLORS[name] = color
+    for arch in ["sse2", "avx2"]:
+        name = f"direct_double_{arch}"
+        BENCHMARK_RENAMES[name] = f"DirectDouble {arch.upper()}"
+        SEQ_PACK_COLORS[name] = "#08519C"
+
+
+_register_seq_pack_labels()
+BENCHMARK_COLORS.update(SEQ_PACK_COLORS)
+
+
 # -----------------------------------------------------------------------------
 #     Display unit: throughput (default) vs legacy ns/op
 # -----------------------------------------------------------------------------

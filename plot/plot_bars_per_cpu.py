@@ -40,6 +40,7 @@ If --out is omitted, shows interactively.
 from __future__ import annotations
 
 import argparse
+import csv
 import glob
 import math
 import os, sys, re
@@ -214,7 +215,7 @@ def apply_case_filters(
     return df
 
 
-def main() -> None:
+def main(argv=None) -> None:
 
     # --------------------------------------
     #      CLI args
@@ -237,6 +238,10 @@ def main() -> None:
         "--suite",
         default=None,
         help="Suite name to filter (recommended). If omitted, all suites are combined.",
+    )
+    ap.add_argument(
+        "--benchmark", action="append", default=[],
+        help="Include and order a benchmark (repeatable); overrides the default variant sets.",
     )
     ap.add_argument(
         "--case-filter",
@@ -289,7 +294,7 @@ def main() -> None:
         default=300,
         help="DPI for saved figure (default: 300).",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     # --------------------------------------
     #      Load the data
@@ -297,6 +302,7 @@ def main() -> None:
 
     benchmarks_keep = BENCHMARKS_KEEP_EXTENDED if args.extended else BENCHMARKS_KEEP
     benchmarks_keep = BENCHMARKS_KEEP_REDUCED if args.reduced else benchmarks_keep
+    benchmarks_keep = args.benchmark or benchmarks_keep
     plot_benchmarks = set(benchmarks_keep)
 
     files: list[str] = list(args.file)
@@ -343,7 +349,8 @@ def main() -> None:
     pivot = agg.pivot(index="benchmark", columns="series", values="display_value")
 
     # Stable benchmark order
-    benchmark_order = [b for b in BENCHMARK_ORDER if b in pivot.index]
+    order = args.benchmark or BENCHMARK_ORDER
+    benchmark_order = [b for b in dict.fromkeys(order) if b in pivot.index]
     benchmark_order += [b for b in pivot.index if b not in benchmark_order]
     pivot = pivot.reindex(benchmark_order)
     benchmarks = pivot.index.tolist()
@@ -555,14 +562,14 @@ def main() -> None:
             ncol=2 if len(leg_labels) > 5 else 3
         )
 
+    # ax.margins(x=0)
+    if len(labels) > 0:
+        ax.set_xlim(-0.5, len(benchmarks) - 0.5)
+
     if args.untight:
         fig.subplots_adjust(left=0.07, right=0.99, bottom=0.28, top=0.94)
     else:
         fig.tight_layout(pad=0.1, w_pad=0.1, h_pad=0.1)
-
-    # ax.margins(x=0)
-    if len(labels) > 0:
-        ax.set_xlim(-0.5, len(benchmarks) - 0.5)
 
     if args.out:
         out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
@@ -570,10 +577,11 @@ def main() -> None:
         # print best implementation for each arch
         # print(title)
         root, ext = os.path.splitext(out)
-        with open(f"{root}.csv", 'w') as f:
-            f.write(f"platform,best_impl,best_{args.unit}\n")
+        with open(f"{root}.csv", 'w', newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["platform", "best_impl", f"best_{args.unit}"])
             for impl in best_impl:
-                f.write(f"{impl[0]},{labels[impl[1]]},{impl[2]}\n")
+                writer.writerow([impl[0], labels[impl[1]], impl[2]])
                 # name = impl[0]
                 # min_val = impl[1]
                 # min_idx = impl[2]
@@ -592,6 +600,7 @@ def main() -> None:
         print(f"Wrote {out}")
     else:
         plt.show()
+    plt.close(fig)
 
 
 if __name__ == "__main__":

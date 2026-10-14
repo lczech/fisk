@@ -104,6 +104,14 @@ for EXT in png svg ; do
       --out "${DIR}/bit_extract_blocks.${EXT}"
 
 
+    # Sequence Packing
+
+    CSV="${DIR}/seq_pack.csv"
+    run_plot "$CSV" python ./plot/plot_seq_pack.py \
+      "$CSV" --unit "$UNIT" --scale "$SCALE" --format "$EXT" \
+      --out-dir "$DIR"
+
+
     # Kmer Extract
 
     CSV="${DIR}/kmer_extract.csv"

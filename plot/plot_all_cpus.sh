@@ -197,6 +197,34 @@ done
 #     --file "results/Intel_Xeon_8568Y/kmer_extract.csv"
 
 # ------------------------------------------------------------
+# Sequence packing: separate encoding/layout views
+# ------------------------------------------------------------
+
+echo "Plotting sequence-packing comparisons"
+if build_file_args "seq_pack.csv"; then
+  for EXT in "${FORMATS[@]}"; do
+    for combo in "${COMBOS[@]}"; do
+      UNIT="${combo%%:*}"
+      SCALE="${combo##*:}"
+
+      run_job python ./plot/plot_seq_pack.py "${args[@]}" \
+        --summary --unit "$UNIT" --scale "$SCALE" --format "$EXT" \
+        --out-dir "$OUT"
+    done
+  done
+  wait
+
+  for combo in "${COMBOS[@]}"; do
+    UNIT="${combo%%:*}"
+    SCALE="${combo##*:}"
+    for svg in "${OUT}"/seq_pack_*_per_cpu_"${UNIT}_${SCALE}".svg; do
+      [[ -e "$svg" ]] || continue
+      inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+    done
+  done
+fi
+
+# ------------------------------------------------------------
 # Kmer spaced: by mask vs. by position, one panel per CPU
 # ------------------------------------------------------------
 
