@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "fisk/core/char_encoder.hpp"
@@ -234,6 +235,101 @@ inline void check_kmer_callbacks(
     values.clear();
     extract([&](fisk::Kmer<E, L> kmer) { values.push_back(fisk::kmer_value(kmer)); });
     check_emitted_kmers(expected, k, values, nullptr);
+}
+
+// =================================================================================================
+//     Expected Spaced K-mers
+// =================================================================================================
+
+// One expected emission of a spaced k-mer extractor: the start position of the full span, the
+// index of the mask, and the selected bases.
+struct SpacedEvent
+{
+    std::size_t pos;
+    std::size_t mask_idx;
+    std::uint64_t value;
+};
+
+// Builds the public spaced-k-mer contract from characters, without any rolling word or bit-extract
+// helper: each output event is (full-span start position, mask index, packed selected bases), with
+// the first selected base in the highest bits for MSB, and in the lowest bits for LSB. Spans in
+// which a selected base is not a nucleotide are skipped.
+template <fisk::Encoding E, fisk::Layout L>
+inline std::vector<SpacedEvent> oracle_spaced_events(
+    std::string const& seq, std::vector<std::string> const& masks
+) {
+    std::vector<SpacedEvent> out;
+    if (masks.empty() || seq.size() < masks.front().size()) {
+        return out;
+    }
+
+    std::size_t const span_k = masks.front().size();
+    for (std::size_t pos = 0; pos + span_k <= seq.size(); ++pos) {
+        for (std::size_t mask_idx = 0; mask_idx < masks.size(); ++mask_idx) {
+            std::uint64_t value = 0;
+            std::size_t kept = 0;
+            bool valid = true;
+            for (std::size_t i = 0; i < span_k; ++i) {
+                if (masks[mask_idx][i] != '1') {
+                    continue;
+                }
+                std::uint8_t const code = oracle_code<E>(seq[pos + i]);
+                if (code >= fisk::kInvalidNucleotide) {
+                    valid = false;
+                    break;
+                }
+                if constexpr (L == fisk::Layout::kMSB) {
+                    value = (value << 2) | code;
+                } else {
+                    value |= std::uint64_t{code} << (2 * kept);
+                }
+                ++kept;
+            }
+            if (valid) {
+                out.push_back({pos, mask_idx, value});
+            }
+        }
+    }
+    return out;
+}
+
+// =================================================================================================
+//     Spaced K-mer Checks
+// =================================================================================================
+
+// Checks one extractor call's output, in emission order, against `expected`.
+inline void check_spaced_events(
+    std::vector<SpacedEvent> const& got, std::vector<SpacedEvent> const& expected
+) {
+    EXPECT_EQ(got.size(), expected.size());
+    std::size_t const n = std::min(got.size(), expected.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        EXPECT_EQ(got[i].pos, expected[i].pos);
+        EXPECT_EQ(got[i].mask_idx, expected[i].mask_idx);
+        EXPECT_EQ(got[i].value, expected[i].value);
+    }
+}
+
+// Runs `extract`, called as `extract(callback)`, once with a `callback(pos, mask_idx, value)`, and,
+// if SingleMask, once more with the `callback(pos, value)` shorthand, which is only accepted for a
+// single mask known at compile time (see invoke_spaced_kmer_callback()). Returns the events of
+// each run, to be checked against the same expected events. The spaced k-mers have to be in `L`.
+template <fisk::Layout L, bool SingleMask, typename Extract>
+inline std::vector<std::vector<SpacedEvent>> collect_spaced_callback_forms(Extract&& extract)
+{
+    std::vector<std::vector<SpacedEvent>> runs(1);
+    extract([&](std::size_t pos, std::size_t mask_idx, auto const& value) {
+        static_assert(std::remove_cvref_t<decltype(value)>::layout == L);
+        runs[0].push_back({pos, mask_idx, fisk::kmer_value(value)});
+    });
+    if constexpr (SingleMask) {
+        runs.emplace_back();
+        extract([&](std::size_t pos, auto const& value) {
+            static_assert(std::remove_cvref_t<decltype(value)>::layout == L);
+            runs[1].push_back({pos, 0, fisk::kmer_value(value)});
+        });
+    }
+    return runs;
 }
 
 // =================================================================================================

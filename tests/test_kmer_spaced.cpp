@@ -28,57 +28,8 @@
 using namespace fisk;
 
 // =================================================================================================
-//     Independent Oracle
+//     Helpers
 // =================================================================================================
-
-struct SpacedEvent
-{
-    std::size_t pos;
-    std::size_t mask_idx;
-    std::uint64_t value;
-};
-
-// Builds the public spaced-k-mer contract from characters, without any rolling word or bit-extract
-// helper: each output event is (full-span start position, mask index, packed selected bases), with
-// the first selected base in the highest bits for MSB, and in the lowest bits for LSB.
-template <Encoding E, Layout L>
-static std::vector<SpacedEvent> oracle_events(
-    std::string const& seq, std::vector<std::string> const& masks
-) {
-    std::vector<SpacedEvent> out;
-    if (masks.empty() || seq.size() < masks.front().size()) {
-        return out;
-    }
-
-    std::size_t const span_k = masks.front().size();
-    for (std::size_t pos = 0; pos + span_k <= seq.size(); ++pos) {
-        for (std::size_t mask_idx = 0; mask_idx < masks.size(); ++mask_idx) {
-            std::uint64_t value = 0;
-            std::size_t kept = 0;
-            bool valid = true;
-            for (std::size_t i = 0; i < span_k; ++i) {
-                if (masks[mask_idx][i] != '1') {
-                    continue;
-                }
-                std::uint8_t const code = oracle_code<E>(seq[pos + i]);
-                if (code >= kInvalidNucleotide) {
-                    valid = false;
-                    break;
-                }
-                if constexpr (L == Layout::kMSB) {
-                    value = (value << 2) | code;
-                } else {
-                    value |= std::uint64_t{code} << (2 * kept);
-                }
-                ++kept;
-            }
-            if (valid) {
-                out.push_back({pos, mask_idx, value});
-            }
-        }
-    }
-    return out;
-}
 
 static bool event_less(SpacedEvent const& lhs, SpacedEvent const& rhs)
 {
@@ -91,24 +42,12 @@ static bool event_less(SpacedEvent const& lhs, SpacedEvent const& rhs)
     return lhs.value < rhs.value;
 }
 
-static void check_events(
-    std::vector<SpacedEvent> const& got, std::vector<SpacedEvent> const& expected
-) {
-    EXPECT_EQ(got.size(), expected.size());
-    std::size_t const n = std::min(got.size(), expected.size());
-    for (std::size_t i = 0; i < n; ++i) {
-        EXPECT_EQ(got[i].pos, expected[i].pos);
-        EXPECT_EQ(got[i].mask_idx, expected[i].mask_idx);
-        EXPECT_EQ(got[i].value, expected[i].value);
-    }
-}
-
 static void check_event_multiset(
     std::vector<SpacedEvent> got, std::vector<SpacedEvent> expected
 ) {
     std::sort(got.begin(), got.end(), event_less);
     std::sort(expected.begin(), expected.end(), event_less);
-    check_events(got, expected);
+    check_spaced_events(got, expected);
 }
 
 static std::vector<SpacedEvent> events_for_mask(
@@ -132,7 +71,7 @@ static void check_by_mask_events(
     for (std::size_t m = 0; m < mask_count; ++m) {
         auto const got_mask = events_for_mask(got, m);
         auto const expected_mask = events_for_mask(expected, m);
-        check_events(got_mask, expected_mask);
+        check_spaced_events(got_mask, expected_mask);
         for (std::size_t i = 1; i < got_mask.size(); ++i) {
             EXPECT_TRUE(got_mask[i - 1].pos <= got_mask[i].pos);
         }
@@ -235,28 +174,6 @@ static std::string mask_for_span(std::size_t span_k)
     return mask;
 }
 
-// Runs `extract`, called as `extract(callback)`, once with a `callback(pos, mask_idx, value)`, and,
-// if SingleMask, once more with the `callback(pos, value)` shorthand, which is only accepted for a
-// single mask known at compile time (see invoke_spaced_kmer_callback()). Returns the events of
-// each run, to be checked against the same expected events. The spaced k-mers have to be in `L`.
-template <Layout L, bool SingleMask, typename Extract>
-static std::vector<std::vector<SpacedEvent>> collect_callback_forms(Extract&& extract)
-{
-    std::vector<std::vector<SpacedEvent>> runs(1);
-    extract([&](std::size_t pos, std::size_t mask_idx, auto const& value) {
-        static_assert(std::remove_cvref_t<decltype(value)>::layout == L);
-        runs[0].push_back({pos, mask_idx, kmer_value(value)});
-    });
-    if constexpr (SingleMask) {
-        runs.emplace_back();
-        extract([&](std::size_t pos, auto const& value) {
-            static_assert(std::remove_cvref_t<decltype(value)>::layout == L);
-            runs[1].push_back({pos, 0, kmer_value(value)});
-        });
-    }
-    return runs;
-}
-
 // =================================================================================================
 //     Scalar Extraction
 // =================================================================================================
@@ -272,22 +189,24 @@ static void check_scalar_variant(
 ) {
     std::size_t const span_k = mask_strings.front().size();
     for (auto const& seq : sequence_corpus(span_k, 8)) {
-        auto const expected = oracle_events<Enc::encoding, Mask::layout>(seq, mask_strings);
-        auto const runs = collect_callback_forms<Mask::layout, false>([&](auto const& callback) {
-            for_each_spaced_kmer(seq, masks, enc, bit_extract, callback);
-        });
+        auto const expected = oracle_spaced_events<Enc::encoding, Mask::layout>(seq, mask_strings);
+        auto const runs = collect_spaced_callback_forms<Mask::layout, false>(
+            [&](auto const& callback) {
+                for_each_spaced_kmer(seq, masks, enc, bit_extract, callback);
+            }
+        );
         for (auto const& got : runs) {
-            check_events(got, expected);
+            check_spaced_events(got, expected);
         }
 
         if (masks.size() == 1) {
-            auto const single_runs = collect_callback_forms<Mask::layout, true>(
+            auto const single_runs = collect_spaced_callback_forms<Mask::layout, true>(
                 [&](auto const& callback) {
                     for_each_spaced_kmer(seq, masks.front(), enc, bit_extract, callback);
                 }
             );
             for (auto const& got : single_runs) {
-                check_events(got, expected);
+                check_spaced_events(got, expected);
             }
         }
     }
@@ -386,15 +305,17 @@ static void check_simd_set(std::array<std::string, N> const& mask_array, Enc con
     std::size_t const span_k = masks.front().size();
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
-        auto const expected = oracle_events<Enc::encoding, L>(seq, masks);
+        auto const expected = oracle_spaced_events<Enc::encoding, L>(seq, masks);
 
-        auto const by_position = collect_callback_forms<L, N == 1>([&](auto const& callback) {
-            for_each_spaced_kmer_simd_by_position(seq, kernels, enc, callback);
-        });
+        auto const by_position = collect_spaced_callback_forms<L, N == 1>(
+            [&](auto const& callback) {
+                for_each_spaced_kmer_simd_by_position(seq, kernels, enc, callback);
+            }
+        );
         for (auto const& got : by_position) {
-            check_events(got, expected);
+            check_spaced_events(got, expected);
         }
-        auto const by_mask = collect_callback_forms<L, N == 1>([&](auto const& callback) {
+        auto const by_mask = collect_spaced_callback_forms<L, N == 1>([&](auto const& callback) {
             for_each_spaced_kmer_simd_by_mask(seq, kernels, enc, callback);
         });
         for (auto const& got : by_mask) {
@@ -402,17 +323,19 @@ static void check_simd_set(std::array<std::string, N> const& mask_array, Enc con
         }
 
         if constexpr (N == 1) {
-            auto const single_by_position = collect_callback_forms<L, true>(
+            auto const single_by_position = collect_spaced_callback_forms<L, true>(
                 [&](auto const& callback) {
                     for_each_spaced_kmer_simd_by_position(seq, kernels[0], enc, callback);
                 }
             );
             for (auto const& got : single_by_position) {
-                check_events(got, expected);
+                check_spaced_events(got, expected);
             }
-            auto const single_by_mask = collect_callback_forms<L, true>([&](auto const& callback) {
-                for_each_spaced_kmer_simd_by_mask(seq, kernels[0], enc, callback);
-            });
+            auto const single_by_mask = collect_spaced_callback_forms<L, true>(
+                [&](auto const& callback) {
+                    for_each_spaced_kmer_simd_by_mask(seq, kernels[0], enc, callback);
+                }
+            );
             for (auto const& got : single_by_mask) {
                 check_by_mask_events(got, expected, N);
             }
@@ -448,7 +371,7 @@ static void check_simd_dispatcher_in_layout(std::vector<std::string> const& mask
     std::size_t const span_k = masks.front().size();
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
-        auto const expected = oracle_events<Encoding::kACGT, L>(seq, masks);
+        auto const expected = oracle_spaced_events<Encoding::kACGT, L>(seq, masks);
         std::vector<SpacedEvent> by_position;
         dispatcher.run([&](auto const& kernels) {
             for_each_spaced_kmer_simd_by_position(
@@ -458,7 +381,7 @@ static void check_simd_dispatcher_in_layout(std::vector<std::string> const& mask
                 }
             );
         });
-        check_events(by_position, expected);
+        check_spaced_events(by_position, expected);
 
         std::vector<SpacedEvent> by_mask;
         dispatcher.run([&](auto const& kernels) {
@@ -501,7 +424,9 @@ static_assert(!SpacedKmerType<KmerAcgtMsb>);
 static_assert(!SpacedKmerType<std::uint64_t>);
 static_assert(std::is_same_v<SpacedKmerActgLsb, SpacedKmer<Encoding::kACTG, Layout::kLSB>>);
 
-static_assert(CanReverse<KmerAcgtMsb> && CanReverseComplement<KmerAcgtMsb> && CanCanonical<KmerAcgtMsb>);
+static_assert(CanReverse<KmerAcgtMsb>);
+static_assert(CanReverseComplement<KmerAcgtMsb>);
+static_assert(CanCanonical<KmerAcgtMsb>);
 
 // Spaced k-mer extraction only accepts masks that are tagged with their Layout.
 template <typename Mask>

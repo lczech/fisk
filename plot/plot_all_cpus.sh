@@ -117,6 +117,8 @@ CSV_FILES=(
   "kmer_extract.csv"
   "kmer_spaced_multi.csv"
   "kmer_spaced_single.csv"
+  "kmer_spaced_packed_multi.csv"
+  "kmer_spaced_packed_single.csv"
   # "kmer_clark.csv"
 )
 

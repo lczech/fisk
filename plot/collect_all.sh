@@ -19,6 +19,8 @@ BENCHMARKS=(
     "kmer_extract_packed"
     "kmer_spaced_multi_bars"
     "kmer_spaced_single_bars"
+    "kmer_spaced_packed_multi_bars"
+    "kmer_spaced_packed_single_bars"
     # "kmer_clark"
 )
 

@@ -191,6 +191,14 @@ def main():
 
     out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
 
+    # Without benchmarks of an emission order, such as for the packed suites, a single plot.
+    if df["benchmark"].apply(_axis_of).isna().all():
+        make_grouped_bar_plot_impl_first(
+            df, suite, base_title, out,
+            unit=args.unit, scale=args.scale, y_min=args.y_min, y_max=args.y_max,
+        )
+        return
+
     # One plot per emission order. See plot_kmer_spaced_axis_per_cpu.py for a side by side view.
     for axis, axis_label in [("by_mask", "by mask"), ("by_position", "by position")]:
         outpath = str(Path(out).with_stem(f"{Path(out).stem}_{axis}")) if out else None

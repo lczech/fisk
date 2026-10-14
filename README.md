@@ -121,6 +121,7 @@ Overview of the library headers (in `include/fisk/`), and their most important f
  - `kmer_extract/packed.hpp`: K-mer extraction reading directly from an already-packed `PackedSequence` (`seq_pack.hpp`), instead of re-deriving codes from ASCII on every call.
  - `kmer_spaced/kmer_spaced.hpp`: Extraction loop for spaced k-mers from a sequence, templated with the bit extract function. Masks are created from a string of 1s and 0s via `make_spaced_kmer_mask()` and the related functions for the bit extraction tables (`make_spaced_kmer_butterfly_table()`, etc.), for spaced k-mers in either `Layout` (e.g., `make_spaced_kmer_mask<Layout::kLSB>()`).
  - `kmer_spaced/simd.hpp`: SIMD variant of the spaced k-mer extraction, taking one of the `bit_extract/simd.hpp` kernels, created via `make_spaced_kmer_kernel()`.
+ - `kmer_spaced/packed.hpp`: Spaced k-mer extraction reading directly from an already-packed `PackedSequence`, with the same masks and bit extract functions.
  - `kmer_spaced/selector.hpp`: Helper that runs a quick benchmark to find the most performant spaced k-mer extraction algorithm for a given mask. Similar to `bit_extract/selector.hpp`.
 
 The `benchmarks/` directory contains the driver code for the benchmark program: `main.cpp`, `arg_parser.hpp`, `microbench.hpp`, `utils.hpp`, `seq_data.hpp`, `kmer_clark.hpp`, and one `bench_*.hpp` per benchmark shown in the manuscript. These might be useful to see how each algorithm is intended to be called and used.

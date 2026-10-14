@@ -193,6 +193,60 @@ for EXT in png svg ; do
       --unit "$UNIT" --scale "$SCALE" \
       --out "${DIR}/kmer_spaced_multi_bars.${EXT}"
 
+
+    # Kmer Spaced Packed Single
+
+    CSV="${DIR}/kmer_spaced_packed_single.csv"
+
+    run_plot "$CSV" python ./plot/plot_kmer_spaced.py \
+      "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_single.${EXT}"
+
+    run_plot "$CSV" python ./plot/plot_case_summary.py \
+      "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_single_bars.${EXT}"
+
+    run_plot "$CSV" python ./plot/plot_case_summary.py \
+      "$CSV" \
+      --extended \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_single_bars.${EXT}"
+
+    run_plot "$CSV" python ./plot/plot_case_summary.py \
+      "$CSV" \
+      --reduced \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_single_bars.${EXT}"
+
+
+    # Kmer Spaced Packed Multi
+
+    CSV="${DIR}/kmer_spaced_packed_multi.csv"
+
+    run_plot "$CSV" python ./plot/plot_kmer_spaced.py \
+      "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_multi.${EXT}"
+
+    run_plot "$CSV" python ./plot/plot_case_summary.py \
+      "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_multi_bars.${EXT}"
+
+    run_plot "$CSV" python ./plot/plot_case_summary.py \
+      "$CSV" \
+      --extended \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_multi_bars.${EXT}"
+
+    run_plot "$CSV" python ./plot/plot_case_summary.py \
+      "$CSV" \
+      --reduced \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_multi_bars.${EXT}"
+
   done
 done
 
