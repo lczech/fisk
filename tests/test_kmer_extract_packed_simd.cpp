@@ -85,12 +85,13 @@ static void check_simd_callbacks(
     check_emitted_kmers(expected, k, values, nullptr);
 }
 
-// Checks the narrow-width (k in [1, 29]) and full-width (k in [1, 32]) internal helpers and the
-// public dispatcher for one SIMD arch, under the conventions of E and L, against the same oracle
-// output, plus their invalid-k contracts.
+// Checks the narrow-width (k in [1, 29]) and full-width (k in [1, 32]) internal helpers, also
+// without masking, and the public dispatcher for one SIMD arch, under the conventions of E and L,
+// against the same oracle output, plus their invalid-k contracts.
 template <SimdArch Simd, Encoding E, Layout L>
 static void check_simd_arch()
 {
+    using simd_vector = typename Simd::simd_vector;
     auto const narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
         for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, func);
     };
@@ -101,6 +102,29 @@ static void check_simd_arch()
         for_each_kmer_packed_simd<Simd>(seq, k, func);
     };
 
+    // Without masking, the bits above the k-mers hold neighboring bases. Masking them in the
+    // callback instead has to give the k-mers.
+    auto const masked_after = [](auto const& extract) {
+        return [extract](auto const& seq, std::size_t k, auto const& func) {
+            std::uint64_t const mask = (k == 32) ? ~std::uint64_t{0}
+                                                 : (std::uint64_t{1} << (2 * k)) - 1u;
+            simd_vector const mask_v = Simd::broadcast(mask);
+            extract(seq, k, [&](std::size_t pos, simd_vector vec, std::size_t n) {
+                invoke_kmer_vector_callback(func, pos, Simd::bitwise_and(vec, mask_v), n);
+            });
+        };
+    };
+    auto const narrow_width_unmasked = masked_after(
+        [](auto const& seq, std::size_t k, auto const& func) {
+            for_each_kmer_packed_simd_narrow_width_<Simd, false>(seq, k, func);
+        }
+    );
+    auto const full_width_unmasked = masked_after(
+        [](auto const& seq, std::size_t k, auto const& func) {
+            for_each_kmer_packed_simd_full_width_<Simd, false>(seq, k, func);
+        }
+    );
+
     WordEncoderButterfly<E, L> const encoder;
     sweep_packed_extractors(
         encoder, test_sequences(), 32,
@@ -109,9 +133,15 @@ static void check_simd_arch()
                 check_simd_callbacks<Simd>(expected, k, [&](auto const& callback) {
                     narrow_width(packed, k, callback);
                 });
+                check_simd_callbacks<Simd>(expected, k, [&](auto const& callback) {
+                    narrow_width_unmasked(packed, k, callback);
+                });
             }
             check_simd_callbacks<Simd>(expected, k, [&](auto const& callback) {
                 full_width(packed, k, callback);
+            });
+            check_simd_callbacks<Simd>(expected, k, [&](auto const& callback) {
+                full_width_unmasked(packed, k, callback);
             });
             check_simd_callbacks<Simd>(expected, k, [&](auto const& callback) {
                 dispatch(packed, k, callback);

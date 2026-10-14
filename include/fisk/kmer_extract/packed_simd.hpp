@@ -206,9 +206,11 @@ inline void emit_tail_packed_(
 /**
  * @brief Extracts k in [1, 29] as vectors of k-mers.
  *
- * Any such k-mer is within the word of its starting byte, which needs one shift and a mask.
+ * Any such k-mer is within the word of its starting byte, which needs one shift and a mask. With
+ * `Masked` false, the mask is left out, so that the bits above each k-mer hold the bases next to
+ * it, for callers that select bits with a mask of their own, such as spaced k-mer extraction.
  */
-template <SimdArch Simd, Encoding E, Layout L, typename Func>
+template <SimdArch Simd, bool Masked = true, Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_narrow_width_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
@@ -254,7 +256,8 @@ inline void for_each_kmer_packed_simd_narrow_width_(
     for (std::size_t b = 0; b < fast_bytes; b += step_bytes) {
         simd_vector const words = load_packed_words_<Simd, L>(&seq.data[b]);
         emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {
-            return Simd::bitwise_and(packed_simd_shift_right_<Simd>(words, counts.at[i]), mask_v);
+            simd_vector const kmers = packed_simd_shift_right_<Simd>(words, counts.at[i]);
+            return Masked ? Simd::bitwise_and(kmers, mask_v) : kmers;
         }, func);
     }
 
@@ -273,8 +276,10 @@ inline void for_each_kmer_packed_simd_narrow_width_(
  * @brief Extracts k in [1, 32] as vectors of k-mers.
  *
  * A k-mer of more than 29 bases can reach into a ninth byte, so that this combines two words.
+ * `Masked` is as for for_each_kmer_packed_simd_narrow_width_(). It only affects kLSB, as the
+ * shift down of kMSB leaves nothing above the k-mer.
  */
-template <SimdArch Simd, Encoding E, Layout L, typename Func>
+template <SimdArch Simd, bool Masked = true, Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_full_width_(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
@@ -344,7 +349,7 @@ inline void for_each_kmer_packed_simd_full_width_(
                         packed_simd_shift_right_<Simd>(words, word_counts.at[i]),
                         packed_simd_shift_left_<Simd>(next, next_counts.at[i])
                     );
-                    return Simd::bitwise_and(kmers, mask_v);
+                    return Masked ? Simd::bitwise_and(kmers, mask_v) : kmers;
                 } else {
                     static_assert(
                         dependent_false_v<L>,
