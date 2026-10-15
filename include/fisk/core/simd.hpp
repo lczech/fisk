@@ -28,7 +28,7 @@ namespace fisk {
 // concept. Each of them has its own concept that refines SimdArch, to select an implementation
 // by. The archs with a byte shuffle offer lookup_low_nibbles(), which SimdScalar and plain SSE2
 // lack. The overload of store_two_bit_codes() that takes two vectors exists for the archs where
-// storing two vectors together is faster than one after the other.
+// storing two vectors together takes fewer instructions than one after the other.
 // All archs but SSE2 can shift each lane by its own count, with shift_right_lanes() and
 // shift_left_lanes(). SimdSSE2 has interleave_low() and interleave_high() instead, to pick lanes
 // from vectors that were shifted as a whole.
@@ -1053,6 +1053,25 @@ struct SimdAVX512
         );
         _mm_storeu_si128(reinterpret_cast<__m128i*>(out), _mm512_cvtepi32_epi8(quads));
     }
+
+    // Same as store_two_bit_codes() for one vector, but for two at once. Narrowing the 16-bit
+    // elements of both vectors together saves one of the two narrowing steps. It leaves the four
+    // bytes of each 128-bit lane of each vector in separate 32-bit elements, which the final
+    // permutation brings into order.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v0, simd_vector v1, char* out) noexcept
+    {
+        __m512i const weights = _mm512_set1_epi32(MsbFirst ? 0x01041040 : 0x40100401);
+        __m512i const halves = _mm512_packus_epi16(
+            _mm512_maddubs_epi16(v0, weights), _mm512_maddubs_epi16(v1, weights)
+        );
+        __m512i const words = _mm512_maddubs_epi16(halves, _mm512_set1_epi8(1));
+        __m256i const bytes = _mm512_cvtepi16_epi8(words);
+        __m256i const order = _mm256_setr_epi32(0, 2, 4, 6, 1, 3, 5, 7);
+        _mm256_storeu_si256(
+            reinterpret_cast<__m256i*>(out), _mm256_permutevar8x32_epi32(bytes, order)
+        );
+    }
 };
 
 #endif // FISK_HAS_AVX512
@@ -1237,26 +1256,56 @@ struct SimdNEON
     // Each byte holds a 2-bit code. Store them packed, four codes per byte, see SimdScalar. Two
     // shifts with accumulation or insertion combine first the two codes of each 16-bit element,
     // and then the two halves of each 32-bit element, into one packed byte per element. That
-    // byte is its lowest one, or its third one for MsbFirst.
+    // byte is its lowest one, or its third one for MsbFirst, and the narrowing to 16 bits keeps
+    // it in the low byte.
     template <bool MsbFirst>
     static void store_two_bit_codes(simd_vector v, char* out) noexcept
     {
-        uint16x8_t const codes = vreinterpretq_u16_u64(v);
+        uint32x4_t const quads = two_bit_code_quads_<MsbFirst>(v);
         uint16x4_t words;
         if constexpr (MsbFirst) {
-            uint32x4_t const halves = vreinterpretq_u32_u16(
-                vsraq_n_u16(vshlq_n_u16(codes, 2), codes, 8)
-            );
-            words = vshrn_n_u32(vsliq_n_u32(halves, halves, 20), 16);
+            words = vshrn_n_u32(quads, 16);
         } else {
-            uint32x4_t const halves = vreinterpretq_u32_u16(vsraq_n_u16(codes, codes, 6));
-            words = vmovn_u32(vsraq_n_u32(halves, halves, 12));
+            words = vmovn_u32(quads);
         }
 
         // The packed bytes are the low bytes of the four 16-bit elements.
         uint8x8_t const bytes = vreinterpret_u8_u16(words);
         std::uint32_t const packed = vget_lane_u32(vreinterpret_u32_u8(vuzp1_u8(bytes, bytes)), 0);
         std::memcpy(out, &packed, sizeof(packed));
+    }
+
+    // Same as store_two_bit_codes() for one vector, but for two at once. Narrowing both vectors
+    // into one, and then to their low bytes, stores all eight packed bytes directly, instead of
+    // moving the four of each vector through a general-purpose register.
+    template <bool MsbFirst>
+    static void store_two_bit_codes(simd_vector v0, simd_vector v1, char* out) noexcept
+    {
+        uint32x4_t const quads0 = two_bit_code_quads_<MsbFirst>(v0);
+        uint32x4_t const quads1 = two_bit_code_quads_<MsbFirst>(v1);
+        uint16x8_t words;
+        if constexpr (MsbFirst) {
+            words = vshrn_high_n_u32(vshrn_n_u32(quads0, 16), quads1, 16);
+        } else {
+            words = vmovn_high_u32(vmovn_u32(quads0), quads1);
+        }
+        vst1_u8(reinterpret_cast<std::uint8_t*>(out), vmovn_u16(words));
+    }
+
+    // The packed byte of each 32-bit element, see store_two_bit_codes().
+    template <bool MsbFirst>
+    static uint32x4_t two_bit_code_quads_(simd_vector v) noexcept
+    {
+        uint16x8_t const codes = vreinterpretq_u16_u64(v);
+        if constexpr (MsbFirst) {
+            uint32x4_t const halves = vreinterpretq_u32_u16(
+                vsraq_n_u16(vshlq_n_u16(codes, 2), codes, 8)
+            );
+            return vsliq_n_u32(halves, halves, 20);
+        } else {
+            uint32x4_t const halves = vreinterpretq_u32_u16(vsraq_n_u16(codes, codes, 6));
+            return vsraq_n_u32(halves, halves, 12);
+        }
     }
 };
 

@@ -155,6 +155,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_lsb_direct_avx512(seq, out);
                 }
             ),
+            bench(
+                "direct_double_avx512",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_double_avx512(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
@@ -173,6 +179,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "direct_neon",
                 [&](std::string const& seq) {
                     return run_var_acgt_lsb_direct_neon(seq, out);
+                }
+            ),
+            bench(
+                "direct_double_neon",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_direct_double_neon(seq, out);
                 }
             ),
             #endif
@@ -314,6 +326,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_msb_direct_avx512(seq, out);
                 }
             ),
+            bench(
+                "direct_double_avx512",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_double_avx512(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
@@ -332,6 +350,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "direct_neon",
                 [&](std::string const& seq) {
                     return run_var_acgt_msb_direct_neon(seq, out);
+                }
+            ),
+            bench(
+                "direct_double_neon",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_direct_double_neon(seq, out);
                 }
             ),
             #endif
@@ -491,6 +515,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_lsb_direct_avx512(seq, out);
                 }
             ),
+            bench(
+                "direct_double_avx512",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_double_avx512(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
@@ -509,6 +539,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "direct_neon",
                 [&](std::string const& seq) {
                     return run_var_actg_lsb_direct_neon(seq, out);
+                }
+            ),
+            bench(
+                "direct_double_neon",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_direct_double_neon(seq, out);
                 }
             ),
             #endif
@@ -662,6 +698,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_msb_direct_avx512(seq, out);
                 }
             ),
+            bench(
+                "direct_double_avx512",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_double_avx512(seq, out);
+                }
+            ),
             #endif
             #if defined(FISK_HAS_NEON)
             bench(
@@ -680,6 +722,12 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                 "direct_neon",
                 [&](std::string const& seq) {
                     return run_var_actg_msb_direct_neon(seq, out);
+                }
+            ),
+            bench(
+                "direct_double_neon",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_direct_double_neon(seq, out);
                 }
             ),
             #endif

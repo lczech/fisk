@@ -256,6 +256,18 @@ std::uint64_t run_var_actg_lsb_direct_avx512(
 std::uint64_t run_var_actg_msb_direct_avx512(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
+std::uint64_t run_var_acgt_lsb_direct_double_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_direct_double_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_direct_double_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_direct_double_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
 #endif
 
 #if defined(FISK_HAS_NEON)
@@ -293,6 +305,18 @@ std::uint64_t run_var_actg_lsb_direct_neon(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
 );
 std::uint64_t run_var_actg_msb_direct_neon(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_acgt_lsb_direct_double_neon(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_direct_double_neon(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_direct_double_neon(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_direct_double_neon(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
 #endif

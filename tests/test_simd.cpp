@@ -45,6 +45,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX2>>);
 static_assert(SimdArch<SimdAVX512>);
 static_assert(SimdArchWithLaneShifts<SimdAVX512>);
 static_assert(SimdArchWithByteShuffle<SimdAVX512>);
+static_assert(SimdArchWithDoubleStore<SimdAVX512>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX512>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
 #endif
@@ -53,6 +54,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
 static_assert(SimdArch<SimdNEON>);
 static_assert(SimdArchWithLaneShifts<SimdNEON>);
 static_assert(SimdArchWithByteShuffle<SimdNEON>);
+static_assert(SimdArchWithDoubleStore<SimdNEON>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdNEON>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdNEON>>);
 #endif

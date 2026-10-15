@@ -354,11 +354,13 @@ static_assert( WordEncoder<WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 8);
 static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 8);
 static_assert(WordEncoderFold<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 8);
+static_assert(WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 16);
 #endif
 #if defined(FISK_HAS_NEON)
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdNEON>::lanes == 2);
 static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdNEON>::lanes == 2);
 static_assert(WordEncoderFold<Encoding::kACGT, Layout::kMSB, SimdNEON>::lanes == 2);
+static_assert(WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdNEON>::lanes == 4);
 #endif
 
 // The packed sequence type follows the encoder's tags.
@@ -725,6 +727,22 @@ TEST(SeqPackSimd, Avx512DirectAcgtMsb)
 {
     check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX512>>();
 }
+TEST(SeqPackSimd, Avx512DirectDoubleActgLsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACTG, Layout::kLSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512DirectDoubleActgMsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACTG, Layout::kMSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512DirectDoubleAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kLSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512DirectDoubleAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdAVX512>>();
+}
 #if defined(FISK_HAS_BMI2)
 TEST(SeqPackSimd, Avx512PextActgLsb)
 {
@@ -795,6 +813,22 @@ TEST(SeqPackSimd, NeonDirectAcgtLsb)
 TEST(SeqPackSimd, NeonDirectAcgtMsb)
 {
     check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdNEON>>();
+}
+TEST(SeqPackSimd, NeonDirectDoubleActgLsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACTG, Layout::kLSB, SimdNEON>>();
+}
+TEST(SeqPackSimd, NeonDirectDoubleActgMsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACTG, Layout::kMSB, SimdNEON>>();
+}
+TEST(SeqPackSimd, NeonDirectDoubleAcgtLsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kLSB, SimdNEON>>();
+}
+TEST(SeqPackSimd, NeonDirectDoubleAcgtMsb)
+{
+    check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdNEON>>();
 }
 
 #endif // FISK_HAS_NEON
@@ -888,6 +922,7 @@ TEST(SeqPackValidity, Avx512)
     check_seq_pack_validity_all<WordEncoderButterfly, SimdAVX512>();
     check_seq_pack_validity_all<WordEncoderFold, SimdAVX512>();
     check_seq_pack_validity_all<WordEncoderDirect, SimdAVX512>();
+    check_seq_pack_validity_all<WordEncoderDirectDouble, SimdAVX512>();
     #if defined(FISK_HAS_BMI2)
     check_seq_pack_validity_all<WordEncoderPext, SimdAVX512>();
     #endif
@@ -900,5 +935,6 @@ TEST(SeqPackValidity, Neon)
     check_seq_pack_validity_all<WordEncoderButterfly, SimdNEON>();
     check_seq_pack_validity_all<WordEncoderFold, SimdNEON>();
     check_seq_pack_validity_all<WordEncoderDirect, SimdNEON>();
+    check_seq_pack_validity_all<WordEncoderDirectDouble, SimdNEON>();
 }
 #endif
