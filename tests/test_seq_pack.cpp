@@ -107,6 +107,153 @@ static void check_seq_pack()
     check_packed(std::string("AC"), out);
 }
 
+// -----------------------------------------------------------------------------
+//     Validity
+// -----------------------------------------------------------------------------
+
+static bool is_valid_nucleotide(char c)
+{
+    return kValidBases.find(c) != std::string_view::npos;
+}
+
+// Checks `valid_bits`, called on a pointer to `Bytes` characters, against the oracle, for every
+// byte value at every position. The other positions hold random valid characters, random invalid
+// ones, which include those that differ from a valid one in a single bit, or random bytes.
+template <std::size_t Bytes, typename ValidBits>
+static void check_valid_nucleotide_bits(ValidBits valid_bits)
+{
+    Splitmix64 rng(3005);
+    std::string const any_byte = [] {
+        std::string out;
+        for (int i = 0; i < 256; ++i) {
+            out += static_cast<char>(i);
+        }
+        return out;
+    }();
+
+    for (std::string_view background : {kValidBases, std::string_view(all_invalid_bytes()),
+                                        std::string_view(any_byte)}) {
+        std::string buffer = random_sequence(rng, Bytes, background);
+        for (std::size_t pos = 0; pos < Bytes; ++pos) {
+            char const kept = buffer[pos];
+            for (int value = 0; value < 256; ++value) {
+                buffer[pos] = static_cast<char>(value);
+                std::uint64_t expected = 0;
+                for (std::size_t j = 0; j < Bytes; ++j) {
+                    expected |= static_cast<std::uint64_t>(is_valid_nucleotide(buffer[j])) << j;
+                }
+                EXPECT_EQ(valid_bits(buffer.data()), expected);
+            }
+            buffer[pos] = kept;
+        }
+    }
+}
+
+// Checks valid_nucleotide_bits(), and its lookup and compare forms where they exist, for an arch.
+template <typename Simd>
+static void check_valid_nucleotide_bits_arch()
+{
+    constexpr std::size_t bytes = 8 * Simd::lanes;
+    auto const load = [](char const* p) {
+        return Simd::load_unaligned(reinterpret_cast<std::uint64_t const*>(p));
+    };
+    check_valid_nucleotide_bits<bytes>([&](char const* p) {
+        return valid_nucleotide_bits<Simd>(load(p));
+    });
+    check_valid_nucleotide_bits<bytes>([&](char const* p) {
+        return valid_nucleotide_bits_compare_<Simd>(load(p));
+    });
+    if constexpr (SimdArchWithByteShuffle<Simd>) {
+        check_valid_nucleotide_bits<bytes>([&](char const* p) {
+            return valid_nucleotide_bits_lookup_<Simd>(load(p));
+        });
+    }
+}
+
+// Every length up to 130, which covers the end of a word (8), of a vector of each arch (16, 32,
+// 64), and of a double step (64, 128) with both of their neighbors, and some longer ones. Each
+// length comes valid only, with invalid bytes of the whole range, and with many hand-picked ones.
+static std::vector<std::string> const& validity_sequences()
+{
+    static std::vector<std::string> const seqs = [] {
+        std::vector<std::string> out;
+        Splitmix64 rng(3006);
+        std::vector<std::size_t> lengths;
+        for (std::size_t len = 0; len <= 130; ++len) {
+            lengths.push_back(len);
+        }
+        lengths.insert(lengths.end(), {255, 256, 257, 1000});
+        for (std::size_t const len : lengths) {
+            out.push_back(random_sequence(rng, len));
+            std::string seq = random_sequence(rng, len);
+            inject_invalid(seq, rng, 0.1, all_invalid_bytes());
+            out.push_back(seq);
+            seq = random_sequence(rng, len);
+            inject_invalid(seq, rng, 0.5, kHandPickedInvalid);
+            out.push_back(seq);
+        }
+        return out;
+    }();
+    return seqs;
+}
+
+// Checks the validity bits of a PackedSequenceWithValidity against `seq`: one bit per character,
+// no more bytes than these need, and zero bits beyond the end.
+template <Encoding E, Layout L>
+static void check_validity(std::string const& seq, PackedSequenceWithValidity<E, L> const& packed)
+{
+    ASSERT_EQ(packed.valid.size(), (seq.size() + 7) / 8);
+    for (std::size_t i = 0; i < 8 * packed.valid.size(); ++i) {
+        bool const bit = (packed.valid[i / 8] >> (i % 8)) & 1;
+        EXPECT_EQ(bit, i < seq.size() && is_valid_nucleotide(seq[i]));
+    }
+}
+
+// Checks pack_sequence_with_validity() -- both overloads, the overload of pack_sequence() that
+// forwards to it, and reuse across calls -- for a given word encoder. Its codes have to be the
+// same as those of pack_sequence(), including the unspecified ones of invalid characters.
+template <typename Encoder>
+static void check_seq_pack_validity()
+{
+    Encoder encoder{};
+    PackedSequence<Encoder::encoding, Encoder::layout> plain;
+    PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> out;
+    PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> forwarded;
+
+    for (auto const& seq : validity_sequences()) {
+        pack_sequence(seq, encoder, plain);
+
+        pack_sequence_with_validity(seq, encoder, out);
+        check_packed(seq, out);
+        check_validity(seq, out);
+        EXPECT_EQ(out.length, plain.length);
+        EXPECT_TRUE(out.data == plain.data);
+
+        auto const out2 = pack_sequence_with_validity(seq, encoder);
+        check_packed(seq, out2);
+        check_validity(seq, out2);
+
+        pack_sequence(seq, encoder, forwarded);
+        check_validity(seq, forwarded);
+    }
+
+    // Reuse must not leak stale bits from a previous, larger pack.
+    pack_sequence_with_validity(std::string(100, 'T'), encoder, out);
+    pack_sequence_with_validity(std::string("ANC"), encoder, out);
+    check_packed(std::string("ANC"), out);
+    check_validity(std::string("ANC"), out);
+}
+
+// Runs check_seq_pack_validity() for all four combinations of Encoding and Layout.
+template <template <Encoding, Layout, typename> class Encoder, typename Simd>
+static void check_seq_pack_validity_all()
+{
+    check_seq_pack_validity<Encoder<Encoding::kACGT, Layout::kLSB, Simd>>();
+    check_seq_pack_validity<Encoder<Encoding::kACGT, Layout::kMSB, Simd>>();
+    check_seq_pack_validity<Encoder<Encoding::kACTG, Layout::kLSB, Simd>>();
+    check_seq_pack_validity<Encoder<Encoding::kACTG, Layout::kMSB, Simd>>();
+}
+
 // =================================================================================================
 //     Compile-Time Conventions
 // =================================================================================================
@@ -178,7 +325,16 @@ static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB>::lanes == 1);
 static_assert(WordEncoderFold<Encoding::kACGT, Layout::kMSB>::lanes == 1);
 #if defined(FISK_HAS_BMI2)
 static_assert(WordEncoderPext<Encoding::kACGT, Layout::kMSB>::lanes == 1);
+#if defined(FISK_HAS_SSE2)
+static_assert(WordEncoderPext<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
 #endif
+#if defined(FISK_HAS_AVX2)
+static_assert(WordEncoderPext<Encoding::kACGT, Layout::kMSB, SimdAVX2>::lanes == 4);
+#endif
+#if defined(FISK_HAS_AVX512)
+static_assert(WordEncoderPext<Encoding::kACGT, Layout::kMSB, SimdAVX512>::lanes == 8);
+#endif
+#endif // FISK_HAS_BMI2
 #if defined(FISK_HAS_SSE2)
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
 static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdSSE2>::lanes == 2);
@@ -218,6 +374,22 @@ static_assert(!PackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>,
 
 // Nor can a sequence of one encoding be passed where another is expected.
 static_assert(!std::is_convertible_v<ActgMsb const&, AcgtMsb const&>);
+
+// A sequence with validity can be read as a plain one, and packing it with either function fills
+// its validity, see check_seq_pack_validity().
+using AcgtMsbWithValidity = PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>;
+static_assert(std::is_convertible_v<AcgtMsbWithValidity const&, AcgtMsb const&>);
+static_assert(!std::is_convertible_v<AcgtMsbWithValidity const&, AcgtLsb const&>);
+static_assert(std::is_same_v<
+    decltype(pack_sequence_with_validity("", WordEncoderDirect<Encoding::kACGT, Layout::kMSB>{})),
+    AcgtMsbWithValidity
+>);
+static_assert(
+    PackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kMSB>, AcgtMsbWithValidity>
+);
+static_assert(
+    !PackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kLSB>, AcgtMsbWithValidity>
+);
 
 // =================================================================================================
 //     Scalar Word Encoders
@@ -395,6 +567,24 @@ TEST(SeqPackSimd, Sse2DirectDoubleAcgtMsb)
     check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdSSE2>>();
 }
 #endif // FISK_HAS_SSSE3
+#if defined(FISK_HAS_BMI2)
+TEST(SeqPackSimd, Sse2PextActgLsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACTG, Layout::kLSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2PextActgMsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACTG, Layout::kMSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2PextAcgtLsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACGT, Layout::kLSB, SimdSSE2>>();
+}
+TEST(SeqPackSimd, Sse2PextAcgtMsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACGT, Layout::kMSB, SimdSSE2>>();
+}
+#endif // FISK_HAS_BMI2
 
 #endif // FISK_HAS_SSE2
 
@@ -464,6 +654,24 @@ TEST(SeqPackSimd, Avx2DirectDoubleAcgtMsb)
 {
     check_seq_pack<WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdAVX2>>();
 }
+#if defined(FISK_HAS_BMI2)
+TEST(SeqPackSimd, Avx2PextActgLsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACTG, Layout::kLSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2PextActgMsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACTG, Layout::kMSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2PextAcgtLsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACGT, Layout::kLSB, SimdAVX2>>();
+}
+TEST(SeqPackSimd, Avx2PextAcgtMsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACGT, Layout::kMSB, SimdAVX2>>();
+}
+#endif // FISK_HAS_BMI2
 
 #endif // FISK_HAS_AVX2
 
@@ -517,6 +725,24 @@ TEST(SeqPackSimd, Avx512DirectAcgtMsb)
 {
     check_seq_pack<WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX512>>();
 }
+#if defined(FISK_HAS_BMI2)
+TEST(SeqPackSimd, Avx512PextActgLsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACTG, Layout::kLSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512PextActgMsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACTG, Layout::kMSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512PextAcgtLsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACGT, Layout::kLSB, SimdAVX512>>();
+}
+TEST(SeqPackSimd, Avx512PextAcgtMsb)
+{
+    check_seq_pack<WordEncoderPext<Encoding::kACGT, Layout::kMSB, SimdAVX512>>();
+}
+#endif // FISK_HAS_BMI2
 
 #endif // FISK_HAS_AVX512
 
@@ -572,3 +798,107 @@ TEST(SeqPackSimd, NeonDirectAcgtMsb)
 }
 
 #endif // FISK_HAS_NEON
+
+// =================================================================================================
+//     Validity
+// =================================================================================================
+
+// -----------------------------------------------------------------------------
+//     Nucleotide Bits
+// -----------------------------------------------------------------------------
+
+TEST(SeqPackValidity, NucleotideBitsScalar)
+{
+    check_valid_nucleotide_bits_arch<SimdScalar>();
+}
+
+#if defined(FISK_HAS_SSE2)
+TEST(SeqPackValidity, NucleotideBitsSse2)
+{
+    check_valid_nucleotide_bits_arch<SimdSSE2>();
+}
+#endif
+
+#if defined(FISK_HAS_AVX2)
+TEST(SeqPackValidity, NucleotideBitsAvx2)
+{
+    check_valid_nucleotide_bits_arch<SimdAVX2>();
+}
+#endif
+
+#if defined(FISK_HAS_AVX512)
+TEST(SeqPackValidity, NucleotideBitsAvx512)
+{
+    check_valid_nucleotide_bits_arch<SimdAVX512>();
+}
+#endif
+
+#if defined(FISK_HAS_NEON)
+TEST(SeqPackValidity, NucleotideBitsNeon)
+{
+    check_valid_nucleotide_bits_arch<SimdNEON>();
+}
+#endif
+
+// -----------------------------------------------------------------------------
+//     Pack Sequence With Validity
+// -----------------------------------------------------------------------------
+
+TEST(SeqPackValidity, Scalar)
+{
+    check_seq_pack_validity_all<WordEncoderButterfly, SimdScalar>();
+    check_seq_pack_validity_all<WordEncoderFold, SimdScalar>();
+    check_seq_pack_validity_all<WordEncoderDirect, SimdScalar>();
+    #if defined(FISK_HAS_BMI2)
+    check_seq_pack_validity_all<WordEncoderPext, SimdScalar>();
+    #endif
+}
+
+#if defined(FISK_HAS_SSE2)
+TEST(SeqPackValidity, Sse2)
+{
+    check_seq_pack_validity_all<WordEncoderButterfly, SimdSSE2>();
+    check_seq_pack_validity_all<WordEncoderFold, SimdSSE2>();
+    check_seq_pack_validity_all<WordEncoderDirect, SimdSSE2>();
+    #if defined(FISK_HAS_SSSE3)
+    check_seq_pack_validity_all<WordEncoderDirectDouble, SimdSSE2>();
+    #endif
+    #if defined(FISK_HAS_BMI2)
+    check_seq_pack_validity_all<WordEncoderPext, SimdSSE2>();
+    #endif
+}
+#endif
+
+#if defined(FISK_HAS_AVX2)
+TEST(SeqPackValidity, Avx2)
+{
+    check_seq_pack_validity_all<WordEncoderButterfly, SimdAVX2>();
+    check_seq_pack_validity_all<WordEncoderFold, SimdAVX2>();
+    check_seq_pack_validity_all<WordEncoderDirect, SimdAVX2>();
+    check_seq_pack_validity_all<WordEncoderDirectDouble, SimdAVX2>();
+    #if defined(FISK_HAS_BMI2)
+    check_seq_pack_validity_all<WordEncoderPext, SimdAVX2>();
+    #endif
+}
+#endif
+
+#if defined(FISK_HAS_AVX512)
+TEST(SeqPackValidity, Avx512)
+{
+    check_seq_pack_validity_all<WordEncoderButterfly, SimdAVX512>();
+    check_seq_pack_validity_all<WordEncoderFold, SimdAVX512>();
+    check_seq_pack_validity_all<WordEncoderDirect, SimdAVX512>();
+    #if defined(FISK_HAS_BMI2)
+    check_seq_pack_validity_all<WordEncoderPext, SimdAVX512>();
+    #endif
+}
+#endif
+
+#if defined(FISK_HAS_NEON)
+TEST(SeqPackValidity, Neon)
+{
+    check_seq_pack_validity_all<WordEncoderButterfly, SimdNEON>();
+    check_seq_pack_validity_all<WordEncoderFold, SimdNEON>();
+    check_seq_pack_validity_all<WordEncoderDirect, SimdNEON>();
+}
+#endif

@@ -15,7 +15,7 @@ namespace fisk {
 // Packed 2-bit data can differ along two independent axes: which base each 2-bit code stands for
 // (Encoding), and in which order bases are laid out within a word (Layout). Both are
 // tracked as template parameters on the types that carry such data, so that the compiler can
-// enforce consistency between etween producer and consumer.
+// enforce consistency between producer and consumer.
 
 /**
  * @brief Encoding for which base each 2-bit code stands for.
@@ -85,6 +85,24 @@ struct PackedSequence
 
     std::vector<std::uint8_t> data;
     std::size_t length = 0;
+};
+
+/**
+ * @brief A PackedSequence that also records which of its nucleotides are valid.
+ *
+ * Bit `j` of byte `b` of `valid` is set if nucleotide `8 * b + j` was one of `ACGTacgt` in the
+ * input, for both layouts. The 2-bit code of an invalid nucleotide is unspecified.
+ *
+ * `valid` holds exactly `ceil(length / 8)` bytes, with no trailing padding, and its bits beyond
+ * `length` are zero. Readers are responsible for bounds checking, as for `data`.
+ *
+ * Being a PackedSequence, it can be passed to everything that reads one. Packing into it through
+ * a reference to the base however leaves `valid` as it was, see pack_sequence_with_validity().
+ */
+template <Encoding E, Layout L>
+struct PackedSequenceWithValidity : PackedSequence<E, L>
+{
+    std::vector<std::uint8_t> valid;
 };
 
 } // namespace fisk

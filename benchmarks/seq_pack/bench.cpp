@@ -57,6 +57,30 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_lsb_pext(seq, out);
                 }
             ),
+            #if defined(FISK_HAS_SSE2)
+            bench(
+                "pext_sse2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_pext_sse2(seq, out);
+                }
+            ),
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "pext_avx2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_pext_avx2(seq, out);
+                }
+            ),
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "pext_avx512",
+                [&](std::string const& seq) {
+                    return run_var_acgt_lsb_pext_avx512(seq, out);
+                }
+            ),
+            #endif
             #endif
             #if defined(FISK_HAS_SSE2)
             bench(
@@ -192,6 +216,30 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_acgt_msb_pext(seq, out);
                 }
             ),
+            #if defined(FISK_HAS_SSE2)
+            bench(
+                "pext_sse2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_pext_sse2(seq, out);
+                }
+            ),
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "pext_avx2",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_pext_avx2(seq, out);
+                }
+            ),
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "pext_avx512",
+                [&](std::string const& seq) {
+                    return run_var_acgt_msb_pext_avx512(seq, out);
+                }
+            ),
+            #endif
             #endif
             #if defined(FISK_HAS_SSE2)
             bench(
@@ -345,6 +393,30 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_lsb_pext(seq, out);
                 }
             ),
+            #if defined(FISK_HAS_SSE2)
+            bench(
+                "pext_sse2",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_pext_sse2(seq, out);
+                }
+            ),
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "pext_avx2",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_pext_avx2(seq, out);
+                }
+            ),
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "pext_avx512",
+                [&](std::string const& seq) {
+                    return run_var_actg_lsb_pext_avx512(seq, out);
+                }
+            ),
+            #endif
             #endif
             #if defined(FISK_HAS_SSE2)
             bench(
@@ -492,6 +564,30 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
                     return run_var_actg_msb_pext(seq, out);
                 }
             ),
+            #if defined(FISK_HAS_SSE2)
+            bench(
+                "pext_sse2",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_pext_sse2(seq, out);
+                }
+            ),
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "pext_avx2",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_pext_avx2(seq, out);
+                }
+            ),
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "pext_avx512",
+                [&](std::string const& seq) {
+                    return run_var_actg_msb_pext_avx512(seq, out);
+                }
+            ),
+            #endif
             #endif
             #if defined(FISK_HAS_SSE2)
             bench(

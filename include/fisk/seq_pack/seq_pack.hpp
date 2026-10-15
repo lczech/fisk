@@ -54,6 +54,91 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
 }
 
 // -----------------------------------------------------------------------------
+//     Pack Loop
+// -----------------------------------------------------------------------------
+
+/**
+ * @brief Pack `seq` into `out`, and with `WithValidity`, also its validity bits into `valid`.
+ *
+ * The loop shared by pack_sequence() and pack_sequence_with_validity(). Without `WithValidity`,
+ * `valid` is unused and may be null. With it, `valid` has to hold `ceil(seq.size() / 8)` bytes,
+ * all of which are written.
+ */
+template <bool WithValidity, WordEncoder Encoder>
+FISK_ALWAYS_INLINE
+inline void pack_sequence_(
+    std::string_view seq,
+    Encoder const& encoder,
+    PackedSequence<Encoder::encoding, Encoder::layout>& out,
+    std::uint8_t* valid
+) {
+    constexpr Layout layout = Encoder::layout;
+
+    std::size_t const seq_len   = seq.size();
+    std::size_t const num_bytes = (seq_len + 3) / 4;
+
+    out.length = seq_len;
+
+    // Every byte in the resized output is written below, including the partial final byte. Avoid
+    // clearing retained storage first: callers commonly reuse `out` across many sequences/chunks.
+    out.data.resize(num_bytes);
+    char* const out_bytes = reinterpret_cast<char*>(out.data.data());
+    char const* const data = seq.data();
+
+    // Read the 8-byte chunk starting at seq byte offset `off`.
+    auto read_chunk = [data](std::size_t off) -> std::uint64_t {
+        std::uint64_t word;
+        std::memcpy(&word, data + off, 8);
+        return word;
+    };
+
+    // byte offset into seq. Each 8 bytes of it give one byte of validity bits, at offset `i / 8`.
+    std::size_t i = 0;
+
+    // Full vectors of `lanes` chunks.
+    if constexpr (Encoder::lanes > 1) {
+        constexpr std::size_t vec_bytes = Encoder::lanes * 8;
+        for (; i + vec_bytes <= seq_len; i += vec_bytes) {
+            auto const x = Encoder::load_unaligned(
+                reinterpret_cast<std::uint64_t const*>(data + i)
+            );
+            Encoder::store_packed(encoder(x), out_bytes + i / 4);
+            if constexpr (WithValidity) {
+                Encoder::store_valid_bits(x, valid + i / 8);
+            }
+        }
+    }
+
+    // Full 8-base chunks. These and the remaining bases below are scalar code throughout, for the
+    // codes as well as the validity.
+    for (; i + 8 <= seq_len; i += 8) {
+        std::uint64_t const word = read_chunk(i);
+        write_two_bit_chunk_<layout>(out_bytes + i / 4, encoder(word));
+        if constexpr (WithValidity) {
+            valid[i / 8] = static_cast<std::uint8_t>(valid_nucleotide_bits<SimdScalar>(word));
+        }
+    }
+
+    // Remaining < 8 bases: zero-pad into a local word before encoding. `out` holds no trailing
+    // bytes beyond its real content, so a <=4-base remainder (one real output byte, not two) must
+    // write only that one byte -- writing the usual 2 would spill past the allocation. The zero
+    // padding is not a valid nucleotide, which keeps the validity bits beyond the end zero.
+    if (i < seq_len) {
+        std::size_t const remaining = seq_len - i;
+        std::uint64_t word = 0;
+        std::memcpy(&word, data + i, remaining);
+        if (remaining <= 4) {
+            write_two_bit_chunk_<layout, 1>(out_bytes + i / 4, encoder(word));
+        } else {
+            write_two_bit_chunk_<layout, 2>(out_bytes + i / 4, encoder(word));
+        }
+        if constexpr (WithValidity) {
+            valid[i / 8] = static_cast<std::uint8_t>(valid_nucleotide_bits<SimdScalar>(word));
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
 //     Pack Sequence
 // -----------------------------------------------------------------------------
 
@@ -80,58 +165,7 @@ inline void pack_sequence(
     Encoder const& encoder,
     PackedSequence<Encoder::encoding, Encoder::layout>& out
 ) {
-    constexpr Layout layout = Encoder::layout;
-
-    std::size_t const seq_len   = seq.size();
-    std::size_t const num_bytes = (seq_len + 3) / 4;
-
-    out.length = seq_len;
-
-    // Every byte in the resized output is written below, including the partial final byte. Avoid
-    // clearing retained storage first: callers commonly reuse `out` across many sequences/chunks.
-    out.data.resize(num_bytes);
-    char* const out_bytes = reinterpret_cast<char*>(out.data.data());
-    char const* const data = seq.data();
-
-    // Read the 8-byte chunk starting at seq byte offset `off`.
-    auto read_chunk = [data](std::size_t off) -> std::uint64_t {
-        std::uint64_t word;
-        std::memcpy(&word, data + off, 8);
-        return word;
-    };
-
-    // byte offset into seq
-    std::size_t i = 0;
-
-    // Full vectors of `lanes` chunks.
-    if constexpr (Encoder::lanes > 1) {
-        constexpr std::size_t vec_bytes = Encoder::lanes * 8;
-        for (; i + vec_bytes <= seq_len; i += vec_bytes) {
-            auto const x = encoder(
-                Encoder::load_unaligned(reinterpret_cast<std::uint64_t const*>(data + i))
-            );
-            Encoder::store_packed(x, out_bytes + i / 4);
-        }
-    }
-
-    // Full 8-base chunks.
-    for (; i + 8 <= seq_len; i += 8) {
-        write_two_bit_chunk_<layout>(out_bytes + i / 4, encoder(read_chunk(i)));
-    }
-
-    // Remaining < 8 bases: zero-pad into a local word before encoding. `out` holds no trailing
-    // bytes beyond its real content, so a <=4-base remainder (one real output byte, not two) must
-    // write only that one byte -- writing the usual 2 would spill past the allocation.
-    if (i < seq_len) {
-        std::size_t const remaining = seq_len - i;
-        std::uint64_t word = 0;
-        std::memcpy(&word, data + i, remaining);
-        if (remaining <= 4) {
-            write_two_bit_chunk_<layout, 1>(out_bytes + i / 4, encoder(word));
-        } else {
-            write_two_bit_chunk_<layout, 2>(out_bytes + i / 4, encoder(word));
-        }
-    }
+    pack_sequence_<false>(seq, encoder, out, nullptr);
 }
 
 /**
@@ -143,11 +177,65 @@ inline void pack_sequence(
  */
 template <WordEncoder Encoder>
 inline PackedSequence<Encoder::encoding, Encoder::layout> pack_sequence(
-    std::string_view seq, Encoder const& encoder
+    std::string_view seq,
+    Encoder const& encoder
 ) {
     PackedSequence<Encoder::encoding, Encoder::layout> out;
     pack_sequence(seq, encoder, out);
     return out;
+}
+
+// -----------------------------------------------------------------------------
+//     Pack Sequence With Validity
+// -----------------------------------------------------------------------------
+
+/**
+ * @brief Pack a whole ASCII sequence into a PackedSequenceWithValidity, reusing existing storage.
+ *
+ * As pack_sequence(), and also records which characters are valid nucleotides, from the same
+ * loads of the input, see `store_valid_bits()` of the word encoders.
+ *
+ * Calling pack_sequence() with a PackedSequenceWithValidity forwards to this as well. Only when
+ * passed as a reference to its PackedSequence base does it get packed without its validity.
+ */
+template <WordEncoder Encoder>
+FISK_ALWAYS_INLINE
+inline void pack_sequence_with_validity(
+    std::string_view seq,
+    Encoder const& encoder,
+    PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& out
+) {
+    out.valid.resize((seq.size() + 7) / 8);
+    pack_sequence_<true>(seq, encoder, out, out.valid.data());
+}
+
+/**
+ * @brief Pack a whole ASCII sequence into a freshly allocated PackedSequenceWithValidity.
+ *
+ * Convenience wrapper around the in-place overload above, see pack_sequence().
+ */
+template <WordEncoder Encoder>
+inline PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> pack_sequence_with_validity(
+    std::string_view seq,
+    Encoder const& encoder
+) {
+    PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> out;
+    pack_sequence_with_validity(seq, encoder, out);
+    return out;
+}
+
+/**
+ * @brief Same as pack_sequence_with_validity(), so that packing a PackedSequenceWithValidity
+ * always fills its validity.
+ */
+template <WordEncoder Encoder>
+FISK_ALWAYS_INLINE
+inline void pack_sequence(
+    std::string_view seq,
+    Encoder const& encoder,
+    PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& out
+) {
+    pack_sequence_with_validity(seq, encoder, out);
 }
 
 } // namespace fisk

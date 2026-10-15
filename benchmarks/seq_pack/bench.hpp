@@ -71,6 +71,48 @@ std::uint64_t run_var_actg_lsb_pext(
 std::uint64_t run_var_actg_msb_pext(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
 );
+#if defined(FISK_HAS_SSE2)
+std::uint64_t run_var_acgt_lsb_pext_sse2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_pext_sse2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_pext_sse2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_pext_sse2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
+#endif
+#if defined(FISK_HAS_AVX2)
+std::uint64_t run_var_acgt_lsb_pext_avx2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_pext_avx2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_pext_avx2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_pext_avx2(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
+#endif
+#if defined(FISK_HAS_AVX512)
+std::uint64_t run_var_acgt_lsb_pext_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_acgt_msb_pext_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>& out
+);
+std::uint64_t run_var_actg_lsb_pext_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_actg_msb_pext_avx512(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kMSB>& out
+);
+#endif
 #endif
 
 #if defined(FISK_HAS_SSE2)

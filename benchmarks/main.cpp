@@ -38,6 +38,7 @@
 #include "bit_extract_weights/bench.hpp"
 #include "char_encoder/bench.hpp"
 #include "seq_pack/bench.hpp"
+#include "seq_pack_validity/bench.hpp"
 #include "utils.hpp"
 #include "seq_data.hpp"
 #include "fisk/core/cpu_runtime.hpp"
@@ -251,6 +252,12 @@ int main(int argc, char **argv)
     {
         auto os_seq_pack = get_ofstream(out_dir, "seq_pack.csv" );
         bench_seq_pack( sequences, os_seq_pack );
+    }
+
+    // Seq Packing with validity (as above, also recording which characters are valid)
+    {
+        auto os_seq_pack_validity = get_ofstream(out_dir, "seq_pack_validity.csv" );
+        bench_seq_pack_validity( sequences, os_seq_pack_validity );
     }
 
     // Kmer extract
