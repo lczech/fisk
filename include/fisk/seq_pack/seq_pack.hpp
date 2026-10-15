@@ -95,23 +95,41 @@ inline void pack_sequence_(
     // byte offset into seq. Each 8 bytes of it give one byte of validity bits, at offset `i / 8`.
     std::size_t i = 0;
 
-    // Full vectors of `lanes` chunks.
+    // End of the full 8-base chunks.
+    std::size_t const words_end = seq_len - (seq_len % 8);
+
+    // The main work for encoders with more than one lane: all full 8-base chunks of sequences of
+    // at least one vector, `lanes` of them at a time. What they leave is at most the last bases
+    // that do not fill a chunk.
     if constexpr (Encoder::lanes > 1) {
         constexpr std::size_t vec_bytes = Encoder::lanes * 8;
-        for (; i + vec_bytes <= seq_len; i += vec_bytes) {
+        auto pack_vector = [&](std::size_t off) {
             auto const x = Encoder::load_unaligned(
-                reinterpret_cast<std::uint64_t const*>(data + i)
+                reinterpret_cast<std::uint64_t const*>(data + off)
             );
-            Encoder::store_packed(encoder(x), out_bytes + i / 4);
+            Encoder::store_packed(encoder(x), out_bytes + off / 4);
             if constexpr (WithValidity) {
-                Encoder::store_valid_bits(x, valid + i / 8);
+                Encoder::store_valid_bits(x, valid + off / 8);
             }
+        };
+
+        // Full vectors of `lanes` chunks.
+        for (; i + vec_bytes <= seq_len; i += vec_bytes) {
+            pack_vector(i);
+        }
+
+        // The remaining full chunks as one more vector that ends at the last of them. It overlaps
+        // the previous one, whose chunks it packs again into the same bytes.
+        if (i < words_end && words_end >= vec_bytes) {
+            pack_vector(words_end - vec_bytes);
+            i = words_end;
         }
     }
 
-    // Full 8-base chunks. These and the remaining bases below are scalar code throughout, for the
-    // codes as well as the validity.
-    for (; i + 8 <= seq_len; i += 8) {
+    // Full 8-base chunks one at a time: all of them for encoders on SimdScalar, and those of
+    // sequences shorter than one vector for the others. As the remainder below, this is scalar
+    // code for the codes as well as the validity.
+    for (; i < words_end; i += 8) {
         std::uint64_t const word = read_chunk(i);
         write_two_bit_chunk_<layout>(out_bytes + i / 4, encoder(word));
         if constexpr (WithValidity) {
@@ -119,14 +137,20 @@ inline void pack_sequence_(
         }
     }
 
-    // Remaining < 8 bases: zero-pad into a local word before encoding. `out` holds no trailing
-    // bytes beyond its real content, so a <=4-base remainder (one real output byte, not two) must
-    // write only that one byte -- writing the usual 2 would spill past the allocation. The zero
-    // padding is not a valid nucleotide, which keeps the validity bits beyond the end zero.
+    // Remaining < 8 bases: the last 8 bytes of the sequence, shifted down to the bases that remain,
+    // with zeros above them. If the sequence is shorter than that, they are copied instead. `out`
+    // holds no trailing bytes beyond its real content, so a <=4-base remainder (one real output
+    // byte, not two) must write only that one byte -- writing the usual 2 would spill past the
+    // allocation. Zero gets code 0 and is not a valid nucleotide, which keeps the bits beyond the
+    // end zero.
     if (i < seq_len) {
         std::size_t const remaining = seq_len - i;
         std::uint64_t word = 0;
-        std::memcpy(&word, data + i, remaining);
+        if (seq_len >= 8) {
+            word = read_chunk(seq_len - 8) >> (8 * (8 - remaining));
+        } else {
+            std::memcpy(&word, data + i, remaining);
+        }
         if (remaining <= 4) {
             write_two_bit_chunk_<layout, 1>(out_bytes + i / 4, encoder(word));
         } else {
@@ -148,8 +172,8 @@ inline void pack_sequence_(
  * Processes the sequence in 8-byte chunks via `encoder` (see word_encoder.hpp), writing
  * each chunk's 16-bit result to its 2 sequential output bytes at `out.data[i/4 .. i/4+1]`, where
  * `i` is the chunk's starting byte offset into `seq` (see write_two_bit_chunk_() for the per-byte
- * ordering). Encoders with more than one lane process `lanes` chunks at once, and only the chunks
- * at the end that do not fill a whole vector one at a time.
+ * ordering). Encoders with more than one lane process `lanes` chunks at once, including the last
+ * full chunks, in a vector that overlaps the previous one.
  *
  * `Encoder::encoding` and `Encoder::layout` (see Encoding and Layout in core/types.hpp) select
  * the out type. Passing an encoder whose encoding or layout differs from `out`'s is a compile

@@ -337,7 +337,8 @@ struct WordEncoderPext
  *
  * With a SIMD arch other than SimdScalar (see core/simd.hpp), the call operator on a whole
  * `simd_vector` encodes `lanes` words at once, applying the same steps to each lane. The call
- * operator on a single word remains, for the words at the end that do not fill a whole vector.
+ * operator on a single word remains, for sequences shorter than a vector, and for the last bases
+ * of a sequence that do not fill a whole word.
  *
  * The encoder is stateless: its butterfly table is a compile-time constant, so that the compiler
  * can keep it in registers. A table in the encoder object instead would have to be reloaded after
@@ -431,7 +432,7 @@ struct WordEncoderButterfly
  * measured, and is kept as a simple reference to compare against.
  *
  * As for WordEncoderButterfly, the call operator on a whole `simd_vector` processes `lanes` words
- * at once, and the one on a single word the words at the end that do not fill a whole vector.
+ * at once, and the one on a single word the rest.
  */
 template <Encoding E, Layout L, SimdArch Simd = SimdScalar>
 struct WordEncoderFold
@@ -535,7 +536,7 @@ private:
  * of 128 and above, this can give a different code than the other word encoders do.
  *
  * As for WordEncoderButterfly, the call operator on a whole `simd_vector` processes `lanes` words
- * at once, and the one on a single word the words at the end that do not fill a whole vector.
+ * at once, and the one on a single word the rest.
  */
 template <Encoding E, Layout L, SimdArch Simd = SimdScalar>
 struct WordEncoderDirect
@@ -631,8 +632,8 @@ protected:
  * is then the fastest word encoder for long sequences.
  *
  * The `simd_vector` here holds two vectors of the arch, and `lanes` is accordingly twice that of
- * the arch. The end of a sequence that does not fill such a pair is left to the call operator on
- * a single word, which makes this slower than WordEncoderDirect for some short sequences.
+ * the arch. Sequences shorter than such a pair are packed one word at a time, which makes this
+ * slower than WordEncoderDirect for some short sequences.
  */
 template <Encoding E, Layout L, SimdArchWithDoubleStore Simd>
 struct WordEncoderDirectDouble : WordEncoderDirect<E, L, Simd>
