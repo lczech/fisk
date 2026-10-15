@@ -321,8 +321,11 @@ private:
         }
         do_not_optimize(acc);
 
+        // Every round runs on the same inputs, so without the memory barrier, the compiler could
+        // compute an inlined kernel once and reuse its results for the other rounds.
         auto t0 = std::chrono::steady_clock::now();
         for (int r = 0; r < rounds_; ++r) {
+            clobber_memory(inputs.data());
             for (auto const& in : inputs) {
                 acc += static_cast<std::uint64_t>(b.fn(in));
             }
