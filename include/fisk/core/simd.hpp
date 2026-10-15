@@ -32,6 +32,11 @@ namespace fisk {
 // All archs but SSE2 can shift each lane by its own count, with shift_right_lanes() and
 // shift_left_lanes(). SimdSSE2 has interleave_low() and interleave_high() instead, to pick lanes
 // from vectors that were shifted as a whole.
+//
+// Comparing the lanes of two vectors gives a `lane_mask`, in the form native to the arch: a vector
+// with all bits set in the equal lanes and zero in the others, or the mask register of AVX512.
+// lane_mask_to_bits() turns it into bit `j` for lane `j`, as compare_eq_bytes_to_bits() does
+// for the bytes of two vectors.
 
 /**
  * @brief Concept for a SIMD arch, such as SimdAVX2.
@@ -44,7 +49,8 @@ concept SimdArch = requires(
     std::uint64_t* out,
     char* bytes,
     std::uint64_t value,
-    std::array<std::uint64_t, Simd::lanes> values
+    std::array<std::uint64_t, Simd::lanes> values,
+    typename Simd::lane_mask const mask
 ) {
     { Simd::lanes } -> std::convertible_to<std::size_t>;
     Simd::load_aligned(in);
@@ -64,6 +70,10 @@ concept SimdArch = requires(
     Simd::template store_truncated_u16<true>(v, bytes);
     Simd::template store_two_bit_codes<false>(v, bytes);
     Simd::template store_two_bit_codes<true>(v, bytes);
+    { Simd::compare_eq_lanes(v, v) } -> std::same_as<typename Simd::lane_mask>;
+    { Simd::lane_mask_all() } -> std::same_as<typename Simd::lane_mask>;
+    { Simd::lane_mask_to_bits(mask) } -> std::same_as<std::uint64_t>;
+    { Simd::compare_eq_bytes_to_bits(v, v) } -> std::same_as<std::uint64_t>;
 };
 
 /**
@@ -114,6 +124,7 @@ struct SimdScalar
 {
     using simd_vector = std::uint64_t;
     using shift_count = std::uint8_t;
+    using lane_mask = std::uint64_t;
     static constexpr std::size_t lanes = 1;
 
     // -------------------------------------------
@@ -208,6 +219,37 @@ struct SimdScalar
     }
 
     // -------------------------------------------
+    //     Compare
+    // -------------------------------------------
+
+    // All bits set if a == b, zero otherwise.
+    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
+    {
+        return std::uint64_t{0} - static_cast<std::uint64_t>(a == b);
+    }
+
+    static lane_mask lane_mask_all() noexcept
+    {
+        return ~std::uint64_t{0};
+    }
+
+    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
+    {
+        return m & 1;
+    }
+
+    // Bit j set iff byte j of a and b are equal. The test of each byte for zero adds within its
+    // low seven bits only, so that no carry crosses into the next byte, which keeps it exact. The
+    // multiplication then gathers the eight high bits into the lowest byte.
+    static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept
+    {
+        constexpr std::uint64_t low7 = 0x7F7F7F7F7F7F7F7FULL;
+        std::uint64_t const x = a ^ b;
+        std::uint64_t const zero_high = ~(((x & low7) + low7) | x | low7);
+        return ((zero_high >> 7) * 0x0102040810204080ULL) >> 56;
+    }
+
+    // -------------------------------------------
     //     Bytes
     // -------------------------------------------
 
@@ -266,6 +308,7 @@ struct SimdSSE2
 {
     using simd_vector = __m128i;
     using shift_count = __m128i;
+    using lane_mask = __m128i;
     static constexpr std::size_t lanes = 2;
 
     // -------------------------------------------
@@ -371,6 +414,51 @@ struct SimdSSE2
     {
         return _mm_unpackhi_epi64(a, b);
     }
+
+    // -------------------------------------------
+    //     Compare
+    // -------------------------------------------
+
+    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
+    {
+        #if defined(FISK_HAS_SSE41)
+            return compare_eq_lanes_sse41_(a, b);
+        #else
+            return compare_eq_lanes_sse2_(a, b);
+        #endif
+    }
+
+    static lane_mask lane_mask_all() noexcept
+    {
+        return _mm_set1_epi64x(-1);
+    }
+
+    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
+    {
+        return static_cast<unsigned>(_mm_movemask_pd(_mm_castsi128_pd(m)));
+    }
+
+    static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept
+    {
+        return static_cast<unsigned>(_mm_movemask_epi8(_mm_cmpeq_epi8(a, b)));
+    }
+
+    // SSE2 has no 64-bit compare. A lane is equal if both of its 32-bit halves are, so that each
+    // half is combined with the other half of its lane.
+    static lane_mask compare_eq_lanes_sse2_(simd_vector a, simd_vector b) noexcept
+    {
+        __m128i const halves = _mm_cmpeq_epi32(a, b);
+        return _mm_and_si128(halves, _mm_shuffle_epi32(halves, _MM_SHUFFLE(2, 3, 0, 1)));
+    }
+
+    #if defined(FISK_HAS_SSE41)
+
+    static lane_mask compare_eq_lanes_sse41_(simd_vector a, simd_vector b) noexcept
+    {
+        return _mm_cmpeq_epi64(a, b);
+    }
+
+    #endif // FISK_HAS_SSE41
 
     // -------------------------------------------
     //     Bytes
@@ -535,6 +623,7 @@ struct SimdAVX2
 {
     using simd_vector = __m256i;
     using shift_count = __m128i;
+    using lane_mask = __m256i;
     static constexpr std::size_t lanes = 4;
 
     // -------------------------------------------
@@ -628,6 +717,30 @@ struct SimdAVX2
     static simd_vector shift_left_lanes(simd_vector v, simd_vector counts) noexcept
     {
         return _mm256_sllv_epi64(v, counts);
+    }
+
+    // -------------------------------------------
+    //     Compare
+    // -------------------------------------------
+
+    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
+    {
+        return _mm256_cmpeq_epi64(a, b);
+    }
+
+    static lane_mask lane_mask_all() noexcept
+    {
+        return _mm256_set1_epi64x(-1);
+    }
+
+    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
+    {
+        return static_cast<unsigned>(_mm256_movemask_pd(_mm256_castsi256_pd(m)));
+    }
+
+    static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept
+    {
+        return static_cast<std::uint32_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(a, b)));
     }
 
     // -------------------------------------------
@@ -737,6 +850,7 @@ struct SimdAVX512
 {
     using simd_vector = __m512i;
     using shift_count = __m128i;
+    using lane_mask = __mmask8;
     static constexpr std::size_t lanes = 8;
 
     // -------------------------------------------
@@ -837,6 +951,31 @@ struct SimdAVX512
     }
 
     // -------------------------------------------
+    //     Compare
+    // -------------------------------------------
+
+    // The lane mask is the mask register of the compare, with bit j for lane j already.
+    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
+    {
+        return _mm512_cmpeq_epi64_mask(a, b);
+    }
+
+    static lane_mask lane_mask_all() noexcept
+    {
+        return static_cast<lane_mask>(0xFF);
+    }
+
+    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
+    {
+        return m;
+    }
+
+    static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept
+    {
+        return _mm512_cmpeq_epi8_mask(a, b);
+    }
+
+    // -------------------------------------------
     //     Bytes
     // -------------------------------------------
 
@@ -931,6 +1070,7 @@ struct SimdNEON
 {
     using simd_vector = uint64x2_t;
     using shift_count = int64x2_t;
+    using lane_mask = uint64x2_t;
     static constexpr std::size_t lanes = 2;
 
     // -------------------------------------------
@@ -1025,6 +1165,40 @@ struct SimdNEON
     static simd_vector shift_left_lanes(simd_vector v, simd_vector counts) noexcept
     {
         return vshlq_u64(v, vreinterpretq_s64_u64(counts));
+    }
+
+    // -------------------------------------------
+    //     Compare
+    // -------------------------------------------
+
+    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
+    {
+        return vceqq_u64(a, b);
+    }
+
+    static lane_mask lane_mask_all() noexcept
+    {
+        return vdupq_n_u64(~std::uint64_t{0});
+    }
+
+    // NEON has no movemask. Keep bit j of lane j, and add the lanes.
+    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
+    {
+        return vaddvq_u64(vandq_u64(m, vcombine_u64(vcreate_u64(1), vcreate_u64(2))));
+    }
+
+    // Keep bit j % 8 of each equal byte j, and add up each half of eight bytes, with three
+    // pairwise additions that leave the sums of the halves in the two lowest bytes.
+    static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept
+    {
+        uint8x16_t const equal = vceqq_u8(vreinterpretq_u8_u64(a), vreinterpretq_u8_u64(b));
+        uint8x16_t bits = vandq_u8(
+            equal, vreinterpretq_u8_u64(vdupq_n_u64(0x8040201008040201ULL))
+        );
+        bits = vpaddq_u8(bits, bits);
+        bits = vpaddq_u8(bits, bits);
+        bits = vpaddq_u8(bits, bits);
+        return vgetq_lane_u16(vreinterpretq_u16_u8(bits), 0);
     }
 
     // -------------------------------------------

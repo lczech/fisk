@@ -295,6 +295,13 @@ inline bool msvc_cpu_ssse3_() noexcept
     return (regs[2] & (1 << 9)) != 0; // ECX.SSSE3
 }
 
+inline bool msvc_cpu_sse41_() noexcept
+{
+    int regs[4] = {};
+    cpuidex_(regs, 1, 0);
+    return (regs[2] & (1 << 19)) != 0; // ECX.SSE4_1
+}
+
 inline bool msvc_cpu_avx2_() noexcept
 {
     if (!os_avx_state_enabled_()) {
@@ -344,6 +351,15 @@ inline bool compiled_sse2() noexcept
 inline bool compiled_ssse3() noexcept
 {
 #ifdef FISK_HAS_SSSE3
+    return true;
+#else
+    return false;
+#endif
+}
+
+inline bool compiled_sse41() noexcept
+{
+#ifdef FISK_HAS_SSE41
     return true;
 #else
     return false;
@@ -417,6 +433,18 @@ inline bool cpu_ssse3() noexcept
     #endif
 }
 
+inline bool cpu_sse41() noexcept
+{
+    #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
+        ensure_cpu_init_();
+        return __builtin_cpu_supports("sse4.1");
+    #elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+        return msvc_cpu_sse41_();
+    #else
+        return false;
+    #endif
+}
+
 inline bool cpu_avx2() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
@@ -466,10 +494,18 @@ inline bool ssse3_enabled() noexcept
     return enabled;
 }
 
-// SimdSSE2 uses SSSE3 where that is compiled in, so that it then needs a CPU that has it.
+inline bool sse41_enabled() noexcept
+{
+    static bool const enabled = compiled_sse41() && cpu_sse41();
+    return enabled;
+}
+
+// SimdSSE2 uses SSSE3 and SSE4.1 where these are compiled in, so that it then needs a CPU that
+// has them.
 inline bool sse2_enabled() noexcept
 {
-    static bool const enabled = compiled_sse2() && cpu_sse2() && (!compiled_ssse3() || cpu_ssse3());
+    static bool const enabled = compiled_sse2() && cpu_sse2()
+        && (!compiled_ssse3() || cpu_ssse3()) && (!compiled_sse41() || cpu_sse41());
     return enabled;
 }
 
@@ -512,6 +548,7 @@ inline void info_print_intrinsics(std::ostream& os)
     print_one_feature("BMI2",   compiled_bmi2(),   cpu_bmi2());
     print_one_feature("SSE2",   compiled_sse2(),   cpu_sse2());
     print_one_feature("SSSE3",  compiled_ssse3(),  cpu_ssse3());
+    print_one_feature("SSE4.1", compiled_sse41(),  cpu_sse41());
     print_one_feature("AVX2",   compiled_avx2(),   cpu_avx2());
     print_one_feature("AVX512", compiled_avx512(), cpu_avx512());
     print_one_feature("NEON",   compiled_neon(),   cpu_neon());

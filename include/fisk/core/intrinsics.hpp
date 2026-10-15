@@ -43,6 +43,11 @@
     #include <tmmintrin.h>
     #define FISK_HAS_SSSE3 1
 #endif
+// MSVC has no macro for SSE4.1 either, and AVX implies it as well.
+#if defined(FISK_HAS_SSE41) || defined(__SSE4_1__) || defined(__AVX__)
+    #include <smmintrin.h>
+    #define FISK_HAS_SSE41 1
+#endif
 #if defined(FISK_HAS_AVX2) || defined(__AVX2__)
     #include <immintrin.h>
     #define FISK_HAS_AVX2 1

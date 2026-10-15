@@ -300,11 +300,90 @@ static void check_simd_lookup_low_nibbles(Lanes<Simd> const& in)
     }
 }
 
+// The lanes of `mask` as well, where the arch has it as a vector. Told apart by size, as GCC
+// warns about vector types as template arguments, such as of std::is_same_v.
+template <SimdArch Simd>
+static void check_simd_lane_mask(typename Simd::lane_mask mask, std::uint64_t expected_bits)
+{
+    EXPECT_EQ(Simd::lane_mask_to_bits(mask), expected_bits);
+    if constexpr (sizeof(typename Simd::lane_mask) == sizeof(typename Simd::simd_vector)) {
+        auto const out = to_lanes<Simd>(mask);
+        for (std::size_t i = 0; i < Simd::lanes; ++i) {
+            EXPECT_EQ(out[i], ((expected_bits >> i) & 1) ? ~std::uint64_t{0} : 0);
+        }
+    }
+}
+
+// Compare `a` with `b`, and with variants of `a` that differ in some lanes, or in only one of
+// the 32-bit halves of a lane.
+template <SimdArch Simd, typename Compare>
+static void check_simd_compare_eq_lanes(
+    Lanes<Simd> const& a, Lanes<Simd> const& b, Compare const& compare
+) {
+    std::vector<Lanes<Simd>> others = {a, b};
+    for (std::size_t pattern = 1; pattern < (std::size_t{1} << Simd::lanes); ++pattern) {
+        Lanes<Simd> mixed = a;
+        Lanes<Simd> low = a;
+        Lanes<Simd> high = a;
+        for (std::size_t i = 0; i < Simd::lanes; ++i) {
+            if ((pattern >> i) & 1) {
+                mixed[i] = b[i];
+                low[i] ^= 1;
+                high[i] ^= std::uint64_t{1} << 63;
+            }
+        }
+        others.push_back(mixed);
+        others.push_back(low);
+        others.push_back(high);
+    }
+    for (auto const& other : others) {
+        std::uint64_t expected = 0;
+        for (std::size_t i = 0; i < Simd::lanes; ++i) {
+            expected |= std::uint64_t{a[i] == other[i]} << i;
+        }
+        auto const mask = compare(from_lanes<Simd>(a), from_lanes<Simd>(other));
+        check_simd_lane_mask<Simd>(mask, expected);
+    }
+}
+
+// Differ from `a` by each byte value at each byte, alone or next to unequal bytes.
+template <SimdArch Simd>
+static void check_simd_compare_eq_bytes(Lanes<Simd> const& a)
+{
+    constexpr std::size_t bytes = 8 * Simd::lanes;
+    for (std::size_t at = 0; at < bytes; ++at) {
+        for (unsigned diff = 0; diff < 256; ++diff) {
+            for (std::uint64_t const others : {0x00ULL, 0x01ULL, 0x80ULL}) {
+                Lanes<Simd> b = a;
+                std::uint64_t expected = 0;
+                for (std::size_t j = 0; j < bytes; ++j) {
+                    std::uint64_t const d = j == at ? diff : (j % 2 ? others : 0);
+                    b[j / 8] ^= d << (8 * (j % 8));
+                    expected |= std::uint64_t{d == 0} << j;
+                }
+                EXPECT_EQ(
+                    Simd::compare_eq_bytes_to_bits(from_lanes<Simd>(a), from_lanes<Simd>(b)),
+                    expected
+                );
+            }
+        }
+    }
+}
+
 template <SimdArch Simd>
 static void check_simd_arch()
 {
     Lanes<Simd> zeros{};
     EXPECT_TRUE(to_lanes<Simd>(Simd::zero()) == zeros);
+    check_simd_lane_mask<Simd>(Simd::lane_mask_all(), (std::uint64_t{1} << Simd::lanes) - 1);
+
+    // A few random inputs, and the all-zero and all-one ones at the end.
+    auto const byte_inputs = random_lanes<Simd>(7);
+    for (std::size_t const r : {std::size_t{0}, std::size_t{1}, std::size_t{2}}) {
+        check_simd_compare_eq_bytes<Simd>(byte_inputs[r]);
+    }
+    check_simd_compare_eq_bytes<Simd>(byte_inputs[byte_inputs.size() - 2]);
+    check_simd_compare_eq_bytes<Simd>(byte_inputs[byte_inputs.size() - 1]);
 
     auto const lanes = random_lanes<Simd>(42);
     for (std::size_t r = 0; r < lanes.size(); ++r) {
@@ -330,6 +409,11 @@ static void check_simd_arch()
         check_simd_store_truncated<Simd, true>(in);
         check_simd_store_two_bit_codes<Simd, false>(in);
         check_simd_store_two_bit_codes<Simd, true>(in);
+
+        check_simd_compare_eq_lanes<Simd>(
+            in, lanes[(r + 1) % lanes.size()],
+            [](auto a, auto b) { return Simd::compare_eq_lanes(a, b); }
+        );
 
         if constexpr (SimdArchWithByteShuffle<Simd>) {
             check_simd_lookup_low_nibbles<Simd>(in);
@@ -377,6 +461,21 @@ TEST(SimdArch, SSE2LaneHelpers)
                 EXPECT_EQ(out[i], a[i] << n);
             }
         }
+    }
+}
+
+// SimdSSE2 picks one of these per build, so that TEST(SimdArch, SSE2) only covers that one.
+TEST(SimdArch, SSE2CompareHelpers)
+{
+    using Simd = SimdSSE2;
+    auto const lanes = random_lanes<Simd>(42);
+    for (std::size_t r = 0; r < lanes.size(); ++r) {
+        auto const& a = lanes[r];
+        auto const& b = lanes[(r + 1) % lanes.size()];
+        check_simd_compare_eq_lanes<Simd>(a, b, Simd::compare_eq_lanes_sse2_);
+        #if defined(FISK_HAS_SSE41)
+            check_simd_compare_eq_lanes<Simd>(a, b, Simd::compare_eq_lanes_sse41_);
+        #endif
     }
 }
 
