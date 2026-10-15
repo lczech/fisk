@@ -9,6 +9,11 @@
 #include "fisk/kmer_spaced/packed.hpp"
 #include "fisk/kmer_spaced/packed_simd.hpp"
 #include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/core/simd_scalar.hpp"
+#include "fisk/core/simd_sse2.hpp"
+#include "fisk/core/simd_avx2.hpp"
+#include "fisk/core/simd_avx512.hpp"
+#include "fisk/core/simd_neon.hpp"
 #include "sink.hpp"
 
 using PackedMsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>;

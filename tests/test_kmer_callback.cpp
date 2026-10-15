@@ -3,6 +3,7 @@
 #include <string>
 
 #include "fisk/core/kmer_callback.hpp"
+#include "fisk/core/simd_scalar.hpp"
 
 using namespace fisk;
 

@@ -9,6 +9,11 @@
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/random.hpp"
 #include "fisk/core/simd.hpp"
+#include "fisk/core/simd_scalar.hpp"
+#include "fisk/core/simd_sse2.hpp"
+#include "fisk/core/simd_avx2.hpp"
+#include "fisk/core/simd_avx512.hpp"
+#include "fisk/core/simd_neon.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -17,44 +22,25 @@ using namespace fisk;
 //     Concepts
 // =================================================================================================
 
-static_assert(SimdArch<SimdScalar>);
-static_assert(SimdArchWithLaneShifts<SimdScalar>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdScalar>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdScalar>>);
 
 #if defined(FISK_HAS_SSE2)
-static_assert(SimdArch<SimdSSE2>);
-#if defined(FISK_HAS_SSSE3)
-static_assert(SimdArchWithByteShuffle<SimdSSE2>);
-static_assert(SimdArchWithDoubleStore<SimdSSE2>);
-#endif
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdSSE2>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdSSE2>>);
 #endif
 
 #if defined(FISK_HAS_AVX2)
-static_assert(SimdArch<SimdAVX2>);
-static_assert(SimdArchWithLaneShifts<SimdAVX2>);
-static_assert(SimdArchWithByteShuffle<SimdAVX2>);
-static_assert(SimdArchWithDoubleStore<SimdAVX2>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX2>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX2>>);
 #endif
 
 #if defined(FISK_HAS_AVX512)
-static_assert(SimdArch<SimdAVX512>);
-static_assert(SimdArchWithLaneShifts<SimdAVX512>);
-static_assert(SimdArchWithByteShuffle<SimdAVX512>);
-static_assert(SimdArchWithDoubleStore<SimdAVX512>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX512>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
 #endif
 
 #if defined(FISK_HAS_NEON)
-static_assert(SimdArch<SimdNEON>);
-static_assert(SimdArchWithLaneShifts<SimdNEON>);
-static_assert(SimdArchWithByteShuffle<SimdNEON>);
-static_assert(SimdArchWithDoubleStore<SimdNEON>);
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdNEON>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdNEON>>);
 #endif

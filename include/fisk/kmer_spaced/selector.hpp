@@ -18,6 +18,10 @@
 #include "fisk/core/cpu_runtime.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/random.hpp"
+#include "fisk/core/simd_sse2.hpp"
+#include "fisk/core/simd_avx2.hpp"
+#include "fisk/core/simd_avx512.hpp"
+#include "fisk/core/simd_neon.hpp"
 
 namespace fisk {
 

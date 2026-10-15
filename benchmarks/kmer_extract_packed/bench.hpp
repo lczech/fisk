@@ -7,6 +7,10 @@
 #include <vector>
 
 #include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/core/simd_sse2.hpp"
+#include "fisk/core/simd_avx2.hpp"
+#include "fisk/core/simd_avx512.hpp"
+#include "fisk/core/simd_neon.hpp"
 #include "sink.hpp"
 
 // Every sequence benchmarked below is packed with an ACGT word encoder; only the layout varies.

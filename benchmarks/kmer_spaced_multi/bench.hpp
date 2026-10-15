@@ -7,6 +7,11 @@
 #include <vector>
 
 #include "fisk/kmer_spaced/simd.hpp"
+#include "fisk/core/simd_scalar.hpp"
+#include "fisk/core/simd_sse2.hpp"
+#include "fisk/core/simd_avx2.hpp"
+#include "fisk/core/simd_avx512.hpp"
+#include "fisk/core/simd_neon.hpp"
 #include "sink.hpp"
 
 /**
