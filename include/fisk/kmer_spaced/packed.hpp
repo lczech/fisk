@@ -67,7 +67,7 @@ inline void emit_spaced_kmers_packed_tail_(
     PackedSequence<E, L> const& seq, std::size_t span_k, std::size_t start,
     MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
 ) {
-    std::array<std::uint64_t, 64> windows;
+    PackedTail_ windows;
     std::size_t const n = collect_kmers_packed_tail_<E, L>(
         seq, start, seq.length - span_k, static_cast<unsigned>(span_k), windows
     );

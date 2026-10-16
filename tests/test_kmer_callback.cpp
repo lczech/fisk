@@ -36,11 +36,27 @@ static_assert(!KmerCb<decltype([](std::string const&) {})>);
 static_assert(!KmerCb<decltype([](std::size_t, S const&) {})>);
 
 static_assert(KmerVectorCallback<decltype([](std::size_t, Vec, std::size_t) {}), Vec>);
-static_assert(KmerVectorCallback<decltype([](Vec, std::size_t) {}), Vec>);
+static_assert(!KmerVectorCallback<decltype([](Vec, std::size_t) {}), Vec>);
 static_assert(!KmerVectorCallback<decltype([](Vec) {}), Vec>);
 static_assert(!KmerVectorCallback<
     decltype([](std::size_t, std::size_t, Vec, std::size_t) {}), Vec
 >);
+
+// The valid lanes are a type of their own, so that a callback for a count of valid lanes does not
+// take them, which the mask register of AVX512 would convert to.
+using Lanes = SimdValidLanes<SimdScalar>;
+static_assert(KmerValidLanesCallback<decltype([](std::size_t, Vec, Lanes) {}), Vec, SimdScalar>);
+static_assert(!KmerValidLanesCallback<decltype([](Vec, Lanes) {}), Vec, SimdScalar>);
+static_assert(!KmerValidLanesCallback<
+    decltype([](std::size_t, Vec, std::size_t) {}), Vec, SimdScalar
+>);
+
+// The forms of single k-mers and of vectors differ in their number of arguments, so that generic
+// lambdas are only one of them.
+static_assert(KmerCb<decltype([](auto, auto) {})>);
+static_assert(!KmerValidLanesCallback<decltype([](auto, auto) {}), Vec, SimdScalar>);
+static_assert(!KmerCb<decltype([](auto, auto, auto) {})>);
+static_assert(KmerValidLanesCallback<decltype([](auto, auto, auto) {}), Vec, SimdScalar>);
 
 // =================================================================================================
 //     Spaced K-mers

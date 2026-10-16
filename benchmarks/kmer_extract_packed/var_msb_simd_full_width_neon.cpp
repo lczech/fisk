@@ -15,8 +15,9 @@ std::uint64_t run_var_msb_simd_full_width_neon(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_simd_full_width_<SimdNEON>(
-        seq, k, [&](uint64x2_t v, std::size_t) noexcept { sink.consume(v); }
+    for_each_kmer_packed_simd_full_width_<SimdNEON, true, false>(
+        seq, nullptr, k,
+        [&](std::size_t, uint64x2_t v, std::size_t, AllValid_) noexcept { sink.consume(v); }
     );
     return sink.finalize();
 }

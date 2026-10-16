@@ -40,10 +40,10 @@ static std::vector<std::string> const& test_sequences()
 //     Generic SIMD Arch Check
 // =================================================================================================
 
-// Runs `extract`, called as `extract(callback)`, once with a `callback(pos, vec, n)` and once with
-// a `callback(vec, n)`, and checks both against `expected`, lane by lane: `pos` is the start of
-// the k-mer in lane 0, and lane `j` holds the one starting at `pos + j`. Also checks the vector
-// structure: every vector is full except possibly the last, which zero-pads its unused lanes.
+// Runs `extract`, called as `extract(callback)`, with a `callback(pos, vec, n)`, and checks it
+// against `expected`, lane by lane: `pos` is the start of the k-mer in lane 0, and lane `j` holds
+// the one starting at `pos + j`. Also checks the vector structure: every vector is full except
+// possibly the last, which zero-pads its unused lanes.
 template <SimdArch Simd, typename Extract>
 static void check_simd_callbacks(
     std::vector<ExpectedKmer> const& expected, std::size_t k, Extract&& extract
@@ -82,12 +82,6 @@ static void check_simd_callbacks(
     });
     EXPECT_EQ(callbacks, expected_callbacks);
     check_emitted_kmers(expected, k, values, &positions);
-
-    values.clear();
-    callbacks = 0;
-    extract([&](simd_vector vec, std::size_t n) { unpack(vec, n); });
-    EXPECT_EQ(callbacks, expected_callbacks);
-    check_emitted_kmers(expected, k, values, nullptr);
 }
 
 // Checks the narrow-width (k in [1, 29]) and full-width (k in [1, 32]) internal helpers, also
@@ -97,11 +91,18 @@ template <SimdArch Simd, Encoding E, Layout L>
 static void check_simd_arch()
 {
     using simd_vector = typename Simd::simd_vector;
-    auto const narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, func);
+
+    // The internal loops emit with the validity of the vector, which is AllValid_ unchecked.
+    auto const emit_to = [](auto const& func) {
+        return [&func](std::size_t pos, simd_vector vec, std::size_t n, AllValid_) {
+            func(pos, vec, n);
+        };
     };
-    auto const full_width = [](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_simd_full_width_<Simd>(seq, k, func);
+    auto const narrow_width = [&](auto const& seq, std::size_t k, auto const& func) {
+        for_each_kmer_packed_simd_narrow_width_<Simd, true, false>(seq, nullptr, k, emit_to(func));
+    };
+    auto const full_width = [&](auto const& seq, std::size_t k, auto const& func) {
+        for_each_kmer_packed_simd_full_width_<Simd, true, false>(seq, nullptr, k, emit_to(func));
     };
     auto const dispatch = [](auto const& seq, std::size_t k, auto const& func) {
         for_each_kmer_packed_simd<Simd>(seq, k, func);
@@ -120,13 +121,17 @@ static void check_simd_arch()
         };
     };
     auto const narrow_width_unmasked = masked_after(
-        [](auto const& seq, std::size_t k, auto const& func) {
-            for_each_kmer_packed_simd_narrow_width_<Simd, false>(seq, k, func);
+        [&](auto const& seq, std::size_t k, auto const& func) {
+            for_each_kmer_packed_simd_narrow_width_<Simd, false, false>(
+                seq, nullptr, k, emit_to(func)
+            );
         }
     );
     auto const full_width_unmasked = masked_after(
-        [](auto const& seq, std::size_t k, auto const& func) {
-            for_each_kmer_packed_simd_full_width_<Simd, false>(seq, k, func);
+        [&](auto const& seq, std::size_t k, auto const& func) {
+            for_each_kmer_packed_simd_full_width_<Simd, false, false>(
+                seq, nullptr, k, emit_to(func)
+            );
         }
     );
 
@@ -156,7 +161,7 @@ static void check_simd_arch()
 
     auto const throws_for = [&](auto const& extract, std::size_t max_k) {
         check_invalid_k_throws(max_k, [&](std::string const& seq, std::size_t k) {
-            extract(pack_sequence(seq, encoder), k, [](auto, std::size_t) {});
+            extract(pack_sequence(seq, encoder), k, [](std::size_t, auto, std::size_t) {});
         });
     };
     throws_for(narrow_width, 29);

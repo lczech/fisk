@@ -82,6 +82,18 @@
 // a single place to pick up something more (e.g. [[gnu::flatten]]) later, if ever needed.
 #define FISK_ALWAYS_INLINE_FOR_EACH FISK_ALWAYS_INLINE
 
+// For lambdas, placed after the parameter list: `[&](int x) FISK_ALWAYS_INLINE_LAMBDA { ... }`.
+// That is the one position that both GCC and clang honor without a pedantic warning. Needed where
+// a lambda is called at several places, such as the steps of the packed k-mer loops, which GCC
+// otherwise keeps as calls. MSVC is left to its own inlining decisions here.
+#if defined(_MSC_VER)
+    #define FISK_ALWAYS_INLINE_LAMBDA
+#elif defined(__GNUC__) || defined(__clang__)
+    #define FISK_ALWAYS_INLINE_LAMBDA __attribute__((always_inline))
+#else
+    #define FISK_ALWAYS_INLINE_LAMBDA
+#endif
+
 // For rare/cold-path helpers (precondition checks that throw, tail-case loops) that should stay
 // out of a hot path's inlined body and icache footprint. MSVC has no "cold" hint to pair with
 // noinline, so it only gets the noinline half.

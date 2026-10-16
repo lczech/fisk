@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include <type_traits>
 #include <utility>
 
 #include "fisk/core/intrinsics.hpp"
@@ -22,10 +23,12 @@ namespace fisk {
 // =================================================================================================
 
 // Extractors for PackedSequence values, generic over the SIMD arch, see core/simd.hpp.
-// for_each_kmer_packed_simd() accepts k in [1, 32] and calls `func(pos, vec, valid_count)` or
-// `func(vec, valid_count)` with consecutive k-mers in the vector of the arch: `pos` is the start
-// position of the k-mer in lane 0, and lane `j` holds the one starting at `pos + j`. Full vectors
-// have `valid_count == Simd::lanes`; the final vector may be zero-padded in high lanes.
+// for_each_kmer_packed_simd() accepts k in [1, 32] and calls `func(pos, vec, valid_count)` with
+// consecutive k-mers in the vector of the arch: `pos` is the start position of the k-mer in lane 0,
+// and lane `j` holds the one starting at `pos + j`. Full vectors have `valid_count == Simd::lanes`;
+// the final vector may be zero-padded in high lanes. for_each_kmer_packed_checked_simd() extracts
+// from a PackedSequenceWithValidity, and calls `func(pos, vec, valid_lanes)` instead, or `func`
+// with each valid k-mer.
 //
 // The vectors hold raw k-mer words rather than Kmer values (core/kmer.hpp), with the conventions
 // of the PackedSequence. Use the vector overloads of kmer_cast() to get Kmer values from them.
@@ -153,18 +156,18 @@ inline typename Simd::simd_vector packed_simd_shift_left_(
     }
 }
 
-// Emit the vectors of the iteration that starts at position `pos`, where `kmers(i)` computes them
-// from the shift counts at index `i`, see make_packed_simd_counts_(). With shifts per lane, that
-// is vector `i` of the iteration. Otherwise, it has position `i` of two starting bytes, and is
-// interleaved with the next position to get consecutive k-mers.
-template <SimdArch Simd, typename Kmers, typename Func>
+// Emit the vectors of the iteration that starts at position `pos` as `emit(pos, vec)`, where
+// `kmers(i)` computes them from the shift counts at index `i`, see make_packed_simd_counts_(). With
+// shifts per lane, that is vector `i` of the iteration. Otherwise, it has position `i` of two
+// starting bytes, and is interleaved with the next position to get consecutive k-mers.
+template <SimdArch Simd, typename Kmers, typename Emit>
 FISK_ALWAYS_INLINE
-inline void emit_packed_simd_step_(std::size_t pos, Kmers&& kmers, Func&& func)
+inline void emit_packed_simd_step_(std::size_t pos, Kmers&& kmers, Emit&& emit)
 {
     constexpr std::size_t lanes = Simd::lanes;
     if constexpr (SimdArchWithLaneShifts<Simd>) {
         for (std::size_t v = 0; v < packed_simd_step_vectors_v<Simd>; ++v) {
-            invoke_kmer_vector_callback(func, pos + v * lanes, kmers(v), lanes);
+            emit(pos + v * lanes, kmers(v));
         }
     } else {
         static_assert(lanes == 2, "Interleaving the positions needs an arch with two lanes.");
@@ -172,19 +175,20 @@ inline void emit_packed_simd_step_(std::size_t pos, Kmers&& kmers, Func&& func)
         auto const k1 = kmers(1);
         auto const k2 = kmers(2);
         auto const k3 = kmers(3);
-        invoke_kmer_vector_callback(func, pos + 0, Simd::interleave_low(k0, k1), lanes);
-        invoke_kmer_vector_callback(func, pos + 2, Simd::interleave_low(k2, k3), lanes);
-        invoke_kmer_vector_callback(func, pos + 4, Simd::interleave_high(k0, k1), lanes);
-        invoke_kmer_vector_callback(func, pos + 6, Simd::interleave_high(k2, k3), lanes);
+        emit(pos + 0, Simd::interleave_low(k0, k1));
+        emit(pos + 2, Simd::interleave_low(k2, k3));
+        emit(pos + 4, Simd::interleave_high(k0, k1));
+        emit(pos + 6, Simd::interleave_high(k2, k3));
     }
 }
 
 // Emit the k-mers at the end of the sequence, which the extraction loops leave out, zero-padding
-// the last vector. `vals[0]` is the k-mer starting at sequence position `base`, and the following
-// ones are consecutive.
-template <SimdArch Simd, typename Func>
+// the last vector, as `emit(pos, vec, valid_count, validity)`, see the loops below. `vals[0]` is
+// the k-mer starting at sequence position `start`, and the following ones are consecutive.
+template <SimdArch Simd, bool Checked, typename Emit>
 inline void emit_tail_packed_(
-    std::uint64_t const* vals, std::size_t n, std::size_t base, Func&& func
+    std::uint64_t const* vals, std::size_t n, std::size_t start, std::uint8_t const* valid,
+    std::size_t valid_size, Emit&& emit
 ) {
     constexpr std::size_t lanes = Simd::lanes;
     std::size_t i = 0;
@@ -194,9 +198,41 @@ inline void emit_tail_packed_(
         for (std::size_t j = 0; j < chunk; ++j) {
             buf[j] = vals[i + j];
         }
-        invoke_kmer_vector_callback(func, base + i, Simd::from_values(buf), chunk);
+        if constexpr (Checked) {
+            std::uint64_t const window = load_validity_window_tail_(valid, valid_size, start + i);
+            emit(start + i, Simd::from_values(buf), chunk, window);
+        } else {
+            (void) valid;
+            (void) valid_size;
+            emit(start + i, Simd::from_values(buf), chunk, AllValid_{});
+        }
         i += chunk;
     }
+}
+
+// The valid lanes of a vector of consecutive k-mers, from the validity window `w` at the k-mer in
+// lane 0, see packed.hpp: lane `j` is valid if the bits of `test` are all set in `w >> j`. `test`
+// has a bit for each nucleotide of a k-mer that has to be valid, the low k bits for k-mers.
+template <SimdArch Simd>
+FISK_ALWAYS_INLINE
+inline SimdValidLanes<Simd> valid_lanes_(std::uint64_t w, std::uint64_t test) noexcept
+{
+    typename Simd::simd_vector windows;
+    if constexpr (SimdArchWithLaneShifts<Simd>) {
+        std::array<std::uint64_t, Simd::lanes> lane_index;
+        for (std::size_t j = 0; j < Simd::lanes; ++j) {
+            lane_index[j] = j;
+        }
+        windows = Simd::shift_right_lanes(Simd::broadcast(w), Simd::from_values(lane_index));
+    } else {
+        std::array<std::uint64_t, Simd::lanes> lane_windows;
+        for (std::size_t j = 0; j < Simd::lanes; ++j) {
+            lane_windows[j] = w >> j;
+        }
+        windows = Simd::from_values(lane_windows);
+    }
+    auto const test_v = Simd::broadcast(test);
+    return {Simd::compare_eq_lanes(Simd::bitwise_and(windows, test_v), test_v)};
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -209,11 +245,17 @@ inline void emit_tail_packed_(
  * Any such k-mer is within the word of its starting byte, which needs one shift and a mask. With
  * `Masked` false, the mask is left out, so that the bits above each k-mer hold the bases next to
  * it, for callers that select bits with a mask of their own, such as spaced k-mer extraction.
+ *
+ * The vectors are emitted as `emit(pos, vec, valid_count, validity)`, with `validity` as of
+ * run_packed_blocks_() (packed.hpp) for the k-mer in lane 0. Without `Checked`, it is always
+ * AllValid_, and `valid` is unused and may be null. With `Checked`, `valid` holds the validity bits
+ * of `seq`, and the validity is AllValid_ in the blocks whose nucleotides are all valid, and the
+ * window at `pos` otherwise.
  */
-template <SimdArch Simd, bool Masked = true, Encoding E, Layout L, typename Func>
+template <SimdArch Simd, bool Masked, bool Checked, Encoding E, Layout L, typename Emit>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_narrow_width_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, Emit&& emit
 ) {
     if (k == 0 || k > 29) {
         throw_invalid_kmer_k_(29);
@@ -231,11 +273,15 @@ inline void for_each_kmer_packed_simd_narrow_width_(
     std::size_t const p_max = seq.length - k;
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes  = (seq.length + 3) / 4;
+    std::size_t const valid_size = (seq.length + 7) / 8;
     // Every starting byte of the loop has a safe 8-byte read. Starting bytes that do not fill a
     // whole iteration are left to the tail.
     std::size_t fast_bytes = std::min(
         full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
     );
+    if constexpr (Checked) {
+        fast_bytes = checked_fast_bytes_(fast_bytes, valid_size);
+    }
     fast_bytes -= fast_bytes % step_bytes;
 
     // Right shift that moves the k-mer at position `local` of a starting byte to the low bits.
@@ -253,19 +299,26 @@ inline void for_each_kmer_packed_simd_narrow_width_(
         }
     });
 
-    for (std::size_t b = 0; b < fast_bytes; b += step_bytes) {
+    auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         simd_vector const words = load_packed_words_<Simd, L>(&seq.data[b]);
         emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {
             simd_vector const kmers = packed_simd_shift_right_<Simd>(words, counts.at[i]);
             return Masked ? Simd::bitwise_and(kmers, mask_v) : kmers;
-        }, func);
-    }
+        }, [&](std::size_t pos, simd_vector vec) FISK_ALWAYS_INLINE_LAMBDA {
+            emit(pos, vec, Simd::lanes, validity_at(pos));
+        });
+    };
+    run_packed_blocks_<Checked, true, step_bytes>(
+        fast_bytes, valid, (std::uint64_t{1} << (31 + k)) - 1u, step_
+    );
 
-    std::array<std::uint64_t, 64> tail_vals;
+    PackedTail_ tail_vals;
     std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
-    emit_tail_packed_<Simd>(tail_vals.data(), tail_n, 4 * fast_bytes, func);
+    emit_tail_packed_<Simd, Checked>(
+        tail_vals.data(), tail_n, 4 * fast_bytes, valid, valid_size, emit
+    );
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -276,13 +329,13 @@ inline void for_each_kmer_packed_simd_narrow_width_(
  * @brief Extracts k in [1, 32] as vectors of k-mers.
  *
  * A k-mer of more than 29 bases can reach into a ninth byte, so that this combines two words.
- * `Masked` is as for for_each_kmer_packed_simd_narrow_width_(). It only affects kLSB, as the
- * shift down of kMSB leaves nothing above the k-mer.
+ * `Masked`, `Checked`, `valid` and `emit` are as for for_each_kmer_packed_simd_narrow_width_().
+ * `Masked` only affects kLSB, as the shift down of kMSB leaves nothing above the k-mer.
  */
-template <SimdArch Simd, bool Masked = true, Encoding E, Layout L, typename Func>
+template <SimdArch Simd, bool Masked, bool Checked, Encoding E, Layout L, typename Emit>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_full_width_(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
+    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, Emit&& emit
 ) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -300,12 +353,16 @@ inline void for_each_kmer_packed_simd_full_width_(
     std::size_t const p_max = seq.length - k;
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes  = (seq.length + 3) / 4;
+    std::size_t const valid_size = (seq.length + 7) / 8;
     // An iteration also loads the words of the next iteration, see below. The bound keeps these
     // 8-byte reads within the packed input.
     std::size_t fast_bytes = (num_bytes >= 7 + step_bytes)
         ? std::min(full_bytes, num_bytes - 7 - step_bytes)
         : std::size_t{0}
     ;
+    if constexpr (Checked) {
+        fast_bytes = checked_fast_bytes_(fast_bytes, valid_size);
+    }
     fast_bytes -= fast_bytes % step_bytes;
 
     // The k-mer at position `local` of a starting byte spans up to nine bytes: the word at the
@@ -331,7 +388,7 @@ inline void for_each_kmer_packed_simd_full_width_(
 
     if (fast_bytes > 0) {
         simd_vector next = load_packed_words_<Simd, L>(&seq.data[0]);
-        for (std::size_t b = 0; b < fast_bytes; b += step_bytes) {
+        auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
             simd_vector const words = next;
             next = load_packed_words_<Simd, L>(&seq.data[b + step_bytes]);
             emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {
@@ -356,15 +413,22 @@ inline void for_each_kmer_packed_simd_full_width_(
                         "Unhandled Layout in for_each_kmer_packed_simd_full_width_()"
                     );
                 }
-            }, func);
-        }
+            }, [&](std::size_t pos, simd_vector vec) FISK_ALWAYS_INLINE_LAMBDA {
+                emit(pos, vec, Simd::lanes, validity_at(pos));
+            });
+        };
+        run_packed_blocks_<Checked, true, step_bytes>(
+            fast_bytes, valid, (std::uint64_t{1} << (31 + k)) - 1u, step_
+        );
     }
 
-    std::array<std::uint64_t, 64> tail_vals;
+    PackedTail_ tail_vals;
     std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
         seq, 4 * fast_bytes, p_max, k32, tail_vals
     );
-    emit_tail_packed_<Simd>(tail_vals.data(), tail_n, 4 * fast_bytes, func);
+    emit_tail_packed_<Simd, Checked>(
+        tail_vals.data(), tail_n, 4 * fast_bytes, valid, valid_size, emit
+    );
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -375,8 +439,7 @@ inline void for_each_kmer_packed_simd_full_width_(
  * @brief Extracts all k-mers for k in [1, 32] from a PackedSequence with the given SIMD arch,
  * yielding consecutive k-mers in the vectors of that arch.
  *
- * Func may be called either as `func(pos, vec, valid_count)` or as `func(vec, valid_count)`, see
- * invoke_kmer_vector_callback().
+ * Func is called as `func(pos, vec, valid_count)`, see invoke_kmer_vector_callback().
  *
  * @tparam Simd  SIMD arch, such as SimdAVX2, to be given explicitly.
  */
@@ -388,10 +451,75 @@ inline void for_each_kmer_packed_simd(
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
+    auto const emit = [&](
+        std::size_t pos, typename Simd::simd_vector vec, std::size_t valid_count, AllValid_
+    ) FISK_ALWAYS_INLINE_LAMBDA {
+        invoke_kmer_vector_callback(func, pos, vec, valid_count);
+    };
     if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_narrow_width_<Simd, true, false>(seq, nullptr, k, emit);
     } else {
-        for_each_kmer_packed_simd_full_width_<Simd>(seq, k, std::forward<Func>(func));
+        for_each_kmer_packed_simd_full_width_<Simd, true, false>(seq, nullptr, k, emit);
+    }
+}
+
+// The emit of the checked loops above for for_each_kmer_packed_checked_simd(): calls `func` with
+// the vectors of k-mers and their valid lanes, see invoke_kmer_valid_lanes_callback().
+template <SimdArch Simd, Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE
+inline auto checked_kmer_emit_(Func& func, std::size_t k) noexcept
+{
+    std::uint64_t const kbits = (std::uint64_t{1} << k) - 1u;
+    return [&func, kbits](
+        std::size_t pos, typename Simd::simd_vector vec, std::size_t, auto validity
+    ) FISK_ALWAYS_INLINE_LAMBDA {
+        if constexpr (std::is_same_v<decltype(validity), AllValid_>) {
+            SimdValidLanes<Simd> const all{Simd::lane_mask_all()};
+            invoke_kmer_valid_lanes_callback<E, L, Simd>(func, pos, vec, all);
+        } else {
+            invoke_kmer_valid_lanes_callback<E, L, Simd>(
+                func, pos, vec, valid_lanes_<Simd>(validity, kbits)
+            );
+        }
+    };
+}
+
+/**
+ * @brief Extracts the valid k-mers for k in [1, 32] from a PackedSequenceWithValidity with the
+ * given SIMD arch, yielding consecutive k-mers in the vectors of that arch, with their valid lanes.
+ *
+ * As for_each_kmer_packed_simd(), checking the validity of the nucleotides by the validity bits of
+ * `seq`, see pack_sequence_with_validity(). Func is called as `func(pos, vec, valid_lanes)`: lane
+ * `j` of `vec` holds the k-mer starting at `pos + j`, and is valid if it is set in `valid_lanes`,
+ * see SimdValidLanes. That covers the end of the sequence as well, where the last vector can have
+ * lanes beyond it. For example, with AVX512, the valid k-mers can be stored contiguously with
+ *
+ *     _mm512_mask_compressstoreu_epi64(out, valid_lanes.value, vec);
+ *
+ * Func can also take single k-mers, as `func(pos, kmer)` or `func(kmer)`, which it is then called
+ * with for each valid k-mer in order, see invoke_kmer_valid_lanes_callback().
+ *
+ * The loop tests a block of 32 positions at once, and the blocks whose nucleotides are all valid
+ * get a constant `valid_lanes`. Sequences whose invalid nucleotides come in runs, such as the N
+ * runs of assemblies, thus run at about the speed of the unchecked loop.
+ *
+ * @tparam Simd  SIMD arch, such as SimdAVX2, to be given explicitly.
+ * @throws std::invalid_argument if `seq.valid` does not have `(seq.length + 7) / 8` bytes.
+ */
+template <SimdArch Simd, Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_kmer_packed_checked_simd(
+    PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
+) {
+    check_validity_size_(seq);
+    if (k == 0 || k > 32) {
+        throw_invalid_kmer_k_(32);
+    }
+    auto const emit = checked_kmer_emit_<Simd, E, L>(func, k);
+    if (k <= 29) {
+        for_each_kmer_packed_simd_narrow_width_<Simd, true, true>(seq, seq.valid.data(), k, emit);
+    } else {
+        for_each_kmer_packed_simd_full_width_<Simd, true, true>(seq, seq.valid.data(), k, emit);
     }
 }
 

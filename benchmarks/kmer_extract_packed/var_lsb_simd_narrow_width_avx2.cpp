@@ -15,8 +15,9 @@ std::uint64_t run_var_lsb_simd_narrow_width_avx2(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_simd_narrow_width_<SimdAVX2>(
-        seq, k, [&](__m256i v, std::size_t) noexcept { sink.consume(v); }
+    for_each_kmer_packed_simd_narrow_width_<SimdAVX2, true, false>(
+        seq, nullptr, k,
+        [&](std::size_t, __m256i v, std::size_t, AllValid_) noexcept { sink.consume(v); }
     );
     return sink.finalize();
 }

@@ -29,6 +29,7 @@
 #include "arg_parser.hpp"
 #include "kmer_extract/bench.hpp"
 #include "kmer_extract_packed/bench.hpp"
+#include "kmer_extract_packed_checked/bench.hpp"
 #include "kmer_spaced_single/bench.hpp"
 #include "kmer_spaced_multi/bench.hpp"
 #include "kmer_spaced_packed_single/bench.hpp"
@@ -278,6 +279,18 @@ int main(int argc, char **argv)
             bench_kmer_extract_packed( sequences, os_kmer_extract_packed );
         } else {
             bench_kmer_extract_packed( sequences, k, k, os_kmer_extract_packed );
+        }
+    }
+
+    // Kmer extract, directly from a PackedSequenceWithValidity, emitting the valid k-mers only
+    {
+        auto os_kmer_extract_packed_checked = get_ofstream(
+            out_dir, "kmer_extract_packed_checked.csv"
+        );
+        if( k == 0 ) {
+            bench_kmer_extract_packed_checked( sequences, os_kmer_extract_packed_checked );
+        } else {
+            bench_kmer_extract_packed_checked( sequences, k, k, os_kmer_extract_packed_checked );
         }
     }
 

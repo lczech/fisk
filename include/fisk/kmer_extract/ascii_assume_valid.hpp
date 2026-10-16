@@ -89,9 +89,13 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
         }
         ChunkCallback chunk_func{func, chunk_start};
         if constexpr (K >= 30) {
-            for_each_kmer_packed_aligned_full_width_<E, L, K>(scratch, chunk_func);
+            for_each_kmer_packed_aligned_full_width_<false, E, L, K>(
+                scratch, nullptr, chunk_func
+            );
         } else {
-            for_each_kmer_packed_aligned_narrow_width_<E, L, K>(scratch, chunk_func);
+            for_each_kmer_packed_aligned_narrow_width_<false, E, L, K>(
+                scratch, nullptr, chunk_func
+            );
         }
     }
 }
