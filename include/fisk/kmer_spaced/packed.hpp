@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -57,27 +56,6 @@ inline void emit_spaced_kmers_packed_(
     });
 }
 
-// Emit the spaced k-mers of the spans starting at `start` and after, which the extraction loops
-// leave out, from the k-mers of their spans.
-template <
-    bool SingleMask, Encoding E, Layout L,
-    typename MaskOrMasks, typename BitExtract, typename Callback
->
-inline void emit_spaced_kmers_packed_tail_(
-    PackedSequence<E, L> const& seq, std::size_t span_k, std::size_t start,
-    MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
-) {
-    PackedTail_ windows;
-    std::size_t const n = collect_kmers_packed_tail_<E, L>(
-        seq, start, seq.length - span_k, static_cast<unsigned>(span_k), windows
-    );
-    for (std::size_t i = 0; i < n; ++i) {
-        emit_spaced_kmers_packed_<SingleMask, E, L>(
-            masks, start + i, windows[i], bit_ext, callback
-        );
-    }
-}
-
 // -------------------------------------------------------------------------------------------------
 //     Narrow Width
 // -------------------------------------------------------------------------------------------------
@@ -128,9 +106,7 @@ inline void for_each_spaced_kmer_packed_narrow_width_(
             );
         }
     }
-    emit_spaced_kmers_packed_tail_<SingleMask>(
-        seq, span_k, 4 * fast_bytes, masks, bit_ext, callback
-    );
+    for_each_kmer_packed_rolling_narrow_width_<false>(seq, nullptr, span_k, 4 * fast_bytes, emit_);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -201,7 +177,7 @@ inline void for_each_spaced_kmer_packed_full_width_(
         emit_(4 * b + 2, spaced_kmer_packed_full_width_window_<L, K, 2>(word, ninth));
         emit_(4 * b + 3, spaced_kmer_packed_full_width_window_<L, K, 3>(word, ninth));
     }
-    emit_spaced_kmers_packed_tail_<SingleMask>(seq, K, 4 * fast_bytes, masks, bit_ext, callback);
+    for_each_kmer_packed_rolling_full_width_<false>(seq, nullptr, K, 4 * fast_bytes, emit_);
 }
 
 // -------------------------------------------------------------------------------------------------

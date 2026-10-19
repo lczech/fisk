@@ -84,58 +84,6 @@ namespace fisk {
 // but we since have cleaned up a bit, and are only keeping a final selection of variants here.
 
 // -------------------------------------------------------------------------------------------------
-//     Helpers
-// -------------------------------------------------------------------------------------------------
-
-// The k-mers after the fast region of a loop, of which there are at most 56, for any length of the
-// sequence: the region ends at most 40 positions before the end, as its 8-byte loads have to be
-// within the codes, and at most 56 for the checked loops, see checked_fast_bytes_().
-using PackedTail_ = std::array<std::uint64_t, 64>;
-
-// Shared tail for every fast-path variant below, decoding one base at a time (O(k) per k-mer)
-// rather than reusing a main loop's word-width trick; only ever runs for the handful of k-mers
-// after the fast path. The callback function is never passed in directly, as that would prevent
-// compiler optimizations; instead, values are returned to the caller.
-template <Encoding E, Layout L>
-FISK_NOINLINE_COLD
-std::size_t collect_kmers_packed_tail_(
-    PackedSequence<E, L> const& seq, std::size_t start_pos, std::size_t p_max,
-    unsigned k32, PackedTail_& out
-) {
-    auto decode_base_ = [&](std::size_t p) -> unsigned {
-        std::uint8_t const byte = seq.data[p / 4];
-        unsigned const in_byte = static_cast<unsigned>(p % 4);
-        if constexpr (L == Layout::kMSB) {
-            return (byte >> (6 - 2 * in_byte)) & 0x3u;
-        } else if constexpr (L == Layout::kLSB) {
-            return (byte >> (2 * in_byte)) & 0x3u;
-        } else {
-            static_assert(dependent_false_v<L>, "Unhandled Layout in collect_kmers_packed_tail_()");
-        }
-    };
-
-    assert(p_max + 1 <= start_pos + out.size());
-    std::size_t n = 0;
-    for (std::size_t p = start_pos; p <= p_max; ++p) {
-        std::uint64_t kmer = 0;
-        for (unsigned i = 0; i < k32; ++i) {
-            unsigned const code = decode_base_(p + i);
-            if constexpr (L == Layout::kMSB) {
-                kmer = (kmer << 2) | code;
-            } else if constexpr (L == Layout::kLSB) {
-                kmer |= std::uint64_t{code} << (2 * i);
-            } else {
-                static_assert(
-                    dependent_false_v<L>, "Unhandled Layout in collect_kmers_packed_tail_()"
-                );
-            }
-        }
-        out[n++] = kmer;
-    }
-    return n;
-}
-
-// -------------------------------------------------------------------------------------------------
 //     Validity
 // -------------------------------------------------------------------------------------------------
 
@@ -173,16 +121,6 @@ inline std::uint64_t load_validity_window_(std::uint8_t const* valid, std::size_
 {
     std::uint64_t word;
     std::memcpy(&word, valid + pos / 8, 8);
-    return word >> (pos % 8);
-}
-
-// As load_validity_window_(), for positions near the end of the `size` bytes of `valid`, with zero
-// for the bits beyond them.
-inline std::uint64_t load_validity_window_tail_(
-    std::uint8_t const* valid, std::size_t size, std::size_t pos
-) noexcept {
-    std::uint64_t word = 0;
-    std::memcpy(&word, valid + pos / 8, std::min<std::size_t>(8, size - pos / 8));
     return word >> (pos % 8);
 }
 
@@ -275,6 +213,296 @@ inline std::size_t checked_fast_bytes_(std::size_t fast_bytes, std::size_t valid
     );
 }
 
+// -------------------------------------------------------------------------------------------------
+//     Rolling Loop
+// -------------------------------------------------------------------------------------------------
+
+// The rolling loops fold one byte of codes at a time into an accumulator, and extract the four
+// k-mers that end in it. Each fold depends serially on the previous one, as opposed to the
+// independent loads of the aligned loops below, which is what makes them slower. They extract the
+// k-mers that start at `first` and after, and emit them as `emit(pos, kmer)`: from 0 for the
+// rolling extraction, and after the fast region for the aligned and SIMD extraction, see
+// run_packed_blocks_().
+//
+// With `Checked`, `valid` holds the validity bits of `seq`, see RollingValidity_, only the valid
+// k-mers are emitted, and `first` has to be a multiple of 8. Otherwise, `valid` is unused and may
+// be null.
+
+// The 8 bytes at `p` as a word with the bases in order: the first base is in the lowest bits for
+// kLSB, and in the highest bits for kMSB. That is the accumulator of the rolling loops after
+// folding them.
+template <Layout L>
+FISK_ALWAYS_INLINE
+inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
+{
+    std::uint64_t word;
+    std::memcpy(&word, p, 8);
+    if constexpr (L == Layout::kMSB) {
+        return byte_swap_64(word);
+    } else if constexpr (L == Layout::kLSB) {
+        return word;
+    } else {
+        static_assert(dependent_false_v<L>, "Unhandled Layout in load_packed_word_()");
+    }
+}
+
+// The byte in which the k-mer at `first` ends, from which the rolling loops start if it is byte 8
+// or later: the 8 bytes before it are loaded into their accumulator at once, instead of folding
+// the bytes from `first` on one at a time, none of which completes a k-mer yet.
+inline std::size_t packed_rolling_seed_byte_(std::size_t first, std::size_t k) noexcept
+{
+    return (first + k - 1) / 4;
+}
+
+// The validity bits of the checked rolling loops, folded in one byte per 8 nucleotides next to the
+// codes: once the byte of nucleotide `e` is folded, its bit is at 56 + e % 8, and the k-mer ending
+// at `e` has its k bits right below. The accumulator starts with all bits invalid, and the loops
+// fold from the byte of `first` on, so that the k-mers before `first` are invalid without a test of
+// their own.
+struct RollingValidity_
+{
+    std::uint8_t const* valid;
+    std::size_t k;
+    std::uint64_t kbits;
+    std::uint64_t acc = 0;
+
+    // Before the nucleotides of byte `b` of the codes.
+    FISK_ALWAYS_INLINE
+    void fold(std::size_t b) noexcept
+    {
+        if (b % 2 == 0) {
+            acc = (acc >> 8) | (std::uint64_t{valid[b / 2]} << 56);
+        }
+    }
+
+    FISK_ALWAYS_INLINE
+    bool kmer_ending_at_is_valid(std::size_t e) const noexcept
+    {
+        return ((acc >> (57 + e % 8 - k)) & kbits) == kbits;
+    }
+};
+
+// k <= 29 fits in a single 64-bit accumulator.
+template <bool Checked, Encoding E, Layout L, typename Emit>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_kmer_packed_rolling_narrow_width_(
+    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, std::size_t first,
+    Emit&& emit
+) {
+    assert(!Checked || first % 8 == 0);
+    if (first + k > seq.length) {
+        return;
+    }
+    std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
+    RollingValidity_ validity{valid, k, (std::uint64_t{1} << k) - 1u};
+
+    std::uint64_t acc = 0;
+
+    auto fold_byte_ = [&](std::uint8_t byte) {
+        if constexpr (L == Layout::kMSB) {
+            acc = (acc << 8) | byte;
+        } else if constexpr (L == Layout::kLSB) {
+            acc = (acc >> 8) | (std::uint64_t{byte} << 56);
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_rolling_narrow_width_()"
+            );
+        }
+    };
+
+    std::size_t b = first / 4;
+    std::size_t const seed_b = packed_rolling_seed_byte_(first, k);
+    if (seed_b >= 8) {
+        acc = load_packed_word_<L>(&seq.data[seed_b - 8]);
+        if constexpr (Checked) {
+            for (; b < seed_b; ++b) {
+                validity.fold(b);
+            }
+        }
+        b = seed_b;
+    }
+
+    std::size_t const num_bytes = (seq.length + 3) / 4;
+    for (; b < num_bytes; ++b) {
+        fold_byte_(seq.data[b]);
+        if constexpr (Checked) {
+            validity.fold(b);
+        }
+
+        // The 4 k-mers ending within this byte, oldest (local 0) to newest (local 3).
+        for (unsigned local = 0; local < 4; ++local) {
+            std::size_t const e = 4 * b + local; // base end position of this k-mer
+            if (e >= seq.length) {
+                break;
+            }
+            if constexpr (Checked) {
+                if (!validity.kmer_ending_at_is_valid(e)) {
+                    continue;
+                }
+            } else if (e + 1 < first + k) {
+                continue;
+            }
+
+            unsigned const s = 6 - 2 * local;
+            unsigned shift;
+            if constexpr (L == Layout::kMSB) {
+                shift = s;
+            } else if constexpr (L == Layout::kLSB) {
+                shift = 64 - 2 * static_cast<unsigned>(k) - s;
+            } else {
+                static_assert(
+                    dependent_false_v<L>,
+                    "Unhandled Layout in for_each_kmer_packed_rolling_narrow_width_()"
+                );
+            }
+            auto const word = (acc >> shift) & mask;
+            assert_fits_width_(word, k);
+            emit(e + 1 - k, word);
+        }
+    }
+}
+
+// k > 29 needs more than 64 bits of accumulator, so this variant folds into a hi:lo pair instead
+// of the narrow-width impl's single 64-bit `acc`; correct for any k in [1, 32], just with more
+// bookkeeping per byte, which is why the narrow-width impl above still exists as the faster choice
+// for k <= 29.
+template <bool Checked, Encoding E, Layout L, typename Emit>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_kmer_packed_rolling_full_width_(
+    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, std::size_t first,
+    Emit&& emit
+) {
+    assert(!Checked || first % 8 == 0);
+    if (first + k > seq.length) {
+        return;
+    }
+    std::uint64_t const mask = (k == 32)
+        ? ~std::uint64_t{0}
+        : ((std::uint64_t{1} << (2 * k)) - 1u);
+    RollingValidity_ validity{valid, k, (std::uint64_t{1} << k) - 1u};
+
+    // `start` and which of window_()'s 3 cases it falls into depend only on `k` and `local`, never
+    // on the byte data, so precompute them once instead of re-deriving 4 times per byte.
+    struct LocalPlan
+    {
+        unsigned start;
+        int case_id; // 0: hi only, 1: lo only, 2: spans hi and lo
+    };
+    std::array<LocalPlan, 4> plans;
+    for (unsigned local = 0; local < 4; ++local) {
+        unsigned const s = 6 - 2 * local;
+        unsigned start;
+        if constexpr (L == Layout::kMSB) {
+            start = s;
+        } else if constexpr (L == Layout::kLSB) {
+            start = 128 - 2 * static_cast<unsigned>(k) - s;
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
+            );
+        }
+        int case_id;
+        if (start >= 64) {
+            case_id = 0;
+        } else if (start + 2 * k <= 64) {
+            case_id = 1;
+        } else {
+            case_id = 2;
+        }
+        plans[local] = LocalPlan{start, case_id};
+    }
+
+    std::uint64_t hi = 0;
+    std::uint64_t lo = 0;
+
+    auto fold_byte_ = [&](std::uint8_t byte) {
+        if constexpr (L == Layout::kMSB) {
+            std::uint64_t const carry = lo >> 56;
+            lo = (lo << 8) | byte;
+            hi = (hi << 8) | carry;
+        } else if constexpr (L == Layout::kLSB) {
+            std::uint64_t const carry = hi & 0xFFu;
+            hi = (hi >> 8) | (std::uint64_t{byte} << 56);
+            lo = (lo >> 8) | (carry << 56);
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
+            );
+        }
+    };
+
+    auto window_ = [&](LocalPlan const& p) -> std::uint64_t {
+        std::uint64_t bits;
+        switch (p.case_id) {
+            case 0:  bits = hi >> (p.start - 64); break;
+            case 1:  bits = lo >> p.start; break;
+            default: bits = (lo >> p.start) | (hi << (64 - p.start)); break;
+        }
+        return bits & mask;
+    };
+
+    // The seed only fills the half that holds the newest 8 bytes, as the k-mers from `first` on
+    // start no earlier.
+    std::size_t b = first / 4;
+    std::size_t const seed_b = packed_rolling_seed_byte_(first, k);
+    if (seed_b >= 8) {
+        if constexpr (L == Layout::kMSB) {
+            lo = load_packed_word_<L>(&seq.data[seed_b - 8]);
+        } else if constexpr (L == Layout::kLSB) {
+            hi = load_packed_word_<L>(&seq.data[seed_b - 8]);
+        } else {
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
+            );
+        }
+        if constexpr (Checked) {
+            for (; b < seed_b; ++b) {
+                validity.fold(b);
+            }
+        }
+        b = seed_b;
+    }
+
+    std::size_t const num_bytes = (seq.length + 3) / 4;
+    for (; b < num_bytes; ++b) {
+        fold_byte_(seq.data[b]);
+        if constexpr (Checked) {
+            validity.fold(b);
+        }
+
+        for (unsigned local = 0; local < 4; ++local) {
+            std::size_t const e = 4 * b + local;
+            if (e >= seq.length) {
+                break;
+            }
+            if constexpr (Checked) {
+                if (!validity.kmer_ending_at_is_valid(e)) {
+                    continue;
+                }
+            } else if (e + 1 < first + k) {
+                continue;
+            }
+            auto const word = window_(plans[local]);
+            assert_fits_width_(word, k);
+            emit(e + 1 - k, word);
+        }
+    }
+}
+
+// The emit of the loops above that calls `func` with each k-mer, see invoke_kmer_callback().
+template <Encoding E, Layout L, typename Func>
+FISK_ALWAYS_INLINE
+inline auto packed_kmer_emit_(Func& func) noexcept
+{
+    return [&func](std::size_t pos, std::uint64_t kmer) FISK_ALWAYS_INLINE_LAMBDA {
+        invoke_kmer_callback<E, L>(func, pos, kmer);
+    };
+}
+
 // =================================================================================================
 //     Aligned
 // =================================================================================================
@@ -292,33 +520,6 @@ inline void invoke_kmer_callback_if_valid_(
         invoke_kmer_callback<E, L>(func, pos, kmer);
     } else if ((validity & kbits) == kbits) {
         invoke_kmer_callback<E, L>(func, pos, kmer);
-    }
-}
-
-// The k-mers after the fast region of an aligned loop, one at a time.
-template <bool Checked, Encoding E, Layout L, unsigned K, typename Func>
-FISK_ALWAYS_INLINE
-inline void emit_kmers_packed_aligned_tail_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t start_pos,
-    std::size_t p_max, Func& func
-) {
-    PackedTail_ tail_vals;
-    std::size_t const tail_n = collect_kmers_packed_tail_<E, L>(
-        seq, start_pos, p_max, K, tail_vals
-    );
-    for (std::size_t i = 0; i < tail_n; ++i) {
-        assert_fits_width_(tail_vals[i], K);
-        if constexpr (Checked) {
-            std::uint64_t const window = load_validity_window_tail_(
-                valid, (seq.length + 7) / 8, start_pos + i
-            );
-            invoke_kmer_callback_if_valid_<E, L>(
-                func, start_pos + i, tail_vals[i], window, (std::uint64_t{1} << K) - 1
-            );
-        } else {
-            (void) valid;
-            invoke_kmer_callback<E, L>(func, start_pos + i, tail_vals[i]);
-        }
     }
 }
 
@@ -409,7 +610,9 @@ inline void for_each_kmer_packed_aligned_narrow_width_(
         fast_bytes, valid, (std::uint64_t{1} << (31 + K)) - 1u, step_
     );
 
-    emit_kmers_packed_aligned_tail_<Checked, E, L, K>(seq, valid, 4 * fast_bytes, p_max, func);
+    for_each_kmer_packed_rolling_narrow_width_<Checked>(
+        seq, valid, K, 4 * fast_bytes, packed_kmer_emit_<E, L>(func)
+    );
 }
 
 // k in [30, 32] needs a 9th margin byte beyond the main 8-byte word, which breaks the narrow-width
@@ -507,7 +710,9 @@ inline void for_each_kmer_packed_aligned_full_width_(
         fast_bytes, valid, (std::uint64_t{1} << (31 + K)) - 1u, step_
     );
 
-    emit_kmers_packed_aligned_tail_<Checked, E, L, K>(seq, valid, 4 * fast_bytes, p_max, func);
+    for_each_kmer_packed_rolling_full_width_<Checked>(
+        seq, valid, K, 4 * fast_bytes, packed_kmer_emit_<E, L>(func)
+    );
 }
 
 // The dispatch of for_each_kmer_packed_aligned() and for_each_kmer_packed_checked_aligned() to the
@@ -620,204 +825,6 @@ inline void for_each_kmer_packed_checked_aligned(
 //     Rolling
 // =================================================================================================
 
-// The validity bits of the checked rolling loops, folded in one byte per 8 nucleotides next to the
-// codes: once the byte of nucleotide `e` is folded, its bit is at 56 + e % 8, and the k-mer ending
-// at `e` has its k bits right below. The accumulator starts with all bits invalid, so that the
-// k-mers ending at `e < k - 1` are invalid without a test of their own.
-struct RollingValidity_
-{
-    std::uint8_t const* valid;
-    std::size_t k;
-    std::uint64_t kbits;
-    std::uint64_t acc = 0;
-
-    // Before the nucleotides of byte `b` of the codes.
-    FISK_ALWAYS_INLINE
-    void fold(std::size_t b) noexcept
-    {
-        if (b % 2 == 0) {
-            acc = (acc >> 8) | (std::uint64_t{valid[b / 2]} << 56);
-        }
-    }
-
-    FISK_ALWAYS_INLINE
-    bool kmer_ending_at_is_valid(std::size_t e) const noexcept
-    {
-        return ((acc >> (57 + e % 8 - k)) & kbits) == kbits;
-    }
-};
-
-// k <= 29 fits in a single 64-bit accumulator, folded one byte at a time. Each byte's fold
-// depends serially on the previous one, as opposed to the above independent loads.
-// That serial dependency chain is what makes this version slower.
-//
-// `Checked` and `valid` are as for for_each_kmer_packed_aligned_narrow_width_(), see
-// RollingValidity_.
-template <bool Checked, Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_narrow_width_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, Func&& func
-) {
-    std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
-    RollingValidity_ validity{valid, k, (std::uint64_t{1} << k) - 1u};
-
-    std::uint64_t acc = 0;
-
-    auto fold_byte_ = [&](std::uint8_t byte) {
-        if constexpr (L == Layout::kMSB) {
-            acc = (acc << 8) | byte;
-        } else if constexpr (L == Layout::kLSB) {
-            acc = (acc >> 8) | (std::uint64_t{byte} << 56);
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_narrow_width_()"
-            );
-        }
-    };
-
-    std::size_t const num_bytes = (seq.length + 3) / 4;
-    for (std::size_t b = 0; b < num_bytes; ++b) {
-        fold_byte_(seq.data[b]);
-        if constexpr (Checked) {
-            validity.fold(b);
-        }
-
-        // The 4 k-mers ending within this byte, oldest (local 0) to newest (local 3).
-        for (unsigned local = 0; local < 4; ++local) {
-            std::size_t const e = 4 * b + local; // base end position of this k-mer
-            if (e >= seq.length) {
-                break;
-            }
-            if constexpr (Checked) {
-                if (!validity.kmer_ending_at_is_valid(e)) {
-                    continue;
-                }
-            } else if (e + 1 < k) {
-                continue;
-            }
-
-            unsigned const s = 6 - 2 * local;
-            unsigned shift;
-            if constexpr (L == Layout::kMSB) {
-                shift = s;
-            } else if constexpr (L == Layout::kLSB) {
-                shift = 64 - 2 * static_cast<unsigned>(k) - s;
-            } else {
-                static_assert(
-                    dependent_false_v<L>,
-                    "Unhandled Layout in for_each_kmer_packed_rolling_narrow_width_()"
-                );
-            }
-            auto const word = (acc >> shift) & mask;
-            assert_fits_width_(word, k);
-            invoke_kmer_callback<E, L>(func, e + 1 - k, word);
-        }
-    }
-}
-
-// k > 29 needs more than 64 bits of accumulator, so this variant folds into a hi:lo pair instead
-// of the narrow-width impl's single 64-bit `acc`; correct for any k in [1, 32], just with more
-// bookkeeping per byte, which is why the narrow-width impl above still exists as the faster choice
-// for k <= 29.
-template <bool Checked, Encoding E, Layout L, typename Func>
-FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_full_width_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, Func&& func
-) {
-    std::uint64_t const mask = (k == 32)
-        ? ~std::uint64_t{0}
-        : ((std::uint64_t{1} << (2 * k)) - 1u);
-    RollingValidity_ validity{valid, k, (std::uint64_t{1} << k) - 1u};
-
-    // `start` and which of window_()'s 3 cases it falls into depend only on `k` and `local`, never
-    // on the byte data, so precompute them once instead of re-deriving 4 times per byte.
-    struct LocalPlan
-    {
-        unsigned start;
-        int case_id; // 0: hi only, 1: lo only, 2: spans hi and lo
-    };
-    std::array<LocalPlan, 4> plans;
-    for (unsigned local = 0; local < 4; ++local) {
-        unsigned const s = 6 - 2 * local;
-        unsigned start;
-        if constexpr (L == Layout::kMSB) {
-            start = s;
-        } else if constexpr (L == Layout::kLSB) {
-            start = 128 - 2 * static_cast<unsigned>(k) - s;
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
-            );
-        }
-        int case_id;
-        if (start >= 64) {
-            case_id = 0;
-        } else if (start + 2 * k <= 64) {
-            case_id = 1;
-        } else {
-            case_id = 2;
-        }
-        plans[local] = LocalPlan{start, case_id};
-    }
-
-    std::uint64_t hi = 0;
-    std::uint64_t lo = 0;
-
-    auto fold_byte_ = [&](std::uint8_t byte) {
-        if constexpr (L == Layout::kMSB) {
-            std::uint64_t const carry = lo >> 56;
-            lo = (lo << 8) | byte;
-            hi = (hi << 8) | carry;
-        } else if constexpr (L == Layout::kLSB) {
-            std::uint64_t const carry = hi & 0xFFu;
-            hi = (hi >> 8) | (std::uint64_t{byte} << 56);
-            lo = (lo >> 8) | (carry << 56);
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
-            );
-        }
-    };
-
-    auto window_ = [&](LocalPlan const& p) -> std::uint64_t {
-        std::uint64_t bits;
-        switch (p.case_id) {
-            case 0:  bits = hi >> (p.start - 64); break;
-            case 1:  bits = lo >> p.start; break;
-            default: bits = (lo >> p.start) | (hi << (64 - p.start)); break;
-        }
-        return bits & mask;
-    };
-
-    std::size_t const num_bytes = (seq.length + 3) / 4;
-    for (std::size_t b = 0; b < num_bytes; ++b) {
-        fold_byte_(seq.data[b]);
-        if constexpr (Checked) {
-            validity.fold(b);
-        }
-
-        for (unsigned local = 0; local < 4; ++local) {
-            std::size_t const e = 4 * b + local;
-            if (e >= seq.length) {
-                break;
-            }
-            if constexpr (Checked) {
-                if (!validity.kmer_ending_at_is_valid(e)) {
-                    continue;
-                }
-            } else if (e + 1 < k) {
-                continue;
-            }
-            auto const word = window_(plans[local]);
-            assert_fits_width_(word, k);
-            invoke_kmer_callback<E, L>(func, e + 1 - k, word);
-        }
-    }
-}
-
 // The dispatch of for_each_kmer_packed_rolling() and for_each_kmer_packed_checked_rolling(), see
 // for_each_kmer_packed_aligned_narrow_width_() for `Checked` and `valid`.
 template <bool Checked, Encoding E, Layout L, typename Func>
@@ -831,10 +838,11 @@ inline void for_each_kmer_packed_rolling_(
     if (seq.length < k) {
         return;
     }
+    auto const emit = packed_kmer_emit_<E, L>(func);
     if (k <= 29) {
-        for_each_kmer_packed_rolling_narrow_width_<Checked>(seq, valid, k, func);
+        for_each_kmer_packed_rolling_narrow_width_<Checked>(seq, valid, k, 0, emit);
     } else {
-        for_each_kmer_packed_rolling_full_width_<Checked>(seq, valid, k, func);
+        for_each_kmer_packed_rolling_full_width_<Checked>(seq, valid, k, 0, emit);
     }
 }
 
