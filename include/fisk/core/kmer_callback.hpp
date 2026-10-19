@@ -1,6 +1,5 @@
 #pragma once
 
-#include <bit>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -151,32 +150,22 @@ inline void invoke_kmer_vector_callback(
 
 /**
  * @brief Invoke a k-mer extraction callback with a vector of consecutive k-mers and its valid
- * lanes, or with each of its valid k-mers.
+ * lanes.
  *
  * Accepts `callback(pos, vec, valid_lanes)`, see KmerValidLanesCallback, where lane `j` of `vec`
- * holds the k-mer starting at `pos + j`, valid if lane `j` of `valid_lanes` is. Or the forms of
- * single k-mers of invoke_kmer_callback(), called for each valid lane, in order. That stores the
- * vector, and is hence slower.
+ * holds the k-mer starting at `pos + j`, valid if lane `j` of `valid_lanes` is.
  */
-template <Encoding E, Layout L, SimdArch Simd, typename Callback, typename Vector>
+template <typename Callback, typename Vector, SimdArch Simd>
 FISK_ALWAYS_INLINE
 inline void invoke_kmer_valid_lanes_callback(
     Callback&& callback, std::size_t pos, Vector vec, SimdValidLanes<Simd> valid_lanes
 ) {
     if constexpr (KmerValidLanesCallback<Callback, Vector, Simd>) {
         callback(pos, vec, valid_lanes);
-    } else if constexpr (KmerCallback<Callback, E, L>) {
-        alignas(64) std::uint64_t kmers[Simd::lanes];
-        Simd::store_aligned(vec, kmers);
-        for (std::uint64_t bits = valid_lanes.bits(); bits != 0; bits &= bits - 1) {
-            std::size_t const lane = static_cast<std::size_t>(std::countr_zero(bits));
-            invoke_kmer_callback<E, L>(callback, pos + lane, kmers[lane]);
-        }
     } else {
         static_assert(
-            KmerValidLanesCallback<Callback, Vector, Simd> || KmerCallback<Callback, E, L>,
-            "Callback must be callable as callback(pos, vec, valid_lanes), as "
-            "callback(pos, kmer), or as callback(kmer)."
+            KmerValidLanesCallback<Callback, Vector, Simd>,
+            "Callback must be callable as callback(pos, vec, valid_lanes)."
         );
     }
 }

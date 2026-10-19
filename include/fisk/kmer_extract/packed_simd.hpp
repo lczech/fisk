@@ -27,8 +27,7 @@ namespace fisk {
 // consecutive k-mers in the vector of the arch: `pos` is the start position of the k-mer in lane 0,
 // and lane `j` holds the one starting at `pos + j`. Full vectors have `valid_count == Simd::lanes`;
 // the final vector may be zero-padded in high lanes. for_each_kmer_packed_checked_simd() extracts
-// from a PackedSequenceWithValidity, and calls `func(pos, vec, valid_lanes)` instead, or `func`
-// with each valid k-mer.
+// from a PackedSequenceWithValidity, and calls `func(pos, vec, valid_lanes)` instead.
 //
 // The vectors hold raw k-mer words rather than Kmer values (core/kmer.hpp), with the conventions
 // of the PackedSequence. Use the vector overloads of kmer_cast() to get Kmer values from them.
@@ -473,7 +472,7 @@ inline void for_each_kmer_packed_simd(
 
 // The emit of the checked loops above for for_each_kmer_packed_checked_simd(): calls `func` with
 // the vectors of k-mers and their valid lanes, see invoke_kmer_valid_lanes_callback().
-template <SimdArch Simd, Encoding E, Layout L, typename Func>
+template <SimdArch Simd, typename Func>
 FISK_ALWAYS_INLINE
 inline auto checked_kmer_emit_(Func& func, std::size_t k) noexcept
 {
@@ -483,15 +482,11 @@ inline auto checked_kmer_emit_(Func& func, std::size_t k) noexcept
     ) FISK_ALWAYS_INLINE_LAMBDA {
         if constexpr (std::is_same_v<decltype(validity), AllValid_>) {
             SimdValidLanes<Simd> const all{Simd::lane_mask_all()};
-            invoke_kmer_valid_lanes_callback<E, L, Simd>(func, pos, vec, all);
+            invoke_kmer_valid_lanes_callback(func, pos, vec, all);
         } else if constexpr (std::is_same_v<decltype(validity), ValidLaneBits_>) {
-            invoke_kmer_valid_lanes_callback<E, L, Simd>(
-                func, pos, vec, valid_lanes_<Simd>(validity.bits, 1)
-            );
+            invoke_kmer_valid_lanes_callback(func, pos, vec, valid_lanes_<Simd>(validity.bits, 1));
         } else {
-            invoke_kmer_valid_lanes_callback<E, L, Simd>(
-                func, pos, vec, valid_lanes_<Simd>(validity, kbits)
-            );
+            invoke_kmer_valid_lanes_callback(func, pos, vec, valid_lanes_<Simd>(validity, kbits));
         }
     };
 }
@@ -508,8 +503,8 @@ inline auto checked_kmer_emit_(Func& func, std::size_t k) noexcept
  *
  *     _mm512_mask_compressstoreu_epi64(out, valid_lanes.value, vec);
  *
- * Func can also take single k-mers, as `func(pos, kmer)` or `func(kmer)`, which it is then called
- * with for each valid k-mer in order, see invoke_kmer_valid_lanes_callback().
+ * For single k-mers, for_each_kmer_packed_checked_aligned() is at least as fast: getting them out
+ * of the vectors one at a time costs about as much as its extraction.
  *
  * The loop tests a block of 32 positions at once, and the blocks whose nucleotides are all valid
  * get a constant `valid_lanes`. Sequences whose invalid nucleotides come in runs, such as the N
@@ -527,7 +522,7 @@ inline void for_each_kmer_packed_checked_simd(
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
-    auto const emit = checked_kmer_emit_<Simd, E, L>(func, k);
+    auto const emit = checked_kmer_emit_<Simd>(func, k);
     if (k <= 29) {
         for_each_kmer_packed_simd_narrow_width_<Simd, true, true>(seq, seq.valid.data(), k, emit);
     } else {

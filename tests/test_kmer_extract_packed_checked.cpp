@@ -113,9 +113,6 @@ static void check_checked_extractors(
             check_valid_lanes_callback<Simd>(expected, k, num_kmers, [&](auto const& callback) {
                 for_each_kmer_packed_checked_simd<Simd>(packed, k, callback);
             });
-            check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                for_each_kmer_packed_checked_simd<Simd>(packed, k, callback);
-            });
         };
         check_simd.template operator()<SimdScalar>();
         #if defined(FISK_HAS_SSE2)
@@ -217,25 +214,31 @@ static void check_invalid_in_validity_only()
 template <Encoding E, Layout L>
 static void check_throws()
 {
-    auto const extractors = [](auto const& seq, std::size_t k) {
-        for_each_kmer_packed_checked_aligned(seq, k, [](Kmer<E, L>) {});
-        for_each_kmer_packed_checked_rolling(seq, k, [](Kmer<E, L>) {});
-        for_each_kmer_packed_checked_simd<SimdScalar>(seq, k, [](Kmer<E, L>) {});
-    };
-    std::size_t const lengths[] = {0, 1, 8, 9, 100};
-    for (std::size_t len : lengths) {
-        std::string const seq(len, 'A');
-        auto packed = pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{});
-        packed.valid.push_back(0);
-        EXPECT_THROW(extractors(packed, 1), std::invalid_argument);
-        packed.valid.pop_back();
-        if (!packed.valid.empty()) {
+    auto const check_extractor = [](auto const& extract) {
+        std::size_t const lengths[] = {0, 1, 8, 9, 100};
+        for (std::size_t len : lengths) {
+            std::string const seq(len, 'A');
+            auto packed = pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{});
+            packed.valid.push_back(0);
+            EXPECT_THROW(extract(packed, 1), std::invalid_argument);
             packed.valid.pop_back();
-            EXPECT_THROW(extractors(packed, 1), std::invalid_argument);
+            if (!packed.valid.empty()) {
+                packed.valid.pop_back();
+                EXPECT_THROW(extract(packed, 1), std::invalid_argument);
+            }
         }
-    }
-    check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        extractors(pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{}), k);
+        check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
+            extract(pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{}), k);
+        });
+    };
+    check_extractor([](auto const& seq, std::size_t k) {
+        for_each_kmer_packed_checked_aligned(seq, k, [](Kmer<E, L>) {});
+    });
+    check_extractor([](auto const& seq, std::size_t k) {
+        for_each_kmer_packed_checked_rolling(seq, k, [](Kmer<E, L>) {});
+    });
+    check_extractor([](auto const& seq, std::size_t k) {
+        for_each_kmer_packed_checked_simd<SimdScalar>(seq, k, [](std::size_t, auto, auto) {});
     });
 }
 
