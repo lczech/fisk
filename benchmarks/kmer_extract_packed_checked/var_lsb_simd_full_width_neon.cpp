@@ -20,7 +20,7 @@ std::uint64_t run_var_checked_lsb_simd_full_width_neon(
     };
     for_each_kmer_packed_simd_full_width_<SimdNEON, true, true>(
         seq, seq.valid.data(), k,
-        checked_kmer_emit_<SimdNEON, Encoding::kACGT, Layout::kLSB>(consume, k)
+        checked_kmer_emit_<SimdNEON>(consume, k)
     );
     return sink.finalize();
 }

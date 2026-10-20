@@ -20,7 +20,7 @@ std::uint64_t run_var_checked_msb_simd_narrow_width_avx512(
     };
     for_each_kmer_packed_simd_narrow_width_<SimdAVX512, true, true>(
         seq, seq.valid.data(), k,
-        checked_kmer_emit_<SimdAVX512, Encoding::kACGT, Layout::kMSB>(consume, k)
+        checked_kmer_emit_<SimdAVX512>(consume, k)
     );
     return sink.finalize();
 }
