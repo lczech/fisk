@@ -10,9 +10,9 @@
 #include <string>
 #include <vector>
 
+#include "fisk/core/cast.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
-#include "fisk/core/kmer_spaced.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"

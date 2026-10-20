@@ -49,8 +49,8 @@ static void check_sequence(std::string const& seq)
     // Producers and decoding.
     auto const kmer = kmer_encode<K>(seq);
     EXPECT_EQ(kmer, expected);
-    EXPECT_EQ((kmer_cast<K::encoding, K::layout>(kmer_value(expected), width)), expected);
-    EXPECT_EQ((kmer_cast_unchecked<K::encoding, K::layout>(kmer_value(expected))), expected);
+    EXPECT_EQ((wide_kmer_cast<K::encoding, K::layout>(kmer_value(expected), width)), expected);
+    EXPECT_EQ((wide_kmer_cast_unchecked<K::encoding, K::layout>(kmer_value(expected))), expected);
     EXPECT_EQ(kmer_decode(kmer, width), seq);
     bool bases_match = true;
     for (std::size_t i = 0; i < width; ++i) {
@@ -209,21 +209,23 @@ static_assert(std::is_same_v<
 static_assert(std::is_same_v<decltype(kmer_encode<WideKmerActgLsb>("A")), WideKmerActgLsb>);
 static_assert(std::is_same_v<decltype(kmer_encode("A")), KmerAcgtMsb>);
 
-// kmer_cast() deduces the capacity from the number of words, next to the unchanged narrow casts.
+// wide_kmer_cast() deduces the capacity from the number of words; kmer_cast() stays the narrow one.
 static_assert(std::is_same_v<
-    decltype(kmer_cast<Encoding::kACTG, Layout::kLSB>(std::array<std::uint64_t, 3>{}, 65)),
+    decltype(wide_kmer_cast<Encoding::kACTG, Layout::kLSB>(std::array<std::uint64_t, 3>{}, 65)),
     WideKmer<Encoding::kACTG, Layout::kLSB, 96>
 >);
 static_assert(std::is_same_v<
-    decltype(kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(std::array<std::uint64_t, 1>{})),
+    decltype(
+        wide_kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(std::array<std::uint64_t, 1>{})
+    ),
     WideKmer<Encoding::kACGT, Layout::kMSB, 32>
 >);
 static_assert(std::is_same_v<
     decltype(kmer_cast<Encoding::kACGT, Layout::kMSB>(std::uint64_t{0}, 1)), KmerAcgtMsb
 >);
 
-// The predicate behind the debug check in kmer_cast(): words fit a width iff they have no bits set
-// above it, neither in the partly used word nor in any wholly unused one.
+// The predicate behind the debug check in wide_kmer_cast(): words fit a width iff they have no bits
+// set above it, neither in the partly used word nor in any wholly unused one.
 using Words2 = std::array<std::uint64_t, 2>;
 using Words3 = std::array<std::uint64_t, 3>;
 static_assert(wide_fits_width_(Words2{0x3, 0}, 1) && !wide_fits_width_(Words2{0x4, 0}, 1));
@@ -243,7 +245,7 @@ namespace {
 }
 static_assert(lsb33.words == std::array<std::uint64_t, 2>{2, 3});
 static_assert(msb33.words == std::array<std::uint64_t, 2>{3, 2});
-static_assert(kmer_cast<Encoding::kACGT, Layout::kLSB>(lsb33.words, 33) == lsb33);
+static_assert(wide_kmer_cast<Encoding::kACGT, Layout::kLSB>(lsb33.words, 33) == lsb33);
 static_assert(base_at(lsb33, 0, 33) == 2 && base_at(lsb33, 32, 33) == 3);
 static_assert(reverse(lsb33, 33).words == std::array<std::uint64_t, 2>{3, 2});  // TAA...AG
 static_assert(complement(lsb33, 33).words == std::array<std::uint64_t, 2>{     // CTT...TA

@@ -5,35 +5,12 @@
 #include <cstdint>
 #include <utility>
 
+#include "fisk/core/cast.hpp"
 #include "fisk/core/intrinsics.hpp"
-#include "fisk/core/kmer.hpp"
-#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/simd.hpp"
+#include "fisk/core/types.hpp"
 
 namespace fisk {
-
-// =================================================================================================
-//     Valid Lanes
-// =================================================================================================
-
-/**
- * @brief The lanes of a SIMD vector of k-mers that hold valid k-mers, for the extraction functions
- * that check the validity of the nucleotides, such as for_each_kmer_packed_checked_simd().
- *
- * `value` is the lane mask in the form native to the arch, see SimdArch: a vector with all bits
- * set in the valid lanes and zero in the others, or the mask register of AVX512, which the masked
- * instructions of AVX512 take directly. bits() has bit `j` set for a valid lane `j`.
- */
-template <SimdArch Simd>
-struct SimdValidLanes
-{
-    typename Simd::lane_mask value;
-
-    std::uint64_t bits() const noexcept
-    {
-        return Simd::lane_mask_to_bits(value);
-    }
-};
 
 // =================================================================================================
 //     K-mer Extraction Callback Concepts
@@ -65,11 +42,11 @@ concept KmerVectorCallback = std::invocable<Callback, std::size_t, Vector, std::
 
 /**
  * @brief A callback for vectors of k-mers with their valid lanes, as
- * `callback(pos, vec, valid_lanes)`, see SimdValidLanes.
+ * `callback(pos, vec, valid_lanes)`, see KmerVectorValidLanes.
  */
 template <typename Callback, typename Vector, typename Simd>
 concept KmerValidLanesCallback =
-    std::invocable<Callback, std::size_t, Vector, SimdValidLanes<Simd>>;
+    std::invocable<Callback, std::size_t, Vector, KmerVectorValidLanes<Simd>>;
 
 // -------------------------------------------------------------------------------------------------
 //     Spaced K-mers
@@ -158,7 +135,7 @@ inline void invoke_kmer_vector_callback(
 template <typename Callback, typename Vector, SimdArch Simd>
 FISK_ALWAYS_INLINE
 inline void invoke_kmer_valid_lanes_callback(
-    Callback&& callback, std::size_t pos, Vector vec, SimdValidLanes<Simd> valid_lanes
+    Callback&& callback, std::size_t pos, Vector vec, KmerVectorValidLanes<Simd> valid_lanes
 ) {
     if constexpr (KmerValidLanesCallback<Callback, Vector, Simd>) {
         callback(pos, vec, valid_lanes);

@@ -16,7 +16,7 @@
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/kmer_hash.hpp"
-#include "fisk/core/kmer_spaced.hpp"
+#include "fisk/core/cast.hpp"
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
 #include "fisk/kmer_spaced/selector.hpp"
 #include "fisk/kmer_spaced/simd.hpp"

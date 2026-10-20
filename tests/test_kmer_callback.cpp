@@ -44,7 +44,7 @@ static_assert(!KmerVectorCallback<
 
 // The valid lanes are a type of their own, so that a callback for a count of valid lanes does not
 // take them, which the mask register of AVX512 would convert to.
-using Lanes = SimdValidLanes<SimdScalar>;
+using Lanes = KmerVectorValidLanes<SimdScalar>;
 static_assert(KmerValidLanesCallback<decltype([](std::size_t, Vec, Lanes) {}), Vec, SimdScalar>);
 static_assert(!KmerValidLanesCallback<decltype([](Vec, Lanes) {}), Vec, SimdScalar>);
 static_assert(!KmerValidLanesCallback<

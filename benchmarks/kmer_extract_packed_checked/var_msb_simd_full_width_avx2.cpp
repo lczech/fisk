@@ -15,7 +15,9 @@ std::uint64_t run_var_checked_msb_simd_full_width_avx2(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    auto const consume = [&](std::size_t, __m256i v, SimdValidLanes<SimdAVX2> lanes) noexcept {
+    auto const consume = [&](
+        std::size_t, __m256i v, KmerVectorValidLanes<SimdAVX2> lanes
+    ) noexcept {
         sink.consume(valid_kmers_<SimdAVX2>(v, lanes));
     };
     for_each_kmer_packed_simd_full_width_<SimdAVX2>(seq, k, consume);

@@ -5,9 +5,9 @@
 #include <functional>
 
 #include "fisk/core/kmer.hpp"
-#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/kmer_wide.hpp"
 #include "fisk/core/random.hpp"
+#include "fisk/core/types.hpp"
 
 namespace fisk {
 

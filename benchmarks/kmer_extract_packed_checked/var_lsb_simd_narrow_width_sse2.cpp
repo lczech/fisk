@@ -15,7 +15,9 @@ std::uint64_t run_var_checked_lsb_simd_narrow_width_sse2(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    auto const consume = [&](std::size_t, __m128i v, SimdValidLanes<SimdSSE2> lanes) noexcept {
+    auto const consume = [&](
+        std::size_t, __m128i v, KmerVectorValidLanes<SimdSSE2> lanes
+    ) noexcept {
         sink.consume(valid_kmers_<SimdSSE2>(v, lanes));
     };
     for_each_kmer_packed_simd_narrow_width_<SimdSSE2>(seq, k, consume);

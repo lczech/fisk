@@ -11,6 +11,7 @@
 #include <string_view>
 #include <type_traits>
 
+#include "fisk/core/cast.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/types.hpp"
@@ -18,137 +19,8 @@
 namespace fisk {
 
 // =================================================================================================
-//     Wide K-mer
+//     Convention Dispatch
 // =================================================================================================
-
-/**
- * @brief A k-mer of up to `Capacity` bases, densely encoded at 2 bits per base over several words,
- * tagged with its conventions.
- *
- * The wide counterpart of Kmer, for k-mers longer than 32 bases, with the same Encoding and Layout
- * conventions and the same runtime width. The bases occupy the lowest `2 * width` bits of `words`,
- * with zero padding above them. Each word holds 32 two-bit slots: `words[0]` holds slots 0-31,
- * `words[1]` holds slots 32-63, etc. Under kLSB, base `i` occupies slot `i`; under kMSB it occupies
- * slot `width - 1 - i`.
- *
- * For width 40, from lowest to highest slot:
- *   kLSB: words[0] holds bases 0-31; words[1] holds bases 32-39, then zeros.
- *   kMSB: words[0] holds bases 39-8; words[1] holds bases 7-0, then zeros.
- *
- * `Capacity` is in bases and must be a multiple of 32, so that the type always fills its words. It
- * only bounds the width, which is passed to every operation at runtime, as for Kmer. Also as for
- * Kmer, this is a plain aggregate, and `words` is public as the sanctioned way out of the type.
- */
-template <Encoding E, Layout L, std::size_t Capacity = 64>
-struct WideKmer
-{
-    static_assert(
-        Capacity > 0 && Capacity % 32 == 0, "WideKmer capacity must be a positive multiple of 32"
-    );
-
-    static constexpr Encoding encoding = E;
-    static constexpr Layout layout = L;
-    static constexpr std::size_t capacity = Capacity;
-    static constexpr std::size_t word_count = Capacity / 32;
-
-    /**
-     * @brief The same wide k-mer type, with the same capacity, under different conventions.
-     */
-    template <Encoding E2, Layout L2>
-    using rebind = WideKmer<E2, L2, Capacity>;
-
-    std::array<std::uint64_t, word_count> words;
-
-    [[nodiscard]] constexpr bool operator==(WideKmer const&) const noexcept = default;
-
-    /**
-     * @brief Compare as one unsigned integer, starting with the highest word.
-     *
-     * Not defaulted, as that would compare the array from `words[0]` up, i.e. lowest word first.
-     * As for Kmer, the order matches lexicographic order of the decoded string for Encoding::kACGT
-     * combined with Layout::kMSB only.
-     */
-    [[nodiscard]] constexpr std::strong_ordering operator<=>(WideKmer const& other) const noexcept
-    {
-        for (std::size_t i = word_count; i-- > 0;) {
-            if (words[i] < other.words[i]) {
-                return std::strong_ordering::less;
-            }
-            if (words[i] > other.words[i]) {
-                return std::strong_ordering::greater;
-            }
-        }
-        return std::strong_ordering::equal;
-    }
-};
-
-// -------------------------------------------------------------------------------------------------
-//     Type Traits and Helpers
-// -------------------------------------------------------------------------------------------------
-
-/**
- * @brief A wide k-mer of capacity 64 under the conventions of KmerAcgtMsb.
- */
-using WideKmerAcgtMsb = WideKmer<Encoding::kACGT, Layout::kMSB>;
-
-/**
- * @brief A wide k-mer of capacity 64 under the conventions of KmerAcgtLsb.
- */
-using WideKmerAcgtLsb = WideKmer<Encoding::kACGT, Layout::kLSB>;
-
-/**
- * @brief A wide k-mer of capacity 64 under the conventions of KmerActgMsb.
- */
-using WideKmerActgMsb = WideKmer<Encoding::kACTG, Layout::kMSB>;
-
-/**
- * @brief A wide k-mer of capacity 64 under the conventions of KmerActgLsb.
- */
-using WideKmerActgLsb = WideKmer<Encoding::kACTG, Layout::kLSB>;
-
-/**
- * @brief A wide k-mer, i.e. a WideKmer itself and not a look-alike with the same members.
- */
-template <typename K>
-concept WideKmerType = std::same_as<K, WideKmer<K::encoding, K::layout, K::capacity>>;
-
-/**
- * @brief Debug check that a width is in [1, Capacity].
- */
-template <std::size_t Capacity>
-FISK_ALWAYS_INLINE inline constexpr void assert_wide_width_(
-    [[maybe_unused]] std::size_t width
-) noexcept {
-    assert(width >= 1 && width <= Capacity);
-}
-
-/**
- * @brief Whether words hold no bits above `width` bases, i.e. they are a valid wide k-mer of that
- * width.
- */
-template <std::size_t N>
-inline constexpr bool wide_fits_width_(
-    std::array<std::uint64_t, N> const& words, std::size_t width
-) noexcept {
-    for (std::size_t i = 0; i < N; ++i) {
-        std::size_t const used = (width > 32 * i) ? width - 32 * i : 0;
-        if ((words[i] & ~width_mask_(used)) != 0) {
-            return false;
-        }
-    }
-    return true;
-}
-
-/**
- * @brief Debug check that words are a valid wide k-mer of `width` bases, see kmer_cast().
- */
-template <std::size_t N>
-FISK_ALWAYS_INLINE inline constexpr void assert_wide_fits_width_(
-    [[maybe_unused]] std::array<std::uint64_t, N> const& words, [[maybe_unused]] std::size_t width
-) noexcept {
-    assert_wide_width_<32 * N>(width);
-    assert(wide_fits_width_(words, width));
-}
 
 /**
  * @brief The two-bit slot that base `index` occupies under a layout convention.
@@ -193,54 +65,6 @@ inline constexpr std::array<std::uint64_t, N> reverse_xor_wide_words_(
         }
     }
     return result;
-}
-
-// =================================================================================================
-//     Construction and Cast
-// =================================================================================================
-
-/**
- * @brief Get the raw words of a wide k-mer, the counterpart of kmer_cast().
- */
-template <WideKmerType K>
-[[nodiscard]] inline constexpr auto kmer_value(K const& kmer) noexcept
-{
-    return kmer.words;
-}
-
-/**
- * @brief Adopt raw words as a wide k-mer, without checking them against the width.
- *
- * For words that the caller already knows to be valid. Otherwise use kmer_cast(), which asserts the
- * width in debug builds.
- */
-template <Encoding E, Layout L, std::size_t N>
-[[nodiscard]] inline constexpr WideKmer<E, L, 32 * N> kmer_cast_unchecked(
-    std::array<std::uint64_t, N> const& words
-) noexcept {
-    // A bare array of words, as Kmer is a bare word (see kmer_cast_unchecked() for Kmer).
-    using K = WideKmer<E, L, 32 * N>;
-    static_assert(sizeof(K) == N * sizeof(std::uint64_t));
-    static_assert(alignof(K) == alignof(std::uint64_t));
-    static_assert(std::is_trivially_copyable_v<K>);
-    static_assert(std::is_standard_layout_v<K>);
-    static_assert(std::is_aggregate_v<K>);
-    return K{words};
-}
-
-/**
- * @brief Adopt raw words as a wide k-mer of a given convention.
- *
- * The wide counterpart of kmer_cast() for Kmer, with the same caveat that the caller asserts the
- * convention and the width, both checked by assert() only. The capacity is deduced from the number
- * of words, as `32 * N`.
- */
-template <Encoding E, Layout L, std::size_t N>
-[[nodiscard]] inline constexpr WideKmer<E, L, 32 * N> kmer_cast(
-    std::array<std::uint64_t, N> const& words, [[maybe_unused]] std::size_t width
-) noexcept {
-    assert_wide_fits_width_(words, width);
-    return kmer_cast_unchecked<E, L>(words);
 }
 
 // =================================================================================================

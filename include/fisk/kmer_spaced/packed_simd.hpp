@@ -9,7 +9,6 @@
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/packed_simd.hpp"
 #include "fisk/kmer_spaced/kmer_spaced.hpp"

@@ -22,7 +22,7 @@ using CheckedLsb = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, fisk:
 // The k-mers of the valid lanes, with zero in the others: a stand-in for what a caller does with
 // the valid lanes, so that they are computed.
 template <typename Simd, typename Vector>
-inline Vector valid_kmers_(Vector v, fisk::SimdValidLanes<Simd> lanes) noexcept
+inline Vector valid_kmers_(Vector v, fisk::KmerVectorValidLanes<Simd> lanes) noexcept
 {
     // Vector lane masks (all ones or zero per lane) are and-ed in; AVX512 has a mask register.
     if constexpr (requires { Simd::bitwise_and(v, lanes.value); }) {

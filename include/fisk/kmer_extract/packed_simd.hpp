@@ -170,7 +170,7 @@ inline void emit_packed_simd_step_(std::size_t pos, Kmers&& kmers, Emit&& emit)
 // just bit 0 for bits that are set for each valid k-mer.
 template <SimdArch Simd>
 FISK_ALWAYS_INLINE
-inline SimdValidLanes<Simd> valid_lanes_(std::uint64_t w, std::uint64_t test) noexcept
+inline KmerVectorValidLanes<Simd> valid_lanes_(std::uint64_t w, std::uint64_t test) noexcept
 {
     typename Simd::simd_vector windows;
     if constexpr (SimdArchWithLaneShifts<Simd>) {
@@ -193,7 +193,7 @@ inline SimdValidLanes<Simd> valid_lanes_(std::uint64_t w, std::uint64_t test) no
 // All lanes, for the k-mers of a block of valid nucleotides, see run_packed_blocks_() (packed.hpp).
 template <SimdArch Simd>
 FISK_ALWAYS_INLINE
-inline SimdValidLanes<Simd> valid_lanes_(AllValid, std::uint64_t) noexcept
+inline KmerVectorValidLanes<Simd> valid_lanes_(AllValid, std::uint64_t) noexcept
 {
     return {Simd::lane_mask_all()};
 }
@@ -498,8 +498,8 @@ inline void for_each_kmer_packed_simd(
  * As for_each_kmer_packed_simd(), checking the validity of the nucleotides by the validity bits of
  * `seq`, see pack_sequence_with_validity(). Func is called as `func(pos, vec, valid_lanes)`: lane
  * `j` of `vec` holds the k-mer starting at `pos + j`, and is valid if it is set in `valid_lanes`,
- * see SimdValidLanes. That covers the end of the sequence as well, where the last vector can have
- * lanes beyond it. For example, with AVX512, the valid k-mers can be stored contiguously with
+ * see KmerVectorValidLanes. That covers the end of the sequence as well, where the last vector can
+ * have lanes beyond it. For example, with AVX512, the valid k-mers can be stored contiguously with
  *
  *     _mm512_mask_compressstoreu_epi64(out, valid_lanes.value, vec);
  *
@@ -523,7 +523,7 @@ inline void for_each_kmer_packed_checked_simd(
         throw_invalid_kmer_k_(32);
     }
     auto const emit = [&](
-        std::size_t pos, typename Simd::simd_vector vec, SimdValidLanes<Simd> valid_lanes
+        std::size_t pos, typename Simd::simd_vector vec, KmerVectorValidLanes<Simd> valid_lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
         invoke_kmer_valid_lanes_callback(func, pos, vec, valid_lanes);
     };
