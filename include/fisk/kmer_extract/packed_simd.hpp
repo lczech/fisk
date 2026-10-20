@@ -327,7 +327,9 @@ inline void for_each_kmer_packed_simd_narrow_width_(Seq const& seq, std::size_t 
 
     // One step: the k-mers that start in the `step_bytes` bytes from `b`, as vectors of consecutive
     // k-mers, each with the validity of its k-mer in lane 0, see run_packed_blocks_() (packed.hpp).
-    auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
+    auto const step_ = [&](
+        std::size_t b, [[maybe_unused]] auto const& validity_at
+    ) FISK_ALWAYS_INLINE_LAMBDA {
         simd_vector const words = load_packed_words_<Simd, L>(&seq.data[b]);
         emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {
             simd_vector const kmers = packed_simd_shift_right_<Simd>(words, counts.at[i]);
@@ -417,7 +419,9 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
         // One step, as in the narrow-width loop. `next` holds the words of the next step, which
         // the step loads for its ninth bytes, and which the next step then starts with.
         simd_vector next = load_packed_words_<Simd, L>(&seq.data[0]);
-        auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
+        auto const step_ = [&](
+            std::size_t b, [[maybe_unused]] auto const& validity_at
+        ) FISK_ALWAYS_INLINE_LAMBDA {
             simd_vector const words = next;
             next = load_packed_words_<Simd, L>(&seq.data[b + step_bytes]);
             emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {

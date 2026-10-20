@@ -129,7 +129,8 @@ struct AllValid {};
 template <std::size_t StepBytes, PackedSequenceType Seq, typename Step>
 FISK_ALWAYS_INLINE
 inline void run_packed_blocks_(
-    Seq const& seq, std::size_t fast_bytes, std::uint64_t block_mask, Step&& step
+    [[maybe_unused]] Seq const& seq, std::size_t fast_bytes,
+    [[maybe_unused]] std::uint64_t block_mask, Step&& step
 ) {
     static_assert(8 % StepBytes == 0, "Steps have to fill a block.");
 
@@ -138,7 +139,6 @@ inline void run_packed_blocks_(
 
     std::size_t b = 0;
     if constexpr (!PackedSequenceWithValidityType<Seq>) {
-        (void) block_mask;
         for (; b < fast_bytes; b += StepBytes) {
             step(b, all_valid);
         }
@@ -269,7 +269,7 @@ inline void for_each_kmer_packed_rolling_narrow_width_(
     // With validity bits, shift in those of the nucleotides of byte `b` of the codes, before
     // extracting its k-mers. Byte `b / 2` of the validity bits covers the codes of bytes `b` and
     // `b + 1` for an even `b`, and is shifted in once, at the first of them.
-    auto fold_valid_ = [&](std::size_t b) FISK_ALWAYS_INLINE_LAMBDA {
+    auto fold_valid_ = [&]([[maybe_unused]] std::size_t b) FISK_ALWAYS_INLINE_LAMBDA {
         if constexpr (Checked) {
             if (b % 2 == 0) {
                 valid_acc = (valid_acc >> 8) | (std::uint64_t{valid[b / 2]} << 56);
@@ -428,7 +428,7 @@ inline void for_each_kmer_packed_rolling_full_width_(
     };
 
     // As in the narrow-width loop.
-    auto fold_valid_ = [&](std::size_t b) FISK_ALWAYS_INLINE_LAMBDA {
+    auto fold_valid_ = [&]([[maybe_unused]] std::size_t b) FISK_ALWAYS_INLINE_LAMBDA {
         if constexpr (Checked) {
             if (b % 2 == 0) {
                 valid_acc = (valid_acc >> 8) | (std::uint64_t{valid[b / 2]} << 56);
