@@ -119,13 +119,13 @@ inline void for_each_spaced_kmer_packed_simd(
     }
 
     // The windows come without the mask of the k-mers, which the kernels make redundant.
-    auto const emit = [&](std::size_t pos, auto windows, std::size_t valid_count, AllValid_) {
+    auto const emit = [&](std::size_t pos, auto windows, std::size_t valid_count) {
         emit_spaced_kmers_packed_simd_<E, L>(kernels, pos, windows, valid_count, callback);
     };
     if (span_k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_<Simd, false, false>(seq, nullptr, span_k, emit);
+        for_each_kmer_packed_simd_narrow_width_<Simd, false>(seq, span_k, emit);
     } else {
-        for_each_kmer_packed_simd_full_width_<Simd, false, false>(seq, nullptr, span_k, emit);
+        for_each_kmer_packed_simd_full_width_<Simd, false>(seq, span_k, emit);
     }
 }
 

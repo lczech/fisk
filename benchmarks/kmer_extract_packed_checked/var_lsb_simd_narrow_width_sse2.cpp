@@ -18,10 +18,7 @@ std::uint64_t run_var_checked_lsb_simd_narrow_width_sse2(
     auto const consume = [&](std::size_t, __m128i v, SimdValidLanes<SimdSSE2> lanes) noexcept {
         sink.consume(valid_kmers_<SimdSSE2>(v, lanes));
     };
-    for_each_kmer_packed_simd_narrow_width_<SimdSSE2, true, true>(
-        seq, seq.valid.data(), k,
-        checked_kmer_emit_<SimdSSE2>(consume, k)
-    );
+    for_each_kmer_packed_simd_narrow_width_<SimdSSE2>(seq, k, consume);
     return sink.finalize();
 }
 

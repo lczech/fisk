@@ -106,7 +106,7 @@ inline void for_each_spaced_kmer_packed_narrow_width_(
             );
         }
     }
-    for_each_kmer_packed_rolling_narrow_width_<false>(seq, nullptr, span_k, 4 * fast_bytes, emit_);
+    for_each_kmer_packed_rolling_narrow_width_(seq, span_k, 4 * fast_bytes, emit_);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -177,7 +177,7 @@ inline void for_each_spaced_kmer_packed_full_width_(
         emit_(4 * b + 2, spaced_kmer_packed_full_width_window_<L, K, 2>(word, ninth));
         emit_(4 * b + 3, spaced_kmer_packed_full_width_window_<L, K, 3>(word, ninth));
     }
-    for_each_kmer_packed_rolling_full_width_<false>(seq, nullptr, K, 4 * fast_bytes, emit_);
+    for_each_kmer_packed_rolling_full_width_(seq, K, 4 * fast_bytes, emit_);
 }
 
 // -------------------------------------------------------------------------------------------------

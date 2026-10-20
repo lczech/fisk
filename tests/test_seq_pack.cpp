@@ -398,6 +398,20 @@ static_assert(
     !PackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kLSB>, AcgtMsbWithValidity>
 );
 
+// Both are packed sequences, and only the one with validity has validity bits. A type with
+// validity bits but without the rest of a packed sequence is neither.
+struct OnlyValidityBits
+{
+    std::vector<std::uint8_t> valid;
+};
+static_assert( PackedSequenceType<AcgtMsb>);
+static_assert( PackedSequenceType<AcgtMsbWithValidity>);
+static_assert(!PackedSequenceType<std::vector<std::uint8_t>>);
+static_assert(!PackedSequenceType<OnlyValidityBits>);
+static_assert(!PackedSequenceWithValidityType<AcgtMsb>);
+static_assert( PackedSequenceWithValidityType<AcgtMsbWithValidity>);
+static_assert(!PackedSequenceWithValidityType<OnlyValidityBits>);
+
 // =================================================================================================
 //     Scalar Word Encoders
 // =================================================================================================

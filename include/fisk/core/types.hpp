@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -103,6 +104,31 @@ template <Encoding E, Layout L>
 struct PackedSequenceWithValidity : PackedSequence<E, L>
 {
     std::vector<std::uint8_t> valid;
+};
+
+/**
+ * @brief Anything shaped like a PackedSequence: convention tags, packed codes and a length.
+ *
+ * The internal loops of the packed k-mer extraction are written against this, so that they take
+ * both PackedSequence and PackedSequenceWithValidity.
+ */
+template <typename T>
+concept PackedSequenceType = requires(T const& seq) {
+    { T::encoding }       -> std::convertible_to<Encoding>;
+    { T::layout }         -> std::convertible_to<Layout>;
+    { seq.data.data() }   -> std::convertible_to<std::uint8_t const*>;
+    { seq.length }        -> std::convertible_to<std::size_t>;
+};
+
+/**
+ * @brief A packed sequence with validity bits, such as PackedSequenceWithValidity.
+ *
+ * The internal loops of the packed k-mer extraction check the validity of the nucleotides of
+ * these, and extract all k-mers of the others.
+ */
+template <typename T>
+concept PackedSequenceWithValidityType = PackedSequenceType<T> && requires(T const& seq) {
+    { seq.valid.data() } -> std::convertible_to<std::uint8_t const*>;
 };
 
 } // namespace fisk

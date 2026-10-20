@@ -76,13 +76,6 @@ namespace fisk {
 // function. If we were to add those barriers in the benchmark itself, the compiler would be
 // forced to serialize the output, severely messing with the scheduling and benchmarks.
 
-// We experimented with several variations of the basic algorithm here, in order to find a solution
-// that compiles to optimal code across most compilers and platforms. Some of the more promising
-// variants are in commits
-//  -f3910762f1d4a577da88de02347faf94e584a0f1
-//  -313e33b54b07e87ec3a4852c65403d9ed77050b6
-// but we since have cleaned up a bit, and are only keeping a final selection of variants here.
-
 // -------------------------------------------------------------------------------------------------
 //     Validity
 // -------------------------------------------------------------------------------------------------
@@ -112,17 +105,7 @@ inline void check_validity_size_(PackedSequenceWithValidity<E, L> const& seq)
 
 // The validity of all k-mers of a block of 32 positions whose nucleotides are all valid. A type of
 // its own, so that the checks of the k-mers fold away at compile time.
-struct AllValid_ {};
-
-// The validity window at `pos`, from the 8 bytes at `pos / 8`, which have to be in `valid`. At
-// least its lower 57 bits hold nucleotides.
-FISK_ALWAYS_INLINE
-inline std::uint64_t load_validity_window_(std::uint8_t const* valid, std::size_t pos) noexcept
-{
-    std::uint64_t word;
-    std::memcpy(&word, valid + pos / 8, 8);
-    return word >> (pos % 8);
-}
+struct AllValid {};
 
 // -------------------------------------------------------------------------------------------------
 //     Block Loop
@@ -132,85 +115,71 @@ inline std::uint64_t load_validity_window_(std::uint8_t const* valid, std::size_
 // validity_at)` extracts the k-mers that start in the `StepBytes` bytes from byte `b`, for all `b`
 // below `fast_bytes`, and `validity_at(pos)` is the validity of the k-mer at `pos` for them.
 //
-// Unchecked, all k-mers are valid. Checked, the steps run in blocks of 8 bytes, that is, 32
-// positions, and each block is tested once: with one load of the validity bits at its start, which
-// covers its 32 positions and the k - 1 nucleotides after them, the low `31 + k` bits of
-// `block_mask`. If they are all valid, the block runs with AllValid_. Otherwise, as well as after
-// the last whole block, each step loads the windows of its k-mers. Checked, `fast_bytes` must leave
-// 8 bytes of `valid` to load at `pos / 8` for each of its positions, see checked_fast_bytes_().
+// Without validity bits, see PackedSequenceWithValidityType (core/types.hpp), all k-mers are valid.
+// With them, the steps run in blocks of 8 bytes, that is, 32 positions, and each block is tested
+// once: with one load of the validity bits at its start, which covers its 32 positions and the
+// k - 1 nucleotides after them, the low `31 + k` bits of `block_mask`. If they are all valid, the
+// block runs with AllValid. Otherwise, as well as after the last whole block, each step loads the
+// windows of its k-mers. With validity bits, `fast_bytes` must leave 8 bytes of them to load at
+// `pos / 8` for each of its positions, see checked_fast_bytes_().
 //
-// Each copy of the step is inlined. Checked, there is one for the blocks of all valid k-mers, and
-// one for all other steps. With `SeparateDirtyBlocks`, the blocks with invalid nucleotides get a
-// copy of their own, whose loop has a fixed count, apart from the steps after the last whole block.
-// That makes the SIMD loops faster on sequences with scattered invalid nucleotides, but not the
-// aligned one, which would only grow, in each of its 32 instantiations for k.
-template <bool Checked, bool SeparateDirtyBlocks, std::size_t StepBytes, typename Step>
+// Each copy of the step is inlined. With validity bits, there are three: for the blocks of all
+// valid k-mers, for the other blocks, whose loop has a fixed count, and for the steps after the
+// last whole block.
+template <std::size_t StepBytes, PackedSequenceType Seq, typename Step>
 FISK_ALWAYS_INLINE
 inline void run_packed_blocks_(
-    std::size_t fast_bytes, std::uint8_t const* valid, std::uint64_t block_mask, Step&& step
+    Seq const& seq, std::size_t fast_bytes, std::uint64_t block_mask, Step&& step
 ) {
     static_assert(8 % StepBytes == 0, "Steps have to fill a block.");
-    auto const all_valid = [](std::size_t) FISK_ALWAYS_INLINE_LAMBDA { return AllValid_{}; };
-    auto const window_at = [valid](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
-        return load_validity_window_(valid, pos);
-    };
+
+    // The validity of the k-mers of a block of valid nucleotides, see AllValid.
+    auto const all_valid = [](std::size_t) FISK_ALWAYS_INLINE_LAMBDA { return AllValid{}; };
 
     std::size_t b = 0;
-    if constexpr (!Checked) {
+    if constexpr (!PackedSequenceWithValidityType<Seq>) {
         (void) block_mask;
-        (void) window_at;
         for (; b < fast_bytes; b += StepBytes) {
             step(b, all_valid);
         }
     } else {
+        std::uint8_t const* const valid = seq.valid.data();
+
+        // The validity window at `pos`, from the 8 bytes at `pos / 8`, which have to be in `valid`.
+        // At least its lower 57 bits hold nucleotides.
+        auto const window_at = [valid](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
+            std::uint64_t word;
+            std::memcpy(&word, valid + pos / 8, 8);
+            return word >> (pos % 8);
+        };
+
+        // Whether the nucleotides of all k-mers of the block at `b` are valid: the 32 positions
+        // of the block start at bit 0 of byte `b / 2` of `valid`.
         auto const block_is_valid_ = [&]() FISK_ALWAYS_INLINE_LAMBDA {
             std::uint64_t block_word;
             std::memcpy(&block_word, valid + b / 2, 8);
             return (block_word & block_mask) == block_mask;
         };
+
+        // The steps of the block at `b`, with the given validity.
         auto const block_ = [&](auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
             for (std::size_t i = 0; i < 8; i += StepBytes) {
                 step(b + i, validity_at);
             }
         };
-        if constexpr (SeparateDirtyBlocks) {
-            for (; b + 8 <= fast_bytes; b += 8) {
-                if (block_is_valid_()) {
-                    block_(all_valid);
-                } else {
-                    block_(window_at);
-                }
-            }
-            for (; b < fast_bytes; b += StepBytes) {
-                step(b, window_at);
-            }
-        } else {
-            while (b < fast_bytes) {
-                if (b + 8 <= fast_bytes && block_is_valid_()) {
-                    block_(all_valid);
-                    b += 8;
-                } else {
-                    // A block with invalid nucleotides, or the steps after the last whole block.
-                    std::size_t const end = std::min(b + 8, fast_bytes);
-                    for (; b < end; b += StepBytes) {
-                        step(b, window_at);
-                    }
-                }
+
+        // The whole blocks, each with one test of its validity, and then the steps after them.
+        for (; b + 8 <= fast_bytes; b += 8) {
+            if (block_is_valid_()) {
+                block_(all_valid);
+            } else {
+                block_(window_at);
             }
         }
+        for (; b < fast_bytes; b += StepBytes) {
+            step(b, window_at);
+        }
     }
-}
-
-// The end of the fast region of a checked loop, see run_packed_blocks_(), for `valid_size` bytes of
-// validity bits. The last window of the region is loaded at byte `fast_bytes / 2 - 1` of `valid`,
-// and its 8 bytes have to be there, which ends the region 56 positions before the end of `valid`,
-// earlier than the codes. The region is rounded down to an even number of bytes, so that it ends
-// at a byte of `valid`.
-inline std::size_t checked_fast_bytes_(std::size_t fast_bytes, std::size_t valid_size) noexcept
-{
-    return std::min(
-        fast_bytes - fast_bytes % 2, valid_size >= 7 ? 2 * (valid_size - 7) : std::size_t{0}
-    );
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -224,9 +193,16 @@ inline std::size_t checked_fast_bytes_(std::size_t fast_bytes, std::size_t valid
 // rolling extraction, and after the fast region for the aligned and SIMD extraction, see
 // run_packed_blocks_().
 //
-// With `Checked`, `valid` holds the validity bits of `seq`, see RollingValidity_, only the valid
-// k-mers are emitted, and `first` has to be a multiple of 8. Otherwise, `valid` is unused and may
-// be null.
+// The first byte that completes a k-mer from `first` on is the one in which the k-mer at `first`
+// ends. If that is byte 8 or later, the loops load the 8 bytes before it into their accumulator at
+// once, the seed, instead of folding them one at a time.
+//
+// For a sequence with validity bits, see PackedSequenceWithValidityType, only the valid k-mers are
+// emitted, and `first` has to be a multiple of 8. The validity bits are folded into an accumulator
+// of their own, one byte per 8 nucleotides next to the codes: once the byte of nucleotide `e` is
+// folded, its bit is at 56 + e % 8, and the k-mer ending at `e` has its k bits right below. The
+// accumulator starts with all bits invalid, and the loops fold from the byte of `first` on, so
+// that the k-mers before `first` are invalid without a test of their own.
 
 // The 8 bytes at `p` as a word with the bases in order: the first base is in the lowest bits for
 // kLSB, and in the highest bits for kMSB. That is the accumulator of the rolling loops after
@@ -246,58 +222,37 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
     }
 }
 
-// The byte in which the k-mer at `first` ends, from which the rolling loops start if it is byte 8
-// or later: the 8 bytes before it are loaded into their accumulator at once, instead of folding
-// the bytes from `first` on one at a time, none of which completes a k-mer yet.
-inline std::size_t packed_rolling_seed_byte_(std::size_t first, std::size_t k) noexcept
-{
-    return (first + k - 1) / 4;
-}
-
-// The validity bits of the checked rolling loops, folded in one byte per 8 nucleotides next to the
-// codes: once the byte of nucleotide `e` is folded, its bit is at 56 + e % 8, and the k-mer ending
-// at `e` has its k bits right below. The accumulator starts with all bits invalid, and the loops
-// fold from the byte of `first` on, so that the k-mers before `first` are invalid without a test of
-// their own.
-struct RollingValidity_
-{
-    std::uint8_t const* valid;
-    std::size_t k;
-    std::uint64_t kbits;
-    std::uint64_t acc = 0;
-
-    // Before the nucleotides of byte `b` of the codes.
-    FISK_ALWAYS_INLINE
-    void fold(std::size_t b) noexcept
-    {
-        if (b % 2 == 0) {
-            acc = (acc >> 8) | (std::uint64_t{valid[b / 2]} << 56);
-        }
-    }
-
-    FISK_ALWAYS_INLINE
-    bool kmer_ending_at_is_valid(std::size_t e) const noexcept
-    {
-        return ((acc >> (57 + e % 8 - k)) & kbits) == kbits;
-    }
-};
-
 // k <= 29 fits in a single 64-bit accumulator.
-template <bool Checked, Encoding E, Layout L, typename Emit>
+template <PackedSequenceType Seq, typename Emit>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_rolling_narrow_width_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, std::size_t first,
-    Emit&& emit
+    Seq const& seq, std::size_t k, std::size_t first, Emit&& emit
 ) {
+    constexpr Layout L = Seq::layout;
+    constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
     assert(!Checked || first % 8 == 0);
+    // No k-mer starts at `first` or later.
     if (first + k > seq.length) {
         return;
     }
+
+    // The 2k bits of a k-mer in the codes, and its k bits in the validity bits.
     std::uint64_t const mask = (std::uint64_t{1} << (2 * k)) - 1u;
-    RollingValidity_ validity{valid, k, (std::uint64_t{1} << k) - 1u};
+    std::uint64_t const kbits = (std::uint64_t{1} << k) - 1u;
 
+    // The codes of the last 8 bytes folded, in the order of load_packed_word_(), and the validity
+    // bits from `first` on, see above.
     std::uint64_t acc = 0;
+    std::uint64_t valid_acc = 0;
 
+    // The validity bits, loaded once, as the emits could change `seq` as far as the compiler knows.
+    std::uint8_t const* valid = nullptr;
+    if constexpr (Checked) {
+        valid = seq.valid.data();
+    }
+
+    // Shift a byte of codes in at the end of the newest bases: the low bits for kMSB, and the high
+    // bits for kLSB, whose bytes hold their first base in the low bits.
     auto fold_byte_ = [&](std::uint8_t byte) {
         if constexpr (L == Layout::kMSB) {
             acc = (acc << 8) | byte;
@@ -311,24 +266,35 @@ inline void for_each_kmer_packed_rolling_narrow_width_(
         }
     };
 
+    // With validity bits, shift in those of the nucleotides of byte `b` of the codes, before
+    // extracting its k-mers. Byte `b / 2` of the validity bits covers the codes of bytes `b` and
+    // `b + 1` for an even `b`, and is shifted in once, at the first of them.
+    auto fold_valid_ = [&](std::size_t b) FISK_ALWAYS_INLINE_LAMBDA {
+        if constexpr (Checked) {
+            if (b % 2 == 0) {
+                valid_acc = (valid_acc >> 8) | (std::uint64_t{valid[b / 2]} << 56);
+            }
+        }
+    };
+
+    // The seed, see above: afterwards, `acc` holds the 8 bytes before `seed_b`, and `valid_acc` the
+    // validity bits from `first` on up to there, as if they had been folded.
     std::size_t b = first / 4;
-    std::size_t const seed_b = packed_rolling_seed_byte_(first, k);
+    std::size_t const seed_b = (first + k - 1) / 4;
     if (seed_b >= 8) {
         acc = load_packed_word_<L>(&seq.data[seed_b - 8]);
-        if constexpr (Checked) {
-            for (; b < seed_b; ++b) {
-                validity.fold(b);
-            }
+        for (; b < seed_b; ++b) {
+            fold_valid_(b);
         }
         b = seed_b;
     }
 
+    // Fold one byte of codes at a time, and emit the 4 k-mers that end in it. Checked, the k-mers
+    // with invalid nucleotides are skipped, and unchecked, the ones that start before `first`.
     std::size_t const num_bytes = (seq.length + 3) / 4;
     for (; b < num_bytes; ++b) {
         fold_byte_(seq.data[b]);
-        if constexpr (Checked) {
-            validity.fold(b);
-        }
+        fold_valid_(b);
 
         // The 4 k-mers ending within this byte, oldest (local 0) to newest (local 3).
         for (unsigned local = 0; local < 4; ++local) {
@@ -337,13 +303,15 @@ inline void for_each_kmer_packed_rolling_narrow_width_(
                 break;
             }
             if constexpr (Checked) {
-                if (!validity.kmer_ending_at_is_valid(e)) {
+                if (((valid_acc >> (57 + e % 8 - k)) & kbits) != kbits) {
                     continue;
                 }
             } else if (e + 1 < first + k) {
                 continue;
             }
 
+            // Shift the k-mer to the low bits: its last base is at bit `6 - 2 * local` for kMSB,
+            // and its first base at bit `58 - 2k + 2 * local` for kLSB.
             unsigned const s = 6 - 2 * local;
             unsigned shift;
             if constexpr (L == Layout::kMSB) {
@@ -367,20 +335,24 @@ inline void for_each_kmer_packed_rolling_narrow_width_(
 // of the narrow-width impl's single 64-bit `acc`; correct for any k in [1, 32], just with more
 // bookkeeping per byte, which is why the narrow-width impl above still exists as the faster choice
 // for k <= 29.
-template <bool Checked, Encoding E, Layout L, typename Emit>
+template <PackedSequenceType Seq, typename Emit>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_rolling_full_width_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, std::size_t first,
-    Emit&& emit
+    Seq const& seq, std::size_t k, std::size_t first, Emit&& emit
 ) {
+    constexpr Layout L = Seq::layout;
+    constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
     assert(!Checked || first % 8 == 0);
+    // No k-mer starts at `first` or later.
     if (first + k > seq.length) {
         return;
     }
+
+    // The 2k bits of a k-mer in the codes, and its k bits in the validity bits.
     std::uint64_t const mask = (k == 32)
         ? ~std::uint64_t{0}
         : ((std::uint64_t{1} << (2 * k)) - 1u);
-    RollingValidity_ validity{valid, k, (std::uint64_t{1} << k) - 1u};
+    std::uint64_t const kbits = (std::uint64_t{1} << k) - 1u;
 
     // `start` and which of window_()'s 3 cases it falls into depend only on `k` and `local`, never
     // on the byte data, so precompute them once instead of re-deriving 4 times per byte.
@@ -414,9 +386,19 @@ inline void for_each_kmer_packed_rolling_full_width_(
         plans[local] = LocalPlan{start, case_id};
     }
 
+    // The codes of the last 16 bytes folded, as in the narrow-width loop, split into two words,
+    // and the validity bits.
     std::uint64_t hi = 0;
     std::uint64_t lo = 0;
+    std::uint64_t valid_acc = 0;
 
+    // As in the narrow-width loop.
+    std::uint8_t const* valid = nullptr;
+    if constexpr (Checked) {
+        valid = seq.valid.data();
+    }
+
+    // As in the narrow-width loop, moving the byte that leaves one word over into the other.
     auto fold_byte_ = [&](std::uint8_t byte) {
         if constexpr (L == Layout::kMSB) {
             std::uint64_t const carry = lo >> 56;
@@ -434,6 +416,7 @@ inline void for_each_kmer_packed_rolling_full_width_(
         }
     };
 
+    // The k-mer of a plan, shifted to the low bits from `hi`, `lo`, or both, and masked.
     auto window_ = [&](LocalPlan const& p) -> std::uint64_t {
         std::uint64_t bits;
         switch (p.case_id) {
@@ -444,10 +427,19 @@ inline void for_each_kmer_packed_rolling_full_width_(
         return bits & mask;
     };
 
-    // The seed only fills the half that holds the newest 8 bytes, as the k-mers from `first` on
-    // start no earlier.
+    // As in the narrow-width loop.
+    auto fold_valid_ = [&](std::size_t b) FISK_ALWAYS_INLINE_LAMBDA {
+        if constexpr (Checked) {
+            if (b % 2 == 0) {
+                valid_acc = (valid_acc >> 8) | (std::uint64_t{valid[b / 2]} << 56);
+            }
+        }
+    };
+
+    // The seed, as in the narrow-width loop. It only fills the word that holds the newest 8 bytes,
+    // as the k-mers from `first` on start no earlier.
     std::size_t b = first / 4;
-    std::size_t const seed_b = packed_rolling_seed_byte_(first, k);
+    std::size_t const seed_b = (first + k - 1) / 4;
     if (seed_b >= 8) {
         if constexpr (L == Layout::kMSB) {
             lo = load_packed_word_<L>(&seq.data[seed_b - 8]);
@@ -459,20 +451,18 @@ inline void for_each_kmer_packed_rolling_full_width_(
                 "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
             );
         }
-        if constexpr (Checked) {
-            for (; b < seed_b; ++b) {
-                validity.fold(b);
-            }
+        for (; b < seed_b; ++b) {
+            fold_valid_(b);
         }
         b = seed_b;
     }
 
+    // Fold one byte of codes at a time, and emit the 4 k-mers that end in it. Checked, the k-mers
+    // with invalid nucleotides are skipped, and unchecked, the ones that start before `first`.
     std::size_t const num_bytes = (seq.length + 3) / 4;
     for (; b < num_bytes; ++b) {
         fold_byte_(seq.data[b]);
-        if constexpr (Checked) {
-            validity.fold(b);
-        }
+        fold_valid_(b);
 
         for (unsigned local = 0; local < 4; ++local) {
             std::size_t const e = 4 * b + local;
@@ -480,7 +470,7 @@ inline void for_each_kmer_packed_rolling_full_width_(
                 break;
             }
             if constexpr (Checked) {
-                if (!validity.kmer_ending_at_is_valid(e)) {
+                if (((valid_acc >> (57 + e % 8 - k)) & kbits) != kbits) {
                     continue;
                 }
             } else if (e + 1 < first + k) {
@@ -507,14 +497,26 @@ inline auto packed_kmer_emit_(Func& func) noexcept
 //     Aligned
 // =================================================================================================
 
+// The end of the fast region of a checked loop, see run_packed_blocks_(), for `valid_size` bytes of
+// validity bits. The last window of the region is loaded at byte `fast_bytes / 2 - 1` of `valid`,
+// and its 8 bytes have to be there, which ends the region 56 positions before the end of `valid`,
+// earlier than the codes. The region is rounded down to an even number of bytes, so that it ends
+// at a byte of `valid`.
+inline std::size_t checked_fast_bytes_(std::size_t fast_bytes, std::size_t valid_size) noexcept
+{
+    return std::min(
+        fast_bytes - fast_bytes % 2, valid_size >= 7 ? 2 * (valid_size - 7) : std::size_t{0}
+    );
+}
+
 // Emit the k-mer `kmer` at `pos`, if it is valid by its `validity`, see run_packed_blocks_():
-// either AllValid_, or its window, with `kbits` the mask of its low k bits.
+// either AllValid, or its window, with `kbits` the mask of its low k bits.
 template <Encoding E, Layout L, typename Func, typename Validity>
 FISK_ALWAYS_INLINE
 inline void invoke_kmer_callback_if_valid_(
     Func& func, std::size_t pos, std::uint64_t kmer, Validity validity, std::uint64_t kbits
 ) {
-    if constexpr (std::is_same_v<Validity, AllValid_>) {
+    if constexpr (std::is_same_v<Validity, AllValid>) {
         (void) validity;
         (void) kbits;
         invoke_kmer_callback<E, L>(func, pos, kmer);
@@ -528,30 +530,38 @@ inline void invoke_kmer_callback_if_valid_(
 // "full-width" case below (k <= 32), which needs to read an extra byte.
 //
 // K is a template parameter, so that all shifts and masks are compile-time constants regardless of
-// the call site; with a runtime k, this was measured up to ~1.25x slower on Clang (about the same
-// on GCC). The cost is one instantiation per K in for_each_kmer_packed_aligned()'s dispatch.
+// the call site, with one instantiation per K in for_each_kmer_packed_aligned()'s dispatch.
 //
-// With `Checked`, `valid` holds the validity bits of `seq`, see run_packed_blocks_(), and only the
-// valid k-mers are emitted. Otherwise, it is unused and may be null.
-template <bool Checked, Encoding E, Layout L, unsigned K, typename Func>
+// For a sequence with validity bits, see run_packed_blocks_(), only the valid k-mers are emitted.
+template <unsigned K, PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_narrow_width_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, Func&& func
-) {
+inline void for_each_kmer_packed_aligned_narrow_width_(Seq const& seq, Func&& func)
+{
     static_assert(K >= 1 && K <= 29, "K must be in [1, 29]");
+    constexpr Encoding E = Seq::encoding;
+    constexpr Layout L = Seq::layout;
 
+    // The 2k bits of a k-mer in the codes, and its k bits in the validity bits.
     std::uint64_t const mask = (std::uint64_t{1} << (2 * K)) - 1u;
     std::uint64_t const kbits = (std::uint64_t{1} << K) - 1u;
+
+    // The last k-mer starts at `p_max`, so that the 4 k-mers of each of the first `full_bytes`
+    // bytes are within the sequence. The codes have `num_bytes` bytes.
     std::size_t const p_max = seq.length - K;
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes = (seq.length + 3) / 4;
+
+    // The fast region: the starting bytes of the steps below. Their 4 k-mers are within the
+    // sequence, their 8-byte loads within the codes, and checked, within the validity bits.
     std::size_t fast_bytes = std::min(
         full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
     );
-    if constexpr (Checked) {
+    if constexpr (PackedSequenceWithValidityType<Seq>) {
         fast_bytes = checked_fast_bytes_(fast_bytes, (seq.length + 7) / 8);
     }
 
+    // One step: the 4 k-mers that start in byte `b`, from one 8-byte load, each shifted to the low
+    // bits and masked. `validity_at` gives their validity, see run_packed_blocks_().
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         std::uint64_t word;
         std::memcpy(&word, &seq.data[b], 8);
@@ -606,12 +616,12 @@ inline void for_each_kmer_packed_aligned_narrow_width_(
         assert_fits_width_(v3, K);
         invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3), kbits);
     };
-    run_packed_blocks_<Checked, false, 1>(
-        fast_bytes, valid, (std::uint64_t{1} << (31 + K)) - 1u, step_
-    );
 
-    for_each_kmer_packed_rolling_narrow_width_<Checked>(
-        seq, valid, K, 4 * fast_bytes, packed_kmer_emit_<E, L>(func)
+    // The steps over the fast region, with one validity test per block of 32 positions. The rolling
+    // loop then extracts the k-mers after it, at most 56, starting at the first of them.
+    run_packed_blocks_<1>(seq, fast_bytes, (std::uint64_t{1} << (31 + K)) - 1u, step_);
+    for_each_kmer_packed_rolling_narrow_width_(
+        seq, K, 4 * fast_bytes, packed_kmer_emit_<E, L>(func)
     );
 }
 
@@ -643,13 +653,15 @@ inline std::uint64_t aligned_boundary_window_(
 }
 
 // As for_each_kmer_packed_aligned_narrow_width_(), for k in [30, 32].
-template <bool Checked, Encoding E, Layout L, unsigned K, typename Func>
+template <unsigned K, PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_full_width_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, Func&& func
-) {
+inline void for_each_kmer_packed_aligned_full_width_(Seq const& seq, Func&& func)
+{
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
+    constexpr Encoding E = Seq::encoding;
+    constexpr Layout L = Seq::layout;
 
+    // As in the narrow-width loop.
     std::uint64_t mask;
     if constexpr (K == 32) {
         mask = ~std::uint64_t{0};
@@ -662,12 +674,16 @@ inline void for_each_kmer_packed_aligned_full_width_(
     std::size_t const full_bytes = (p_max + 1) / 4;
     std::size_t const num_bytes  = (seq.length + 3) / 4;
 
+    // The fast region, as in the narrow-width loop, but each step also loads the ninth byte after
+    // its starting byte.
     std::size_t fast_bytes = (num_bytes >= 9) ? std::min(full_bytes, num_bytes - 9)
                                                : std::size_t{0};
-    if constexpr (Checked) {
+    if constexpr (PackedSequenceWithValidityType<Seq>) {
         fast_bytes = checked_fast_bytes_(fast_bytes, (seq.length + 7) / 8);
     }
 
+    // One step: the 4 k-mers that start in byte `b`, from an 8-byte load and the byte after it,
+    // combined by aligned_boundary_window_(). `validity_at` as in the narrow-width loop.
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         std::uint64_t lo;
         std::memcpy(&lo, &seq.data[b], 8);
@@ -706,22 +722,20 @@ inline void for_each_kmer_packed_aligned_full_width_(
         assert_fits_width_(v3, K);
         invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3), kbits);
     };
-    run_packed_blocks_<Checked, false, 1>(
-        fast_bytes, valid, (std::uint64_t{1} << (31 + K)) - 1u, step_
-    );
 
-    for_each_kmer_packed_rolling_full_width_<Checked>(
-        seq, valid, K, 4 * fast_bytes, packed_kmer_emit_<E, L>(func)
+    // The steps over the fast region, then the k-mers after it, as in the narrow-width loop.
+    run_packed_blocks_<1>(seq, fast_bytes, (std::uint64_t{1} << (31 + K)) - 1u, step_);
+    for_each_kmer_packed_rolling_full_width_(
+        seq, K, 4 * fast_bytes, packed_kmer_emit_<E, L>(func)
     );
 }
 
 // The dispatch of for_each_kmer_packed_aligned() and for_each_kmer_packed_checked_aligned() to the
-// loops of each k, see for_each_kmer_packed_aligned_narrow_width_() for `Checked` and `valid`.
-template <bool Checked, Encoding E, Layout L, typename Func>
+// loops of each k.
+template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, Func&& func
-) {
+inline void for_each_kmer_packed_aligned_(Seq const& seq, std::size_t k, Func&& func)
+{
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
@@ -733,7 +747,7 @@ inline void for_each_kmer_packed_aligned_(
     // from their K, and spelling each out longhand would bury that in repetition.
     #define FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(K_) \
         case K_: \
-            for_each_kmer_packed_aligned_narrow_width_<Checked, E, L, K_>(seq, valid, func); \
+            for_each_kmer_packed_aligned_narrow_width_<K_>(seq, func); \
             break;
 
     switch (k) {
@@ -767,15 +781,15 @@ inline void for_each_kmer_packed_aligned_(
         FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(28)
         FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(29)
         case 30: {
-            for_each_kmer_packed_aligned_full_width_<Checked, E, L, 30>(seq, valid, func);
+            for_each_kmer_packed_aligned_full_width_<30>(seq, func);
             break;
         }
         case 31: {
-            for_each_kmer_packed_aligned_full_width_<Checked, E, L, 31>(seq, valid, func);
+            for_each_kmer_packed_aligned_full_width_<31>(seq, func);
             break;
         }
         case 32: {
-            for_each_kmer_packed_aligned_full_width_<Checked, E, L, 32>(seq, valid, func);
+            for_each_kmer_packed_aligned_full_width_<32>(seq, func);
             break;
         }
     }
@@ -798,7 +812,7 @@ FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_aligned(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
-    for_each_kmer_packed_aligned_<false>(seq, nullptr, k, func);
+    for_each_kmer_packed_aligned_(seq, k, func);
 }
 
 /**
@@ -807,8 +821,8 @@ inline void for_each_kmer_packed_aligned(
  *
  * As for_each_kmer_packed_aligned(), emitting only the k-mers whose nucleotides are all valid by
  * the validity bits of `seq`, see pack_sequence_with_validity(). The loop tests a block of 32
- * positions at once, so that sequences whose invalid nucleotides come in runs, such as the N runs
- * of assemblies, run at about the speed of the unchecked loop.
+ * positions at once, and the blocks whose nucleotides are all valid run without a test per k-mer,
+ * as do most blocks of sequences whose invalid nucleotides come in runs, such as assemblies.
  *
  * @throws std::invalid_argument if `seq.valid` does not have `(seq.length + 7) / 8` bytes.
  */
@@ -818,31 +832,29 @@ inline void for_each_kmer_packed_checked_aligned(
     PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
 ) {
     check_validity_size_(seq);
-    for_each_kmer_packed_aligned_<true>(seq, seq.valid.data(), k, func);
+    for_each_kmer_packed_aligned_(seq, k, func);
 }
 
 // =================================================================================================
 //     Rolling
 // =================================================================================================
 
-// The dispatch of for_each_kmer_packed_rolling() and for_each_kmer_packed_checked_rolling(), see
-// for_each_kmer_packed_aligned_narrow_width_() for `Checked` and `valid`.
-template <bool Checked, Encoding E, Layout L, typename Func>
+// The dispatch of for_each_kmer_packed_rolling() and for_each_kmer_packed_checked_rolling().
+template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_(
-    PackedSequence<E, L> const& seq, std::uint8_t const* valid, std::size_t k, Func&& func
-) {
+inline void for_each_kmer_packed_rolling_(Seq const& seq, std::size_t k, Func&& func)
+{
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
     if (seq.length < k) {
         return;
     }
-    auto const emit = packed_kmer_emit_<E, L>(func);
+    auto const emit = packed_kmer_emit_<Seq::encoding, Seq::layout>(func);
     if (k <= 29) {
-        for_each_kmer_packed_rolling_narrow_width_<Checked>(seq, valid, k, 0, emit);
+        for_each_kmer_packed_rolling_narrow_width_(seq, k, 0, emit);
     } else {
-        for_each_kmer_packed_rolling_full_width_<Checked>(seq, valid, k, 0, emit);
+        for_each_kmer_packed_rolling_full_width_(seq, k, 0, emit);
     }
 }
 
@@ -865,7 +877,7 @@ FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_rolling(
     PackedSequence<E, L> const& seq, std::size_t k, Func&& func
 ) {
-    for_each_kmer_packed_rolling_<false>(seq, nullptr, k, func);
+    for_each_kmer_packed_rolling_(seq, k, func);
 }
 
 /**
@@ -884,7 +896,7 @@ inline void for_each_kmer_packed_checked_rolling(
     PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
 ) {
     check_validity_size_(seq);
-    for_each_kmer_packed_rolling_<true>(seq, seq.valid.data(), k, func);
+    for_each_kmer_packed_rolling_(seq, k, func);
 }
 
 } // namespace fisk

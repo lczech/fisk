@@ -91,18 +91,11 @@ template <SimdArch Simd, Encoding E, Layout L>
 static void check_simd_arch()
 {
     using simd_vector = typename Simd::simd_vector;
-
-    // The internal loops emit with the validity of the vector, which is AllValid_ unchecked.
-    auto const emit_to = [](auto const& func) {
-        return [&func](std::size_t pos, simd_vector vec, std::size_t n, AllValid_) {
-            func(pos, vec, n);
-        };
+    auto const narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
+        for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, func);
     };
-    auto const narrow_width = [&](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_simd_narrow_width_<Simd, true, false>(seq, nullptr, k, emit_to(func));
-    };
-    auto const full_width = [&](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_simd_full_width_<Simd, true, false>(seq, nullptr, k, emit_to(func));
+    auto const full_width = [](auto const& seq, std::size_t k, auto const& func) {
+        for_each_kmer_packed_simd_full_width_<Simd>(seq, k, func);
     };
     auto const dispatch = [](auto const& seq, std::size_t k, auto const& func) {
         for_each_kmer_packed_simd<Simd>(seq, k, func);
@@ -121,17 +114,13 @@ static void check_simd_arch()
         };
     };
     auto const narrow_width_unmasked = masked_after(
-        [&](auto const& seq, std::size_t k, auto const& func) {
-            for_each_kmer_packed_simd_narrow_width_<Simd, false, false>(
-                seq, nullptr, k, emit_to(func)
-            );
+        [](auto const& seq, std::size_t k, auto const& func) {
+            for_each_kmer_packed_simd_narrow_width_<Simd, false>(seq, k, func);
         }
     );
     auto const full_width_unmasked = masked_after(
-        [&](auto const& seq, std::size_t k, auto const& func) {
-            for_each_kmer_packed_simd_full_width_<Simd, false, false>(
-                seq, nullptr, k, emit_to(func)
-            );
+        [](auto const& seq, std::size_t k, auto const& func) {
+            for_each_kmer_packed_simd_full_width_<Simd, false>(seq, k, func);
         }
     );
 

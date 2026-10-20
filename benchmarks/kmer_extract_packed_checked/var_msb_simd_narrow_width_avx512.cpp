@@ -18,10 +18,7 @@ std::uint64_t run_var_checked_msb_simd_narrow_width_avx512(
     auto const consume = [&](std::size_t, __m512i v, SimdValidLanes<SimdAVX512> lanes) noexcept {
         sink.consume(valid_kmers_<SimdAVX512>(v, lanes));
     };
-    for_each_kmer_packed_simd_narrow_width_<SimdAVX512, true, true>(
-        seq, seq.valid.data(), k,
-        checked_kmer_emit_<SimdAVX512>(consume, k)
-    );
+    for_each_kmer_packed_simd_narrow_width_<SimdAVX512>(seq, k, consume);
     return sink.finalize();
 }
 

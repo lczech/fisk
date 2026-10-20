@@ -18,10 +18,7 @@ std::uint64_t run_var_checked_msb_simd_narrow_width_neon(
     auto const consume = [&](std::size_t, uint64x2_t v, SimdValidLanes<SimdNEON> lanes) noexcept {
         sink.consume(valid_kmers_<SimdNEON>(v, lanes));
     };
-    for_each_kmer_packed_simd_narrow_width_<SimdNEON, true, true>(
-        seq, seq.valid.data(), k,
-        checked_kmer_emit_<SimdNEON>(consume, k)
-    );
+    for_each_kmer_packed_simd_narrow_width_<SimdNEON>(seq, k, consume);
     return sink.finalize();
 }
 
