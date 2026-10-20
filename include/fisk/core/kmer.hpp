@@ -314,6 +314,27 @@ template <KmerType K>
 // =================================================================================================
 
 /**
+ * @brief Adopt a raw word as a k-mer of a given convention, without checking it against the width.
+ *
+ * For words that the caller already knows to be valid, such as the output of an extractor.
+ * Otherwise use kmer_cast(), which asserts the width in debug builds.
+ */
+template <Encoding E, Layout L>
+[[nodiscard]] inline constexpr Kmer<E, L> kmer_cast_unchecked(std::uint64_t raw) noexcept
+{
+    // The type must stay a bare word as far as the ABI is concerned: an aggregate with no
+    // user-declared constructors, so that it is passed in a register exactly like the uint64_t it
+    // wraps. Checked here, as every cast passes through, and the type is incomplete in its body.
+    using K = Kmer<E, L>;
+    static_assert(sizeof(K) == sizeof(std::uint64_t));
+    static_assert(alignof(K) == alignof(std::uint64_t));
+    static_assert(std::is_trivially_copyable_v<K>);
+    static_assert(std::is_standard_layout_v<K>);
+    static_assert(std::is_aggregate_v<K>);
+    return K{raw};
+}
+
+/**
  * @brief Adopt a raw 2-bit-packed word as a k-mer of a given convention.
  *
  * This is the one operation that can silently mislabel a k-mer, since nothing about a bare word
@@ -328,7 +349,7 @@ template <Encoding E, Layout L>
     std::uint64_t raw, [[maybe_unused]] std::size_t width
 ) noexcept {
     assert_fits_width_(raw, width);
-    return Kmer<E, L>{raw};
+    return kmer_cast_unchecked<E, L>(raw);
 }
 
 /**
@@ -382,18 +403,6 @@ inline std::size_t kmer_cast(Vec vec, std::size_t width, Kmer<E, L>* out) noexce
         "kmer_cast() expects a vector of whole 64-bit lanes"
     );
     return kmer_cast<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), width, out);
-}
-
-/**
- * @brief Adopt a raw word as a k-mer of a given convention, without checking it against the width.
- *
- * For words that the caller already knows to be valid, such as the output of an extractor.
- * Otherwise use kmer_cast(), which asserts the width in debug builds.
- */
-template <Encoding E, Layout L>
-[[nodiscard]] inline constexpr Kmer<E, L> kmer_cast_unchecked(std::uint64_t raw) noexcept
-{
-    return Kmer<E, L>{raw};
 }
 
 /**

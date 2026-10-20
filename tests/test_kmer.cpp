@@ -31,15 +31,6 @@ using namespace fisk;
 //     Compile-Time Guarantees
 // =================================================================================================
 
-// The type must stay a bare word as far as the ABI is concerned: an aggregate with no user-declared
-// constructors, so that it is passed in a register exactly like the uint64_t it wraps. Guards
-// against someone later adding a constructor or a second member and silently losing that.
-static_assert(sizeof(KmerAcgtMsb) == sizeof(std::uint64_t));
-static_assert(alignof(KmerAcgtMsb) == alignof(std::uint64_t));
-static_assert(std::is_trivially_copyable_v<KmerAcgtMsb>);
-static_assert(std::is_standard_layout_v<KmerAcgtMsb>);
-static_assert(std::is_aggregate_v<KmerAcgtMsb>);
-
 // All four instantiations are distinct types, and none of them converts to another or to a raw
 // word in either direction. This is the guarantee the whole type exists for.
 static_assert(!std::is_same_v<KmerAcgtMsb, KmerAcgtLsb>);

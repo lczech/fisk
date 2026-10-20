@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
@@ -208,6 +209,26 @@ template <WideKmerType K>
 }
 
 /**
+ * @brief Adopt raw words as a wide k-mer, without checking them against the width.
+ *
+ * For words that the caller already knows to be valid. Otherwise use kmer_cast(), which asserts the
+ * width in debug builds.
+ */
+template <Encoding E, Layout L, std::size_t N>
+[[nodiscard]] inline constexpr WideKmer<E, L, 32 * N> kmer_cast_unchecked(
+    std::array<std::uint64_t, N> const& words
+) noexcept {
+    // A bare array of words, as Kmer is a bare word (see kmer_cast_unchecked() for Kmer).
+    using K = WideKmer<E, L, 32 * N>;
+    static_assert(sizeof(K) == N * sizeof(std::uint64_t));
+    static_assert(alignof(K) == alignof(std::uint64_t));
+    static_assert(std::is_trivially_copyable_v<K>);
+    static_assert(std::is_standard_layout_v<K>);
+    static_assert(std::is_aggregate_v<K>);
+    return K{words};
+}
+
+/**
  * @brief Adopt raw words as a wide k-mer of a given convention.
  *
  * The wide counterpart of kmer_cast() for Kmer, with the same caveat that the caller asserts the
@@ -219,20 +240,7 @@ template <Encoding E, Layout L, std::size_t N>
     std::array<std::uint64_t, N> const& words, [[maybe_unused]] std::size_t width
 ) noexcept {
     assert_wide_fits_width_(words, width);
-    return WideKmer<E, L, 32 * N>{words};
-}
-
-/**
- * @brief Adopt raw words as a wide k-mer, without checking them against the width.
- *
- * For words that the caller already knows to be valid. Otherwise use kmer_cast(), which asserts the
- * width in debug builds.
- */
-template <Encoding E, Layout L, std::size_t N>
-[[nodiscard]] inline constexpr WideKmer<E, L, 32 * N> kmer_cast_unchecked(
-    std::array<std::uint64_t, N> const& words
-) noexcept {
-    return WideKmer<E, L, 32 * N>{words};
+    return kmer_cast_unchecked<E, L>(words);
 }
 
 // =================================================================================================

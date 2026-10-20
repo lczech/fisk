@@ -77,20 +77,6 @@ concept SpacedKmerType = KmerType<K> && std::same_as<K, SpacedKmer<K::encoding, 
 // =================================================================================================
 
 /**
- * @brief Adopt a raw 2-bit-packed word of kept bases as a spaced k-mer of a given convention.
- *
- * The spaced counterpart of kmer_cast(): `weight` is the mask weight, i.e. the number of kept bases
- * in `raw`. Same caveat as kmer_cast(), that the caller asserts the convention and the weight.
- */
-template <Encoding E, Layout L>
-[[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast(
-    std::uint64_t raw, [[maybe_unused]] std::size_t weight
-) noexcept {
-    assert_fits_width_(raw, weight);
-    return SpacedKmer<E, L>{raw};
-}
-
-/**
  * @brief Adopt a raw word of kept bases as a spaced k-mer, without checking it against the weight.
  *
  * For words that the caller already knows to be valid, such as the output of an extractor.
@@ -101,7 +87,28 @@ template <Encoding E, Layout L>
     std::uint64_t raw
 ) noexcept
 {
-    return SpacedKmer<E, L>{raw};
+    // A bare word as far as the ABI is concerned, as for Kmer (see kmer_cast_unchecked()).
+    using K = SpacedKmer<E, L>;
+    static_assert(sizeof(K) == sizeof(std::uint64_t));
+    static_assert(alignof(K) == alignof(std::uint64_t));
+    static_assert(std::is_trivially_copyable_v<K>);
+    static_assert(std::is_standard_layout_v<K>);
+    static_assert(std::is_aggregate_v<K>);
+    return K{raw};
+}
+
+/**
+ * @brief Adopt a raw 2-bit-packed word of kept bases as a spaced k-mer of a given convention.
+ *
+ * The spaced counterpart of kmer_cast(): `weight` is the mask weight, i.e. the number of kept bases
+ * in `raw`. Same caveat as kmer_cast(), that the caller asserts the convention and the weight.
+ */
+template <Encoding E, Layout L>
+[[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast(
+    std::uint64_t raw, [[maybe_unused]] std::size_t weight
+) noexcept {
+    assert_fits_width_(raw, weight);
+    return spaced_kmer_cast_unchecked<E, L>(raw);
 }
 
 /**

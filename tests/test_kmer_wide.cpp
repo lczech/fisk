@@ -182,12 +182,7 @@ static void check_word_order()
 //     Compile-Time Guarantees
 // =================================================================================================
 
-// WideKmer is a public aggregate of its word array, just as Kmer is of its single word. Capacity
-// sets the number of words, while the width remains a runtime argument of every operation.
-static_assert(std::is_aggregate_v<WideKmerAcgtMsb>);
-static_assert(std::is_trivially_copyable_v<WideKmerAcgtMsb>);
-static_assert(std::is_standard_layout_v<WideKmerAcgtMsb>);
-static_assert(sizeof(WideKmerAcgtMsb) == 2 * sizeof(std::uint64_t));
+// Capacity sets the number of words, while the width remains a runtime argument of every operation.
 static_assert(WideKmerAcgtMsb::capacity == 64 && WideKmerAcgtMsb::word_count == 2);
 static_assert(WideKmer<Encoding::kACGT, Layout::kMSB, 32>::word_count == 1);
 static_assert(WideKmer<Encoding::kACGT, Layout::kMSB, 128>::word_count == 4);
