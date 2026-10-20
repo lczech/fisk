@@ -58,7 +58,7 @@ static std::vector<std::string> const& test_sequences()
     return seqs;
 }
 
-// Runs `extract`, called as `extract(callback)`, with a `callback(pos, vec, valid_lanes)`, and
+// Runs `extract`, called as `extract(callback)`, with a `callback(pos, kmers, valid_lanes)`, and
 // checks the k-mers of the valid lanes against `expected`. The vectors have to cover the positions
 // in order, `Simd::lanes` at a time, and lanes beyond the last k-mer must not be valid.
 template <SimdArch Simd, typename Extract>
@@ -66,18 +66,17 @@ static void check_valid_lanes_callback(
     std::vector<ExpectedKmer> const& expected, std::size_t k, std::size_t num_kmers,
     Extract&& extract
 ) {
-    using simd_vector = typename Simd::simd_vector;
     constexpr std::size_t lanes = Simd::lanes;
 
     std::vector<std::size_t> positions;
     std::vector<std::uint64_t> values;
     std::size_t next_pos = 0;
-    extract([&](std::size_t pos, simd_vector vec, KmerVectorValidLanes<Simd> valid_lanes) {
+    extract([&](std::size_t pos, auto kmers, KmerVectorValidLanes<Simd> valid_lanes) {
         EXPECT_EQ(pos, next_pos);
         next_pos = pos + lanes;
 
         alignas(64) std::uint64_t buf[lanes];
-        Simd::store_aligned(vec, buf);
+        Simd::store_aligned(kmer_value(kmers), buf);
         std::uint64_t const bits = valid_lanes.bits();
         EXPECT_EQ(bits >> lanes, std::uint64_t{0});
         for (std::size_t j = 0; j < lanes; ++j) {
@@ -113,6 +112,27 @@ static void check_checked_extractors(
             check_valid_lanes_callback<Simd>(expected, k, num_kmers, [&](auto const& callback) {
                 for_each_kmer_packed_checked_simd<Simd>(packed, k, callback);
             });
+
+            // The single valid k-mers, from for_each_valid_lane() in both callback forms, and
+            // from store_valid_lanes(), without their positions.
+            check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+                for_each_kmer_packed_checked_simd<Simd>(
+                    packed, k, [&](std::size_t pos, auto kmers, auto valid_lanes) {
+                        for_each_valid_lane(pos, kmers, valid_lanes, callback);
+                    }
+                );
+            });
+            std::vector<std::uint64_t> stored_values;
+            for_each_kmer_packed_checked_simd<Simd>(
+                packed, k, [&](std::size_t, auto kmers, auto valid_lanes) {
+                    Kmer<E, L> stored[Simd::lanes];
+                    std::size_t const count = store_valid_lanes(kmers, valid_lanes, stored);
+                    for (std::size_t i = 0; i < count; ++i) {
+                        stored_values.push_back(kmer_value(stored[i]));
+                    }
+                }
+            );
+            check_emitted_kmers(expected, k, stored_values, nullptr);
         };
         check_simd.template operator()<SimdScalar>();
         #if defined(FISK_HAS_SSE2)

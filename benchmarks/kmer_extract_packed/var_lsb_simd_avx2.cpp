@@ -16,7 +16,9 @@ std::uint64_t run_var_lsb_simd_avx2(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_simd<SimdAVX2>(
-        seq, k, [&](std::size_t, __m256i v, std::size_t) noexcept { sink.consume(v); }
+        seq, k, [&](std::size_t, auto kmers, std::size_t) noexcept {
+            sink.consume(kmer_value(kmers));
+        }
     );
     return sink.finalize();
 }

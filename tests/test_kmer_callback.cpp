@@ -11,14 +11,20 @@ using namespace fisk;
 //     Helpers
 // =================================================================================================
 
-// The vector forms are checked with the words of SimdScalar: spelling out a vector type such as
-// __m256i as a template argument makes GCC warn about its ignored attributes.
+// The vector forms of spaced k-mers are checked with the words of SimdScalar: spelling out a vector
+// type such as __m256i as a template argument makes GCC warn about its ignored attributes.
 using Vec = std::uint64_t;
 using K = Kmer<Encoding::kACGT, Layout::kMSB>;
 using S = SpacedKmer<Encoding::kACGT, Layout::kMSB>;
+using KV = KmerVector<Encoding::kACGT, Layout::kMSB, SimdScalar>;
+using Lanes = KmerVectorValidLanes<SimdScalar>;
 
 template <typename T>
 concept KmerCb = KmerCallback<T, Encoding::kACGT, Layout::kMSB>;
+template <typename T>
+concept VectorCb = KmerVectorCallback<T, Encoding::kACGT, Layout::kMSB, SimdScalar>;
+template <typename T>
+concept LanesCb = KmerVectorValidLanesCallback<T, Encoding::kACGT, Layout::kMSB, SimdScalar>;
 template <typename T>
 concept SpacedCb = SpacedKmerCallback<T, Encoding::kACGT, Layout::kMSB, false>;
 template <typename T>
@@ -35,28 +41,35 @@ static_assert(!KmerCb<decltype([](std::size_t, std::size_t, K const&) {})>);
 static_assert(!KmerCb<decltype([](std::string const&) {})>);
 static_assert(!KmerCb<decltype([](std::size_t, S const&) {})>);
 
-static_assert(KmerVectorCallback<decltype([](std::size_t, Vec, std::size_t) {}), Vec>);
-static_assert(!KmerVectorCallback<decltype([](Vec, std::size_t) {}), Vec>);
-static_assert(!KmerVectorCallback<decltype([](Vec) {}), Vec>);
-static_assert(!KmerVectorCallback<
-    decltype([](std::size_t, std::size_t, Vec, std::size_t) {}), Vec
->);
+static_assert(VectorCb<decltype([](std::size_t, KV, std::size_t) {})>);
+static_assert(!VectorCb<decltype([](KV, std::size_t) {})>);
+static_assert(!VectorCb<decltype([](KV) {})>);
+static_assert(!VectorCb<decltype([](std::size_t, std::size_t, KV, std::size_t) {})>);
+
+// The vectors are tagged as the k-mers are: a callback for raw vectors, or for vectors of other
+// conventions, does not take them.
+static_assert(!VectorCb<decltype([](std::size_t, Vec, std::size_t) {})>);
+static_assert(!VectorCb<decltype(
+    [](std::size_t, KmerVector<Encoding::kACTG, Layout::kMSB, SimdScalar>, std::size_t) {}
+)>);
+static_assert(!VectorCb<decltype(
+    [](std::size_t, KmerVector<Encoding::kACGT, Layout::kLSB, SimdScalar>, std::size_t) {}
+)>);
 
 // The valid lanes are a type of their own, so that a callback for a count of valid lanes does not
 // take them, which the mask register of AVX512 would convert to.
-using Lanes = KmerVectorValidLanes<SimdScalar>;
-static_assert(KmerValidLanesCallback<decltype([](std::size_t, Vec, Lanes) {}), Vec, SimdScalar>);
-static_assert(!KmerValidLanesCallback<decltype([](Vec, Lanes) {}), Vec, SimdScalar>);
-static_assert(!KmerValidLanesCallback<
-    decltype([](std::size_t, Vec, std::size_t) {}), Vec, SimdScalar
->);
+static_assert(LanesCb<decltype([](std::size_t, KV, Lanes) {})>);
+static_assert(!LanesCb<decltype([](KV, Lanes) {})>);
+static_assert(!LanesCb<decltype([](std::size_t, KV, std::size_t) {})>);
+static_assert(!LanesCb<decltype([](std::size_t, Vec, Lanes) {})>);
 
 // The forms of single k-mers and of vectors differ in their number of arguments, so that generic
 // lambdas are only one of them.
 static_assert(KmerCb<decltype([](auto, auto) {})>);
-static_assert(!KmerValidLanesCallback<decltype([](auto, auto) {}), Vec, SimdScalar>);
+static_assert(!LanesCb<decltype([](auto, auto) {})>);
 static_assert(!KmerCb<decltype([](auto, auto, auto) {})>);
-static_assert(KmerValidLanesCallback<decltype([](auto, auto, auto) {}), Vec, SimdScalar>);
+static_assert(LanesCb<decltype([](auto, auto, auto) {})>);
+static_assert(VectorCb<decltype([](auto, auto, auto) {})>);
 
 // =================================================================================================
 //     Spaced K-mers

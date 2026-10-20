@@ -109,6 +109,11 @@ std::uint64_t run_var_checked_msb_simd_sse2(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
+std::uint64_t run_var_checked_msb_simd_sse2_scalars(
+    CheckedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
 std::uint64_t run_var_checked_lsb_simd_narrow_width_sse2(
     CheckedLsb const& seq,
     std::size_t k,
@@ -120,6 +125,11 @@ std::uint64_t run_var_checked_lsb_simd_full_width_sse2(
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_checked_lsb_simd_sse2(
+    CheckedLsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_checked_lsb_simd_sse2_scalars(
     CheckedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -142,6 +152,11 @@ std::uint64_t run_var_checked_msb_simd_avx2(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
+std::uint64_t run_var_checked_msb_simd_avx2_scalars(
+    CheckedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
 std::uint64_t run_var_checked_lsb_simd_narrow_width_avx2(
     CheckedLsb const& seq,
     std::size_t k,
@@ -153,6 +168,11 @@ std::uint64_t run_var_checked_lsb_simd_full_width_avx2(
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_checked_lsb_simd_avx2(
+    CheckedLsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_checked_lsb_simd_avx2_scalars(
     CheckedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -175,6 +195,11 @@ std::uint64_t run_var_checked_msb_simd_avx512(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
+std::uint64_t run_var_checked_msb_simd_avx512_scalars(
+    CheckedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
 std::uint64_t run_var_checked_lsb_simd_narrow_width_avx512(
     CheckedLsb const& seq,
     std::size_t k,
@@ -186,6 +211,11 @@ std::uint64_t run_var_checked_lsb_simd_full_width_avx512(
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_checked_lsb_simd_avx512(
+    CheckedLsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_checked_lsb_simd_avx512_scalars(
     CheckedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -208,6 +238,11 @@ std::uint64_t run_var_checked_msb_simd_neon(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
+std::uint64_t run_var_checked_msb_simd_neon_scalars(
+    CheckedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
 std::uint64_t run_var_checked_lsb_simd_narrow_width_neon(
     CheckedLsb const& seq,
     std::size_t k,
@@ -219,6 +254,11 @@ std::uint64_t run_var_checked_lsb_simd_full_width_neon(
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_checked_lsb_simd_neon(
+    CheckedLsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_checked_lsb_simd_neon_scalars(
     CheckedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer

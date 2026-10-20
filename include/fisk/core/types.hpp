@@ -233,14 +233,15 @@ using KmerActgLsb = Kmer<Encoding::kACTG, Layout::kLSB>;
  *
  * The operations of core/kmer.hpp are written against this rather than against Kmer directly, so
  * that SpacedKmer (a spaced k-mer, where `width` is the mask weight rather than k) shares the
- * entire op set without any of it being duplicated.
+ * entire op set without any of it being duplicated. A vector of k-mers, see KmerVector, is not
+ * one, also not with the single word of SimdScalar.
  */
 template <typename T>
 concept KmerType = requires(T kmer) {
     { T::encoding } -> std::convertible_to<Encoding>;
     { T::layout }   -> std::convertible_to<Layout>;
     { kmer.value }  -> std::convertible_to<std::uint64_t>;
-};
+} && !requires { T::lanes; };
 
 /**
  * @brief A contiguous k-mer, i.e. a Kmer itself and not a look-alike such as SpacedKmer.
@@ -458,8 +459,39 @@ template <typename T>
 concept SpacedKmerMaskType = is_spaced_kmer_mask_<T>::value;
 
 // =================================================================================================
-//     K-mer Vector Valid Lanes
+//     K-mer Vector
 // =================================================================================================
+
+/**
+ * @brief A SIMD vector of k-mers, one per 64-bit lane, each encoded as in Kmer, tagged with their
+ * conventions and the SIMD arch.
+ *
+ * The vector counterpart of Kmer, as handed out by the SIMD extraction functions, such as
+ * for_each_kmer_packed_simd(). As for Kmer, this is an aggregate with the vector as its public
+ * `value`, so that it is passed exactly like the bare vector. Use for_each_valid_lane() or
+ * store_valid_lanes() to get the single k-mers, and `value` or kmer_value() for the vector, for
+ * example for the operations of the arch.
+ *
+ * The template takes the arch rather than its vector type, as GCC warns about vector types that
+ * are spelled out as template arguments.
+ */
+template <Encoding E, Layout L, SimdArch Simd>
+struct KmerVector
+{
+    static constexpr Encoding encoding = E;
+    static constexpr Layout layout = L;
+    static constexpr std::size_t lanes = Simd::lanes;
+    using simd = Simd;
+
+    typename Simd::simd_vector value;
+};
+
+/**
+ * @brief A vector of k-mers, i.e. a KmerVector.
+ */
+template <typename T>
+concept KmerVectorType = std::same_as<T, KmerVector<T::encoding, T::layout, typename T::simd>>;
+
 
 /**
  * @brief The lanes of a SIMD vector of k-mers that hold valid k-mers, for the extraction functions

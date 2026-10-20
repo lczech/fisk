@@ -97,6 +97,12 @@ void bench_kmer_extract_packed_checked(
                     return run_var_checked_msb_simd_sse2(seq, k, sink_buffer);
                 }
             ),
+            bench(
+                "simd_sse2_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_msb_simd_sse2_scalars(seq, k, sink_buffer);
+                }
+            ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
@@ -115,6 +121,12 @@ void bench_kmer_extract_packed_checked(
                 "simd_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_msb_simd_avx2(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_avx2_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_msb_simd_avx2_scalars(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
@@ -137,6 +149,12 @@ void bench_kmer_extract_packed_checked(
                     return run_var_checked_msb_simd_avx512(seq, k, sink_buffer);
                 }
             ),
+            bench(
+                "simd_avx512_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_msb_simd_avx512_scalars(seq, k, sink_buffer);
+                }
+            ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
@@ -155,6 +173,12 @@ void bench_kmer_extract_packed_checked(
                 "simd_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_msb_simd_neon(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_neon_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_msb_simd_neon_scalars(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
@@ -202,6 +226,12 @@ void bench_kmer_extract_packed_checked(
                     return run_var_checked_msb_simd_sse2(seq, k, sink_buffer);
                 }
             ),
+            bench(
+                "simd_sse2_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_msb_simd_sse2_scalars(seq, k, sink_buffer);
+                }
+            ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
@@ -214,6 +244,12 @@ void bench_kmer_extract_packed_checked(
                 "simd_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_msb_simd_avx2(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_avx2_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_msb_simd_avx2_scalars(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
@@ -230,6 +266,12 @@ void bench_kmer_extract_packed_checked(
                     return run_var_checked_msb_simd_avx512(seq, k, sink_buffer);
                 }
             ),
+            bench(
+                "simd_avx512_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_msb_simd_avx512_scalars(seq, k, sink_buffer);
+                }
+            ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
@@ -242,6 +284,12 @@ void bench_kmer_extract_packed_checked(
                 "simd_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_msb_simd_neon(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_neon_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_msb_simd_neon_scalars(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
@@ -295,6 +343,12 @@ void bench_kmer_extract_packed_checked(
                     return run_var_checked_lsb_simd_sse2(seq, k, sink_buffer);
                 }
             ),
+            bench(
+                "simd_sse2_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_lsb_simd_sse2_scalars(seq, k, sink_buffer);
+                }
+            ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
@@ -313,6 +367,12 @@ void bench_kmer_extract_packed_checked(
                 "simd_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_lsb_simd_avx2(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_avx2_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_lsb_simd_avx2_scalars(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
@@ -335,6 +395,12 @@ void bench_kmer_extract_packed_checked(
                     return run_var_checked_lsb_simd_avx512(seq, k, sink_buffer);
                 }
             ),
+            bench(
+                "simd_avx512_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_lsb_simd_avx512_scalars(seq, k, sink_buffer);
+                }
+            ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
@@ -353,6 +419,12 @@ void bench_kmer_extract_packed_checked(
                 "simd_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_lsb_simd_neon(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_neon_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_lsb_simd_neon_scalars(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
@@ -400,6 +472,12 @@ void bench_kmer_extract_packed_checked(
                     return run_var_checked_lsb_simd_sse2(seq, k, sink_buffer);
                 }
             ),
+            bench(
+                "simd_sse2_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_lsb_simd_sse2_scalars(seq, k, sink_buffer);
+                }
+            ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
@@ -412,6 +490,12 @@ void bench_kmer_extract_packed_checked(
                 "simd_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_lsb_simd_avx2(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_avx2_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_lsb_simd_avx2_scalars(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
@@ -428,6 +512,12 @@ void bench_kmer_extract_packed_checked(
                     return run_var_checked_lsb_simd_avx512(seq, k, sink_buffer);
                 }
             ),
+            bench(
+                "simd_avx512_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_lsb_simd_avx512_scalars(seq, k, sink_buffer);
+                }
+            ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
@@ -440,6 +530,12 @@ void bench_kmer_extract_packed_checked(
                 "simd_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_lsb_simd_neon(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "simd_neon_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_lsb_simd_neon_scalars(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON

@@ -16,7 +16,9 @@ std::uint64_t run_var_msb_simd_neon(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_simd<SimdNEON>(
-        seq, k, [&](std::size_t, uint64x2_t v, std::size_t) noexcept { sink.consume(v); }
+        seq, k, [&](std::size_t, auto kmers, std::size_t) noexcept {
+            sink.consume(kmer_value(kmers));
+        }
     );
     return sink.finalize();
 }

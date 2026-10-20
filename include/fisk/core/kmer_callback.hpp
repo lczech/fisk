@@ -1,8 +1,11 @@
 #pragma once
 
+#include <bit>
+#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <utility>
 
 #include "fisk/core/cast.hpp"
@@ -17,10 +20,11 @@ namespace fisk {
 // =================================================================================================
 
 // The forms of callbacks that the k-mer extraction functions accept, as dispatched by the
-// invoke_*() functions below. A vector form takes vectors of one SIMD arch, which the concept
-// receives as a deduced type: GCC warns about vector types that are spelled out as template
-// arguments. The vector forms always take the position: the forms of single k-mers and of vectors
-// are then told apart by their number of arguments alone, also for generic lambdas.
+// invoke_*() functions below. The vector forms of k-mers take a KmerVector. Those of spaced k-mers
+// take the vectors of one SIMD arch, which the concept receives as a deduced type: GCC warns about
+// vector types that are spelled out as template arguments. The vector forms always take the
+// position: the forms of single k-mers and of vectors are then told apart by their number of
+// arguments alone, also for generic lambdas.
 
 // -------------------------------------------------------------------------------------------------
 //     Contiguous K-mers
@@ -35,18 +39,19 @@ concept KmerCallback =
     std::invocable<Callback, Kmer<E, L> const&>;
 
 /**
- * @brief A callback for vectors of k-mers, as `callback(pos, vec, valid_count)`.
+ * @brief A callback for vectors of k-mers, as `callback(pos, kmers, valid_count)`, see KmerVector.
  */
-template <typename Callback, typename Vector>
-concept KmerVectorCallback = std::invocable<Callback, std::size_t, Vector, std::size_t>;
+template <typename Callback, Encoding E, Layout L, typename Simd>
+concept KmerVectorCallback =
+    std::invocable<Callback, std::size_t, KmerVector<E, L, Simd>, std::size_t>;
 
 /**
  * @brief A callback for vectors of k-mers with their valid lanes, as
- * `callback(pos, vec, valid_lanes)`, see KmerVectorValidLanes.
+ * `callback(pos, kmers, valid_lanes)`, see KmerVector and KmerVectorValidLanes.
  */
-template <typename Callback, typename Vector, typename Simd>
-concept KmerValidLanesCallback =
-    std::invocable<Callback, std::size_t, Vector, KmerVectorValidLanes<Simd>>;
+template <typename Callback, Encoding E, Layout L, typename Simd>
+concept KmerVectorValidLanesCallback =
+    std::invocable<Callback, std::size_t, KmerVector<E, L, Simd>, KmerVectorValidLanes<Simd>>;
 
 // -------------------------------------------------------------------------------------------------
 //     Spaced K-mers
@@ -103,24 +108,23 @@ inline void invoke_kmer_callback(Callback&& callback, std::size_t pos, std::uint
 }
 
 /**
- * @brief Invoke a k-mer extraction callback that receives a whole SIMD register of consecutive
- * k-mers.
+ * @brief Invoke a k-mer extraction callback with a vector of consecutive k-mers.
  *
- * Accepts `callback(pos, vec, valid_count)`, see KmerVectorCallback. `pos` is the start position
+ * Accepts `callback(pos, kmers, valid_count)`, see KmerVectorCallback. `pos` is the start position
  * of the k-mer in lane 0; lane `j` holds the k-mer starting at `pos + j`, for `j < valid_count`.
  * As for invoke_kmer_callback(), a callback that ignores the position costs nothing.
  */
-template <typename Callback, typename Vector>
+template <Encoding E, Layout L, SimdArch Simd, typename Callback>
 FISK_ALWAYS_INLINE
 inline void invoke_kmer_vector_callback(
-    Callback&& callback, std::size_t pos, Vector vec, std::size_t valid_count
+    Callback&& callback, std::size_t pos, KmerVector<E, L, Simd> kmers, std::size_t valid_count
 ) {
-    if constexpr (std::invocable<Callback, std::size_t, Vector, std::size_t>) {
-        callback(pos, vec, valid_count);
+    if constexpr (KmerVectorCallback<Callback, E, L, Simd>) {
+        callback(pos, kmers, valid_count);
     } else {
         static_assert(
-            KmerVectorCallback<Callback, Vector>,
-            "Callback must be callable as callback(pos, vec, valid_count)."
+            KmerVectorCallback<Callback, E, L, Simd>,
+            "Callback must be callable as callback(pos, kmers, valid_count)."
         );
     }
 }
@@ -129,20 +133,21 @@ inline void invoke_kmer_vector_callback(
  * @brief Invoke a k-mer extraction callback with a vector of consecutive k-mers and its valid
  * lanes.
  *
- * Accepts `callback(pos, vec, valid_lanes)`, see KmerValidLanesCallback, where lane `j` of `vec`
- * holds the k-mer starting at `pos + j`, valid if lane `j` of `valid_lanes` is.
+ * Accepts `callback(pos, kmers, valid_lanes)`, see KmerVectorValidLanesCallback, where lane `j` of
+ * `kmers` holds the k-mer starting at `pos + j`, valid if lane `j` of `valid_lanes` is.
  */
-template <typename Callback, typename Vector, SimdArch Simd>
+template <Encoding E, Layout L, SimdArch Simd, typename Callback>
 FISK_ALWAYS_INLINE
-inline void invoke_kmer_valid_lanes_callback(
-    Callback&& callback, std::size_t pos, Vector vec, KmerVectorValidLanes<Simd> valid_lanes
+inline void invoke_kmer_vector_valid_lanes_callback(
+    Callback&& callback, std::size_t pos, KmerVector<E, L, Simd> kmers,
+    KmerVectorValidLanes<Simd> valid_lanes
 ) {
-    if constexpr (KmerValidLanesCallback<Callback, Vector, Simd>) {
-        callback(pos, vec, valid_lanes);
+    if constexpr (KmerVectorValidLanesCallback<Callback, E, L, Simd>) {
+        callback(pos, kmers, valid_lanes);
     } else {
         static_assert(
-            KmerValidLanesCallback<Callback, Vector, Simd>,
-            "Callback must be callable as callback(pos, vec, valid_lanes)."
+            KmerVectorValidLanesCallback<Callback, E, L, Simd>,
+            "Callback must be callable as callback(pos, kmers, valid_lanes)."
         );
     }
 }
@@ -215,6 +220,83 @@ inline void invoke_spaced_kmer_vector_callback(
             "Callback must be callable as callback(pos, mask_idx, vec, valid_count)."
         );
     }
+}
+
+// =================================================================================================
+//     Valid Lanes of K-mer Vectors
+// =================================================================================================
+
+/**
+ * @brief Call `func` with each of the first `valid_count` k-mers of a vector of k-mers, in lane
+ * order, as handed out by for_each_kmer_packed_simd().
+ *
+ * `func` takes single k-mers, as `func(pos, kmer)` or `func(kmer)`, see KmerCallback, where the
+ * k-mer in lane `j` starts at `pos + j`.
+ */
+template <Encoding E, Layout L, SimdArch Simd, typename Func>
+    requires KmerCallback<Func, E, L>
+FISK_ALWAYS_INLINE
+inline void for_each_valid_lane(
+    std::size_t pos, KmerVector<E, L, Simd> kmers, std::size_t valid_count, Func&& func
+) {
+    assert(valid_count <= Simd::lanes);
+    std::uint64_t words[Simd::lanes];
+    std::memcpy(words, &kmers.value, sizeof(words));
+    for (std::size_t j = 0; j < valid_count; ++j) {
+        invoke_kmer_callback<E, L>(func, pos + j, words[j]);
+    }
+}
+
+/**
+ * @brief Call `func` with each valid k-mer of a vector of k-mers, in lane order, as handed out by
+ * for_each_kmer_packed_checked_simd().
+ *
+ * As the overload for a count of valid lanes, for the k-mers in the lanes set in `valid_lanes`.
+ */
+template <Encoding E, Layout L, SimdArch Simd, typename Func>
+    requires KmerCallback<Func, E, L>
+FISK_ALWAYS_INLINE
+inline void for_each_valid_lane(
+    std::size_t pos, KmerVector<E, L, Simd> kmers, KmerVectorValidLanes<Simd> valid_lanes,
+    Func&& func
+) {
+    std::uint64_t words[Simd::lanes];
+    std::memcpy(words, &kmers.value, sizeof(words));
+    std::uint64_t const bits = valid_lanes.bits();
+
+    // All lanes valid, the usual case, as a loop with a fixed count, which the compilers unroll.
+    // GCC keeps the loop over the set bits below as a loop, even for a constant mask.
+    if (bits == (std::uint64_t{1} << Simd::lanes) - 1) {
+        for (std::size_t j = 0; j < Simd::lanes; ++j) {
+            invoke_kmer_callback<E, L>(func, pos + j, words[j]);
+        }
+        return;
+    }
+    for (std::uint64_t rest = bits; rest != 0; rest &= rest - 1) {
+        std::size_t const j = static_cast<std::size_t>(std::countr_zero(rest));
+        invoke_kmer_callback<E, L>(func, pos + j, words[j]);
+    }
+}
+
+/**
+ * @brief Store the valid k-mers of a vector of k-mers at `out`, in lane order, and return how many
+ * were stored.
+ *
+ * `valid` is the count of valid lanes or the KmerVectorValidLanes that the vector was handed out
+ * with, see for_each_valid_lane(). `out` must have room for `Simd::lanes` k-mers. The positions
+ * are not stored: with a count, the stored k-mer `i` starts at `pos + i`, but valid lanes can leave
+ * gaps, so for their positions, use for_each_valid_lane() with `func(pos, kmer)` instead.
+ */
+template <Encoding E, Layout L, SimdArch Simd, typename Valid>
+    requires std::same_as<Valid, std::size_t> || std::same_as<Valid, KmerVectorValidLanes<Simd>>
+inline std::size_t store_valid_lanes(
+    KmerVector<E, L, Simd> kmers, Valid valid, Kmer<E, L>* out
+) noexcept {
+    std::size_t count = 0;
+    for_each_valid_lane(0, kmers, valid, [&](Kmer<E, L> kmer) {
+        out[count++] = kmer;
+    });
+    return count;
 }
 
 } // namespace fisk

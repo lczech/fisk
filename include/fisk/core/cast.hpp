@@ -150,98 +150,58 @@ template <Encoding E, Layout L>
     return kmer_cast_unchecked<E, L>(raw);
 }
 
+// =================================================================================================
+//     K-mer Vector Cast
+// =================================================================================================
+
 /**
- * @brief Adopt the first `count` lanes of a SIMD vector of raw words as k-mers, and return how
- * many were written.
+ * @brief Adopt a SIMD vector of raw words as a vector of k-mers of a given convention, without
+ * checking them against the width.
  *
- * The vector-emitting extractors (kmer_extract/packed_simd.hpp) hand out several k-mers at once in
- * an ISA register, which no scalar wrapper can describe. This is the way back: it gives the same
- * conventions the producing PackedSequence carries, without the consumer re-deriving lane
- * extraction per ISA. `out` must have room for `count` k-mers.
- *
- * Deliberately ISA-agnostic, moving the register through memcpy rather than a per-ISA store
- * intrinsic. A vector type is an ordinary trivially copyable object, and memcpy imposes no
- * alignment requirement, so compilers lower this to the same unaligned store they would emit for
- * the intrinsic, and usually elide it altogether once inlined into the consumer.
+ * The vector counterpart of kmer_cast_unchecked(), for vectors that the caller already knows to
+ * hold valid k-mers. Otherwise use kmer_vector_cast(), which asserts the width in debug builds.
  */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t kmer_cast(
-    Vec vec, std::size_t count, std::size_t width, Kmer<E, L>* out
+template <Encoding E, Layout L, SimdArch Simd>
+[[nodiscard]] inline KmerVector<E, L, Simd> kmer_vector_cast_unchecked(
+    typename Simd::simd_vector vec
 ) noexcept {
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "kmer_cast() expects a vector of whole 64-bit lanes"
-    );
-    static_assert(
-        std::is_trivially_copyable_v<Vec>,
-        "kmer_cast() expects a trivially copyable vector"
-    );
-    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
-    assert(count <= lanes);
-    assert(out != nullptr);
-
-    std::uint64_t buffer[lanes];
-    std::memcpy(buffer, &vec, sizeof(Vec));
-    for (std::size_t i = 0; i < count; ++i) {
-        out[i] = kmer_cast<E, L>(buffer[i], width);
-    }
-    return count;
+    // A bare vector as far as the ABI is concerned, as Kmer is a bare word (see
+    // kmer_cast_unchecked()), so that it is passed in a vector register.
+    using V = KmerVector<E, L, Simd>;
+    static_assert(sizeof(V) == sizeof(vec));
+    static_assert(alignof(V) == alignof(typename Simd::simd_vector));
+    static_assert(std::is_trivially_copyable_v<V>);
+    static_assert(std::is_standard_layout_v<V>);
+    static_assert(std::is_aggregate_v<V>);
+    return V{vec};
 }
 
 /**
- * @brief Adopt every lane of a SIMD vector of raw words as k-mers.
+ * @brief Adopt a SIMD vector of raw words as a vector of k-mers of a given convention.
  *
- * Convenience for the common full-vector case; see the overload above for the partial case.
+ * The vector counterpart of kmer_cast(), with the same caveat that the caller asserts the
+ * convention, and that every lane holds a k-mer of `width` bases, both checked by assert() only.
  */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t kmer_cast(Vec vec, std::size_t width, Kmer<E, L>* out) noexcept
-{
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "kmer_cast() expects a vector of whole 64-bit lanes"
-    );
-    return kmer_cast<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), width, out);
-}
-
-/**
- * @brief Adopt the first `count` lanes of a SIMD vector of raw words as k-mers, without checking
- * them against the width. The unchecked counterpart of kmer_cast(vec, count, width, out).
- */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t kmer_cast_unchecked(Vec vec, std::size_t count, Kmer<E, L>* out) noexcept
-{
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
-    );
-    static_assert(
-        std::is_trivially_copyable_v<Vec>,
-        "kmer_cast_unchecked() expects a trivially copyable vector"
-    );
-    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
-    assert(count <= lanes);
-    assert(out != nullptr);
-
-    std::uint64_t buffer[lanes];
-    std::memcpy(buffer, &vec, sizeof(Vec));
-    for (std::size_t i = 0; i < count; ++i) {
-        out[i] = kmer_cast_unchecked<E, L>(buffer[i]);
+template <Encoding E, Layout L, SimdArch Simd>
+[[nodiscard]] inline KmerVector<E, L, Simd> kmer_vector_cast(
+    typename Simd::simd_vector vec, [[maybe_unused]] std::size_t width
+) noexcept {
+    static_assert(sizeof(vec) == Simd::lanes * sizeof(std::uint64_t));
+    std::uint64_t words[Simd::lanes];
+    std::memcpy(words, &vec, sizeof(vec));
+    for (std::uint64_t const word : words) {
+        assert_fits_width_(word, width);
     }
-    return count;
+    return kmer_vector_cast_unchecked<E, L, Simd>(vec);
 }
 
 /**
- * @brief Adopt every lane of a SIMD vector of raw words as k-mers, without checking them against
- * the width. The unchecked counterpart of kmer_cast(vec, width, out).
+ * @brief Get the SIMD vector of a vector of k-mers, the counterpart of kmer_vector_cast().
  */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t kmer_cast_unchecked(Vec vec, Kmer<E, L>* out) noexcept
+template <KmerVectorType V>
+[[nodiscard]] inline typename V::simd::simd_vector kmer_value(V kmers) noexcept
 {
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
-    );
-    return kmer_cast_unchecked<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), out);
+    return kmers.value;
 }
 
 // =================================================================================================
@@ -287,8 +247,13 @@ template <Encoding E, Layout L>
  * @brief Adopt the first `count` lanes of a SIMD vector of raw words as spaced k-mers, and return
  * how many were written.
  *
- * The spaced counterpart of the contiguous vector kmer_cast(), with the same memcpy-based,
- * ISA-agnostic lane handling. `weight` is the mask weight shared by all lanes.
+ * The vector-emitting spaced extractors (kmer_spaced/packed_simd.hpp) hand out several spaced
+ * k-mers at once in a SIMD vector. This is the way back to typed spaced k-mers, with the
+ * conventions of the producing mask. `weight` is the mask weight shared by all lanes, and `out`
+ * must have room for `count` spaced k-mers.
+ *
+ * The vector goes through memcpy rather than a store intrinsic of its arch, which compilers lower
+ * to the same unaligned store, and usually elide once this is inlined into the consumer.
  */
 template <Encoding E, Layout L, typename Vec>
 inline std::size_t spaced_kmer_cast(

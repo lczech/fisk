@@ -97,8 +97,13 @@ static void check_simd_arch()
     auto const full_width = [](auto const& seq, std::size_t k, auto const& func) {
         for_each_kmer_packed_simd_full_width_<Simd>(seq, k, func);
     };
+    // The dispatcher hands on the vectors as KmerVector<E, L, Simd>, checked here as raw vectors.
     auto const dispatch = [](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_simd<Simd>(seq, k, func);
+        for_each_kmer_packed_simd<Simd>(
+            seq, k, [&](std::size_t pos, KmerVector<E, L, Simd> kmers, std::size_t n) {
+                func(pos, kmer_value(kmers), n);
+            }
+        );
     };
 
     // Without masking, the bits above the k-mers hold neighboring bases. Masking them in the
@@ -109,7 +114,7 @@ static void check_simd_arch()
                                                  : (std::uint64_t{1} << (2 * k)) - 1u;
             simd_vector const mask_v = Simd::broadcast(mask);
             extract(seq, k, [&](std::size_t pos, simd_vector vec, std::size_t n) {
-                invoke_kmer_vector_callback(func, pos, Simd::bitwise_and(vec, mask_v), n);
+                func(pos, Simd::bitwise_and(vec, mask_v), n);
             });
         };
     };
@@ -144,6 +149,28 @@ static void check_simd_arch()
             });
             check_simd_callbacks<Simd>(expected, k, [&](auto const& callback) {
                 dispatch(packed, k, callback);
+            });
+
+            // The single k-mers of the dispatcher, from for_each_valid_lane() in both callback
+            // forms, and from store_valid_lanes().
+            check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+                for_each_kmer_packed_simd<Simd>(
+                    packed, k, [&](std::size_t pos, auto kmers, std::size_t n) {
+                        for_each_valid_lane(pos, kmers, n, callback);
+                    }
+                );
+            });
+            check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+                for_each_kmer_packed_simd<Simd>(
+                    packed, k, [&](std::size_t pos, auto kmers, std::size_t n) {
+                        Kmer<E, L> stored[Simd::lanes];
+                        std::size_t const count = store_valid_lanes(kmers, n, stored);
+                        EXPECT_EQ(count, n);
+                        for (std::size_t i = 0; i < count; ++i) {
+                            invoke_kmer_callback<E, L>(callback, pos + i, kmer_value(stored[i]));
+                        }
+                    }
+                );
             });
         }
     );

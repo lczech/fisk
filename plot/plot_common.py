@@ -428,15 +428,19 @@ BENCHMARK_RENAMES = {
     "simd_narrow_width_sse2"   : "SIMD Narrow-Width SSE2",
     "simd_full_width_sse2"     : "SIMD Full-Width SSE2",
     "simd_sse2"                : "SIMD SSE2",
+    "simd_sse2_scalars"        : "SIMD SSE2 (scalars)",
     "simd_narrow_width_avx2"   : "SIMD Narrow-Width AVX2",
     "simd_full_width_avx2"     : "SIMD Full-Width AVX2",
     "simd_avx2"                : "SIMD AVX2",
+    "simd_avx2_scalars"        : "SIMD AVX2 (scalars)",
     "simd_narrow_width_avx512" : "SIMD Narrow-Width AVX512",
     "simd_full_width_avx512"   : "SIMD Full-Width AVX512",
     "simd_avx512"              : "SIMD AVX512",
+    "simd_avx512_scalars"      : "SIMD AVX512 (scalars)",
     "simd_narrow_width_neon"   : "SIMD Narrow-Width Neon",
     "simd_full_width_neon"     : "SIMD Full-Width Neon",
     "simd_neon"                : "SIMD Neon",
+    "simd_neon_scalars"        : "SIMD Neon (scalars)",
 }
 
 # "Reduced" names for the main manuscript, to keep it simple.

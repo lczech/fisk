@@ -1,9 +1,10 @@
 #pragma once
 
-// SIMD vectors of raw k-mer words for the vector overloads of kmer_cast() and spaced_kmer_cast(),
-// and the shared check run on them. Each vector is built with its ISA's own set intrinsic rather
-// than via memcpy, since it is precisely the lane order of those intrinsics that the casts must
-// agree with, and memcpy is what the casts use internally.
+// SIMD vectors of raw k-mer words for the vector casts, kmer_vector_cast() and the vector overloads
+// of spaced_kmer_cast(), and the check of the latter. Each vector is built with its ISA's own set
+// intrinsic rather than via memcpy, since it is precisely the lane order of those intrinsics that
+// the casts and the functions on k-mer vectors must agree with, and memcpy is what they use
+// internally.
 
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,10 @@
 #include "fisk/core/cast.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
+#include "fisk/core/simd_avx2.hpp"
+#include "fisk/core/simd_avx512.hpp"
+#include "fisk/core/simd_neon.hpp"
+#include "fisk/core/simd_sse2.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
@@ -27,8 +32,9 @@ inline std::uint64_t lane_word(std::vector<std::string> const& seqs, std::size_t
     return oracle_encode<fisk::Encoding::kACGT, fisk::Layout::kMSB>(seqs[i]).value();
 }
 
-// Call `f(vec, seqs)` once per vector ISA compiled in. `seqs` holds one random sequence of length
-// `width` per lane, and lane `i` of `vec` holds seqs[i] encoded under ACGT/MSB.
+// Call `f(simd, vec, seqs)` once per vector ISA compiled in, with `simd` an object of its SIMD
+// arch, such as SimdAVX2. `seqs` holds one random sequence of length `width` per lane, and lane `i`
+// of `vec` holds seqs[i] encoded under ACGT/MSB.
 template <typename F>
 inline void for_each_lane_vector(
     [[maybe_unused]] std::size_t width, [[maybe_unused]] std::uint64_t seed, [[maybe_unused]] F&& f
@@ -36,7 +42,7 @@ inline void for_each_lane_vector(
     #if defined(FISK_HAS_SSE2)
     {
         auto const seqs = random_seqs(width, 2, seed);
-        f(_mm_set_epi64x(
+        f(fisk::SimdSSE2{}, _mm_set_epi64x(
             static_cast<long long>(lane_word(seqs, 1)),
             static_cast<long long>(lane_word(seqs, 0))
         ), seqs);
@@ -46,7 +52,7 @@ inline void for_each_lane_vector(
     #if defined(FISK_HAS_AVX2)
     {
         auto const seqs = random_seqs(width, 4, seed + 1);
-        f(_mm256_set_epi64x(
+        f(fisk::SimdAVX2{}, _mm256_set_epi64x(
             static_cast<long long>(lane_word(seqs, 3)),
             static_cast<long long>(lane_word(seqs, 2)),
             static_cast<long long>(lane_word(seqs, 1)),
@@ -58,7 +64,7 @@ inline void for_each_lane_vector(
     #if defined(FISK_HAS_AVX512)
     {
         auto const seqs = random_seqs(width, 8, seed + 2);
-        f(_mm512_set_epi64(
+        f(fisk::SimdAVX512{}, _mm512_set_epi64(
             static_cast<long long>(lane_word(seqs, 7)),
             static_cast<long long>(lane_word(seqs, 6)),
             static_cast<long long>(lane_word(seqs, 5)),
@@ -75,7 +81,7 @@ inline void for_each_lane_vector(
     {
         auto const seqs = random_seqs(width, 2, seed + 3);
         std::uint64_t const lanes[2] = {lane_word(seqs, 0), lane_word(seqs, 1)};
-        f(vld1q_u64(lanes), seqs);
+        f(fisk::SimdNEON{}, vld1q_u64(lanes), seqs);
     }
     #endif
 }
@@ -84,9 +90,9 @@ inline void for_each_lane_vector(
 //     Vector Cast Check
 // =================================================================================================
 
-// The vector cast overloads for K (kmer_cast*() for Kmer, spaced_kmer_cast*() for SpacedKmer) must
-// hand back exactly the lanes they were given, in lane order and tagged with K's conventions, so
-// that consumers of the vector-emitting extractors can return to the typed world.
+// The vector overloads of spaced_kmer_cast() and spaced_kmer_cast_unchecked() must hand back
+// exactly the lanes they were given, in lane order and tagged with K's conventions, so that
+// consumers of the vector-emitting spaced extractors can return to the typed world.
 template <typename K, typename Vec>
 inline void check_vector_cast(Vec vec, std::vector<std::string> const& seqs, std::size_t width)
 {
@@ -95,28 +101,10 @@ inline void check_vector_cast(Vec vec, std::vector<std::string> const& seqs, std
     ASSERT_EQ(seqs.size(), lanes);
 
     auto const cast = [&](auto... args) {
-        if constexpr (fisk::ContiguousKmerType<K>) {
-            return fisk::kmer_cast<K::encoding, K::layout>(vec, args...);
-        } else if constexpr (fisk::SpacedKmerType<K>) {
-            return fisk::spaced_kmer_cast<K::encoding, K::layout>(vec, args...);
-        } else {
-            static_assert(
-                fisk::dependent_false_v<K::encoding>, "Unhandled k-mer type in check_vector_cast()"
-            );
-            return std::size_t{0};
-        }
+        return fisk::spaced_kmer_cast<K::encoding, K::layout>(vec, args...);
     };
     auto const cast_unchecked = [&](auto... args) {
-        if constexpr (fisk::ContiguousKmerType<K>) {
-            return fisk::kmer_cast_unchecked<K::encoding, K::layout>(vec, args...);
-        } else if constexpr (fisk::SpacedKmerType<K>) {
-            return fisk::spaced_kmer_cast_unchecked<K::encoding, K::layout>(vec, args...);
-        } else {
-            static_assert(
-                fisk::dependent_false_v<K::encoding>, "Unhandled k-mer type in check_vector_cast()"
-            );
-            return std::size_t{0};
-        }
+        return fisk::spaced_kmer_cast_unchecked<K::encoding, K::layout>(vec, args...);
     };
 
     // The full-vector overloads write every lane, checked and unchecked alike.

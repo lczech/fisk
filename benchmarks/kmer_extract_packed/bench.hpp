@@ -91,6 +91,11 @@ std::uint64_t run_var_msb_simd_sse2(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
+std::uint64_t run_var_msb_simd_sse2_scalars(
+    PackedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
 std::uint64_t run_var_lsb_simd_narrow_width_sse2(
     PackedLsb const& seq,
     std::size_t k,
@@ -102,6 +107,11 @@ std::uint64_t run_var_lsb_simd_full_width_sse2(
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_lsb_simd_sse2(
+    PackedLsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_lsb_simd_sse2_scalars(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -124,6 +134,11 @@ std::uint64_t run_var_msb_simd_avx2(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
+std::uint64_t run_var_msb_simd_avx2_scalars(
+    PackedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
 std::uint64_t run_var_lsb_simd_narrow_width_avx2(
     PackedLsb const& seq,
     std::size_t k,
@@ -135,6 +150,11 @@ std::uint64_t run_var_lsb_simd_full_width_avx2(
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_lsb_simd_avx2(
+    PackedLsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_lsb_simd_avx2_scalars(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -157,6 +177,11 @@ std::uint64_t run_var_msb_simd_avx512(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
+std::uint64_t run_var_msb_simd_avx512_scalars(
+    PackedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
 std::uint64_t run_var_lsb_simd_narrow_width_avx512(
     PackedLsb const& seq,
     std::size_t k,
@@ -168,6 +193,11 @@ std::uint64_t run_var_lsb_simd_full_width_avx512(
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_lsb_simd_avx512(
+    PackedLsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_lsb_simd_avx512_scalars(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
@@ -190,6 +220,11 @@ std::uint64_t run_var_msb_simd_neon(
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 );
+std::uint64_t run_var_msb_simd_neon_scalars(
+    PackedMsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
 std::uint64_t run_var_lsb_simd_narrow_width_neon(
     PackedLsb const& seq,
     std::size_t k,
@@ -201,6 +236,11 @@ std::uint64_t run_var_lsb_simd_full_width_neon(
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_lsb_simd_neon(
+    PackedLsb const& seq,
+    std::size_t k,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_lsb_simd_neon_scalars(
     PackedLsb const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer

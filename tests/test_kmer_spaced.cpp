@@ -500,7 +500,7 @@ TEST(SpacedKmer, AgreesWithContiguousOnBaseOps)
 TEST(SpacedKmer, CastVector)
 {
     std::size_t const width = 10;
-    for_each_lane_vector(width, 919190, [&](auto vec, auto const& seqs) {
+    for_each_lane_vector(width, 919190, [&](auto, auto vec, auto const& seqs) {
         check_vector_cast<SpacedKmerAcgtMsb>(vec, seqs, width);
     });
 }

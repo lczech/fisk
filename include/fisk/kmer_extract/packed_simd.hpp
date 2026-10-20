@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "fisk/core/cast.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_callback.hpp"
@@ -23,14 +24,16 @@ namespace fisk {
 // =================================================================================================
 
 // Extractors for PackedSequence values, generic over the SIMD arch, see core/simd.hpp.
-// for_each_kmer_packed_simd() accepts k in [1, 32] and calls `func(pos, vec, valid_count)` with
-// consecutive k-mers in the vector of the arch: `pos` is the start position of the k-mer in lane 0,
-// and lane `j` holds the one starting at `pos + j`. Full vectors have `valid_count == Simd::lanes`;
-// the final vector may be zero-padded in high lanes. for_each_kmer_packed_checked_simd() extracts
-// from a PackedSequenceWithValidity, and calls `func(pos, vec, valid_lanes)` instead.
+// for_each_kmer_packed_simd() accepts k in [1, 32] and calls `func(pos, kmers, valid_count)` with
+// consecutive k-mers in a KmerVector of the arch: `pos` is the start position of the k-mer in
+// lane 0, and lane `j` holds the one starting at `pos + j`. Full vectors have `valid_count` equal
+// to `Simd::lanes`; the final vector may be zero-padded in high lanes.
+// for_each_kmer_packed_checked_simd() extracts from a PackedSequenceWithValidity, and calls
+// `func(pos, kmers, valid_lanes)` instead.
+// for_each_valid_lane() and store_valid_lanes() take the single k-mers out of the vectors.
 //
-// The vectors hold raw k-mer words rather than Kmer values (core/kmer.hpp), with the conventions
-// of the PackedSequence. Use the vector overloads of kmer_cast() to get Kmer values from them.
+// The loops below work on the raw vectors of the arch, which the dispatchers at the end hand on as
+// a KmerVector with the conventions of the PackedSequence.
 
 // -------------------------------------------------------------------------------------------------
 //     Helpers
@@ -466,7 +469,9 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
  * @brief Extracts all k-mers for k in [1, 32] from a PackedSequence with the given SIMD arch,
  * yielding consecutive k-mers in the vectors of that arch.
  *
- * Func is called as `func(pos, vec, valid_count)`, see invoke_kmer_vector_callback().
+ * Func is called as `func(pos, kmers, valid_count)`, with a KmerVector<E, L, Simd>: lane `j` of
+ * `kmers` holds the k-mer starting at `pos + j`, for `j < valid_count`. The single k-mers can be
+ * taken out with for_each_valid_lane() or store_valid_lanes().
  *
  * @tparam Simd  SIMD arch, such as SimdAVX2, to be given explicitly.
  */
@@ -482,7 +487,9 @@ inline void for_each_kmer_packed_simd(
     auto const emit = [&](
         std::size_t pos, typename Simd::simd_vector vec, std::size_t valid_count
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        invoke_kmer_vector_callback(func, pos, vec, valid_count);
+        invoke_kmer_vector_callback(
+            func, pos, kmer_vector_cast_unchecked<E, L, Simd>(vec), valid_count
+        );
     };
     if (k <= 29) {
         for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, emit);
@@ -496,12 +503,14 @@ inline void for_each_kmer_packed_simd(
  * given SIMD arch, yielding consecutive k-mers in the vectors of that arch, with their valid lanes.
  *
  * As for_each_kmer_packed_simd(), checking the validity of the nucleotides by the validity bits of
- * `seq`, see pack_sequence_with_validity(). Func is called as `func(pos, vec, valid_lanes)`: lane
- * `j` of `vec` holds the k-mer starting at `pos + j`, and is valid if it is set in `valid_lanes`,
- * see KmerVectorValidLanes. That covers the end of the sequence as well, where the last vector can
- * have lanes beyond it. For example, with AVX512, the valid k-mers can be stored contiguously with
+ * `seq`, see pack_sequence_with_validity(). Func is called as `func(pos, kmers, valid_lanes)`, with
+ * a KmerVector<E, L, Simd>: lane `j` of `kmers` holds the k-mer starting at `pos + j`, and is valid
+ * if it is set in `valid_lanes`, see KmerVectorValidLanes. That covers the end of the sequence as
+ * well, where the last vector can have lanes beyond it. The valid k-mers can be taken out with
+ * for_each_valid_lane() or store_valid_lanes(), or, for example with AVX512, stored contiguously
+ * with
  *
- *     _mm512_mask_compressstoreu_epi64(out, valid_lanes.value, vec);
+ *     _mm512_mask_compressstoreu_epi64(out, valid_lanes.value, kmers.value);
  *
  * For single k-mers, use for_each_kmer_packed_checked_aligned(), which extracts them directly,
  * instead of taking them out of the vectors one at a time.
@@ -525,7 +534,9 @@ inline void for_each_kmer_packed_checked_simd(
     auto const emit = [&](
         std::size_t pos, typename Simd::simd_vector vec, KmerVectorValidLanes<Simd> valid_lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        invoke_kmer_valid_lanes_callback(func, pos, vec, valid_lanes);
+        invoke_kmer_vector_valid_lanes_callback(
+            func, pos, kmer_vector_cast_unchecked<E, L, Simd>(vec), valid_lanes
+        );
     };
     if (k <= 29) {
         for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, emit);
