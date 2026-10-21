@@ -163,7 +163,7 @@ struct BitExtractByteTable
     {
         for (size_t m = 0; m < 256; ++m) {
             std::uint8_t c = 0;
-            for (int b = 0; b < 8; ++b) c += (m >> b) & 1;
+            for (int b = 0; b < 8; ++b) c = static_cast<std::uint8_t>(c + ((m >> b) & 1));
             popcnt[m] = c;
 
             for (size_t x = 0; x < 256; ++x) {
@@ -174,7 +174,7 @@ struct BitExtractByteTable
                     std::uint8_t bit = static_cast<std::uint8_t>(1u << b);
                     if (mm & bit) {
                         if (x & bit) out |= out_bit;
-                        out_bit <<= 1;
+                        out_bit = static_cast<std::uint8_t>(out_bit << 1);
                     }
                 }
                 table[m][x] = out;
