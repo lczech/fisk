@@ -101,10 +101,30 @@ jobs:
           - { os: windows-2022, compiler: msvc }
           - { os: windows-latest, compiler: msvc }
 
+          # -------------------------------
+          #     Sanitizers
+          # -------------------------------
+
+          # AddressSanitizer and UndefinedBehaviorSanitizer, with the newest GCC and Clang, and on
+          # macOS for the NEON code paths. See the Configure CMake step for their flags.
+          - { os: ubuntu-26.04, compiler: gcc-15, sanitize: true }
+          - { os: ubuntu-26.04, compiler: llvm-20, sanitize: true }
+          - { os: macos-26, compiler: apple-clang, sanitize: true }
+
+          # -------------------------------
+          #     AVX512 Emulation
+          # -------------------------------
+
+          # The runners may not have AVX512, so this entry enables the AVX512 code paths via
+          # FISK_ENABLE_AVX512, and runs the tests under the Intel Software Development Emulator.
+          - { os: ubuntu-26.04, compiler: llvm-20, sde: true }
+
     runs-on: ${{ matrix.os }}
 
     env:
       BUILD_TYPE: Release
+      SANITIZE_FLAGS: -fsanitize=address,undefined -fno-sanitize-recover=all
+      SDE_URL: https://downloadmirror.intel.com/843185/sde-external-9.48.0-2024-11-25-lin.tar.xz
 
     defaults:
       run:
@@ -122,14 +142,40 @@ jobs:
           ninja: true
           vcvarsall: ${{ runner.os == 'Windows' }}
 
+      - name: Setup Intel SDE
+        if: matrix.sde
+        run: |
+          mkdir -p "${RUNNER_TEMP}/sde"
+          curl -sSL "${SDE_URL}" | tar -xJ -C "${RUNNER_TEMP}/sde" --strip-components=1
+          echo "SDE_PATH=${RUNNER_TEMP}/sde" >> "${GITHUB_ENV}"
+
+      # The sanitizer and emulator entries only build the tests. The sanitizers use a Debug build
+      # with -O1, for usable stack traces at a bearable speed, and fail on the first report.
       - name: Configure CMake
         run: |
-          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+          if [[ "${{ matrix.sanitize }}" == "true" ]]; then
+            cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug -DFISK_BUILD_BENCHMARKS=OFF \
+              -DCMAKE_CXX_FLAGS="-O1 -fno-omit-frame-pointer ${SANITIZE_FLAGS}" \
+              -DCMAKE_EXE_LINKER_FLAGS="${SANITIZE_FLAGS}"
+          elif [[ "${{ matrix.sde }}" == "true" ]]; then
+            cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_BENCHMARKS=OFF \
+              -DFISK_ENABLE_AVX512=ON
+          else
+            cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+          fi
 
       - name: Build
         run: |
           cmake --build build -- -j 4 -k 0
 
+      # Under the emulator, the test binary runs directly, emulating a Sapphire Rapids CPU. The
+      # AVX512 tests only exist if the AVX512 code paths were compiled in, so the run fails if they
+      # did not run.
       - name: Run tests
         run: |
-          ctest --test-dir build --output-on-failure
+          if [[ "${{ matrix.sde }}" == "true" ]]; then
+            "${SDE_PATH}/sde64" -spr -- bin/fisk_tests 2>&1 | tee tests.log
+            grep -q 'OK \] SimdArch.AVX512$' tests.log
+          else
+            ctest --test-dir build --output-on-failure
+          fi
