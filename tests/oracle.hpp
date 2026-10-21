@@ -356,25 +356,47 @@ inline void check_invalid_k_throws(std::size_t max_k, Extract&& extract)
 //     Packed Sequences
 // =================================================================================================
 
-// The bits of the last byte beyond `length` must be zero (see PackedSequence in core/types.hpp).
-template <fisk::Encoding E, fisk::Layout L>
-inline void check_packed_padding_zero(fisk::PackedSequence<E, L> const& packed)
+// Everything beyond the length is zero, see PackedSequence and PackedSequenceWithValidity in
+// core/types.hpp: the bits of the last byte of the codes beyond the length, and for a length above
+// 0, the `codes_padding` bytes after the codes, and the same for the validity bits, if any.
+template <fisk::PackedSequenceType Seq>
+inline void check_zero_beyond_length(Seq const& packed)
 {
-    std::size_t const used = packed.length % 4;
-    if (used == 0 || packed.data.empty()) {
+    std::size_t const length = packed.length();
+    if (length == 0) {
         return;
     }
 
-    std::uint8_t const last = packed.data.back();
-    unsigned padding = 0;
-    if constexpr (L == fisk::Layout::kMSB) {
-        padding = last & (0xFFu >> (2 * used));
-    } else if constexpr (L == fisk::Layout::kLSB) {
-        padding = static_cast<unsigned>(last) >> (2 * used);
-    } else {
-        static_assert(fisk::dependent_false_v<L>, "Unhandled Layout in the test oracle");
+    auto const codes = packed.codes();
+    ASSERT_EQ(codes.size(), (length + 3) / 4);
+    std::size_t const used = length % 4;
+    if (used != 0) {
+        unsigned unused_bits = 0;
+        if constexpr (Seq::layout == fisk::Layout::kMSB) {
+            unused_bits = codes.back() & (0xFFu >> (2 * used));
+        } else if constexpr (Seq::layout == fisk::Layout::kLSB) {
+            unused_bits = static_cast<unsigned>(codes.back()) >> (2 * used);
+        } else {
+            static_assert(
+                fisk::dependent_false_v<Seq::layout>, "Unhandled Layout in the test oracle"
+            );
+        }
+        EXPECT_EQ(unused_bits, 0u);
     }
-    EXPECT_EQ(padding, 0u);
+    for (std::size_t i = 0; i < Seq::codes_padding; ++i) {
+        EXPECT_EQ(codes.data()[codes.size() + i], 0u);
+    }
+
+    if constexpr (fisk::PackedSequenceWithValidityType<Seq>) {
+        auto const validity = packed.validity();
+        ASSERT_EQ(validity.size(), (length + 7) / 8);
+        if (length % 8 != 0) {
+            EXPECT_EQ(static_cast<unsigned>(validity.back()) >> (length % 8), 0u);
+        }
+        for (std::size_t i = 0; i < Seq::validity_padding; ++i) {
+            EXPECT_EQ(validity.data()[validity.size() + i], 0u);
+        }
+    }
 }
 
 // Runs `check_one(seq, packed, k, expected)` for every sequence in `seqs`, plus a fixed set of
@@ -391,7 +413,7 @@ inline void sweep_packed_extractors(
 
     auto check_sequence = [&](std::string const& seq) {
         auto const packed = fisk::pack_sequence(seq, encoder);
-        check_packed_padding_zero(packed);
+        check_zero_beyond_length(packed);
         for (std::size_t k = 1; k <= max_k; ++k) {
             check_one(seq, packed, k, oracle_kmers_all_windows<E, L>(seq, k));
         }

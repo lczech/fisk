@@ -167,16 +167,15 @@ FISK_ALWAYS_INLINE
 inline void pack_sequence(
     std::string_view seq, fisk::PackedSequence<fisk::Encoding::kACTG, L>& out
 ) {
-    out.length = seq.size();
-    out.data.resize((seq.size() + 3) / 4);
+    out.resize(seq.size());
     if constexpr (UsePext) {
         #if defined(FISK_HAS_BMI2)
-        encode_pext<L, Unroll>(seq, out.data.data());
+        encode_pext<L, Unroll>(seq, out.codes().data());
         #else
         static_assert(!UsePext, "The fastdna PEXT reference requires BMI2");
         #endif
     } else {
-        encode_lut<L>(seq, out.data.data());
+        encode_lut<L>(seq, out.codes().data());
     }
 }
 

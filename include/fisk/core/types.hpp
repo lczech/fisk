@@ -5,7 +5,10 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <span>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "fisk/core/platform.hpp"
@@ -72,67 +75,284 @@ inline constexpr bool dependent_false_v = false;
 // =================================================================================================
 
 /**
- * @brief A nucleotide sequence, densely packed at 2 bits per base.
+ * @brief A nucleotide sequence, densely packed at 2 bits per nucleotide.
  *
- * `data` holds exactly `ceil(length / 4)` bytes of 4 bases each, with no trailing padding.
- * When `length` is not a multiple of 4, the unused bits of the last byte are zero.
- * Readers are responsible for bounds checking when reading from `data`.
+ * codes() holds exactly `ceil(length() / 4)` bytes of 4 codes each. When the length is not a
+ * multiple of 4, the unused bits of the last byte are zero. For a length above 0, the codes are
+ * followed by `codes_padding` zero bytes, which codes() does not include, so that loops can read
+ * whole words up to the end of the codes without testing for it.
  *
- * `E` states which base each 2-bit code stands for (see Encoding), and `L` how the 4 bases are
- * arranged within each byte (see Layout). Both are also exposed as the `encoding` and `layout`
+ * `E` states which nucleotide each 2-bit code stands for (see Encoding), and `L` how the 4 codes
+ * are arranged within each byte (see Layout). Both are also exposed as the `encoding` and `layout`
  * static members.
+ *
+ * The codes can be written through codes(), for example to pack a sequence by other means than
+ * pack_sequence(). Writers keep the unused bits of the last byte zero. The size of the codes and
+ * the padding after them only change with resize(), which keeps both intact.
  */
 template <Encoding E, Layout L>
-struct PackedSequence
+class PackedSequence
 {
+public:
+
     static constexpr Encoding encoding = E;
     static constexpr Layout layout = L;
 
-    std::vector<std::uint8_t> data;
-    std::size_t length = 0;
+    /**
+     * @brief The number of zero bytes after the codes, for a length above 0.
+     */
+    static constexpr std::size_t codes_padding = 16;
+
+    /**
+     * @brief An empty sequence, without storage.
+     */
+    PackedSequence() = default;
+
+    /**
+     * @brief A sequence of `length` nucleotides, all with code 0.
+     */
+    explicit PackedSequence(std::size_t length)
+    {
+        resize(length);
+    }
+
+    PackedSequence(PackedSequence const&) = default;
+    PackedSequence& operator=(PackedSequence const&) = default;
+
+    // A move takes the storage along, and leaves the moved-from sequence empty.
+    PackedSequence(PackedSequence&& other) noexcept
+        : storage_(std::move(other.storage_))
+        , length_(std::exchange(other.length_, 0))
+    {
+        other.storage_.clear();
+    }
+    PackedSequence& operator=(PackedSequence&& other) noexcept
+    {
+        storage_ = std::move(other.storage_);
+        length_ = std::exchange(other.length_, 0);
+        other.storage_.clear();
+        return *this;
+    }
+
+    ~PackedSequence() = default;
+
+    /**
+     * @brief The number of nucleotides.
+     */
+    std::size_t length() const noexcept
+    {
+        return length_;
+    }
+
+    /**
+     * @brief The bytes of codes, `ceil(length() / 4)` of them, without the padding.
+     */
+    std::span<std::uint8_t> codes() noexcept
+    {
+        return {storage_.data(), code_bytes_(length_)};
+    }
+
+    /**
+     * @brief The bytes of codes, `ceil(length() / 4)` of them, without the padding.
+     */
+    std::span<std::uint8_t const> codes() const noexcept
+    {
+        return {storage_.data(), code_bytes_(length_)};
+    }
+
+    /**
+     * @brief Change the length to `length` nucleotides, reusing the storage where possible.
+     *
+     * As std::vector::resize(): the codes up to the new length keep their values, and new ones are
+     * 0. The unused bits of the last byte and the padding after it are zero again afterwards, also
+     * where they held codes before. A length of 0 keeps the storage, as it is never read.
+     */
+    void resize(std::size_t length)
+    {
+        length_ = length;
+        if (length == 0) {
+            return;
+        }
+        std::size_t const bytes = code_bytes_(length);
+        storage_.resize(bytes + codes_padding);
+        std::memset(storage_.data() + bytes, 0, codes_padding);
+
+        // The codes beyond the length in the last byte, at its low bits for kMSB and at its high
+        // bits for kLSB, see Layout.
+        std::size_t const used = length % 4;
+        if (used != 0) {
+            if constexpr (L == Layout::kMSB) {
+                storage_[bytes - 1] &= static_cast<std::uint8_t>(0xFF00u >> (2 * used));
+            } else if constexpr (L == Layout::kLSB) {
+                storage_[bytes - 1] &= static_cast<std::uint8_t>((1u << (2 * used)) - 1u);
+            } else {
+                static_assert(dependent_false_v<L>, "Unhandled Layout in PackedSequence::resize()");
+            }
+        }
+    }
+
+private:
+
+    static constexpr std::size_t code_bytes_(std::size_t length) noexcept
+    {
+        return (length + 3) / 4;
+    }
+
+    // The codes and the padding after them.
+    std::vector<std::uint8_t> storage_;
+    std::size_t length_ = 0;
 };
 
 /**
  * @brief A PackedSequence that also records which of its nucleotides are valid.
  *
- * Bit `j` of byte `b` of `valid` is set if nucleotide `8 * b + j` was one of `ACGTacgt` in the
+ * Bit `j` of byte `b` of validity() is set if nucleotide `8 * b + j` was one of `ACGTacgt` in the
  * input, for both layouts. The 2-bit code of an invalid nucleotide is unspecified.
  *
- * `valid` holds exactly `ceil(length / 8)` bytes, with no trailing padding, and its bits beyond
- * `length` are zero. Readers are responsible for bounds checking, as for `data`.
+ * validity() holds exactly `ceil(length() / 8)` bytes, and its bits beyond the length are zero.
+ * For a length above 0, they are followed by `validity_padding` zero bytes, as the codes are by
+ * theirs, see PackedSequence. Writers of the validity bits keep the bits beyond the length zero.
  *
- * Being a PackedSequence, it can be passed to everything that reads one. Packing into it through
- * a reference to the base however leaves `valid` as it was, see pack_sequence_with_validity().
+ * The codes and the length are those of sequence(), which can be passed on to everything that
+ * reads a PackedSequence, and ignores the validity. The extraction functions that do not check
+ * the validity take a PackedSequenceWithValidity as well, see PackedSequenceType.
  */
 template <Encoding E, Layout L>
-struct PackedSequenceWithValidity : PackedSequence<E, L>
+class PackedSequenceWithValidity
 {
-    std::vector<std::uint8_t> valid;
+public:
+
+    static constexpr Encoding encoding = E;
+    static constexpr Layout layout = L;
+
+    /**
+     * @brief The number of zero bytes after the codes, for a length above 0.
+     */
+    static constexpr std::size_t codes_padding = PackedSequence<E, L>::codes_padding;
+
+    /**
+     * @brief The number of zero bytes after the validity bits, for a length above 0.
+     */
+    static constexpr std::size_t validity_padding = 8;
+
+    /**
+     * @brief An empty sequence, without storage.
+     */
+    PackedSequenceWithValidity() = default;
+
+    /**
+     * @brief A sequence of `length` nucleotides, all with code 0, and all invalid.
+     */
+    explicit PackedSequenceWithValidity(std::size_t length)
+    {
+        resize(length);
+    }
+
+    /**
+     * @brief The number of nucleotides.
+     */
+    std::size_t length() const noexcept
+    {
+        return sequence_.length();
+    }
+
+    /**
+     * @brief The bytes of codes, see PackedSequence::codes().
+     */
+    std::span<std::uint8_t> codes() noexcept
+    {
+        return sequence_.codes();
+    }
+
+    /**
+     * @brief The bytes of codes, see PackedSequence::codes().
+     */
+    std::span<std::uint8_t const> codes() const noexcept
+    {
+        return sequence_.codes();
+    }
+
+    /**
+     * @brief The bytes of validity bits, `ceil(length() / 8)` of them, without the padding.
+     */
+    std::span<std::uint8_t> validity() noexcept
+    {
+        return {validity_.data(), validity_bytes_(length())};
+    }
+
+    /**
+     * @brief The bytes of validity bits, `ceil(length() / 8)` of them, without the padding.
+     */
+    std::span<std::uint8_t const> validity() const noexcept
+    {
+        return {validity_.data(), validity_bytes_(length())};
+    }
+
+    /**
+     * @brief The sequence without its validity bits.
+     */
+    PackedSequence<E, L> const& sequence() const noexcept
+    {
+        return sequence_;
+    }
+
+    /**
+     * @brief Change the length to `length` nucleotides, of the codes and of the validity bits.
+     *
+     * As PackedSequence::resize(), where new nucleotides are invalid, and the validity bits beyond
+     * the length and the padding after them are zero again afterwards.
+     */
+    void resize(std::size_t length)
+    {
+        sequence_.resize(length);
+        if (length == 0) {
+            return;
+        }
+        std::size_t const bytes = validity_bytes_(length);
+        validity_.resize(bytes + validity_padding);
+        std::memset(validity_.data() + bytes, 0, validity_padding);
+        if (length % 8 != 0) {
+            validity_[bytes - 1] &= static_cast<std::uint8_t>((1u << (length % 8)) - 1u);
+        }
+    }
+
+private:
+
+    static constexpr std::size_t validity_bytes_(std::size_t length) noexcept
+    {
+        return (length + 7) / 8;
+    }
+
+    // The moves of the members leave a moved-from sequence empty, see PackedSequence.
+    PackedSequence<E, L> sequence_;
+    std::vector<std::uint8_t> validity_;
 };
 
 /**
  * @brief Anything shaped like a PackedSequence: convention tags, packed codes and a length.
  *
- * The internal loops of the packed k-mer extraction are written against this, so that they take
- * both PackedSequence and PackedSequenceWithValidity.
+ * The packed k-mer extraction is written against this, so that it takes both PackedSequence and
+ * PackedSequenceWithValidity.
  */
 template <typename T>
 concept PackedSequenceType = requires(T const& seq) {
-    { T::encoding }       -> std::convertible_to<Encoding>;
-    { T::layout }         -> std::convertible_to<Layout>;
-    { seq.data.data() }   -> std::convertible_to<std::uint8_t const*>;
-    { seq.length }        -> std::convertible_to<std::size_t>;
+    { T::encoding }    -> std::convertible_to<Encoding>;
+    { T::layout }      -> std::convertible_to<Layout>;
+    { seq.codes() }    -> std::convertible_to<std::span<std::uint8_t const>>;
+    { seq.length() }   -> std::convertible_to<std::size_t>;
 };
 
 /**
- * @brief A packed sequence with validity bits, such as PackedSequenceWithValidity.
+ * @brief A packed sequence with validity bits, such as PackedSequenceWithValidity, and the
+ * sequence without them.
  *
  * The internal loops of the packed k-mer extraction check the validity of the nucleotides of
  * these, and extract all k-mers of the others.
  */
 template <typename T>
 concept PackedSequenceWithValidityType = PackedSequenceType<T> && requires(T const& seq) {
-    { seq.valid.data() } -> std::convertible_to<std::uint8_t const*>;
+    { seq.validity() } -> std::convertible_to<std::span<std::uint8_t const>>;
+    requires PackedSequenceType<std::remove_cvref_t<decltype(seq.sequence())>>;
 };
 
 // =================================================================================================

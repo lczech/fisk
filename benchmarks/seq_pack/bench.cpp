@@ -18,7 +18,7 @@ template <Encoding E, Layout L>
 std::uint64_t pack_sequence_sink(PackedSequence<E, L> const& s)
 {
     std::uint64_t h = 0;
-    for (auto const w : s.data) {
+    for (auto const w : s.codes()) {
         h += w;
     }
     return h;

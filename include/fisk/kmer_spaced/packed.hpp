@@ -72,9 +72,9 @@ inline void for_each_spaced_kmer_packed_narrow_width_(
 ) {
     assert(span_k >= 1 && span_k <= 29);
 
-    std::size_t const p_max = seq.length - span_k;
+    std::size_t const p_max = seq.length() - span_k;
     std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes = (seq.length + 3) / 4;
+    std::size_t const num_bytes = (seq.length() + 3) / 4;
     std::size_t const fast_bytes = std::min(
         full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
     );
@@ -84,7 +84,7 @@ inline void for_each_spaced_kmer_packed_narrow_width_(
     };
     for (std::size_t b = 0; b < fast_bytes; ++b) {
         std::uint64_t word;
-        std::memcpy(&word, &seq.data[b], 8);
+        std::memcpy(&word, &seq.codes()[b], 8);
         if constexpr (L == Layout::kMSB) {
             // Move the span at position 3 to the lowest bits once, so that the shifts per
             // position are constants, as in for_each_kmer_packed_aligned_narrow_width_().
@@ -155,9 +155,9 @@ inline void for_each_spaced_kmer_packed_full_width_(
 ) {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
 
-    std::size_t const p_max = seq.length - K;
+    std::size_t const p_max = seq.length() - K;
     std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes = (seq.length + 3) / 4;
+    std::size_t const num_bytes = (seq.length() + 3) / 4;
     std::size_t const fast_bytes = (num_bytes >= 9) ? std::min(full_bytes, num_bytes - 9)
                                                      : std::size_t{0};
 
@@ -166,11 +166,11 @@ inline void for_each_spaced_kmer_packed_full_width_(
     };
     for (std::size_t b = 0; b < fast_bytes; ++b) {
         std::uint64_t word;
-        std::memcpy(&word, &seq.data[b], 8);
+        std::memcpy(&word, &seq.codes()[b], 8);
         if constexpr (L == Layout::kMSB) {
             word = byte_swap_64(word);
         }
-        std::uint64_t const ninth = seq.data[b + 8];
+        std::uint64_t const ninth = seq.codes()[b + 8];
         emit_(4 * b + 0, spaced_kmer_packed_full_width_window_<L, K, 0>(word, ninth));
         emit_(4 * b + 1, spaced_kmer_packed_full_width_window_<L, K, 1>(word, ninth));
         emit_(4 * b + 2, spaced_kmer_packed_full_width_window_<L, K, 2>(word, ninth));
@@ -202,7 +202,7 @@ inline void for_each_spaced_kmer_packed_(
         assert(is_valid_spaced_kmer_mask(mask));
         assert(bit_ext(~std::uint64_t{0}, mask) == bit_ext(spaced_kmer_mask_bits_(mask), mask));
     });
-    if (seq.length < span_k) {
+    if (seq.length() < span_k) {
         return;
     }
 
@@ -234,7 +234,7 @@ inline void for_each_spaced_kmer_packed_(
  *
  * The packed counterpart of for_each_spaced_kmer() for ASCII input. As the sequence holds only
  * valid bases, a spaced k-mer is emitted at every position. It has the Encoding and Layout of the
- * sequence.
+ * sequence. A PackedSequenceWithValidity is taken as well, ignoring its validity bits.
  *
  * @tparam Mask     Spaced k-mer mask, see SpacedKmerMask and make_spaced_kmer_mask(), whose Layout
  *                  has to be the one of the sequence.
@@ -250,17 +250,17 @@ inline void for_each_spaced_kmer_packed_(
  *                  callback(pos, spaced_kmer). `pos` is the start position of the spaced k-mer's
  *                  span in `seq`. See invoke_spaced_kmer_callback().
  */
-template <Encoding E, Layout L, typename Mask, typename BitExtract, typename Callback>
-    requires SpacedKmerMaskType<Mask> && (Mask::layout == L)
+template <PackedSequenceType Seq, typename Mask, typename BitExtract, typename Callback>
+    requires SpacedKmerMaskType<Mask> && (Mask::layout == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed(
-    PackedSequence<E, L> const& seq,
+    Seq const& seq,
     Mask const& mask,
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
     for_each_spaced_kmer_packed_<true>(
-        seq, check_spaced_kmer_span_(mask.span_k), mask, bit_ext, callback
+        without_validity_(seq), check_spaced_kmer_span_(mask.span_k), mask, bit_ext, callback
     );
 }
 
@@ -274,12 +274,12 @@ inline void for_each_spaced_kmer_packed(
  * callback(pos, spaced_kmer) is only available for a single mask.
  */
 template <
-    Encoding E, Layout L, typename Mask, typename Alloc, typename BitExtract, typename Callback
+    PackedSequenceType Seq, typename Mask, typename Alloc, typename BitExtract, typename Callback
 >
-    requires SpacedKmerMaskType<Mask> && (Mask::layout == L)
+    requires SpacedKmerMaskType<Mask> && (Mask::layout == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed(
-    PackedSequence<E, L> const& seq,
+    Seq const& seq,
     std::vector<Mask, Alloc> const& masks,
     BitExtract&& bit_ext,
     Callback&& callback
@@ -288,7 +288,7 @@ inline void for_each_spaced_kmer_packed(
         return;
     }
     for_each_spaced_kmer_packed_<false>(
-        seq, common_spaced_kmer_span_(masks), masks, bit_ext, callback
+        without_validity_(seq), common_spaced_kmer_span_(masks), masks, bit_ext, callback
     );
 }
 

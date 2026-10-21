@@ -91,6 +91,7 @@ inline void emit_spaced_kmers_packed_simd_(
  *
  * As the sequence holds only valid bases, a spaced k-mer is emitted at every position, for every
  * kernel. It has the Encoding and Layout of the sequence. See above for the forms of the callback.
+ * A PackedSequenceWithValidity is taken as well, ignoring its validity bits.
  *
  * @tparam Kernel   Bit extraction kernel of a SIMD arch, see BitExtractKernelWithArch, tagged as
  *                  spaced k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel().
@@ -98,22 +99,25 @@ inline void emit_spaced_kmers_packed_simd_(
  * @tparam N        Number of kernels in the array.
  * @tparam Callback Callback function, called with vectors or with single spaced k-mers.
  */
-template <Encoding E, Layout L, typename Kernel, std::size_t N, typename Callback>
-    requires BitExtractKernelWithArch<Kernel>
+template <
+    PackedSequenceType Seq, Layout L, typename Kernel, std::size_t N, typename Callback
+>
+    requires BitExtractKernelWithArch<Kernel> && (L == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_simd(
-    PackedSequence<E, L> const& seq,
+    Seq const& seq,
     std::array<SpacedKmerMask<L, Kernel>, N> const& kernels,
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one kernel.");
     using Simd = typename Kernel::simd_arch;
+    constexpr Encoding E = Seq::encoding;
 
     std::size_t const span_k = common_spaced_kmer_span_(kernels);
     for ([[maybe_unused]] auto const& kernel : kernels) {
         assert(is_valid_spaced_kmer_mask(kernel));
     }
-    if (seq.length < span_k) {
+    if (seq.length() < span_k) {
         return;
     }
 
@@ -122,9 +126,9 @@ inline void for_each_spaced_kmer_packed_simd(
         emit_spaced_kmers_packed_simd_<E, L>(kernels, pos, windows, valid_count, callback);
     };
     if (span_k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_<Simd, false>(seq, span_k, emit);
+        for_each_kmer_packed_simd_narrow_width_<Simd, false>(without_validity_(seq), span_k, emit);
     } else {
-        for_each_kmer_packed_simd_full_width_<Simd, false>(seq, span_k, emit);
+        for_each_kmer_packed_simd_full_width_<Simd, false>(without_validity_(seq), span_k, emit);
     }
 }
 
@@ -135,11 +139,11 @@ inline void for_each_spaced_kmer_packed_simd(
  * Same as the overload above, for a single kernel, with `mask_idx` always 0. For single spaced
  * k-mers, the callback can also be called as callback(pos, spaced_kmer).
  */
-template <Encoding E, Layout L, typename Kernel, typename Callback>
-    requires BitExtractKernelWithArch<Kernel>
+template <PackedSequenceType Seq, Layout L, typename Kernel, typename Callback>
+    requires BitExtractKernelWithArch<Kernel> && (L == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_simd(
-    PackedSequence<E, L> const& seq,
+    Seq const& seq,
     SpacedKmerMask<L, Kernel> const& kernel,
     Callback&& callback
 ) {

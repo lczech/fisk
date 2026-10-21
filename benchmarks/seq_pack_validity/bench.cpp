@@ -16,10 +16,10 @@ template <Encoding E, Layout L>
 std::uint64_t pack_sequence_validity_sink(PackedSequenceWithValidity<E, L> const& s)
 {
     std::uint64_t h = 0;
-    for (auto const w : s.data) {
+    for (auto const w : s.codes()) {
         h += w;
     }
-    for (auto const w : s.valid) {
+    for (auto const w : s.validity()) {
         h += std::uint64_t{w} << 32;
     }
     return h;

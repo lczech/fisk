@@ -1,6 +1,5 @@
 #include <cstddef>
 #include <cstdint>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -99,7 +98,7 @@ static void check_checked_extractors(
 ) {
     for (std::size_t k = 1; k <= 32; ++k) {
         auto const expected = expected_of(k);
-        std::size_t const num_kmers = packed.length >= k ? packed.length - k + 1 : 0;
+        std::size_t const num_kmers = packed.length() >= k ? packed.length() - k + 1 : 0;
 
         check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
             for_each_kmer_packed_checked_aligned(packed, k, callback);
@@ -197,13 +196,13 @@ static void check_all_valid_equals_unchecked()
 {
     for (auto const& seq : test_sequences()) {
         auto packed = pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{});
-        for (std::size_t i = 0; i < packed.length; ++i) {
-            packed.valid[i / 8] = static_cast<std::uint8_t>(packed.valid[i / 8] | (1u << (i % 8)));
+        auto const validity = packed.validity();
+        for (std::size_t i = 0; i < packed.length(); ++i) {
+            validity[i / 8] = static_cast<std::uint8_t>(validity[i / 8] | (1u << (i % 8)));
         }
-        PackedSequence<E, L> const& unchecked = packed;
         check_checked_extractors(packed, [&](std::size_t k) {
             std::vector<ExpectedKmer> expected;
-            for_each_kmer_packed_aligned(unchecked, k, [&](std::size_t pos, Kmer<E, L> kmer) {
+            for_each_kmer_packed_aligned(packed, k, [&](std::size_t pos, Kmer<E, L> kmer) {
                 expected.push_back({pos, kmer_value(kmer)});
             });
             return expected;
@@ -211,8 +210,9 @@ static void check_all_valid_equals_unchecked()
     }
 }
 
-// A nucleotide that is invalid only by its validity bit is invalid for the extractors: they never
-// look at the codes for validity.
+// A nucleotide that is invalid only by its validity bit is invalid for the checked extractors: they
+// never look at the codes for validity. The unchecked extractors take the same sequence, and ignore
+// its validity bits.
 template <Encoding E, Layout L>
 static void check_invalid_in_validity_only()
 {
@@ -221,32 +221,38 @@ static void check_invalid_in_validity_only()
     std::size_t const invalid_at[] = {0, 1, 31, 32, 63, 64, 95, 96, 150, 199};
     for (std::size_t at : invalid_at) {
         auto packed = pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{});
-        packed.valid[at / 8] = static_cast<std::uint8_t>(packed.valid[at / 8] & ~(1u << (at % 8)));
+        auto const validity = packed.validity();
+        validity[at / 8] = static_cast<std::uint8_t>(validity[at / 8] & ~(1u << (at % 8)));
         std::string marked = seq;
         marked[at] = 'N';
         check_checked_extractors(packed, [&](std::size_t k) {
             return oracle_kmers_skipping_invalid<E, L>(marked, k);
         });
+
+        for (std::size_t k = 1; k <= 32; ++k) {
+            auto const expected = oracle_kmers_skipping_invalid<E, L>(seq, k);
+            check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+                for_each_kmer_packed_aligned(packed, k, callback);
+            });
+            check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+                for_each_kmer_packed_rolling(packed, k, callback);
+            });
+            check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
+                for_each_kmer_packed_simd<SimdScalar>(
+                    packed, k, [&](std::size_t pos, auto kmers, std::size_t valid_count) {
+                        for_each_valid_lane(pos, kmers, valid_count, callback);
+                    }
+                );
+            });
+        }
     }
 }
 
-// Validity bits that do not match the length of the sequence, and an invalid k, throw.
+// An invalid k throws.
 template <Encoding E, Layout L>
 static void check_throws()
 {
     auto const check_extractor = [](auto const& extract) {
-        std::size_t const lengths[] = {0, 1, 8, 9, 100};
-        for (std::size_t len : lengths) {
-            std::string const seq(len, 'A');
-            auto packed = pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{});
-            packed.valid.push_back(0);
-            EXPECT_THROW(extract(packed, 1), std::invalid_argument);
-            packed.valid.pop_back();
-            if (!packed.valid.empty()) {
-                packed.valid.pop_back();
-                EXPECT_THROW(extract(packed, 1), std::invalid_argument);
-            }
-        }
         check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
             extract(pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{}), k);
         });

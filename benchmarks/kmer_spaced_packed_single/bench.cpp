@@ -44,7 +44,7 @@ static void bench_kmer_spaced_packed_single_layout_(
         .repeats(repeats)
         .units_fn([k](Packed const& seq) {
             // 1 unit per original (unspaced) k-mer
-            return static_cast<double>(seq.length - k + 1);
+            return static_cast<double>(seq.length() - k + 1);
         });
 
     // Prepare masks for all implementations as needed

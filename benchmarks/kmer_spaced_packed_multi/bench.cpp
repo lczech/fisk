@@ -46,7 +46,7 @@ static void bench_kmer_spaced_packed_multi_layout_(
         .repeats(repeats)
         .units_fn([k, mask_count](Packed const& seq) {
             // 1 unit per original (unspaced) k-mer and per mask
-            return static_cast<double>(seq.length - k + 1) * mask_count;
+            return static_cast<double>(seq.length() - k + 1) * mask_count;
         });
 
     // Prepare masks for all implementations as needed

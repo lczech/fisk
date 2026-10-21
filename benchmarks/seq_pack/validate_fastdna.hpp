@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
@@ -23,9 +24,8 @@ namespace fastdna_validation {
 template <fisk::Layout L>
 inline fisk::PackedSequence<fisk::Encoding::kACTG, L> expected_sequence(std::string_view seq)
 {
-    fisk::PackedSequence<fisk::Encoding::kACTG, L> expected;
-    expected.length = seq.size();
-    expected.data.resize((seq.size() + 3) / 4, 0);
+    fisk::PackedSequence<fisk::Encoding::kACTG, L> expected(seq.size());
+    auto const codes = expected.codes();
     for (std::size_t i = 0; i < seq.size(); ++i) {
         auto const c = static_cast<unsigned char>(seq[i]);
         std::uint8_t code;
@@ -37,7 +37,7 @@ inline fisk::PackedSequence<fisk::Encoding::kACTG, L> expected_sequence(std::str
             default: code = static_cast<std::uint8_t>((c & 6) / 2); break;
         }
         std::size_t const shift = L == fisk::Layout::kMSB ? 6 - 2 * (i % 4) : 2 * (i % 4);
-        expected.data[i / 4] |= static_cast<std::uint8_t>(code << shift);
+        codes[i / 4] |= static_cast<std::uint8_t>(code << shift);
     }
     return expected;
 }
@@ -49,13 +49,15 @@ template <fisk::Layout L, typename Kernel>
 inline void check_kernel(
     std::string_view name, Kernel kernel, std::vector<std::string> const& sequences
 ) {
-    fisk::PackedSequence<fisk::Encoding::kACTG, L> out;
-    out.data.resize(128, 0xFF);
-    out.length = 512;
+    fisk::PackedSequence<fisk::Encoding::kACTG, L> out(512);
+    std::ranges::fill(out.codes(), std::uint8_t{0xFF});
     for (auto const& seq : sequences) {
         kernel(seq, out);
         auto const expected = expected_sequence<L>(seq);
-        if (out.length != expected.length || out.data != expected.data) {
+        if (
+            out.length() != expected.length() ||
+            !std::ranges::equal(out.codes(), expected.codes())
+        ) {
             throw std::runtime_error(
                 std::string(name) + ": packed byte mismatch at input length "
                 + std::to_string(seq.size())

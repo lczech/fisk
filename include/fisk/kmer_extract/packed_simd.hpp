@@ -281,7 +281,7 @@ inline void for_each_kmer_packed_simd_narrow_width_(Seq const& seq, std::size_t 
     if (k == 0 || k > 29) {
         throw_invalid_kmer_k_(29);
     }
-    if (seq.length < k) {
+    if (seq.length() < k) {
         return;
     }
 
@@ -297,16 +297,16 @@ inline void for_each_kmer_packed_simd_narrow_width_(Seq const& seq, std::size_t 
 
     // As in the aligned loops of packed.hpp: the last k-mer starts at `p_max`, so that the 4 k-mers
     // of each of the first `full_bytes` bytes are within the sequence.
-    std::size_t const p_max = seq.length - k;
+    std::size_t const p_max = seq.length() - k;
     std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes  = (seq.length + 3) / 4;
+    std::size_t const num_bytes  = (seq.length() + 3) / 4;
     // The fast region: every starting byte of the loop has a safe 8-byte read. Starting bytes that
     // do not fill a whole step are left to the tail.
     std::size_t fast_bytes = std::min(
         full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
     );
     if constexpr (PackedSequenceWithValidityType<Seq>) {
-        fast_bytes = checked_fast_bytes_(fast_bytes, (seq.length + 7) / 8);
+        fast_bytes = checked_fast_bytes_(fast_bytes, (seq.length() + 7) / 8);
     }
     fast_bytes -= fast_bytes % step_bytes;
 
@@ -330,7 +330,7 @@ inline void for_each_kmer_packed_simd_narrow_width_(Seq const& seq, std::size_t 
     auto const step_ = [&](
         std::size_t b, [[maybe_unused]] auto const& validity_at
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        simd_vector const words = load_packed_words_<Simd, L>(&seq.data[b]);
+        simd_vector const words = load_packed_words_<Simd, L>(&seq.codes()[b]);
         emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {
             simd_vector const kmers = packed_simd_shift_right_<Simd>(words, counts.at[i]);
             return Masked ? Simd::bitwise_and(kmers, mask_v) : kmers;
@@ -367,7 +367,7 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
-    if (seq.length < k) {
+    if (seq.length() < k) {
         return;
     }
 
@@ -380,9 +380,9 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
     std::uint64_t const kbits = (std::uint64_t{1} << k) - 1u;
     unsigned const k32 = static_cast<unsigned>(k);
 
-    std::size_t const p_max = seq.length - k;
+    std::size_t const p_max = seq.length() - k;
     std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes  = (seq.length + 3) / 4;
+    std::size_t const num_bytes  = (seq.length() + 3) / 4;
     // The fast region: a step also loads the words of the next step, see below. The bound keeps
     // these 8-byte reads within the packed input.
     std::size_t fast_bytes = (num_bytes >= 7 + step_bytes)
@@ -390,7 +390,7 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
         : std::size_t{0}
     ;
     if constexpr (PackedSequenceWithValidityType<Seq>) {
-        fast_bytes = checked_fast_bytes_(fast_bytes, (seq.length + 7) / 8);
+        fast_bytes = checked_fast_bytes_(fast_bytes, (seq.length() + 7) / 8);
     }
     fast_bytes -= fast_bytes % step_bytes;
 
@@ -418,12 +418,12 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
     if (fast_bytes > 0) {
         // One step, as in the narrow-width loop. `next` holds the words of the next step, which
         // the step loads for its ninth bytes, and which the next step then starts with.
-        simd_vector next = load_packed_words_<Simd, L>(&seq.data[0]);
+        simd_vector next = load_packed_words_<Simd, L>(&seq.codes()[0]);
         auto const step_ = [&](
             std::size_t b, [[maybe_unused]] auto const& validity_at
         ) FISK_ALWAYS_INLINE_LAMBDA {
             simd_vector const words = next;
-            next = load_packed_words_<Simd, L>(&seq.data[b + step_bytes]);
+            next = load_packed_words_<Simd, L>(&seq.codes()[b + step_bytes]);
             emit_packed_simd_step_<Simd>(4 * b, [&](std::size_t i) {
                 // Without shifts per lane, the first vector has position 0 of the starting bytes
                 // in all lanes, where the words hold the whole k-mer already.
@@ -477,13 +477,17 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
  * `kmers` holds the k-mer starting at `pos + j`, for `j < valid_count`. The single k-mers can be
  * taken out with for_each_valid_lane() or store_valid_lanes().
  *
+ * A PackedSequenceWithValidity is taken as well, ignoring its validity bits, see
+ * for_each_kmer_packed_checked_simd() for its valid k-mers only.
+ *
  * @tparam Simd  SIMD arch, such as SimdAVX2, to be given explicitly.
  */
-template <SimdArch Simd, Encoding E, Layout L, typename Func>
+template <SimdArch Simd, PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_simd(
-    PackedSequence<E, L> const& seq, std::size_t k, Func&& func
-) {
+inline void for_each_kmer_packed_simd(Seq const& seq, std::size_t k, Func&& func)
+{
+    constexpr Encoding E = Seq::encoding;
+    constexpr Layout L = Seq::layout;
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
@@ -496,9 +500,9 @@ inline void for_each_kmer_packed_simd(
         );
     };
     if (k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, emit);
+        for_each_kmer_packed_simd_narrow_width_<Simd>(without_validity_(seq), k, emit);
     } else {
-        for_each_kmer_packed_simd_full_width_<Simd>(seq, k, emit);
+        for_each_kmer_packed_simd_full_width_<Simd>(without_validity_(seq), k, emit);
     }
 }
 
@@ -524,14 +528,12 @@ inline void for_each_kmer_packed_simd(
  * runs, such as assemblies.
  *
  * @tparam Simd  SIMD arch, such as SimdAVX2, to be given explicitly.
- * @throws std::invalid_argument if `seq.valid` does not have `(seq.length + 7) / 8` bytes.
  */
 template <SimdArch Simd, Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_checked_simd(
     PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
 ) {
-    check_validity_size_(seq);
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }

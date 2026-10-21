@@ -1,8 +1,11 @@
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "fisk/core/char_encoder.hpp"
@@ -29,12 +32,12 @@ using namespace fisk;
 
 // Decode base `i` per PackedSequence's documented contract (see Layout in core/types.hpp),
 // independent of pack_sequence()'s internals.
-template <Encoding E, Layout L>
-static int decode_base(PackedSequence<E, L> const& s, std::size_t i)
+template <PackedSequenceType Seq>
+static int decode_base(Seq const& s, std::size_t i)
 {
-    std::uint8_t const byte = s.data[i / 4];
+    std::uint8_t const byte = s.codes()[i / 4];
     std::size_t const in_byte = i % 4;
-    if constexpr (L == Layout::kMSB) {
+    if constexpr (Seq::layout == Layout::kMSB) {
         return (byte >> (6 - 2 * in_byte)) & 0x3;
     } else {
         return (byte >> (2 * in_byte)) & 0x3;
@@ -69,23 +72,21 @@ static std::vector<std::string> const& invalid_sequences()
     return seqs;
 }
 
-// Checks a PackedSequence against `seq` and the oracle: length, data size, the code of every
-// valid base, and zero padding.
-template <Encoding E, Layout L>
-static void check_packed(std::string const& seq, PackedSequence<E, L> const& packed)
+// Checks a packed sequence against `seq` and the oracle: length, number of bytes of codes, the
+// code of every valid base, and zeros beyond the length.
+template <PackedSequenceType Seq>
+static void check_packed(std::string const& seq, Seq const& packed)
 {
-    EXPECT_EQ(packed.length, seq.size());
-
-    std::size_t const expected_content_bytes = (seq.size() + 3) / 4;
-    EXPECT_EQ(packed.data.size(), expected_content_bytes);
+    EXPECT_EQ(packed.length(), seq.size());
+    EXPECT_EQ(packed.codes().size(), (seq.size() + 3) / 4);
 
     for (std::size_t i = 0; i < seq.size(); ++i) {
-        std::uint8_t const code = oracle_code<E>(seq[i]);
+        std::uint8_t const code = oracle_code<Seq::encoding>(seq[i]);
         if (code < kInvalidNucleotide) {
             EXPECT_EQ(decode_base(packed, i), static_cast<int>(code));
         }
     }
-    check_packed_padding_zero(packed);
+    check_zero_beyond_length(packed);
 }
 
 // Checks pack_sequence() -- both overloads, and reuse of one PackedSequence across calls -- for a
@@ -203,15 +204,17 @@ static std::vector<std::string> const& validity_sequences()
 }
 
 // Checks the validity bits of a PackedSequenceWithValidity against `seq`: one bit per character,
-// no more bytes than these need, and zero bits beyond the end.
+// no more bytes than these need, and zeros beyond the end, see check_zero_beyond_length().
 template <Encoding E, Layout L>
 static void check_validity(std::string const& seq, PackedSequenceWithValidity<E, L> const& packed)
 {
-    ASSERT_EQ(packed.valid.size(), (seq.size() + 7) / 8);
-    for (std::size_t i = 0; i < 8 * packed.valid.size(); ++i) {
-        bool const bit = (packed.valid[i / 8] >> (i % 8)) & 1;
+    auto const validity = packed.validity();
+    ASSERT_EQ(validity.size(), (seq.size() + 7) / 8);
+    for (std::size_t i = 0; i < 8 * validity.size(); ++i) {
+        bool const bit = (validity[i / 8] >> (i % 8)) & 1;
         EXPECT_EQ(bit, i < seq.size() && is_valid_nucleotide(seq[i]));
     }
+    check_zero_beyond_length(packed);
 }
 
 // Checks pack_sequence_with_validity() -- both overloads, the overload of pack_sequence() that
@@ -231,8 +234,8 @@ static void check_seq_pack_validity()
         pack_sequence_with_validity(seq, encoder, out);
         check_packed(seq, out);
         check_validity(seq, out);
-        EXPECT_EQ(out.length, plain.length);
-        EXPECT_TRUE(out.data == plain.data);
+        EXPECT_EQ(out.length(), plain.length());
+        EXPECT_TRUE(std::ranges::equal(out.codes(), plain.codes()));
 
         auto const out2 = pack_sequence_with_validity(seq, encoder);
         check_packed(seq, out2);
@@ -257,6 +260,84 @@ static void check_seq_pack_validity_all()
     check_seq_pack_validity<Encoder<Encoding::kACGT, Layout::kMSB, Simd>>();
     check_seq_pack_validity<Encoder<Encoding::kACTG, Layout::kLSB, Simd>>();
     check_seq_pack_validity<Encoder<Encoding::kACTG, Layout::kMSB, Simd>>();
+}
+
+// =================================================================================================
+//     Packed Sequence Classes
+// =================================================================================================
+
+// Construction, resize() and moves of a sequence with validity, which resizes its codes as a
+// PackedSequence does: codes that remain keep their values, new ones are zero, and everything
+// beyond the length is zero, see check_zero_beyond_length().
+template <Layout L>
+static void check_construct_resize_move()
+{
+    using Packed = PackedSequenceWithValidity<Encoding::kACGT, L>;
+    auto const fill = [](std::span<std::uint8_t> bytes) {
+        std::fill(bytes.begin(), bytes.end(), std::uint8_t{0xFF});
+    };
+
+    // Empty without storage, and of the given length with all codes 0 and all invalid.
+    Packed const empty;
+    EXPECT_EQ(empty.length(), std::size_t{0});
+    EXPECT_TRUE(empty.codes().empty());
+    EXPECT_TRUE(empty.validity().empty());
+    Packed packed(9);
+    EXPECT_EQ(packed.length(), std::size_t{9});
+    EXPECT_TRUE(std::ranges::all_of(packed.codes(), [](auto b) { return b == 0; }));
+    EXPECT_TRUE(std::ranges::all_of(packed.validity(), [](auto b) { return b == 0; }));
+    check_zero_beyond_length(packed);
+
+    // Shrinking clears the bits beyond the new length, and the codes after it, which are now
+    // padding: 6 nucleotides use 2 bits of the second byte, at its top for kMSB.
+    fill(packed.codes());
+    fill(packed.validity());
+    packed.resize(6);
+    std::uint8_t const second = (L == Layout::kMSB) ? 0xF0 : 0x0F;
+    ASSERT_EQ(packed.codes().size(), std::size_t{2});
+    EXPECT_EQ(packed.codes()[0], 0xFFu);
+    EXPECT_EQ(packed.codes()[1], second);
+    ASSERT_EQ(packed.validity().size(), std::size_t{1});
+    EXPECT_EQ(packed.validity()[0], 0x3Fu);
+    check_zero_beyond_length(packed);
+
+    // Growing keeps those, and adds zero codes and invalid nucleotides.
+    packed.resize(13);
+    ASSERT_EQ(packed.codes().size(), std::size_t{4});
+    EXPECT_EQ(packed.codes()[1], second);
+    EXPECT_EQ(packed.codes()[2], 0u);
+    EXPECT_EQ(packed.codes()[3], 0u);
+    ASSERT_EQ(packed.validity().size(), std::size_t{2});
+    EXPECT_EQ(packed.validity()[0], 0x3Fu);
+    EXPECT_EQ(packed.validity()[1], 0u);
+    check_zero_beyond_length(packed);
+
+    // A move leaves the moved-from sequence empty.
+    Packed moved = std::move(packed);
+    EXPECT_EQ(moved.length(), std::size_t{13});
+    EXPECT_EQ(packed.length(), std::size_t{0});
+    EXPECT_TRUE(packed.codes().empty());
+    EXPECT_TRUE(packed.validity().empty());
+    packed = std::move(moved);
+    EXPECT_EQ(packed.length(), std::size_t{13});
+    EXPECT_EQ(moved.length(), std::size_t{0});
+    EXPECT_TRUE(moved.codes().empty());
+    check_zero_beyond_length(packed);
+
+    packed.resize(0);
+    EXPECT_EQ(packed.length(), std::size_t{0});
+    EXPECT_TRUE(packed.codes().empty());
+    EXPECT_TRUE(packed.validity().empty());
+}
+
+TEST(PackedSequence, ConstructResizeMoveMsb)
+{
+    check_construct_resize_move<Layout::kMSB>();
+}
+
+TEST(PackedSequence, ConstructResizeMoveLsb)
+{
+    check_construct_resize_move<Layout::kLSB>();
 }
 
 // =================================================================================================
@@ -382,11 +463,15 @@ static_assert(!PackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>,
 // Nor can a sequence of one encoding be passed where another is expected.
 static_assert(!std::is_convertible_v<ActgMsb const&, AcgtMsb const&>);
 
-// A sequence with validity can be read as a plain one, and packing it with either function fills
-// its validity, see check_seq_pack_validity().
+// A sequence with validity is not a plain one, so that its codes cannot be resized without its
+// validity bits, but it gives one with sequence(). Packing it with either function fills its
+// validity, see check_seq_pack_validity().
 using AcgtMsbWithValidity = PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>;
-static_assert(std::is_convertible_v<AcgtMsbWithValidity const&, AcgtMsb const&>);
-static_assert(!std::is_convertible_v<AcgtMsbWithValidity const&, AcgtLsb const&>);
+static_assert(!std::is_convertible_v<AcgtMsbWithValidity&, AcgtMsb&>);
+static_assert(!std::is_convertible_v<AcgtMsbWithValidity const&, AcgtMsb const&>);
+static_assert(std::is_same_v<
+    decltype(std::declval<AcgtMsbWithValidity const&>().sequence()), AcgtMsb const&
+>);
 static_assert(std::is_same_v<
     decltype(pack_sequence_with_validity("", WordEncoderDirect<Encoding::kACGT, Layout::kMSB>{})),
     AcgtMsbWithValidity
@@ -402,7 +487,7 @@ static_assert(
 // validity bits but without the rest of a packed sequence is neither.
 struct OnlyValidityBits
 {
-    std::vector<std::uint8_t> valid;
+    std::span<std::uint8_t const> validity() const;
 };
 static_assert( PackedSequenceType<AcgtMsb>);
 static_assert( PackedSequenceType<AcgtMsbWithValidity>);

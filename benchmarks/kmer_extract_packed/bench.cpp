@@ -74,7 +74,7 @@ void bench_kmer_extract_packed(
         }
         Microbench<PackedMsb> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
-            [k](PackedMsb const& seq) { return static_cast<double>(seq.length - k + 1); }
+            [k](PackedMsb const& seq) { return static_cast<double>(seq.length() - k + 1); }
         );
         auto results = suite.run(
             packed_msb,
@@ -209,7 +209,7 @@ void bench_kmer_extract_packed(
         }
         Microbench<PackedMsb> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
-            [k](PackedMsb const& seq) { return static_cast<double>(seq.length - k + 1); }
+            [k](PackedMsb const& seq) { return static_cast<double>(seq.length() - k + 1); }
         );
         auto results = suite.run(
             packed_msb,
@@ -320,7 +320,7 @@ void bench_kmer_extract_packed(
         }
         Microbench<PackedLsb> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
-            [k](PackedLsb const& seq) { return static_cast<double>(seq.length - k + 1); }
+            [k](PackedLsb const& seq) { return static_cast<double>(seq.length() - k + 1); }
         );
         auto results = suite.run(
             packed_lsb,
@@ -455,7 +455,7 @@ void bench_kmer_extract_packed(
         }
         Microbench<PackedLsb> suite(suite_title);
         suite.rounds(rounds).repeats(repeats).units_fn(
-            [k](PackedLsb const& seq) { return static_cast<double>(seq.length - k + 1); }
+            [k](PackedLsb const& seq) { return static_cast<double>(seq.length() - k + 1); }
         );
         auto results = suite.run(
             packed_lsb,

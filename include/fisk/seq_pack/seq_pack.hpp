@@ -59,31 +59,26 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
 // -----------------------------------------------------------------------------
 
 /**
- * @brief Pack `seq` into `out`, and with `WithValidity`, also its validity bits into `valid`.
+ * @brief Pack `seq` into the codes at `codes`, and with `WithValidity`, also its validity bits
+ * into `valid`.
  *
- * The loop shared by pack_sequence() and pack_sequence_with_validity(). Without `WithValidity`,
- * `valid` is unused and may be null. With it, `valid` has to hold `ceil(seq.size() / 8)` bytes,
- * all of which are written.
+ * The loop shared by pack_sequence() and pack_sequence_with_validity(). `codes` has to hold
+ * `ceil(seq.size() / 4)` bytes, all of which are written, including the unused bits of the last
+ * one. Without `WithValidity`, `valid` is unused and may be null. With it, `valid` has to hold
+ * `ceil(seq.size() / 8)` bytes, all of which are written as well.
  */
 template <bool WithValidity, WordEncoder Encoder>
 FISK_ALWAYS_INLINE
 inline void pack_sequence_(
     std::string_view seq,
     Encoder const& encoder,
-    PackedSequence<Encoder::encoding, Encoder::layout>& out,
+    std::uint8_t* codes,
     std::uint8_t* valid
 ) {
     constexpr Layout layout = Encoder::layout;
 
-    std::size_t const seq_len   = seq.size();
-    std::size_t const num_bytes = (seq_len + 3) / 4;
-
-    out.length = seq_len;
-
-    // Every byte in the resized output is written below, including the partial final byte. Avoid
-    // clearing retained storage first: callers commonly reuse `out` across many sequences/chunks.
-    out.data.resize(num_bytes);
-    char* const out_bytes = reinterpret_cast<char*>(out.data.data());
+    std::size_t const seq_len = seq.size();
+    char* const out_bytes = reinterpret_cast<char*>(codes);
     char const* const data = seq.data();
 
     // Read the 8-byte chunk starting at seq byte offset `off`.
@@ -139,11 +134,10 @@ inline void pack_sequence_(
     }
 
     // Remaining < 8 bases: the last 8 bytes of the sequence, shifted down to the bases that remain,
-    // with zeros above them. If the sequence is shorter than that, they are copied instead. `out`
-    // holds no trailing bytes beyond its real content, so a <=4-base remainder (one real output
-    // byte, not two) must write only that one byte -- writing the usual 2 would spill past the
-    // allocation. Zero gets code 0 and is not a valid nucleotide, which keeps the bits beyond the
-    // end zero.
+    // with zeros above them. If the sequence is shorter than that, they are copied instead. A
+    // remainder of at most 4 bases writes only its one byte of codes, as the byte after it is not
+    // part of `codes`. Zero gets code 0 and is not a valid nucleotide, which keeps the bits beyond
+    // the end zero.
     if (i < seq_len) {
         std::size_t const remaining = seq_len - i;
         std::uint64_t word = 0;
@@ -171,7 +165,7 @@ inline void pack_sequence_(
  * @brief Pack a whole ASCII sequence into a PackedSequence, reusing existing storage.
  *
  * Processes the sequence in 8-byte chunks via `encoder` (see word_encoder.hpp), writing
- * each chunk's 16-bit result to its 2 sequential output bytes at `out.data[i/4 .. i/4+1]`, where
+ * each chunk's 16-bit result to its 2 sequential output bytes at `out.codes()[i/4 .. i/4+1]`, where
  * `i` is the chunk's starting byte offset into `seq` (see write_two_bit_chunk_() for the per-byte
  * ordering). Encoders with more than one lane process `lanes` chunks at once, including the last
  * full chunks, in a vector that overlaps the previous one.
@@ -190,7 +184,9 @@ inline void pack_sequence(
     Encoder const& encoder,
     PackedSequence<Encoder::encoding, Encoder::layout>& out
 ) {
-    pack_sequence_<false>(seq, encoder, out, nullptr);
+    // The storage of `out` is reused, without clearing the codes, which are all written below.
+    out.resize(seq.size());
+    pack_sequence_<false>(seq, encoder, out.codes().data(), nullptr);
 }
 
 /**
@@ -220,8 +216,7 @@ inline PackedSequence<Encoder::encoding, Encoder::layout> pack_sequence(
  * As pack_sequence(), and also records which characters are valid nucleotides, from the same
  * loads of the input, see `store_valid_bits()` of the word encoders.
  *
- * Calling pack_sequence() with a PackedSequenceWithValidity forwards to this as well. Only when
- * passed as a reference to its PackedSequence base does it get packed without its validity.
+ * Calling pack_sequence() with a PackedSequenceWithValidity forwards to this as well.
  */
 template <WordEncoder Encoder>
 FISK_ALWAYS_INLINE
@@ -230,8 +225,8 @@ inline void pack_sequence_with_validity(
     Encoder const& encoder,
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& out
 ) {
-    out.valid.resize((seq.size() + 7) / 8);
-    pack_sequence_<true>(seq, encoder, out, out.valid.data());
+    out.resize(seq.size());
+    pack_sequence_<true>(seq, encoder, out.codes().data(), out.validity().data());
 }
 
 /**

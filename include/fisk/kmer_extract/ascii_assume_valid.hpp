@@ -84,7 +84,7 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
         std::size_t const view_end  = std::min(chunk_end + margin, seq_len);
 
         pack_sequence(seq.substr(chunk_start, view_end - chunk_start), encoder, scratch);
-        if (scratch.length < K) {
+        if (scratch.length() < K) {
             continue;
         }
         ChunkCallback chunk_func{func, chunk_start};
