@@ -496,13 +496,50 @@ TEST(SpacedKmer, AgreesWithContiguousOnBaseOps)
     }
 }
 
+// spaced_kmer_cast() and spaced_kmer_cast_unchecked() must hold exactly the word they are cast
+// from, under every convention.
+template <typename K>
+static void check_spaced_value_round_trip()
+{
+    constexpr Encoding E = K::encoding;
+    constexpr Layout L = K::layout;
+    for (std::size_t width = 1; width <= 32; ++width) {
+        for (auto const& seq : random_seqs(width, 4, 515151 + width)) {
+            auto const raw = oracle_encode<E, L>(seq).value();
+            auto const spaced = spaced_kmer_cast<E, L>(raw, width);
+            EXPECT_EQ(kmer_value(spaced), raw);
+            EXPECT_EQ((spaced_kmer_cast_unchecked<E, L>(raw)), spaced);
+            EXPECT_EQ(kmer_decode(spaced, width), seq);
+        }
+    }
+}
+
+TEST(SpacedKmer, ValueRoundTrip)
+{
+    check_spaced_value_round_trip<SpacedKmerAcgtMsb>();
+    check_spaced_value_round_trip<SpacedKmerAcgtLsb>();
+    check_spaced_value_round_trip<SpacedKmerActgMsb>();
+    check_spaced_value_round_trip<SpacedKmerActgLsb>();
+}
+
 // See check_vector_cast() in simd_lanes.hpp, run once per vector ISA compiled in.
-TEST(SpacedKmer, CastVector)
+template <typename K>
+static void check_cast_vector()
 {
     std::size_t const width = 10;
-    for_each_lane_vector(width, 919190, [&](auto, auto vec, auto const& seqs) {
-        check_vector_cast<SpacedKmerAcgtMsb>(vec, seqs, width);
-    });
+    for_each_lane_vector<K::encoding, K::layout>(
+        width, 919190, [&](auto, auto vec, auto const& seqs) {
+            check_vector_cast<K>(vec, seqs, width);
+        }
+    );
+}
+
+TEST(SpacedKmer, CastVector)
+{
+    check_cast_vector<SpacedKmerAcgtMsb>();
+    check_cast_vector<SpacedKmerAcgtLsb>();
+    check_cast_vector<SpacedKmerActgMsb>();
+    check_cast_vector<SpacedKmerActgLsb>();
 }
 
 TEST(SpacedKmer, Hashing)

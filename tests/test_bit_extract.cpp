@@ -454,9 +454,8 @@ TEST(BitExtractDispatcher, RoundTrip)
         random_values()[2],
     };
 
-    std::vector<std::size_t> const counts = {1, 2, 3, 8, 16};
-
-    for (auto const n : counts) {
+    // Every count of masks is a separate kernel array size in the dispatcher.
+    for (std::size_t n = 1; n <= 16; ++n) {
         std::vector<std::uint64_t> masks;
         std::vector<DispatcherTestKernel> kernels;
         for (std::size_t i = 0; i < n; ++i) {

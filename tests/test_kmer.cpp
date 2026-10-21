@@ -179,17 +179,31 @@ TEST(Kmer, BaseAt)
     check_base_at<KmerActgLsb>();
 }
 
-// kmer_value() must be exactly the word the k-mer was cast from, in both directions.
-TEST(Kmer, ValueRoundTrip)
+// kmer_value() must be exactly the word the k-mer was cast from, in both directions, under every
+// convention, and kmer_cast_unchecked() must give the same k-mer.
+template <typename K>
+static void check_value_round_trip()
 {
+    constexpr Encoding E = K::encoding;
+    constexpr Layout L = K::layout;
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 131313 + width)) {
-            auto const raw = oracle_encode<Encoding::kACGT, Layout::kMSB>(seq).value();
-            auto const kmer = kmer_cast<Encoding::kACGT, Layout::kMSB>(raw, width);
+            auto const raw = oracle_encode<E, L>(seq).value();
+            auto const kmer = kmer_cast<E, L>(raw, width);
             EXPECT_EQ(kmer_value(kmer), raw);
-            EXPECT_EQ((kmer_cast<Encoding::kACGT, Layout::kMSB>(kmer_value(kmer), width)), kmer);
+            EXPECT_EQ((kmer_cast<E, L>(kmer_value(kmer), width)), kmer);
+            EXPECT_EQ((kmer_cast_unchecked<E, L>(raw)), kmer);
+            EXPECT_EQ(kmer_decode(kmer, width), seq);
         }
     }
+}
+
+TEST(Kmer, ValueRoundTrip)
+{
+    check_value_round_trip<KmerAcgtMsb>();
+    check_value_round_trip<KmerAcgtLsb>();
+    check_value_round_trip<KmerActgMsb>();
+    check_value_round_trip<KmerActgLsb>();
 }
 
 // A k-mer must never carry bits above its width, which is what kmer_cast() asserts on and what
@@ -595,15 +609,16 @@ static KmerVectorValidLanes<Simd> valid_lanes_of_bits(std::uint64_t bits)
 // A vector of k-mers holds the lanes it is cast from. for_each_valid_lane() hands out exactly its
 // valid k-mers, in lane order and with their positions, for each count of valid lanes and each
 // mask of valid lanes, in both callback forms, and store_valid_lanes() stores the same k-mers. Run
-// once per vector ISA compiled in, see for_each_lane_vector() in simd_lanes.hpp.
-TEST(Kmer, KmerVector)
+// once per vector ISA compiled in, see for_each_lane_vector() in simd_lanes.hpp, and convention.
+template <typename K>
+static void check_kmer_vector()
 {
+    constexpr Encoding E = K::encoding;
+    constexpr Layout L = K::layout;
     std::size_t const width = 10;
     std::size_t const pos = 100;
-    for_each_lane_vector(width, 909090, [&]<typename Simd>(Simd, auto vec, auto const& seqs) {
+    for_each_lane_vector<E, L>(width, 909090, [&]<typename Simd>(Simd, auto vec, auto const& seqs) {
         constexpr std::size_t lanes = Simd::lanes;
-        constexpr Encoding E = Encoding::kACGT;
-        constexpr Layout L = Layout::kMSB;
         auto const kmers = kmer_vector_cast<E, L, Simd>(vec, width);
         auto const kmers_unchecked = kmer_vector_cast_unchecked<E, L, Simd>(vec);
         auto const value = kmer_value(kmers_unchecked);
@@ -613,16 +628,16 @@ TEST(Kmer, KmerVector)
         // The k-mers that each way hands out, for `valid`, which has the lanes of `bits`.
         auto const check = [&](auto const& valid, std::uint64_t bits) {
             std::vector<std::size_t> positions;
-            std::vector<KmerAcgtMsb> with_pos;
-            std::vector<KmerAcgtMsb> without_pos;
-            for_each_valid_lane(pos, kmers, valid, [&](std::size_t p, KmerAcgtMsb kmer) {
+            std::vector<K> with_pos;
+            std::vector<K> without_pos;
+            for_each_valid_lane(pos, kmers, valid, [&](std::size_t p, K kmer) {
                 positions.push_back(p);
                 with_pos.push_back(kmer);
             });
-            for_each_valid_lane(pos, kmers, valid, [&](KmerAcgtMsb kmer) {
+            for_each_valid_lane(pos, kmers, valid, [&](K kmer) {
                 without_pos.push_back(kmer);
             });
-            KmerAcgtMsb stored[lanes] = {};
+            K stored[lanes] = {};
             std::size_t const count = store_valid_lanes(kmers, valid, stored);
 
             std::size_t i = 0;
@@ -632,7 +647,7 @@ TEST(Kmer, KmerVector)
                 }
                 ASSERT_TRUE(i < positions.size());
                 EXPECT_EQ(positions[i], pos + j);
-                EXPECT_EQ(with_pos[i], oracle_kmer<KmerAcgtMsb>(seqs[j]));
+                EXPECT_EQ(with_pos[i], oracle_kmer<K>(seqs[j]));
                 EXPECT_EQ(without_pos[i], with_pos[i]);
                 EXPECT_EQ(stored[i], with_pos[i]);
                 ++i;
@@ -648,4 +663,12 @@ TEST(Kmer, KmerVector)
             check(valid_lanes_of_bits<Simd>(bits), bits);
         }
     });
+}
+
+TEST(Kmer, KmerVector)
+{
+    check_kmer_vector<KmerAcgtMsb>();
+    check_kmer_vector<KmerAcgtLsb>();
+    check_kmer_vector<KmerActgMsb>();
+    check_kmer_vector<KmerActgLsb>();
 }
