@@ -989,8 +989,16 @@ TEST(KmerSpaced, MaskValidationAndFormatting)
     EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0x3}, 2));
     EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0xD}, 2));
     EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0x3F}, 2));
-    EXPECT_ANY_THROW(is_valid_spaced_kmer_mask(std::uint64_t{0}, 0));
-    EXPECT_ANY_THROW(is_valid_spaced_kmer_mask(std::uint64_t{0}, 33));
+
+    // A middle position that uses only one of its two bits, with both ends kept.
+    EXPECT_TRUE(is_valid_spaced_kmer_mask(std::uint64_t{0x33}, 3));
+    EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0x37}, 3));
+    EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0x3B}, 3));
+
+    // Spans outside of [1, 32] are invalid for any mask.
+    EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0}, 0));
+    EXPECT_TRUE(!is_valid_spaced_kmer_mask(std::uint64_t{0x3}, 0));
+    EXPECT_TRUE(!is_valid_spaced_kmer_mask(~std::uint64_t{0}, 33));
 
     EXPECT_TRUE(!is_valid_spaced_kmer_mask(raw_spaced_kmer_mask(0x3, 2)));
     EXPECT_EQ(spaced_kmer_mask_string(raw_spaced_kmer_mask(0x3, 2)), "01");
@@ -1080,6 +1088,20 @@ TEST(KmerSpaced, MixedSpans)
         std::invalid_argument
     );
     EXPECT_THROW((void) spaced_kmer_selector(masks), std::invalid_argument);
+}
+
+// An empty set of masks emits nothing, for any sequence.
+TEST(KmerSpaced, EmptyMasks)
+{
+    std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>> const masks;
+    for (std::string const& seq : {std::string{}, std::string("ACGTACGTACGT")}) {
+        std::size_t count = 0;
+        for_each_spaced_kmer(
+            seq, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop,
+            [&](std::size_t, std::size_t, auto const&) { ++count; }
+        );
+        EXPECT_EQ(count, 0u);
+    }
 }
 
 // =================================================================================================

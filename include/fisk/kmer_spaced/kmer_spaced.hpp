@@ -306,14 +306,15 @@ inline std::size_t spaced_kmer_weight(Mask const& mask)
 /**
  * @brief Check if a spaced k-mer mask is valid.
  *
- * This is the case iff it is two-bit encoded, i.e., each position is either 00 or 11,
- * and the first and last position are kept (11), fitting with the span @p k.
+ * This is the case iff the span @p k is in [1, 32], and the mask is two-bit encoded, i.e., each
+ * position is either 00 or 11, with the first and last position kept (11), and no bits set above
+ * the span.
  */
 inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k )
 {
     // Check boundary conditions.
     if( k == 0 || k > 32 ) {
-        throw std::invalid_argument( "Invalid spaced k-mer mask size not in [1,32]" );
+        return false;
     }
 
     // Check that the first and last positions are kept (11), i.e., the highest and lowest 2-bit
@@ -322,9 +323,6 @@ inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k 
     bool const last_kept  = (mask & 0x3u) == 0x3u;
     if (!first_kept || !last_kept) {
         return false;
-        // throw std::invalid_argument(
-        //     "Invalid spaced k-mer mask: first and last position must be kept"
-        // );
     }
 
     // Validity check: mask must consists of either 00 or 11 at each position.
@@ -332,9 +330,6 @@ inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k 
         const std::uint64_t lane = (mask >> (2 * i)) & 0x3u;
         if (lane != 0x0u && lane != 0x3u) {
             return false;
-            // throw std::invalid_argument(
-            //     "Invalid spaced k-mer mask: each selected position must use both bits"
-            // );
         }
     }
 
