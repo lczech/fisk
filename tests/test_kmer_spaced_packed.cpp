@@ -19,9 +19,9 @@ using namespace fisk;
 //     Helpers
 // =================================================================================================
 
-// Sequence lengths 0..100, which covers sequences shorter than the span, the tail, and the main
-// loop for every span, plus two longer ones, each with random per-position content. The oracle
-// (oracle.hpp) works on the ASCII input, independent of the packing and the extraction.
+// Sequence lengths 0..100, which covers sequences shorter than the span, the last step, and the
+// main loop for every span, plus two longer ones, each with random per-position content. The
+// oracle (oracle.hpp) works on the ASCII input, independent of the packing and the extraction.
 static std::vector<std::string> const& test_sequences()
 {
     static std::vector<std::string> const seqs = [] {

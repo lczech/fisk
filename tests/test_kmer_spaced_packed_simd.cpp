@@ -29,8 +29,8 @@ using namespace fisk;
 //     Helpers
 // =================================================================================================
 
-// Sequence lengths 0..100, which covers sequences shorter than the span, the tail, and the main
-// loop for every span and arch, plus two longer ones, each with random per-position content.
+// Sequence lengths 0..100, which covers sequences shorter than the span, the last step, and the
+// main loop for every span and arch, plus two longer ones, each with random per-position content.
 static std::vector<std::string> const& test_sequences()
 {
     static std::vector<std::string> const seqs = [] {
@@ -75,8 +75,8 @@ static std::array<SpacedKmerMask<L, Kernel>, N> make_kernels(
 
 // Runs the extraction with a vector callback, and returns its spaced k-mers as events, in the
 // order of the scalar callbacks. Checks the structure of the vectors on the way: consecutive
-// positions per mask, the masks in order per vector of positions, and zero lanes past the valid
-// ones.
+// positions per mask, and the masks in order per vector of positions. The lanes past the valid
+// ones are unspecified.
 template <typename Simd, typename Extract>
 static std::vector<SpacedEvent> collect_vector_events(std::size_t mask_count, Extract&& extract)
 {
@@ -100,12 +100,8 @@ static std::vector<SpacedEvent> collect_vector_events(std::size_t mask_count, Ex
 
         alignas(64) std::uint64_t buf[lanes];
         Simd::store_aligned(vec, buf);
-        for (std::size_t lane = 0; lane < lanes; ++lane) {
-            if (lane < valid_count) {
-                events.push_back({pos + lane, mask_idx, buf[lane]});
-            } else {
-                EXPECT_EQ(buf[lane], std::uint64_t{0});
-            }
+        for (std::size_t lane = 0; lane < valid_count && lane < lanes; ++lane) {
+            events.push_back({pos + lane, mask_idx, buf[lane]});
         }
     });
     EXPECT_EQ(expected_mask, std::size_t{0});

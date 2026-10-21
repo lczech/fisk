@@ -1,10 +1,8 @@
 #pragma once
 
-#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <type_traits>
 #include <vector>
 
@@ -71,41 +69,45 @@ inline void for_each_spaced_kmer_packed_narrow_width_(
     MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
 ) {
     assert(span_k >= 1 && span_k <= 29);
-
-    std::size_t const p_max = seq.length() - span_k;
-    std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes = (seq.length() + 3) / 4;
-    std::size_t const fast_bytes = std::min(
-        full_bytes, num_bytes >= 8 ? num_bytes - 8 : std::size_t{0}
-    );
+    std::uint64_t const kbits = (std::uint64_t{1} << span_k) - 1u;
+    std::uint8_t const* const codes = seq.codes().data();
 
     auto const emit_ = [&](std::size_t pos, std::uint64_t window) {
         emit_spaced_kmers_packed_<SingleMask, E, L>(masks, pos, window, bit_ext, callback);
     };
-    for (std::size_t b = 0; b < fast_bytes; ++b) {
-        std::uint64_t word;
-        std::memcpy(&word, &seq.codes()[b], 8);
+
+    // One step of run_packed_blocks_() (packed.hpp): the spans that start in byte `b`, of which
+    // those within the sequence by `validity_at` are emitted.
+    auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
+        auto const emit_if_valid_ = [&](
+            std::size_t pos, std::uint64_t window
+        ) FISK_ALWAYS_INLINE_LAMBDA {
+            if (packed_kmer_is_valid_(validity_at(pos), kbits)) {
+                emit_(pos, window);
+            }
+        };
+        std::uint64_t word = load_packed_word_<L>(codes + b);
         if constexpr (L == Layout::kMSB) {
             // Move the span at position 3 to the lowest bits once, so that the shifts per
             // position are constants, as in for_each_kmer_packed_aligned_narrow_width_().
-            word = byte_swap_64(word) >> (58 - 2 * span_k);
-            emit_(4 * b + 0, word >> 6);
-            emit_(4 * b + 1, word >> 4);
-            emit_(4 * b + 2, word >> 2);
-            emit_(4 * b + 3, word);
+            word >>= 58 - 2 * span_k;
+            emit_if_valid_(4 * b + 0, word >> 6);
+            emit_if_valid_(4 * b + 1, word >> 4);
+            emit_if_valid_(4 * b + 2, word >> 2);
+            emit_if_valid_(4 * b + 3, word);
         } else if constexpr (L == Layout::kLSB) {
-            emit_(4 * b + 0, word);
-            emit_(4 * b + 1, word >> 2);
-            emit_(4 * b + 2, word >> 4);
-            emit_(4 * b + 3, word >> 6);
+            emit_if_valid_(4 * b + 0, word);
+            emit_if_valid_(4 * b + 1, word >> 2);
+            emit_if_valid_(4 * b + 2, word >> 4);
+            emit_if_valid_(4 * b + 3, word >> 6);
         } else {
             static_assert(
                 dependent_false_v<L>,
                 "Unhandled Layout in for_each_spaced_kmer_packed_narrow_width_()"
             );
         }
-    }
-    for_each_kmer_packed_rolling_narrow_width_(seq, span_k, 4 * fast_bytes, emit_);
+    };
+    run_packed_blocks_<1>(seq, span_k, step_);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -154,29 +156,29 @@ inline void for_each_spaced_kmer_packed_full_width_(
     MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
 ) {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
+    std::uint64_t const kbits = (std::uint64_t{1} << K) - 1u;
+    std::uint8_t const* const codes = seq.codes().data();
 
-    std::size_t const p_max = seq.length() - K;
-    std::size_t const full_bytes = (p_max + 1) / 4;
-    std::size_t const num_bytes = (seq.length() + 3) / 4;
-    std::size_t const fast_bytes = (num_bytes >= 9) ? std::min(full_bytes, num_bytes - 9)
-                                                     : std::size_t{0};
-
+    // As in the narrow-width loop.
     auto const emit_ = [&](std::size_t pos, std::uint64_t window) {
         emit_spaced_kmers_packed_<SingleMask, E, L>(masks, pos, window, bit_ext, callback);
     };
-    for (std::size_t b = 0; b < fast_bytes; ++b) {
-        std::uint64_t word;
-        std::memcpy(&word, &seq.codes()[b], 8);
-        if constexpr (L == Layout::kMSB) {
-            word = byte_swap_64(word);
-        }
-        std::uint64_t const ninth = seq.codes()[b + 8];
-        emit_(4 * b + 0, spaced_kmer_packed_full_width_window_<L, K, 0>(word, ninth));
-        emit_(4 * b + 1, spaced_kmer_packed_full_width_window_<L, K, 1>(word, ninth));
-        emit_(4 * b + 2, spaced_kmer_packed_full_width_window_<L, K, 2>(word, ninth));
-        emit_(4 * b + 3, spaced_kmer_packed_full_width_window_<L, K, 3>(word, ninth));
-    }
-    for_each_kmer_packed_rolling_full_width_(seq, K, 4 * fast_bytes, emit_);
+    auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
+        auto const emit_if_valid_ = [&](
+            std::size_t pos, std::uint64_t window
+        ) FISK_ALWAYS_INLINE_LAMBDA {
+            if (packed_kmer_is_valid_(validity_at(pos), kbits)) {
+                emit_(pos, window);
+            }
+        };
+        std::uint64_t const word = load_packed_word_<L>(codes + b);
+        std::uint64_t const ninth = codes[b + 8];
+        emit_if_valid_(4 * b + 0, spaced_kmer_packed_full_width_window_<L, K, 0>(word, ninth));
+        emit_if_valid_(4 * b + 1, spaced_kmer_packed_full_width_window_<L, K, 1>(word, ninth));
+        emit_if_valid_(4 * b + 2, spaced_kmer_packed_full_width_window_<L, K, 2>(word, ninth));
+        emit_if_valid_(4 * b + 3, spaced_kmer_packed_full_width_window_<L, K, 3>(word, ninth));
+    };
+    run_packed_blocks_<1>(seq, K, step_);
 }
 
 // -------------------------------------------------------------------------------------------------

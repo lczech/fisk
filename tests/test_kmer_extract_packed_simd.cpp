@@ -43,7 +43,7 @@ static std::vector<std::string> const& test_sequences()
 // Runs `extract`, called as `extract(callback)`, with a `callback(pos, vec, n)`, and checks it
 // against `expected`, lane by lane: `pos` is the start of the k-mer in lane 0, and lane `j` holds
 // the one starting at `pos + j`. Also checks the vector structure: every vector is full except
-// possibly the last, which zero-pads its unused lanes.
+// possibly the last, whose lanes past its count are unspecified.
 template <SimdArch Simd, typename Extract>
 static void check_simd_callbacks(
     std::vector<ExpectedKmer> const& expected, std::size_t k, Extract&& extract
@@ -67,9 +67,6 @@ static void check_simd_callbacks(
         Simd::store_aligned(vec, buf);
         for (std::size_t i = 0; i < n && i < lanes; ++i) {
             values.push_back(buf[i]);
-        }
-        for (std::size_t i = n; i < lanes; ++i) {
-            EXPECT_EQ(buf[i], std::uint64_t{0});
         }
         ++callbacks;
     };

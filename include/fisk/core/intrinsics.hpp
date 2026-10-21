@@ -94,16 +94,6 @@
     #define FISK_ALWAYS_INLINE_LAMBDA
 #endif
 
-// For helpers that should stay out of the functions that call them, without being rare, such as
-// the tails of the SIMD k-mer loops, see kmer_extract/packed_simd.hpp.
-#if defined(_MSC_VER)
-    #define FISK_NOINLINE [[msvc::noinline]]
-#elif defined(__GNUC__) || defined(__clang__)
-    #define FISK_NOINLINE [[gnu::noinline]]
-#else
-    #define FISK_NOINLINE
-#endif
-
 // For rare/cold-path helpers, such as precondition checks that throw, that should stay out of a
 // hot path's inlined body and icache footprint. MSVC has no "cold" hint to pair with noinline,
 // so it only gets the noinline half.

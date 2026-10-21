@@ -30,10 +30,11 @@ namespace fisk {
 //
 // The callback is called either with vectors, as `callback(pos, mask_idx, vec, valid_count)`: lane
 // `j` of `vec` holds the spaced k-mer of mask `mask_idx` at position `pos + j`, for the first
-// `valid_count` lanes, and the remaining lanes are zero. Per vector of positions, the masks are
-// emitted in their order. As for for_each_kmer_packed_simd(), the vectors hold raw words, with the
-// Encoding and Layout of the sequence. Or, if the callback does not take vectors, with one spaced
-// k-mer at a time, in the same order as for_each_spaced_kmer_packed(): per position, all masks.
+// `valid_count` lanes, and the remaining lanes are unspecified. Per vector of positions, the masks
+// are emitted in their order. As for for_each_kmer_packed_simd(), the vectors hold raw words, with
+// the Encoding and Layout of the sequence. Or, if the callback does not take vectors, with one
+// spaced k-mer at a time, in the same order as for_each_spaced_kmer_packed(): per position, all
+// masks.
 // This stores the vectors and emits their lanes, and is hence slower.
 
 // -------------------------------------------------------------------------------------------------
