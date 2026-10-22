@@ -70,7 +70,7 @@ static void check_valid_lanes_callback(
     std::vector<std::size_t> positions;
     std::vector<std::uint64_t> values;
     std::size_t next_pos = 0;
-    extract([&](std::size_t pos, auto kmers, KmerVectorValidLanes<Simd> valid_lanes) {
+    extract([&](std::size_t pos, auto kmers, SimdVectorValidLanes<Simd> valid_lanes) {
         EXPECT_EQ(pos, next_pos);
         next_pos = pos + lanes;
 

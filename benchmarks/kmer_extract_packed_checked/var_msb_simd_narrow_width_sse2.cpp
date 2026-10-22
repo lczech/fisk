@@ -16,7 +16,7 @@ std::uint64_t run_var_checked_msb_simd_narrow_width_sse2(
 ) {
     auto sink = make_sink(sink_buffer);
     auto const consume = [&](
-        std::size_t, __m128i v, KmerVectorValidLanes<SimdSSE2> lanes
+        std::size_t, __m128i v, SimdVectorValidLanes<SimdSSE2> lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
         sink.consume(valid_kmers_<SimdSSE2>(v, lanes));
     };

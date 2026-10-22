@@ -18,7 +18,7 @@ std::uint64_t run_var_checked_lsb_simd_avx2(
     for_each_kmer_packed_checked_simd<SimdAVX2>(
         seq, k,
         [&](
-            std::size_t, auto kmers, KmerVectorValidLanes<SimdAVX2> lanes
+            std::size_t, auto kmers, SimdVectorValidLanes<SimdAVX2> lanes
         ) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(valid_kmers_<SimdAVX2>(kmer_value(kmers), lanes));
         }

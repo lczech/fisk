@@ -429,6 +429,12 @@ static_assert(!SpacedKmerType<KmerAcgtMsb>);
 static_assert(!SpacedKmerType<std::uint64_t>);
 static_assert(std::is_same_v<SpacedKmerActgLsb, SpacedKmer<Encoding::kACTG, Layout::kLSB>>);
 
+using SpacedKmerVectorScalar = SpacedKmerVector<Encoding::kACGT, Layout::kMSB, SimdScalar>;
+static_assert(KmerVectorType<SpacedKmerVectorScalar>);
+static_assert(SpacedKmerVectorType<SpacedKmerVectorScalar>);
+static_assert(!ContiguousKmerVectorType<SpacedKmerVectorScalar>);
+static_assert(!KmerType<SpacedKmerVectorScalar>);
+
 static_assert(CanReverse<KmerAcgtMsb>);
 static_assert(CanReverseComplement<KmerAcgtMsb>);
 static_assert(CanCanonical<KmerAcgtMsb>);
@@ -522,24 +528,13 @@ TEST(SpacedKmer, ValueRoundTrip)
     check_spaced_value_round_trip<SpacedKmerActgLsb>();
 }
 
-// See check_vector_cast() in simd_lanes.hpp, run once per vector ISA compiled in.
-template <typename K>
-static void check_cast_vector()
+// See check_kmer_vector() in simd_lanes.hpp.
+TEST(SpacedKmer, SpacedKmerVector)
 {
-    std::size_t const width = 10;
-    for_each_lane_vector<K::encoding, K::layout>(
-        width, 919190, [&](auto, auto vec, auto const& seqs) {
-            check_vector_cast<K>(vec, seqs, width);
-        }
-    );
-}
-
-TEST(SpacedKmer, CastVector)
-{
-    check_cast_vector<SpacedKmerAcgtMsb>();
-    check_cast_vector<SpacedKmerAcgtLsb>();
-    check_cast_vector<SpacedKmerActgMsb>();
-    check_cast_vector<SpacedKmerActgLsb>();
+    check_kmer_vector<SpacedKmerAcgtMsb>(919190);
+    check_kmer_vector<SpacedKmerAcgtLsb>(919190);
+    check_kmer_vector<SpacedKmerActgMsb>(919190);
+    check_kmer_vector<SpacedKmerActgLsb>(919190);
 }
 
 TEST(SpacedKmer, Hashing)

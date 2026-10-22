@@ -73,20 +73,20 @@ static std::array<SpacedKmerMask<L, Kernel>, N> make_kernels(
     return kernels;
 }
 
-// Runs the extraction with a vector callback, and returns its spaced k-mers as events, in the
-// order of the scalar callbacks. Checks the structure of the vectors on the way: consecutive
-// positions per mask, and the masks in order per vector of positions. The lanes past the valid
-// ones are unspecified.
-template <typename Simd, typename Extract>
+// Runs the extraction with a vector callback, and returns its spaced k-mers as events, taken out
+// of the vectors with for_each_valid_lane(), in the order of the scalar callbacks. Checks the
+// structure of the vectors on the way: consecutive positions per mask, and the masks in order per
+// vector of positions. With `Shorthand`, the callback is the single-mask form without mask_idx.
+template <typename Simd, Encoding E, Layout L, bool Shorthand = false, typename Extract>
 static std::vector<SpacedEvent> collect_vector_events(std::size_t mask_count, Extract&& extract)
 {
+    using V = SpacedKmerVector<E, L, Simd>;
     constexpr std::size_t lanes = Simd::lanes;
     std::vector<SpacedEvent> events;
     std::vector<std::size_t> next_pos(mask_count, 0);
     std::size_t expected_mask = 0;
-    extract([&](
-        std::size_t pos, std::size_t mask_idx, typename Simd::simd_vector vec,
-        std::size_t valid_count
+    auto const on_vector = [&](
+        std::size_t pos, std::size_t mask_idx, V spaced_kmers, std::size_t valid_count
     ) {
         EXPECT_EQ(mask_idx, expected_mask);
         expected_mask = (expected_mask + 1) % mask_count;
@@ -97,13 +97,20 @@ static std::vector<SpacedEvent> collect_vector_events(std::size_t mask_count, Ex
         EXPECT_EQ(pos, next_pos[mask_idx]);
         next_pos[mask_idx] = pos + valid_count;
         EXPECT_TRUE(valid_count >= 1 && valid_count <= lanes);
-
-        alignas(64) std::uint64_t buf[lanes];
-        Simd::store_aligned(vec, buf);
-        for (std::size_t lane = 0; lane < valid_count && lane < lanes; ++lane) {
-            events.push_back({pos + lane, mask_idx, buf[lane]});
-        }
-    });
+        for_each_valid_lane(
+            pos, spaced_kmers, std::min(valid_count, lanes),
+            [&](std::size_t p, SpacedKmer<E, L> const& spaced_kmer) {
+                events.push_back({p, mask_idx, kmer_value(spaced_kmer)});
+            }
+        );
+    };
+    if constexpr (Shorthand) {
+        extract([&](std::size_t pos, V spaced_kmers, std::size_t valid_count) {
+            on_vector(pos, 0, spaced_kmers, valid_count);
+        });
+    } else {
+        extract(on_vector);
+    }
     EXPECT_EQ(expected_mask, std::size_t{0});
     std::sort(events.begin(), events.end(), [](auto const& lhs, auto const& rhs) {
         return std::tie(lhs.pos, lhs.mask_idx) < std::tie(rhs.pos, rhs.mask_idx);
@@ -116,7 +123,7 @@ static std::vector<SpacedEvent> collect_vector_events(std::size_t mask_count, Ex
 // =================================================================================================
 
 // Checks one kernel type for one set of masks, through the array overload, and, for a single mask,
-// also through the single-kernel overload, in all callback forms, against the oracle.
+// also through the single-kernel overload and the shorthand without mask_idx, against the oracle.
 template <typename Kernel, Encoding E, Layout L, std::size_t N>
 static void check_kernel(
     std::array<std::string, N> const& mask_strings, PackedSequence<E, L> const& packed,
@@ -124,29 +131,22 @@ static void check_kernel(
 ) {
     using Simd = typename Kernel::simd_arch;
     auto const kernels = make_kernels<Kernel, L>(mask_strings);
-
-    auto const runs = collect_spaced_callback_forms<L, N == 1>([&](auto const& callback) {
+    auto const extract_array = [&](auto const& callback) {
         for_each_spaced_kmer_packed_simd(packed, kernels, callback);
-    });
-    for (auto const& got : runs) {
-        check_spaced_events(got, expected);
-    }
-    check_spaced_events(collect_vector_events<Simd>(N, [&](auto const& callback) {
-        for_each_spaced_kmer_packed_simd(packed, kernels, callback);
-    }), expected);
+    };
+    check_spaced_events(collect_vector_events<Simd, E, L>(N, extract_array), expected);
 
     if constexpr (N == 1) {
-        auto const single_runs = collect_spaced_callback_forms<L, true>(
-            [&](auto const& callback) {
-                for_each_spaced_kmer_packed_simd(packed, kernels[0], callback);
-            }
-        );
-        for (auto const& got : single_runs) {
-            check_spaced_events(got, expected);
-        }
-        check_spaced_events(collect_vector_events<Simd>(1, [&](auto const& callback) {
+        auto const extract_single = [&](auto const& callback) {
             for_each_spaced_kmer_packed_simd(packed, kernels[0], callback);
-        }), expected);
+        };
+        check_spaced_events(collect_vector_events<Simd, E, L>(1, extract_single), expected);
+        check_spaced_events(
+            collect_vector_events<Simd, E, L, true>(1, extract_single), expected
+        );
+        check_spaced_events(
+            collect_vector_events<Simd, E, L, true>(1, extract_array), expected
+        );
     }
 }
 
@@ -200,16 +200,16 @@ static void check_extraction()
 //     Error Contract
 // =================================================================================================
 
-struct NoopSpacedCallback
+struct NoopSpacedVectorCallback
 {
-    template <typename K>
-    void operator()(std::size_t, std::size_t, K const&) const {}
+    template <typename V>
+    void operator()(std::size_t, std::size_t, V const&, std::size_t) const {}
 };
 
 // The kernels need to have the Layout of the sequence, and to be built on a SIMD arch.
 template <typename Seq, typename Kernel>
 concept CanExtractPackedSimd = requires(Seq const& seq, Kernel const& kernel) {
-    for_each_spaced_kmer_packed_simd(seq, kernel, NoopSpacedCallback{});
+    for_each_spaced_kmer_packed_simd(seq, kernel, NoopSpacedVectorCallback{});
 };
 static_assert(CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>,
@@ -247,7 +247,7 @@ static void check_error_contract()
             static_cast<Kernel&>(kernel) = Kernel(3);
             kernel.span_k = span_k;
             EXPECT_THROW(
-                for_each_spaced_kmer_packed_simd(packed, kernel, NoopSpacedCallback{}),
+                for_each_spaced_kmer_packed_simd(packed, kernel, NoopSpacedVectorCallback{}),
                 std::invalid_argument
             );
         }
@@ -256,7 +256,7 @@ static void check_error_contract()
             make_spaced_kmer_kernel<Kernel, L>("101"), make_spaced_kmer_kernel<Kernel, L>("1001")
         };
         EXPECT_THROW(
-            for_each_spaced_kmer_packed_simd(packed, mixed, NoopSpacedCallback{}),
+            for_each_spaced_kmer_packed_simd(packed, mixed, NoopSpacedVectorCallback{}),
             std::invalid_argument
         );
     }

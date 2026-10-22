@@ -22,10 +22,10 @@ std::uint64_t run_var_simd_block_table_avx2_vectors(
         for_each_spaced_kmer_packed_simd(
             seq, kernels_arr,
             [&](
-                std::size_t /*pos*/, std::size_t /*mask_idx*/, __m256i spaced_kmers,
+                std::size_t /*pos*/, std::size_t /*mask_idx*/, auto spaced_kmers,
                 std::size_t /*valid_count*/
             ) FISK_ALWAYS_INLINE_LAMBDA {
-                sink.consume(spaced_kmers);
+                sink.consume(kmer_value(spaced_kmers));
             }
         );
         result = sink.finalize();

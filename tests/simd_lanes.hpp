@@ -1,19 +1,23 @@
 #pragma once
 
-// SIMD vectors of raw k-mer words for the vector casts, kmer_vector_cast() and the vector overloads
-// of spaced_kmer_cast(), and the check of the latter. Each vector is built with its ISA's own set
-// intrinsic rather than via memcpy, since it is precisely the lane order of those intrinsics that
-// the casts and the functions on k-mer vectors must agree with, and memcpy is what they use
-// internally.
+// SIMD vectors of raw k-mer words for the vectors of k-mers and spaced k-mers, KmerVector and
+// SpacedKmerVector, and the check of their casts and of the functions that take their lanes out.
+// Each vector is built with its ISA's own set intrinsic rather than via memcpy, since it is
+// precisely the lane order of those intrinsics that the casts and the functions on k-mer vectors
+// must agree with, and memcpy is what they use internally.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "fisk/core/cast.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
+#include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/simd_avx2.hpp"
 #include "fisk/core/simd_avx512.hpp"
 #include "fisk/core/simd_neon.hpp"
@@ -88,47 +92,101 @@ inline void for_each_lane_vector(
 }
 
 // =================================================================================================
-//     Vector Cast Check
+//     K-mer Vector Check
 // =================================================================================================
 
-// The vector overloads of spaced_kmer_cast() and spaced_kmer_cast_unchecked() must hand back
-// exactly the lanes they were given, in lane order and tagged with K's conventions, so that
-// consumers of the vector-emitting spaced extractors can return to the typed world. Lane `i` of
-// `vec` holds seqs[i] encoded under the conventions of K, see for_each_lane_vector().
-template <typename K, typename Vec>
-inline void check_vector_cast(Vec vec, std::vector<std::string> const& seqs, std::size_t width)
+// The valid lanes with bit `j` of `bits` set for lane `j`. Each arch makes its lane mask by
+// comparing the lanes of two vectors, so this compares lanes that are equal where the bits are set.
+template <typename Simd>
+inline fisk::SimdVectorValidLanes<Simd> valid_lanes_of_bits(std::uint64_t bits)
 {
-    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
-    ASSERT_EQ(seqs.size(), lanes);
-
-    auto const cast = [&](auto... args) {
-        return fisk::spaced_kmer_cast<K::encoding, K::layout>(vec, args...);
-    };
-    auto const cast_unchecked = [&](auto... args) {
-        return fisk::spaced_kmer_cast_unchecked<K::encoding, K::layout>(vec, args...);
-    };
-
-    // The full-vector overloads write every lane, checked and unchecked alike.
-    K full[lanes] = {};
-    K full_unchecked[lanes] = {};
-    EXPECT_EQ(cast(width, full), lanes);
-    EXPECT_EQ(cast_unchecked(full_unchecked), lanes);
-    for (std::size_t i = 0; i < lanes; ++i) {
-        EXPECT_EQ(full[i], oracle_kmer<K>(seqs[i]));
-        EXPECT_EQ(full_unchecked[i], full[i]);
-        EXPECT_EQ(kmer_decode(full[i], width), seqs[i]);
+    std::array<std::uint64_t, Simd::lanes> zeros{};
+    std::array<std::uint64_t, Simd::lanes> lanes{};
+    for (std::size_t j = 0; j < Simd::lanes; ++j) {
+        lanes[j] = ((bits >> j) & 1) ? 0 : 1;
     }
+    return {Simd::compare_eq_lanes(Simd::from_values(lanes), Simd::from_values(zeros))};
+}
 
-    // The counted overloads write only the lanes they are told are valid, as the zero-padded final
-    // vector of an extraction run requires.
-    K partial[lanes] = {};
-    K partial_unchecked[lanes] = {};
-    EXPECT_EQ(cast(std::size_t{1}, width, partial), std::size_t{1});
-    EXPECT_EQ(cast_unchecked(std::size_t{1}, partial_unchecked), std::size_t{1});
-    EXPECT_EQ(partial[0], oracle_kmer<K>(seqs[0]));
-    EXPECT_EQ(partial_unchecked[0], partial[0]);
-    if constexpr (lanes > 1) {
-        EXPECT_EQ(partial[1], K{0});
-        EXPECT_EQ(partial_unchecked[1], K{0});
+// The checked and unchecked vector casts of the k-mer type K: kmer_vector_cast() for a Kmer, and
+// spaced_kmer_vector_cast() for a SpacedKmer.
+template <typename K, typename Simd, typename Vec>
+inline auto kmer_vector_cast_of(Vec vec, std::size_t width)
+{
+    if constexpr (fisk::SpacedKmerType<K>) {
+        return fisk::spaced_kmer_vector_cast<K::encoding, K::layout, Simd>(vec, width);
+    } else {
+        return fisk::kmer_vector_cast<K::encoding, K::layout, Simd>(vec, width);
     }
+}
+template <typename K, typename Simd, typename Vec>
+inline auto kmer_vector_cast_unchecked_of(Vec vec)
+{
+    if constexpr (fisk::SpacedKmerType<K>) {
+        return fisk::spaced_kmer_vector_cast_unchecked<K::encoding, K::layout, Simd>(vec);
+    } else {
+        return fisk::kmer_vector_cast_unchecked<K::encoding, K::layout, Simd>(vec);
+    }
+}
+
+// A vector of k-mers or spaced k-mers K holds the lanes it is cast from. for_each_valid_lane()
+// hands out exactly its valid k-mers, in lane order and with their positions, for each count of
+// valid lanes and each mask of valid lanes, in both callback forms, and store_valid_lanes() stores
+// the same k-mers. Run once per vector ISA compiled in, see for_each_lane_vector().
+template <typename K>
+inline void check_kmer_vector(std::uint64_t seed)
+{
+    constexpr fisk::Encoding E = K::encoding;
+    constexpr fisk::Layout L = K::layout;
+    std::size_t const width = 10;
+    std::size_t const pos = 100;
+    for_each_lane_vector<E, L>(width, seed, [&]<typename Simd>(Simd, auto vec, auto const& seqs) {
+        constexpr std::size_t lanes = Simd::lanes;
+        auto const kmers = kmer_vector_cast_of<K, Simd>(vec, width);
+        auto const kmers_unchecked = kmer_vector_cast_unchecked_of<K, Simd>(vec);
+        static_assert(std::is_same_v<typename decltype(kmers)::kmer_type, K>);
+        static_assert(std::is_same_v<decltype(kmers), decltype(kmers_unchecked)>);
+        auto const value = fisk::kmer_value(kmers_unchecked);
+        EXPECT_EQ(std::memcmp(&kmers.value, &vec, sizeof(vec)), 0);
+        EXPECT_EQ(std::memcmp(&value, &vec, sizeof(vec)), 0);
+
+        // The k-mers that each way hands out, for `valid`, which has the lanes of `bits`.
+        auto const check = [&](auto const& valid, std::uint64_t bits) {
+            std::vector<std::size_t> positions;
+            std::vector<K> with_pos;
+            std::vector<K> without_pos;
+            fisk::for_each_valid_lane(pos, kmers, valid, [&](std::size_t p, K kmer) {
+                positions.push_back(p);
+                with_pos.push_back(kmer);
+            });
+            fisk::for_each_valid_lane(pos, kmers, valid, [&](K kmer) {
+                without_pos.push_back(kmer);
+            });
+            K stored[lanes] = {};
+            std::size_t const count = fisk::store_valid_lanes(kmers, valid, stored);
+
+            std::size_t i = 0;
+            for (std::size_t j = 0; j < lanes; ++j) {
+                if (((bits >> j) & 1) == 0) {
+                    continue;
+                }
+                ASSERT_TRUE(i < positions.size());
+                EXPECT_EQ(positions[i], pos + j);
+                EXPECT_EQ(with_pos[i], oracle_kmer<K>(seqs[j]));
+                EXPECT_EQ(fisk::kmer_decode(with_pos[i], width), seqs[j]);
+                EXPECT_EQ(without_pos[i], with_pos[i]);
+                EXPECT_EQ(stored[i], with_pos[i]);
+                ++i;
+            }
+            EXPECT_EQ(positions.size(), i);
+            EXPECT_EQ(without_pos.size(), i);
+            EXPECT_EQ(count, i);
+        };
+        for (std::size_t count = 0; count <= lanes; ++count) {
+            check(count, (std::uint64_t{1} << count) - 1);
+        }
+        for (std::uint64_t bits = 0; bits < (std::uint64_t{1} << lanes); ++bits) {
+            check(valid_lanes_of_bits<Simd>(bits), bits);
+        }
+    });
 }

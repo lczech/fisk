@@ -679,7 +679,7 @@ template <typename T>
 concept SpacedKmerMaskType = is_spaced_kmer_mask_<T>::value;
 
 // =================================================================================================
-//     K-mer Vector
+//     K-mer Vectors
 // =================================================================================================
 
 /**
@@ -703,26 +703,67 @@ struct KmerVector
     static constexpr std::size_t lanes = Simd::lanes;
     using simd = Simd;
 
+    // The type of the single k-mers in the lanes.
+    using kmer_type = Kmer<E, L>;
+
     typename Simd::simd_vector value;
 };
 
 /**
- * @brief A vector of k-mers, i.e. a KmerVector.
+ * @brief A vector of contiguous k-mers, i.e. a KmerVector and not a SpacedKmerVector.
  */
 template <typename T>
-concept KmerVectorType = std::same_as<T, KmerVector<T::encoding, T::layout, typename T::simd>>;
-
+concept ContiguousKmerVectorType = std::same_as<
+    T, KmerVector<T::encoding, T::layout, typename T::simd>
+>;
 
 /**
- * @brief The lanes of a SIMD vector of k-mers that hold valid k-mers, for the extraction functions
- * that check the validity of the nucleotides, such as for_each_kmer_packed_checked_simd().
+ * @brief A SIMD vector of spaced k-mers of one mask, one per 64-bit lane, each encoded as in
+ * SpacedKmer, tagged with their conventions and the SIMD arch.
+ *
+ * The vector counterpart of SpacedKmer, as handed out by the SIMD spaced k-mer extraction
+ * functions, such as for_each_spaced_kmer_packed_simd(), and otherwise the same as KmerVector.
+ */
+template <Encoding E, Layout L, SimdArch Simd>
+struct SpacedKmerVector
+{
+    static constexpr Encoding encoding = E;
+    static constexpr Layout layout = L;
+    static constexpr std::size_t lanes = Simd::lanes;
+    using simd = Simd;
+
+    // The type of the single spaced k-mers in the lanes.
+    using kmer_type = SpacedKmer<E, L>;
+
+    typename Simd::simd_vector value;
+};
+
+/**
+ * @brief A vector of spaced k-mers, i.e. a SpacedKmerVector.
+ */
+template <typename T>
+concept SpacedKmerVectorType = std::same_as<
+    T, SpacedKmerVector<T::encoding, T::layout, typename T::simd>
+>;
+
+/**
+ * @brief A vector of k-mers of either kind, i.e. a KmerVector or a SpacedKmerVector, as KmerType
+ * is for single k-mers.
+ */
+template <typename T>
+concept KmerVectorType = ContiguousKmerVectorType<T> || SpacedKmerVectorType<T>;
+
+/**
+ * @brief The lanes of a SIMD vector of k-mers or spaced k-mers that hold valid ones, for the
+ * extraction functions that check the validity of the nucleotides, such as
+ * for_each_kmer_packed_checked_simd().
  *
  * `value` is the lane mask in the form native to the arch, see SimdArch: a vector with all bits
  * set in the valid lanes and zero in the others, or the mask register of AVX512, which the masked
  * instructions of AVX512 take directly. bits() has bit `j` set for a valid lane `j`.
  */
 template <SimdArch Simd>
-struct KmerVectorValidLanes
+struct SimdVectorValidLanes
 {
     typename Simd::lane_mask value;
 

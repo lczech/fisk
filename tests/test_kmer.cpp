@@ -49,6 +49,8 @@ static_assert(!std::is_convertible_v<std::uint64_t, KmerAcgtMsb>);
 using KmerVectorScalar = KmerVector<Encoding::kACGT, Layout::kMSB, SimdScalar>;
 static_assert(!KmerType<KmerVectorScalar>);
 static_assert(KmerVectorType<KmerVectorScalar>);
+static_assert(ContiguousKmerVectorType<KmerVectorScalar>);
+static_assert(!SpacedKmerVectorType<KmerVectorScalar>);
 static_assert(!KmerVectorType<KmerAcgtMsb>);
 static_assert(!std::is_convertible_v<KmerVectorScalar, KmerAcgtMsb>);
 static_assert(std::is_same_v<decltype(kmer_value(KmerVectorScalar{})), std::uint64_t>);
@@ -593,82 +595,11 @@ TEST(Kmer, EncodeInvalidInput)
 //     SIMD Re-entry
 // =================================================================================================
 
-// The valid lanes with bit `j` of `bits` set for lane `j`. Each arch makes its lane mask by
-// comparing the lanes of two vectors, so this compares lanes that are equal where the bits are set.
-template <typename Simd>
-static KmerVectorValidLanes<Simd> valid_lanes_of_bits(std::uint64_t bits)
-{
-    std::array<std::uint64_t, Simd::lanes> zeros{};
-    std::array<std::uint64_t, Simd::lanes> lanes{};
-    for (std::size_t j = 0; j < Simd::lanes; ++j) {
-        lanes[j] = ((bits >> j) & 1) ? 0 : 1;
-    }
-    return {Simd::compare_eq_lanes(Simd::from_values(lanes), Simd::from_values(zeros))};
-}
-
-// A vector of k-mers holds the lanes it is cast from. for_each_valid_lane() hands out exactly its
-// valid k-mers, in lane order and with their positions, for each count of valid lanes and each
-// mask of valid lanes, in both callback forms, and store_valid_lanes() stores the same k-mers. Run
-// once per vector ISA compiled in, see for_each_lane_vector() in simd_lanes.hpp, and convention.
-template <typename K>
-static void check_kmer_vector()
-{
-    constexpr Encoding E = K::encoding;
-    constexpr Layout L = K::layout;
-    std::size_t const width = 10;
-    std::size_t const pos = 100;
-    for_each_lane_vector<E, L>(width, 909090, [&]<typename Simd>(Simd, auto vec, auto const& seqs) {
-        constexpr std::size_t lanes = Simd::lanes;
-        auto const kmers = kmer_vector_cast<E, L, Simd>(vec, width);
-        auto const kmers_unchecked = kmer_vector_cast_unchecked<E, L, Simd>(vec);
-        auto const value = kmer_value(kmers_unchecked);
-        EXPECT_EQ(std::memcmp(&kmers.value, &vec, sizeof(vec)), 0);
-        EXPECT_EQ(std::memcmp(&value, &vec, sizeof(vec)), 0);
-
-        // The k-mers that each way hands out, for `valid`, which has the lanes of `bits`.
-        auto const check = [&](auto const& valid, std::uint64_t bits) {
-            std::vector<std::size_t> positions;
-            std::vector<K> with_pos;
-            std::vector<K> without_pos;
-            for_each_valid_lane(pos, kmers, valid, [&](std::size_t p, K kmer) {
-                positions.push_back(p);
-                with_pos.push_back(kmer);
-            });
-            for_each_valid_lane(pos, kmers, valid, [&](K kmer) {
-                without_pos.push_back(kmer);
-            });
-            K stored[lanes] = {};
-            std::size_t const count = store_valid_lanes(kmers, valid, stored);
-
-            std::size_t i = 0;
-            for (std::size_t j = 0; j < lanes; ++j) {
-                if (((bits >> j) & 1) == 0) {
-                    continue;
-                }
-                ASSERT_TRUE(i < positions.size());
-                EXPECT_EQ(positions[i], pos + j);
-                EXPECT_EQ(with_pos[i], oracle_kmer<K>(seqs[j]));
-                EXPECT_EQ(without_pos[i], with_pos[i]);
-                EXPECT_EQ(stored[i], with_pos[i]);
-                ++i;
-            }
-            EXPECT_EQ(positions.size(), i);
-            EXPECT_EQ(without_pos.size(), i);
-            EXPECT_EQ(count, i);
-        };
-        for (std::size_t count = 0; count <= lanes; ++count) {
-            check(count, (std::uint64_t{1} << count) - 1);
-        }
-        for (std::uint64_t bits = 0; bits < (std::uint64_t{1} << lanes); ++bits) {
-            check(valid_lanes_of_bits<Simd>(bits), bits);
-        }
-    });
-}
-
+// See check_kmer_vector() in simd_lanes.hpp.
 TEST(Kmer, KmerVector)
 {
-    check_kmer_vector<KmerAcgtMsb>();
-    check_kmer_vector<KmerAcgtLsb>();
-    check_kmer_vector<KmerActgMsb>();
-    check_kmer_vector<KmerActgLsb>();
+    check_kmer_vector<KmerAcgtMsb>(909090);
+    check_kmer_vector<KmerAcgtLsb>(909090);
+    check_kmer_vector<KmerActgMsb>(909090);
+    check_kmer_vector<KmerActgLsb>(909090);
 }

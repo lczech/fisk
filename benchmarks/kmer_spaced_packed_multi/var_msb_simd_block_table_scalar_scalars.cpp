@@ -20,9 +20,15 @@ std::uint64_t run_var_simd_block_table_scalar_scalars(
         for_each_spaced_kmer_packed_simd(
             seq, kernels_arr,
             [&](
-                std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer
+                std::size_t pos, std::size_t /*mask_idx*/, auto spaced_kmers,
+                std::size_t valid_count
             ) FISK_ALWAYS_INLINE_LAMBDA {
-                sink.consume(kmer_value(spaced_kmer));
+                for_each_valid_lane(
+                    pos, spaced_kmers, valid_count,
+                    [&](auto spaced_kmer) FISK_ALWAYS_INLINE_LAMBDA {
+                        sink.consume(kmer_value(spaced_kmer));
+                    }
+                );
             }
         );
         result = sink.finalize();

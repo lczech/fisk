@@ -11,13 +11,15 @@ using namespace fisk;
 //     Helpers
 // =================================================================================================
 
-// The vector forms of spaced k-mers are checked with the words of SimdScalar: spelling out a vector
-// type such as __m256i as a template argument makes GCC warn about its ignored attributes.
+// The vector forms are checked with the words of SimdScalar, whose raw vector `Vec` has the type of
+// a raw k-mer: spelling out a vector type such as __m256i as a template argument makes GCC warn
+// about its ignored attributes.
 using Vec = std::uint64_t;
 using K = Kmer<Encoding::kACGT, Layout::kMSB>;
 using S = SpacedKmer<Encoding::kACGT, Layout::kMSB>;
 using KV = KmerVector<Encoding::kACGT, Layout::kMSB, SimdScalar>;
-using Lanes = KmerVectorValidLanes<SimdScalar>;
+using SV = SpacedKmerVector<Encoding::kACGT, Layout::kMSB, SimdScalar>;
+using Lanes = SimdVectorValidLanes<SimdScalar>;
 
 template <typename T>
 concept KmerCb = KmerCallback<T, Encoding::kACGT, Layout::kMSB>;
@@ -29,6 +31,12 @@ template <typename T>
 concept SpacedCb = SpacedKmerCallback<T, Encoding::kACGT, Layout::kMSB, false>;
 template <typename T>
 concept SpacedSingleCb = SpacedKmerCallback<T, Encoding::kACGT, Layout::kMSB, true>;
+template <typename T>
+concept SpacedVectorCb =
+    SpacedKmerVectorCallback<T, Encoding::kACGT, Layout::kMSB, SimdScalar, false>;
+template <typename T>
+concept SpacedVectorSingleCb =
+    SpacedKmerVectorCallback<T, Encoding::kACGT, Layout::kMSB, SimdScalar, true>;
 
 // =================================================================================================
 //     Contiguous K-mers
@@ -83,12 +91,18 @@ static_assert(SpacedSingleCb<decltype([](std::size_t, S const&) {})>);
 static_assert(!SpacedSingleCb<decltype([](S const&) {})>);
 static_assert(!SpacedCb<decltype([](std::size_t, std::size_t, K const&) {})>);
 
-// Only the form with mask_idx, and the scalar forms do not pass as vector forms, nor vice versa.
-static_assert(SpacedKmerVectorCallback<
-    decltype([](std::size_t, std::size_t, Vec, std::size_t) {}), Vec
->);
-static_assert(!SpacedKmerVectorCallback<decltype([](std::size_t, Vec, std::size_t) {}), Vec>);
-static_assert(!SpacedKmerVectorCallback<
-    decltype([](std::size_t, std::size_t, S const&) {}), Vec
->);
-static_assert(!SpacedSingleCb<decltype([](std::size_t, std::size_t, Vec, std::size_t) {})>);
+// The same holds for the vector forms.
+static_assert(SpacedVectorCb<decltype([](std::size_t, std::size_t, SV, std::size_t) {})>);
+static_assert(SpacedVectorSingleCb<decltype([](std::size_t, std::size_t, SV, std::size_t) {})>);
+static_assert(!SpacedVectorCb<decltype([](std::size_t, SV, std::size_t) {})>);
+static_assert(SpacedVectorSingleCb<decltype([](std::size_t, SV, std::size_t) {})>);
+
+// The vectors are tagged: a callback for raw vectors, or for vectors of k-mers, does not take them.
+// That keeps the vector shorthand apart from the scalar form with mask_idx, even for SimdScalar,
+// whose raw vectors are words, and the scalar and vector forms do not pass as each other.
+static_assert(!SpacedVectorCb<decltype([](std::size_t, std::size_t, Vec, std::size_t) {})>);
+static_assert(!SpacedVectorSingleCb<decltype([](std::size_t, Vec, std::size_t) {})>);
+static_assert(!SpacedVectorCb<decltype([](std::size_t, std::size_t, KV, std::size_t) {})>);
+static_assert(!SpacedVectorSingleCb<decltype([](std::size_t, std::size_t, S const&) {})>);
+static_assert(!SpacedSingleCb<decltype([](std::size_t, SV, std::size_t) {})>);
+static_assert(!SpacedSingleCb<decltype([](std::size_t, std::size_t, SV, std::size_t) {})>);

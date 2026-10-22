@@ -28,14 +28,12 @@ namespace fisk {
 // for_each_spaced_kmer_packed(), the windows still hold the neighboring bases above the span,
 // which the bit extraction does not take.
 //
-// The callback is called either with vectors, as `callback(pos, mask_idx, vec, valid_count)`: lane
-// `j` of `vec` holds the spaced k-mer of mask `mask_idx` at position `pos + j`, for the first
-// `valid_count` lanes, and the remaining lanes are unspecified. Per vector of positions, the masks
-// are emitted in their order. As for for_each_kmer_packed_simd(), the vectors hold raw words, with
-// the Encoding and Layout of the sequence. Or, if the callback does not take vectors, with one
-// spaced k-mer at a time, in the same order as for_each_spaced_kmer_packed(): per position, all
-// masks.
-// This stores the vectors and emits their lanes, and is hence slower.
+// The callback is called with vectors, as `callback(pos, mask_idx, spaced_kmers, valid_count)`,
+// or, for a single kernel, also as `callback(pos, spaced_kmers, valid_count)`: lane `j` of the
+// SpacedKmerVector `spaced_kmers` holds the spaced k-mer of mask `mask_idx` at position `pos + j`,
+// for the first `valid_count` lanes, and the remaining lanes are unspecified. Per vector of
+// positions, the masks are emitted in their order. The spaced k-mers have the Encoding and Layout
+// of the sequence. For single spaced k-mers, use for_each_valid_lane() in the callback.
 
 // -------------------------------------------------------------------------------------------------
 //     Helpers
@@ -52,34 +50,19 @@ inline void emit_spaced_kmers_packed_simd_(
     std::array<Kernel, N> const& kernels, std::size_t pos, Vector windows,
     std::size_t valid_count, Callback& callback
 ) {
-    if constexpr (SpacedKmerVectorCallback<Callback&, Vector>) {
-        [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
-            (invoke_spaced_kmer_vector_callback(
-                callback, M, pos, kernels[M].bit_extract(windows), valid_count
-            ), ...);
-        }(std::make_index_sequence<N>{});
-    } else if constexpr (SpacedKmerCallback<Callback&, E, L, N == 1>) {
-        alignas(64) std::uint64_t spaced[N][Kernel::lanes];
-        [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
-            (Kernel::store(kernels[M].bit_extract(windows), spaced[M]), ...);
-        }(std::make_index_sequence<N>{});
-        for (std::size_t lane = 0; lane < valid_count; ++lane) {
-            for (std::size_t m = 0; m < N; ++m) {
-                assert_fits_width_(spaced[m][lane], spaced_kmer_weight(kernels[m]));
-                invoke_spaced_kmer_callback<E, L, N == 1>(
-                    callback, m, pos + lane, spaced[m][lane]
-                );
-            }
-        }
-    } else {
-        static_assert(
-            SpacedKmerVectorCallback<Callback&, Vector> ||
-                SpacedKmerCallback<Callback&, E, L, N == 1>,
-            "Callback must be callable as callback(pos, mask_idx, vec, valid_count), as "
-            "callback(pos, mask_idx, spaced_kmer), or, for a single kernel, as "
-            "callback(pos, spaced_kmer)."
-        );
-    }
+    using Simd = typename Kernel::simd_arch;
+    static_assert(
+        SpacedKmerVectorCallback<Callback&, E, L, Simd, N == 1>,
+        "Callback must be callable as callback(pos, mask_idx, spaced_kmers, valid_count), or, "
+        "for a single kernel, as callback(pos, spaced_kmers, valid_count)."
+    );
+    [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
+        (invoke_spaced_kmer_vector_callback<E, L, Simd, N == 1>(
+            callback, M, pos,
+            spaced_kmer_vector_cast_unchecked<E, L, Simd>(kernels[M].bit_extract(windows)),
+            valid_count
+        ), ...);
+    }(std::make_index_sequence<N>{});
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -91,14 +74,14 @@ inline void emit_spaced_kmers_packed_simd_(
  * call a callback on them, for an array of kernels.
  *
  * As the sequence holds only valid bases, a spaced k-mer is emitted at every position, for every
- * kernel. It has the Encoding and Layout of the sequence. See above for the forms of the callback.
+ * kernel. It has the Encoding and Layout of the sequence. See above for the form of the callback.
  * A PackedSequenceWithValidity is taken as well, ignoring its validity bits.
  *
  * @tparam Kernel   Bit extraction kernel of a SIMD arch, see BitExtractKernelWithArch, tagged as
  *                  spaced k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel().
  *                  The spans of all kernels must be the same, and in [1, 32].
  * @tparam N        Number of kernels in the array.
- * @tparam Callback Callback function, called with vectors or with single spaced k-mers.
+ * @tparam Callback Callback function, called with vectors of spaced k-mers, see above.
  */
 template <
     PackedSequenceType Seq, Layout L, typename Kernel, std::size_t N, typename Callback
@@ -139,8 +122,8 @@ inline void for_each_spaced_kmer_packed_simd(
  * @brief Iterate a PackedSequence, extract all spaced k-mers from it with SIMD bit extraction, and
  * call a callback on them, for a single kernel.
  *
- * Same as the overload above, for a single kernel, with `mask_idx` always 0. For single spaced
- * k-mers, the callback can also be called as callback(pos, spaced_kmer).
+ * Same as the overload above, for a single kernel, with `mask_idx` always 0. The callback can also
+ * be called without it, as callback(pos, spaced_kmers, valid_count).
  */
 template <PackedSequenceType Seq, Layout L, typename Kernel, typename Callback>
     requires BitExtractKernelWithArch<Kernel> && (L == Seq::layout)

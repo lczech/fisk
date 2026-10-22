@@ -154,6 +154,35 @@ template <Encoding E, Layout L>
 //     K-mer Vector Cast
 // =================================================================================================
 
+// Adopt a SIMD vector of raw words as a KmerVector or SpacedKmerVector `V`, without checking them.
+template <KmerVectorType V>
+[[nodiscard]] inline V kmer_vector_cast_unchecked_(typename V::simd::simd_vector vec) noexcept
+{
+    // A bare vector as far as the ABI is concerned, as Kmer is a bare word (see
+    // kmer_cast_unchecked()), so that it is passed in a vector register.
+    static_assert(sizeof(V) == sizeof(vec));
+    static_assert(alignof(V) == alignof(typename V::simd::simd_vector));
+    static_assert(std::is_trivially_copyable_v<V>);
+    static_assert(std::is_standard_layout_v<V>);
+    static_assert(std::is_aggregate_v<V>);
+    return V{vec};
+}
+
+// Adopt a SIMD vector of raw words as a KmerVector or SpacedKmerVector `V`, asserting that every
+// lane fits `width` nucleotides.
+template <KmerVectorType V>
+[[nodiscard]] inline V kmer_vector_cast_(
+    typename V::simd::simd_vector vec, [[maybe_unused]] std::size_t width
+) noexcept {
+    static_assert(sizeof(vec) == V::lanes * sizeof(std::uint64_t));
+    std::uint64_t words[V::lanes];
+    std::memcpy(words, &vec, sizeof(vec));
+    for (std::uint64_t const word : words) {
+        assert_fits_width_(word, width);
+    }
+    return kmer_vector_cast_unchecked_<V>(vec);
+}
+
 /**
  * @brief Adopt a SIMD vector of raw words as a vector of k-mers of a given convention, without
  * checking them against the width.
@@ -165,15 +194,7 @@ template <Encoding E, Layout L, SimdArch Simd>
 [[nodiscard]] inline KmerVector<E, L, Simd> kmer_vector_cast_unchecked(
     typename Simd::simd_vector vec
 ) noexcept {
-    // A bare vector as far as the ABI is concerned, as Kmer is a bare word (see
-    // kmer_cast_unchecked()), so that it is passed in a vector register.
-    using V = KmerVector<E, L, Simd>;
-    static_assert(sizeof(V) == sizeof(vec));
-    static_assert(alignof(V) == alignof(typename Simd::simd_vector));
-    static_assert(std::is_trivially_copyable_v<V>);
-    static_assert(std::is_standard_layout_v<V>);
-    static_assert(std::is_aggregate_v<V>);
-    return V{vec};
+    return kmer_vector_cast_unchecked_<KmerVector<E, L, Simd>>(vec);
 }
 
 /**
@@ -184,19 +205,14 @@ template <Encoding E, Layout L, SimdArch Simd>
  */
 template <Encoding E, Layout L, SimdArch Simd>
 [[nodiscard]] inline KmerVector<E, L, Simd> kmer_vector_cast(
-    typename Simd::simd_vector vec, [[maybe_unused]] std::size_t width
+    typename Simd::simd_vector vec, std::size_t width
 ) noexcept {
-    static_assert(sizeof(vec) == Simd::lanes * sizeof(std::uint64_t));
-    std::uint64_t words[Simd::lanes];
-    std::memcpy(words, &vec, sizeof(vec));
-    for (std::uint64_t const word : words) {
-        assert_fits_width_(word, width);
-    }
-    return kmer_vector_cast_unchecked<E, L, Simd>(vec);
+    return kmer_vector_cast_<KmerVector<E, L, Simd>>(vec, width);
 }
 
 /**
- * @brief Get the SIMD vector of a vector of k-mers, the counterpart of kmer_vector_cast().
+ * @brief Get the SIMD vector of a vector of k-mers or spaced k-mers, the counterpart of
+ * kmer_vector_cast() and spaced_kmer_vector_cast().
  */
 template <KmerVectorType V>
 [[nodiscard]] inline typename V::simd::simd_vector kmer_value(V kmers) noexcept
@@ -244,95 +260,32 @@ template <Encoding E, Layout L>
 }
 
 /**
- * @brief Adopt the first `count` lanes of a SIMD vector of raw words as spaced k-mers, and return
- * how many were written.
+ * @brief Adopt a SIMD vector of raw words as a vector of spaced k-mers of a given convention,
+ * without checking them against the weight.
  *
- * The vector-emitting spaced extractors (kmer_spaced/packed_simd.hpp) hand out several spaced
- * k-mers at once in a SIMD vector. This is the way back to typed spaced k-mers, with the
- * conventions of the producing mask. `weight` is the mask weight shared by all lanes, and `out`
- * must have room for `count` spaced k-mers.
+ * The vector counterpart of spaced_kmer_cast_unchecked(), for vectors that the caller already
+ * knows to hold valid spaced k-mers. Otherwise use spaced_kmer_vector_cast(), which asserts the
+ * weight in debug builds.
+ */
+template <Encoding E, Layout L, SimdArch Simd>
+[[nodiscard]] inline SpacedKmerVector<E, L, Simd> spaced_kmer_vector_cast_unchecked(
+    typename Simd::simd_vector vec
+) noexcept {
+    return kmer_vector_cast_unchecked_<SpacedKmerVector<E, L, Simd>>(vec);
+}
+
+/**
+ * @brief Adopt a SIMD vector of raw words as a vector of spaced k-mers of a given convention.
  *
- * The vector goes through memcpy rather than a store intrinsic of its arch, which compilers lower
- * to the same unaligned store, and usually elide once this is inlined into the consumer.
+ * The vector counterpart of spaced_kmer_cast(), with the same caveat that the caller asserts the
+ * convention, and that every lane holds a spaced k-mer of `weight` kept nucleotides, both checked
+ * by assert() only.
  */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t spaced_kmer_cast(
-    Vec vec, std::size_t count, std::size_t weight, SpacedKmer<E, L>* out
+template <Encoding E, Layout L, SimdArch Simd>
+[[nodiscard]] inline SpacedKmerVector<E, L, Simd> spaced_kmer_vector_cast(
+    typename Simd::simd_vector vec, std::size_t weight
 ) noexcept {
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "spaced_kmer_cast() expects a vector of whole 64-bit lanes"
-    );
-    static_assert(
-        std::is_trivially_copyable_v<Vec>,
-        "spaced_kmer_cast() expects a trivially copyable vector"
-    );
-    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
-    assert(count <= lanes);
-    assert(out != nullptr);
-
-    std::uint64_t buffer[lanes];
-    std::memcpy(buffer, &vec, sizeof(Vec));
-    for (std::size_t i = 0; i < count; ++i) {
-        out[i] = spaced_kmer_cast<E, L>(buffer[i], weight);
-    }
-    return count;
-}
-
-/**
- * @brief Adopt every lane of a SIMD vector of raw words as spaced k-mers.
- */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t spaced_kmer_cast(Vec vec, std::size_t weight, SpacedKmer<E, L>* out) noexcept
-{
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "spaced_kmer_cast() expects a vector of whole 64-bit lanes"
-    );
-    return spaced_kmer_cast<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), weight, out);
-}
-
-/**
- * @brief Adopt the first `count` lanes of a SIMD vector of raw words as spaced k-mers, without
- * checking them against the weight. The unchecked counterpart of spaced_kmer_cast(vec, count,
- * weight, out).
- */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t spaced_kmer_cast_unchecked(
-    Vec vec, std::size_t count, SpacedKmer<E, L>* out
-) noexcept {
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "spaced_kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
-    );
-    static_assert(
-        std::is_trivially_copyable_v<Vec>,
-        "spaced_kmer_cast_unchecked() expects a trivially copyable vector"
-    );
-    constexpr std::size_t lanes = sizeof(Vec) / sizeof(std::uint64_t);
-    assert(count <= lanes);
-    assert(out != nullptr);
-
-    std::uint64_t buffer[lanes];
-    std::memcpy(buffer, &vec, sizeof(Vec));
-    for (std::size_t i = 0; i < count; ++i) {
-        out[i] = spaced_kmer_cast_unchecked<E, L>(buffer[i]);
-    }
-    return count;
-}
-
-/**
- * @brief Adopt every lane of a SIMD vector of raw words as spaced k-mers, without checking them
- * against the weight. The unchecked counterpart of spaced_kmer_cast(vec, weight, out).
- */
-template <Encoding E, Layout L, typename Vec>
-inline std::size_t spaced_kmer_cast_unchecked(Vec vec, SpacedKmer<E, L>* out) noexcept
-{
-    static_assert(
-        sizeof(Vec) % sizeof(std::uint64_t) == 0,
-        "spaced_kmer_cast_unchecked() expects a vector of whole 64-bit lanes"
-    );
-    return spaced_kmer_cast_unchecked<E, L>(vec, sizeof(Vec) / sizeof(std::uint64_t), out);
+    return kmer_vector_cast_<SpacedKmerVector<E, L, Simd>>(vec, weight);
 }
 
 // =================================================================================================

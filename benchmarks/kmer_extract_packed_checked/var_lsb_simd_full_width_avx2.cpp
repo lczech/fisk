@@ -16,7 +16,7 @@ std::uint64_t run_var_checked_lsb_simd_full_width_avx2(
 ) {
     auto sink = make_sink(sink_buffer);
     auto const consume = [&](
-        std::size_t, __m256i v, KmerVectorValidLanes<SimdAVX2> lanes
+        std::size_t, __m256i v, SimdVectorValidLanes<SimdAVX2> lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
         sink.consume(valid_kmers_<SimdAVX2>(v, lanes));
     };

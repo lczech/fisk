@@ -17,8 +17,15 @@ std::uint64_t run_var_simd_block_table_avx2_scalars(
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer_packed_simd(
         seq, kernel,
-        [&](std::size_t /*pos*/, auto const& spaced_kmer) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(kmer_value(spaced_kmer));
+        [&](
+            std::size_t pos, auto spaced_kmers, std::size_t valid_count
+        ) FISK_ALWAYS_INLINE_LAMBDA {
+            for_each_valid_lane(
+                pos, spaced_kmers, valid_count,
+                [&](auto spaced_kmer) FISK_ALWAYS_INLINE_LAMBDA {
+                    sink.consume(kmer_value(spaced_kmer));
+                }
+            );
         }
     );
     return sink.finalize();
