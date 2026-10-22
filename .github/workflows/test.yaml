@@ -134,7 +134,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup C++
         uses: aminya/setup-cpp@v1
@@ -167,8 +167,21 @@ jobs:
           fi
 
       - name: Build
+        id: build
         run: |
-          cmake --build build -- -j 4 -k 0
+          cmake --build build -- -j 4 -k 0 2>&1 | tee build.log
+
+      # GitHub shows at most 10 error annotations per step, so all distinct error lines of the
+      # build also go to the job summary.
+      - name: Summarize build errors
+        if: failure() && steps.build.outcome == 'failure'
+        run: |
+          {
+            echo '### Build errors'
+            echo '```'
+            grep -E 'error( [A-Z]+[0-9]+)?:' build.log | awk '!seen[$0]++' || true
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       # Under the emulator, the test binary runs directly, emulating a Sapphire Rapids CPU. The
       # AVX512 tests only exist if the AVX512 code paths were compiled in, so the run fails if they

@@ -44,10 +44,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -88,8 +88,21 @@ jobs:
           cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
 
       - name: Build
+        id: build
         run: |
-          cmake --build build --config "${BUILD_TYPE}" -- -j 4 -k 0
+          cmake --build build --config "${BUILD_TYPE}" -- -j 4 -k 0 2>&1 | tee build.log
+
+      # GitHub shows at most 10 error annotations per step, so all distinct error lines of the
+      # build also go to the job summary.
+      - name: Summarize build errors
+        if: failure() && steps.build.outcome == 'failure'
+        run: |
+          {
+            echo '### Build errors'
+            echo '```'
+            grep -E 'error( [A-Z]+[0-9]+)?:' build.log | awk '!seen[$0]++' || true
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Run tests
         run: |
@@ -106,7 +119,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmarks-${{ matrix.os }}-${{ matrix.compiler }}
           path: ${{ env.OUTPUT_DIR }}
