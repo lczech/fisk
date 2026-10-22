@@ -33,7 +33,7 @@ struct SimdScalar
         return a[0];
     }
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
         simd_vector v;
         std::memcpy(&v, a, sizeof(v));

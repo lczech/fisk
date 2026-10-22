@@ -35,9 +35,9 @@ struct SimdAVX2
         return _mm256_load_si256(reinterpret_cast<__m256i const*>(a));
     }
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
-        return _mm256_loadu_si256(reinterpret_cast<__m256i const*>(a));
+        return _mm256_loadu_si256(static_cast<__m256i const*>(a));
     }
 
     static void store_aligned(simd_vector v, std::uint64_t* out) noexcept

@@ -161,7 +161,7 @@ static void check_valid_nucleotide_bits_arch()
 {
     constexpr std::size_t bytes = 8 * Simd::lanes;
     auto const load = [](char const* p) {
-        return Simd::load_unaligned(reinterpret_cast<std::uint64_t const*>(p));
+        return Simd::load_unaligned(p);
     };
     check_valid_nucleotide_bits<bytes>([&](char const* p) {
         return valid_nucleotide_bits<Simd>(load(p));

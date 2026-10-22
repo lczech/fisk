@@ -35,9 +35,10 @@ struct SimdNEON
         return vld1q_u64(a);
     }
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
-        return vld1q_u64(a);
+        // Byte loads have no alignment requirement, unlike the 64-bit lane loads above.
+        return vreinterpretq_u64_u8(vld1q_u8(static_cast<std::uint8_t const*>(a)));
     }
 
     static void store_aligned(simd_vector v, std::uint64_t* out) noexcept

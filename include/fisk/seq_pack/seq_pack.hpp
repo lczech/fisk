@@ -100,9 +100,7 @@ inline void pack_sequence_(
     if constexpr (Encoder::lanes > 1) {
         constexpr std::size_t vec_bytes = Encoder::lanes * 8;
         auto pack_vector = [&](std::size_t off) {
-            auto const x = Encoder::load_unaligned(
-                reinterpret_cast<std::uint64_t const*>(data + off)
-            );
+            auto const x = Encoder::load_unaligned(data + off);
             Encoder::store_packed(encoder(x), out_bytes + off / 4);
             if constexpr (WithValidity) {
                 Encoder::store_valid_bits(x, valid + off / 8);

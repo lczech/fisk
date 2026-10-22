@@ -244,7 +244,7 @@ struct WordEncoderPext
         typename Simd::simd_vector vector;
     };
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
         simd_vector x;
         std::memcpy(x.words.data(), a, sizeof(x.words));
@@ -357,7 +357,7 @@ struct WordEncoderButterfly
     static constexpr BitExtractButterflyTable table =
         make_bit_extract_butterfly_table(pack_mask_v<E>);
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
         return Simd::load_unaligned(a);
     }
@@ -443,7 +443,7 @@ struct WordEncoderFold
     static constexpr std::size_t lanes = Simd::lanes;
     using simd_vector = typename Simd::simd_vector;
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
         return Simd::load_unaligned(a);
     }
@@ -547,7 +547,7 @@ struct WordEncoderDirect
     static constexpr std::size_t lanes = Simd::lanes;
     using simd_vector = typename Simd::simd_vector;
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
         return Simd::load_unaligned(a);
     }
@@ -647,9 +647,12 @@ struct WordEncoderDirectDouble : WordEncoderDirect<E, L, Simd>
         typename Simd::simd_vector v[2];
     };
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
-        return {{Simd::load_unaligned(a), Simd::load_unaligned(a + Simd::lanes)}};
+        return {{
+            Simd::load_unaligned(a),
+            Simd::load_unaligned(static_cast<char const*>(a) + 8 * Simd::lanes)
+        }};
     }
 
     static void store_packed(simd_vector const& v, char* out) noexcept

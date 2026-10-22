@@ -16,7 +16,9 @@ namespace fisk {
 // kernels in bit_extract/simd.hpp, which implement an algorithm for a given arch. SimdScalar is
 // the trivial arch with a single lane, for the scalar variants of these kernels.
 //
-// Aligned loads and stores expect their memory to be aligned to the vector size. To build a vector
+// Aligned loads and stores expect their memory to be aligned to the vector size, and take it as
+// 64-bit words. Unaligned loads take any address, as raw memory, so that callers never need to form
+// a misaligned pointer to a 64-bit word, whose value is unspecified. To build a vector
 // from lane values that are held in registers instead, use from_values(): going through memory
 // with several scalar stores and one vector load stalls the CPU on store forwarding. Conversely,
 // for data in memory, a vector load is a single instruction, and preferable to from_values().
@@ -43,6 +45,7 @@ concept SimdArch = requires(
     typename Simd::simd_vector const v,
     typename Simd::shift_count const count,
     std::uint64_t const* in,
+    void const* raw,
     std::uint64_t* out,
     char* bytes,
     std::uint64_t value,
@@ -51,7 +54,7 @@ concept SimdArch = requires(
 ) {
     { Simd::lanes } -> std::convertible_to<std::size_t>;
     Simd::load_aligned(in);
-    Simd::load_unaligned(in);
+    Simd::load_unaligned(raw);
     Simd::store_aligned(v, out);
     Simd::from_values(values);
     Simd::broadcast(value);

@@ -37,9 +37,9 @@ struct SimdSSE2
         return _mm_load_si128(reinterpret_cast<__m128i const*>(a));
     }
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
-        return _mm_loadu_si128(reinterpret_cast<__m128i const*>(a));
+        return _mm_loadu_si128(static_cast<__m128i const*>(a));
     }
 
     static void store_aligned(simd_vector v, std::uint64_t* out) noexcept

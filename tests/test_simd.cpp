@@ -105,7 +105,7 @@ static void check_simd_memory(Lanes<Simd> const& in)
     // Unaligned load from an odd offset into a byte buffer.
     alignas(64) unsigned char raw[sizeof(Lanes<Simd>) + 8]{};
     std::memcpy(raw + 3, in.data(), sizeof(Lanes<Simd>));
-    auto const v = Simd::load_unaligned(reinterpret_cast<std::uint64_t const*>(raw + 3));
+    auto const v = Simd::load_unaligned(raw + 3);
     EXPECT_TRUE(to_lanes<Simd>(v) == in);
 }
 

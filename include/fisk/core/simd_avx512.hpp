@@ -35,9 +35,9 @@ struct SimdAVX512
         return _mm512_load_si512(reinterpret_cast<__m512i const*>(a));
     }
 
-    static simd_vector load_unaligned(std::uint64_t const* a) noexcept
+    static simd_vector load_unaligned(void const* a) noexcept
     {
-        return _mm512_loadu_si512(reinterpret_cast<__m512i const*>(a));
+        return _mm512_loadu_si512(a);
     }
 
     static void store_aligned(simd_vector v, std::uint64_t* out) noexcept
