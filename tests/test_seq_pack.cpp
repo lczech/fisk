@@ -235,7 +235,11 @@ static void check_seq_pack_validity()
         check_packed(seq, out);
         check_validity(seq, out);
         EXPECT_EQ(out.length(), plain.length());
-        EXPECT_TRUE(std::ranges::equal(out.codes(), plain.codes()));
+        auto const out_codes = out.codes();
+        auto const plain_codes = plain.codes();
+        EXPECT_TRUE(std::equal(
+            out_codes.begin(), out_codes.end(), plain_codes.begin(), plain_codes.end()
+        ));
 
         auto const out2 = pack_sequence_with_validity(seq, encoder);
         check_packed(seq, out2);
@@ -284,8 +288,11 @@ static void check_construct_resize_move()
     EXPECT_TRUE(empty.validity().empty());
     Packed packed(9);
     EXPECT_EQ(packed.length(), std::size_t{9});
-    EXPECT_TRUE(std::ranges::all_of(packed.codes(), [](auto b) { return b == 0; }));
-    EXPECT_TRUE(std::ranges::all_of(packed.validity(), [](auto b) { return b == 0; }));
+    auto const all_zero = [](std::span<std::uint8_t const> bytes) {
+        return std::all_of(bytes.begin(), bytes.end(), [](auto b) { return b == 0; });
+    };
+    EXPECT_TRUE(all_zero(packed.codes()));
+    EXPECT_TRUE(all_zero(packed.validity()));
     check_zero_beyond_length(packed);
 
     // Shrinking clears the bits beyond the new length, and the codes after it, which are now

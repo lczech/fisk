@@ -50,13 +50,17 @@ inline void check_kernel(
     std::string_view name, Kernel kernel, std::vector<std::string> const& sequences
 ) {
     fisk::PackedSequence<fisk::Encoding::kACTG, L> out(512);
-    std::ranges::fill(out.codes(), std::uint8_t{0xFF});
+    std::fill(out.codes().begin(), out.codes().end(), std::uint8_t{0xFF});
     for (auto const& seq : sequences) {
         kernel(seq, out);
         auto const expected = expected_sequence<L>(seq);
+        auto const out_codes = out.codes();
+        auto const expected_codes = expected.codes();
         if (
             out.length() != expected.length() ||
-            !std::ranges::equal(out.codes(), expected.codes())
+            !std::equal(
+                out_codes.begin(), out_codes.end(), expected_codes.begin(), expected_codes.end()
+            )
         ) {
             throw std::runtime_error(
                 std::string(name) + ": packed byte mismatch at input length "

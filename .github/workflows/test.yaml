@@ -74,6 +74,8 @@ jobs:
           #     macOS 15
           # -------------------------------
 
+          # LLVM 14 and 15 use their own libc++ here, which lacks the std::ranges algorithms.
+          # Code that is built in these jobs thus uses the classic iterator algorithms instead.
           - { os: macos-15, compiler: llvm-14 }
           - { os: macos-15, compiler: llvm-15 }
           - { os: macos-15, compiler: llvm-16 }
