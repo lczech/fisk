@@ -15,7 +15,7 @@ std::uint64_t run_var_acgt_msb_chunked_assume_valid(
     auto sink = make_sink(sink_buffer);
     for_each_kmer_ascii_assume_valid(
         seq, k, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{},
-        [&](auto kmer) { sink.consume(kmer_value(kmer)); }
+        [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA { sink.consume(kmer_value(kmer)); }
     );
     return sink.finalize();
 }

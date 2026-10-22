@@ -72,7 +72,7 @@ inline void for_each_spaced_kmer_packed_narrow_width_(
     std::uint64_t const kbits = (std::uint64_t{1} << span_k) - 1u;
     std::uint8_t const* const codes = seq.codes().data();
 
-    auto const emit_ = [&](std::size_t pos, std::uint64_t window) {
+    auto const emit_ = [&](std::size_t pos, std::uint64_t window) FISK_ALWAYS_INLINE_LAMBDA {
         emit_spaced_kmers_packed_<SingleMask, E, L>(masks, pos, window, bit_ext, callback);
     };
 
@@ -160,7 +160,7 @@ inline void for_each_spaced_kmer_packed_full_width_(
     std::uint8_t const* const codes = seq.codes().data();
 
     // As in the narrow-width loop.
-    auto const emit_ = [&](std::size_t pos, std::uint64_t window) {
+    auto const emit_ = [&](std::size_t pos, std::uint64_t window) FISK_ALWAYS_INLINE_LAMBDA {
         emit_spaced_kmers_packed_<SingleMask, E, L>(masks, pos, window, bit_ext, callback);
     };
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {

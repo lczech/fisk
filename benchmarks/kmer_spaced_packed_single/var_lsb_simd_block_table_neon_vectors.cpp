@@ -20,7 +20,7 @@ std::uint64_t run_var_simd_block_table_neon_vectors(
         [&](
             std::size_t /*pos*/, std::size_t /*mask_idx*/, uint64x2_t spaced_kmers,
             std::size_t /*valid_count*/
-        ) {
+        ) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(spaced_kmers);
         }
     );

@@ -14,7 +14,7 @@ std::uint64_t run_var_checked_lsb_aligned(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_checked_aligned(
-        seq, k, [&](auto kmer) { sink.consume(kmer_value(kmer)); }
+        seq, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA { sink.consume(kmer_value(kmer)); }
     );
     return sink.finalize();
 }

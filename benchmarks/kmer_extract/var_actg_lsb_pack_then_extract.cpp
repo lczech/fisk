@@ -16,6 +16,8 @@ std::uint64_t run_var_actg_lsb_pack_then_extract(
 ) {
     pack_sequence(seq, WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>{}, scratch);
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_aligned(scratch, k, [&](auto kmer) { sink.consume(kmer_value(kmer)); });
+    for_each_kmer_packed_aligned(scratch, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
+        sink.consume(kmer_value(kmer));
+    });
     return sink.finalize();
 }

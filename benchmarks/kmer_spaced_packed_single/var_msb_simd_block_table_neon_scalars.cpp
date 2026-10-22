@@ -17,7 +17,7 @@ std::uint64_t run_var_simd_block_table_neon_scalars(
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer_packed_simd(
         seq, kernel,
-        [&](std::size_t /*pos*/, auto const& spaced_kmer) {
+        [&](std::size_t /*pos*/, auto const& spaced_kmer) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(kmer_value(spaced_kmer));
         }
     );

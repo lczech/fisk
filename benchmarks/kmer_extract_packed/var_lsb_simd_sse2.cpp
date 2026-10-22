@@ -16,7 +16,7 @@ std::uint64_t run_var_lsb_simd_sse2(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_simd<SimdSSE2>(
-        seq, k, [&](std::size_t, auto kmers, std::size_t) noexcept {
+        seq, k, [&](std::size_t, auto kmers, std::size_t) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(kmer_value(kmers));
         }
     );

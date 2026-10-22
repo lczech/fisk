@@ -17,7 +17,7 @@ std::uint64_t run_var_checked_lsb_simd_narrow_width_neon(
     auto sink = make_sink(sink_buffer);
     auto const consume = [&](
         std::size_t, uint64x2_t v, KmerVectorValidLanes<SimdNEON> lanes
-    ) noexcept {
+    ) FISK_ALWAYS_INLINE_LAMBDA {
         sink.consume(valid_kmers_<SimdNEON>(v, lanes));
     };
     for_each_kmer_packed_simd_narrow_width_<SimdNEON>(seq, k, consume);

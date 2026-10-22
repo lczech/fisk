@@ -16,7 +16,10 @@ std::uint64_t run_var_checked_lsb_simd_sse2(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_checked_simd<SimdSSE2>(
-        seq, k, [&](std::size_t, auto kmers, KmerVectorValidLanes<SimdSSE2> lanes) noexcept {
+        seq, k,
+        [&](
+            std::size_t, auto kmers, KmerVectorValidLanes<SimdSSE2> lanes
+        ) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(valid_kmers_<SimdSSE2>(kmer_value(kmers), lanes));
         }
     );

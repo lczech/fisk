@@ -15,7 +15,7 @@ std::uint64_t run_var_acgt_lsb_ascii_shift(
 ) {
     auto sink = make_sink(sink_buffer);
     CharEncoderAscii<Encoding::kACGT> const encoder;
-    for_each_kmer_rolling<Layout::kLSB>(seq, k, encoder, [&](auto kmer) {
+    for_each_kmer_rolling<Layout::kLSB>(seq, k, encoder, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
         sink.consume(kmer_value(kmer));
     });
     return sink.finalize();

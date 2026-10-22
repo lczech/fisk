@@ -17,7 +17,7 @@ std::uint64_t run_var_checked_msb_simd_narrow_width_avx2(
     auto sink = make_sink(sink_buffer);
     auto const consume = [&](
         std::size_t, __m256i v, KmerVectorValidLanes<SimdAVX2> lanes
-    ) noexcept {
+    ) FISK_ALWAYS_INLINE_LAMBDA {
         sink.consume(valid_kmers_<SimdAVX2>(v, lanes));
     };
     for_each_kmer_packed_simd_narrow_width_<SimdAVX2>(seq, k, consume);

@@ -13,8 +13,10 @@ std::uint64_t run_var_actg_msb_simd_avx2(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_simd<Encoding::kACTG, Layout::kMSB>(seq, k, [&](auto kmer) {
-        sink.consume(kmer_value(kmer));
-    });
+    for_each_kmer_simd<Encoding::kACTG, Layout::kMSB>(
+        seq, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
+            sink.consume(kmer_value(kmer));
+        }
+    );
     return sink.finalize();
 }

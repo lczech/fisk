@@ -27,6 +27,10 @@
 //              technique that must actually store its output rather than fold it into one
 //              running value. This might still vectorize, but reflects the "realstic" case.
 //
+// The run_var_*() functions mark their callbacks with FISK_ALWAYS_INLINE_LAMBDA, so that each
+// consume() is part of the extraction loop, as with a small callback that the compiler inlines,
+// instead of a call per k-mer that depends on the inlining heuristics of the compiler.
+//
 // The buffer that Write touches (and that Sum/Barrier ignore) is sized to exactly match each
 // call's inner batch, so one pass through the batch fills it exactly once with no wraparound; the
 // caller's existing per-round clobber_memory() (see e.g. bit_extract_weights/var_*.cpp) already

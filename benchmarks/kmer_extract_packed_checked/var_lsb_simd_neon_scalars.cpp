@@ -16,8 +16,8 @@ std::uint64_t run_var_checked_lsb_simd_neon_scalars(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_checked_simd<SimdNEON>(
-        seq, k, [&](std::size_t pos, auto kmers, auto valid_lanes) noexcept {
-            for_each_valid_lane(pos, kmers, valid_lanes, [&](auto kmer) noexcept {
+        seq, k, [&](std::size_t pos, auto kmers, auto valid_lanes) FISK_ALWAYS_INLINE_LAMBDA {
+            for_each_valid_lane(pos, kmers, valid_lanes, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
                 sink.consume(kmer_value(kmer));
             });
         }

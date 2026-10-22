@@ -17,7 +17,9 @@ std::uint64_t run_var_bitloop(
         seq,
         mask,
         bit_extract_bitloop,
-        [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer) {
+        [&](
+            std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer
+        ) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(kmer_value(spaced_kmer));
         }
     );

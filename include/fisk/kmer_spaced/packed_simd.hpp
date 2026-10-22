@@ -53,14 +53,14 @@ inline void emit_spaced_kmers_packed_simd_(
     std::size_t valid_count, Callback& callback
 ) {
     if constexpr (SpacedKmerVectorCallback<Callback&, Vector>) {
-        [&]<std::size_t... M>(std::index_sequence<M...>) {
+        [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
             (invoke_spaced_kmer_vector_callback(
                 callback, M, pos, kernels[M].bit_extract(windows), valid_count
             ), ...);
         }(std::make_index_sequence<N>{});
     } else if constexpr (SpacedKmerCallback<Callback&, E, L, N == 1>) {
         alignas(64) std::uint64_t spaced[N][Kernel::lanes];
-        [&]<std::size_t... M>(std::index_sequence<M...>) {
+        [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
             (Kernel::store(kernels[M].bit_extract(windows), spaced[M]), ...);
         }(std::make_index_sequence<N>{});
         for (std::size_t lane = 0; lane < valid_count; ++lane) {
@@ -123,7 +123,9 @@ inline void for_each_spaced_kmer_packed_simd(
     }
 
     // The windows come without the mask of the k-mers, which the kernels make redundant.
-    auto const emit = [&](std::size_t pos, auto windows, std::size_t valid_count) {
+    auto const emit = [&](
+        std::size_t pos, auto windows, std::size_t valid_count
+    ) FISK_ALWAYS_INLINE_LAMBDA {
         emit_spaced_kmers_packed_simd_<E, L>(kernels, pos, windows, valid_count, callback);
     };
     if (span_k <= 29) {

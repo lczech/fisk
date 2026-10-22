@@ -21,7 +21,9 @@ std::uint64_t run_var_simd_butterfly_table_sse2_scalars(
         auto sink = make_sink(sink_buffer);
         for_each_spaced_kmer_packed_simd(
             seq, kernels_arr,
-            [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer) {
+            [&](
+                std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer
+            ) FISK_ALWAYS_INLINE_LAMBDA {
                 sink.consume(kmer_value(spaced_kmer));
             }
         );

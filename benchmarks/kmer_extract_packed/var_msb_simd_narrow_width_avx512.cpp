@@ -16,7 +16,10 @@ std::uint64_t run_var_msb_simd_narrow_width_avx512(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_simd_narrow_width_<SimdAVX512>(
-        seq, k, [&](std::size_t, __m512i v, std::size_t) noexcept { sink.consume(v); }
+        seq, k,
+        [&](std::size_t, __m512i v, std::size_t) FISK_ALWAYS_INLINE_LAMBDA {
+            sink.consume(v);
+        }
     );
     return sink.finalize();
 }

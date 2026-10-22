@@ -19,7 +19,9 @@ std::uint64_t run_var_pext(
         seq,
         masks,
         bit_extract_pext,
-        [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer) {
+        [&](
+            std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer
+        ) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(kmer_value(spaced_kmer));
         }
     );

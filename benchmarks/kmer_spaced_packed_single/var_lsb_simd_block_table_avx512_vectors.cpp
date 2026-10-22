@@ -20,7 +20,7 @@ std::uint64_t run_var_simd_block_table_avx512_vectors(
         [&](
             std::size_t /*pos*/, std::size_t /*mask_idx*/, __m512i spaced_kmers,
             std::size_t /*valid_count*/
-        ) {
+        ) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(spaced_kmers);
         }
     );
