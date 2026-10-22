@@ -18,7 +18,8 @@ std::uint64_t run_var_checked_msb_simd_full_width_sse2(
     auto const consume = [&](
         std::size_t, __m128i v, SimdVectorValidLanes<SimdSSE2> lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        sink.consume(valid_kmers_<SimdSSE2>(v, lanes));
+        sink.consume(v);
+        do_not_optimize(lanes.bits);
     };
     for_each_kmer_packed_simd_full_width_<SimdSSE2>(seq, k, consume);
     return sink.finalize();

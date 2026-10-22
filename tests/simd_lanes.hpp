@@ -6,7 +6,6 @@
 // precisely the lane order of those intrinsics that the casts and the functions on k-mer vectors
 // must agree with, and memcpy is what they use internally.
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -95,19 +94,6 @@ inline void for_each_lane_vector(
 //     K-mer Vector Check
 // =================================================================================================
 
-// The valid lanes with bit `j` of `bits` set for lane `j`. Each arch makes its lane mask by
-// comparing the lanes of two vectors, so this compares lanes that are equal where the bits are set.
-template <typename Simd>
-inline fisk::SimdVectorValidLanes<Simd> valid_lanes_of_bits(std::uint64_t bits)
-{
-    std::array<std::uint64_t, Simd::lanes> zeros{};
-    std::array<std::uint64_t, Simd::lanes> lanes{};
-    for (std::size_t j = 0; j < Simd::lanes; ++j) {
-        lanes[j] = ((bits >> j) & 1) ? 0 : 1;
-    }
-    return {Simd::compare_eq_lanes(Simd::from_values(lanes), Simd::from_values(zeros))};
-}
-
 // The checked and unchecked vector casts of the k-mer type K: kmer_vector_cast() for a Kmer, and
 // spaced_kmer_vector_cast() for a SpacedKmer.
 template <typename K, typename Simd, typename Vec>
@@ -186,7 +172,7 @@ inline void check_kmer_vector(std::uint64_t seed)
             check(count, (std::uint64_t{1} << count) - 1);
         }
         for (std::uint64_t bits = 0; bits < (std::uint64_t{1} << lanes); ++bits) {
-            check(valid_lanes_of_bits<Simd>(bits), bits);
+            check(fisk::SimdVectorValidLanes<Simd>{bits}, bits);
         }
     });
 }

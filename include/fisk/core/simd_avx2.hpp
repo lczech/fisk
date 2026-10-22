@@ -138,6 +138,16 @@ struct SimdAVX2
         return static_cast<unsigned>(_mm256_movemask_pd(_mm256_castsi256_pd(m)));
     }
 
+    // Lane j keeps bit j and compares it to itself.
+    static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
+    {
+        __m256i const select = _mm256_set_epi64x(8, 4, 2, 1);
+        __m256i const kept = _mm256_and_si256(
+            _mm256_set1_epi64x(static_cast<long long>(bits)), select
+        );
+        return _mm256_cmpeq_epi64(kept, select);
+    }
+
     static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept
     {
         return static_cast<std::uint32_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(a, b)));

@@ -69,7 +69,6 @@ inline void for_each_spaced_kmer_packed_narrow_width_(
     MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
 ) {
     assert(span_k >= 1 && span_k <= 29);
-    std::uint64_t const kbits = (std::uint64_t{1} << span_k) - 1u;
     std::uint8_t const* const codes = seq.codes().data();
 
     auto const emit_ = [&](std::size_t pos, std::uint64_t window) FISK_ALWAYS_INLINE_LAMBDA {
@@ -82,7 +81,7 @@ inline void for_each_spaced_kmer_packed_narrow_width_(
         auto const emit_if_valid_ = [&](
             std::size_t pos, std::uint64_t window
         ) FISK_ALWAYS_INLINE_LAMBDA {
-            if (packed_kmer_is_valid_(validity_at(pos), kbits)) {
+            if (packed_kmer_is_valid_(validity_at(pos))) {
                 emit_(pos, window);
             }
         };
@@ -156,7 +155,6 @@ inline void for_each_spaced_kmer_packed_full_width_(
     MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
 ) {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
-    std::uint64_t const kbits = (std::uint64_t{1} << K) - 1u;
     std::uint8_t const* const codes = seq.codes().data();
 
     // As in the narrow-width loop.
@@ -167,7 +165,7 @@ inline void for_each_spaced_kmer_packed_full_width_(
         auto const emit_if_valid_ = [&](
             std::size_t pos, std::uint64_t window
         ) FISK_ALWAYS_INLINE_LAMBDA {
-            if (packed_kmer_is_valid_(validity_at(pos), kbits)) {
+            if (packed_kmer_is_valid_(validity_at(pos))) {
                 emit_(pos, window);
             }
         };

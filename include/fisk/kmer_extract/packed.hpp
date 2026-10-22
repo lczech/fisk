@@ -82,7 +82,9 @@ namespace fisk {
 // The checked functions read the validity bits of a PackedSequenceWithValidity, see core/types.hpp,
 // as windows of 64 nucleotides: bit `j` of the window at `pos` is set if nucleotide `pos + j` is
 // valid, and a k-mer at `pos` is valid if bits 0 to k - 1 of its window are. Bits beyond the end of
-// the sequence are zero, so that k-mers reaching past the end are never valid.
+// the sequence are zero, so that k-mers reaching past the end are never valid. The block loop below
+// tests the k-mers of a window all at once, as its valid starts: bit `j` is set if the k-mer at
+// `pos + j` is valid.
 
 // The sequence of `seq` without its validity bits, for the extraction of all of its k-mers, which
 // ignores them.
@@ -125,23 +127,27 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 
 // The main loop of the aligned and the SIMD extraction, see packed_simd.hpp, and of the spaced
 // k-mer extraction, see kmer_spaced/packed.hpp: `step(b, validity_at)` extracts the k-mers that
-// start in the `StepBytes` bytes from byte `b`, and `validity_at(pos)` is the validity of the k-mer
-// at `pos` for them. The steps cover all bytes in which a k-mer of length `k` starts, and `seq`
-// has to have at least `k` nucleotides. The words that the steps load reach past the last k-mer,
-// into the padding after the codes and after the validity bits, see PackedSequence
+// start in the `StepBytes` bytes from byte `b`, and `validity_at(pos)` is the validity of the k-mers
+// from `pos` on for them: either AllValid, or a word whose bit 0 is set if the k-mer at `pos` is
+// valid, see packed_kmer_is_valid_(). The steps cover all bytes in which a k-mer of length `k`
+// starts, and `seq` has to have at least `k` nucleotides. The words that the steps load reach past
+// the last k-mer, into the padding after the codes and after the validity bits, see PackedSequence
 // (core/types.hpp).
 //
 // Without validity bits, all k-mers are valid. The steps whose k-mers are all within the sequence
-// run with AllValid, and the step after them, if any, with a window that is valid up to the last
-// k-mer, at `p_max`, and invalid after it.
+// run with AllValid, and the step after them, if any, with a word that is all ones up to the last
+// k-mer, at `p_max`, and zero after it.
 //
 // With validity bits, see PackedSequenceWithValidityType (core/types.hpp), the steps run in blocks
 // of 8 bytes, that is, 32 positions, and each block is tested once: with one load of the validity
 // bits at its start, which covers its 32 positions and the k - 1 nucleotides after them, the low
-// `31 + k` bits of `block_mask`. If they are all valid, the block runs with AllValid. Otherwise, as
-// well as after the last whole block, each step loads the windows of its k-mers. The validity bits
-// are zero after the end of the sequence, which makes its last k-mers invalid without a test of
-// their own.
+// `31 + k` bits of `block_mask`. If they are all valid, the block runs with AllValid. Otherwise, the
+// block computes the valid starts of that window once, see Validity above, which hold the validity
+// of all of its k-mers: the word at `pos` has bit `j` set if the k-mer at `pos + j` is valid, for
+// the k-mers up to the end of the block, so that a vector of consecutive k-mers takes its valid
+// lanes from the low bits. After the last whole block, each step computes the valid starts of the
+// windows of its k-mers instead. The validity bits are zero after the end of the sequence, which
+// makes its last k-mers invalid without a test of their own.
 //
 // Each copy of the step is inlined. Without validity bits, there are two: for the k-mers within
 // the sequence, and for the step after them. With validity bits, there are three: for the blocks
@@ -186,12 +192,16 @@ inline void run_packed_blocks_(Seq const& seq, std::size_t k, Step&& step)
             return word >> (pos % 8);
         };
 
-        // Whether the nucleotides of all k-mers of the block at `b` are valid: the 32 positions
-        // of the block start at bit 0 of byte `b / 2` of `valid`.
-        auto const block_is_valid_ = [&]() FISK_ALWAYS_INLINE_LAMBDA {
-            std::uint64_t block_word;
-            std::memcpy(&block_word, valid + b / 2, 8);
-            return (block_word & block_mask) == block_mask;
+        // The valid starts of a window `w`: bit `j` is set if bits `j` to `j + k - 1` of `w` are.
+        // Each round of the loop doubles the length `len` of the runs of set bits that the bits
+        // of `w` stand for, up to a power of two, and the last AND covers the remaining `k - len`
+        // bits with a run that overlaps the first one.
+        auto const valid_starts_ = [k](std::uint64_t w) FISK_ALWAYS_INLINE_LAMBDA {
+            std::size_t len = 1;
+            for (; 2 * len <= k; len *= 2) {
+                w &= w >> len;
+            }
+            return w & (w >> (k - len));
         };
 
         // The steps of the block at `b`, with the given validity.
@@ -201,32 +211,39 @@ inline void run_packed_blocks_(Seq const& seq, std::size_t k, Step&& step)
             }
         };
 
-        // The whole blocks, each with one test of its validity, and then the steps after them.
+        // The whole blocks, each with one test of the window at its start, and then the steps after
+        // them.
         for (; b + 8 <= end_bytes; b += 8) {
-            if (block_is_valid_()) {
+            std::size_t const block_pos = 4 * b;
+            std::uint64_t const block_window = window_at(block_pos);
+            if ((block_window & block_mask) == block_mask) {
                 block_(all_valid);
             } else {
-                block_(window_at);
+                std::uint64_t const starts = valid_starts_(block_window);
+                block_([starts, block_pos](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
+                    return starts >> (pos - block_pos);
+                });
             }
         }
         for (; b < end_bytes; b += StepBytes) {
-            step(b, window_at);
+            step(b, [&](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
+                return valid_starts_(window_at(pos));
+            });
         }
     }
 }
 
 // Whether the k-mer with the given `validity` is valid, see run_packed_blocks_(): either AllValid,
-// or its window, with `kbits` the mask of its low k bits.
+// or a word whose bit 0 is set for a valid k-mer.
 template <typename Validity>
 FISK_ALWAYS_INLINE
-inline bool packed_kmer_is_valid_(Validity validity, std::uint64_t kbits) noexcept
+inline bool packed_kmer_is_valid_(Validity validity) noexcept
 {
     if constexpr (std::is_same_v<Validity, AllValid>) {
         (void) validity;
-        (void) kbits;
         return true;
     } else {
-        return (validity & kbits) == kbits;
+        return validity & 1u;
     }
 }
 
@@ -238,9 +255,9 @@ inline bool packed_kmer_is_valid_(Validity validity, std::uint64_t kbits) noexce
 template <Encoding E, Layout L, typename Func, typename Validity>
 FISK_ALWAYS_INLINE
 inline void invoke_kmer_callback_if_valid_(
-    Func& func, std::size_t pos, std::uint64_t kmer, Validity validity, std::uint64_t kbits
+    Func& func, std::size_t pos, std::uint64_t kmer, Validity validity
 ) {
-    if (packed_kmer_is_valid_(validity, kbits)) {
+    if (packed_kmer_is_valid_(validity)) {
         invoke_kmer_callback<E, L>(func, pos, kmer);
     }
 }
@@ -261,9 +278,8 @@ inline void for_each_kmer_packed_aligned_narrow_width_(Seq const& seq, Func&& fu
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
 
-    // The 2k bits of a k-mer in the codes, and its k bits in the validity bits.
+    // The 2k bits of a k-mer in the codes.
     std::uint64_t const mask = width_mask_(K);
-    std::uint64_t const kbits = (std::uint64_t{1} << K) - 1u;
 
     // The codes, read up into their padding, see run_packed_blocks_().
     std::uint8_t const* const codes = seq.codes().data();
@@ -308,13 +324,13 @@ inline void for_each_kmer_packed_aligned_narrow_width_(Seq const& seq, Func&& fu
         #endif
 
         assert_fits_width_(v0, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 0, v0, validity_at(4 * b + 0), kbits);
+        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 0, v0, validity_at(4 * b + 0));
         assert_fits_width_(v1, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 1, v1, validity_at(4 * b + 1), kbits);
+        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 1, v1, validity_at(4 * b + 1));
         assert_fits_width_(v2, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2), kbits);
+        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2));
         assert_fits_width_(v3, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3), kbits);
+        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
     };
 
     // The steps over all bytes in which a k-mer starts, see run_packed_blocks_().
@@ -359,7 +375,6 @@ inline void for_each_kmer_packed_aligned_full_width_(Seq const& seq, Func&& func
 
     // As in the narrow-width loop.
     std::uint64_t const mask = width_mask_(K);
-    std::uint64_t const kbits = (std::uint64_t{1} << K) - 1u;
     std::uint8_t const* const codes = seq.codes().data();
 
     // One step: the 4 k-mers that start in byte `b`, from an 8-byte load and the byte after it,
@@ -395,13 +410,13 @@ inline void for_each_kmer_packed_aligned_full_width_(Seq const& seq, Func&& func
         #endif
 
         assert_fits_width_(v0, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 0, v0, validity_at(4 * b + 0), kbits);
+        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 0, v0, validity_at(4 * b + 0));
         assert_fits_width_(v1, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 1, v1, validity_at(4 * b + 1), kbits);
+        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 1, v1, validity_at(4 * b + 1));
         assert_fits_width_(v2, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2), kbits);
+        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2));
         assert_fits_width_(v3, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3), kbits);
+        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
     };
 
     // As in the narrow-width loop.

@@ -143,6 +143,11 @@ struct SimdAVX512
         return m;
     }
 
+    static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
+    {
+        return static_cast<lane_mask>(bits);
+    }
+
     static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept
     {
         return _mm512_cmpeq_epi8_mask(a, b);

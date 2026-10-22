@@ -155,6 +155,15 @@ struct SimdSSE2
         return static_cast<unsigned>(_mm_movemask_pd(_mm_castsi128_pd(m)));
     }
 
+    // Both 32-bit halves of lane j keep bit j and compare it to itself, as SSE2 has no 64-bit
+    // compare.
+    static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
+    {
+        __m128i const select = _mm_set_epi32(2, 2, 1, 1);
+        __m128i const kept = _mm_and_si128(_mm_set1_epi32(static_cast<int>(bits)), select);
+        return _mm_cmpeq_epi32(kept, select);
+    }
+
     static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept
     {
         return static_cast<unsigned>(_mm_movemask_epi8(_mm_cmpeq_epi8(a, b)));

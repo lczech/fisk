@@ -141,6 +141,13 @@ struct SimdNEON
         return vaddvq_u64(vandq_u64(m, vcombine_u64(vcreate_u64(1), vcreate_u64(2))));
     }
 
+    // Lane j keeps bit j and compares it to itself.
+    static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
+    {
+        uint64x2_t const select = vcombine_u64(vcreate_u64(1), vcreate_u64(2));
+        return vceqq_u64(vandq_u64(vdupq_n_u64(bits), select), select);
+    }
+
     // Keep bit j % 8 of each equal byte j, and add up each half of eight bytes, with three
     // pairwise additions that leave the sums of the halves in the two lowest bytes.
     static std::uint64_t compare_eq_bytes_to_bits(simd_vector a, simd_vector b) noexcept

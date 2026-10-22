@@ -176,57 +176,29 @@ inline void emit_packed_simd_step_(
     }
 }
 
-// The valid lanes of a vector of consecutive k-mers, from the validity window `w` at the k-mer in
-// lane 0, see packed.hpp: lane `j` is valid if the low k bits, `kbits`, are all set in `w >> j`.
-template <SimdArch Simd>
-FISK_ALWAYS_INLINE
-inline SimdVectorValidLanes<Simd> valid_lanes_(std::uint64_t w, std::uint64_t kbits) noexcept
-{
-    typename Simd::simd_vector windows;
-    if constexpr (SimdArchWithLaneShifts<Simd>) {
-        std::array<std::uint64_t, Simd::lanes> lane_index;
-        for (std::size_t j = 0; j < Simd::lanes; ++j) {
-            lane_index[j] = j;
-        }
-        windows = Simd::shift_right_lanes(Simd::broadcast(w), Simd::from_values(lane_index));
-    } else {
-        std::array<std::uint64_t, Simd::lanes> lane_windows;
-        for (std::size_t j = 0; j < Simd::lanes; ++j) {
-            lane_windows[j] = w >> j;
-        }
-        windows = Simd::from_values(lane_windows);
-    }
-    auto const kbits_v = Simd::broadcast(kbits);
-    return {Simd::compare_eq_lanes(Simd::bitwise_and(windows, kbits_v), kbits_v)};
-}
-
-// All lanes, for the k-mers of a block of valid nucleotides, see run_packed_blocks_() (packed.hpp).
-template <SimdArch Simd>
-FISK_ALWAYS_INLINE
-inline SimdVectorValidLanes<Simd> valid_lanes_(AllValid, std::uint64_t) noexcept
-{
-    return {Simd::lane_mask_all()};
-}
-
 // The emit of the steps of the loops below, see emit_packed_simd_step_(), which passes each vector
-// of the k-mers from `pos` on to `emit` with the validity of the k-mer at `pos`. With validity
-// bits, the vector goes on with its valid lanes. Without them, it goes on with its count of k-mers,
-// which is below all lanes only in the step after the k-mers within the sequence, see
-// run_packed_blocks_() (packed.hpp). There, the count comes from the length, and the vectors after
-// the last k-mer are left out.
+// of the k-mers from `pos` on to `emit` with the validity of the k-mers from `pos` on. With
+// validity bits, the vector goes on with its valid lanes: all of them in a block of valid
+// nucleotides, and otherwise the low bits of the valid starts, see run_packed_blocks_()
+// (packed.hpp). Without them, it goes on with its count of k-mers, which is below all lanes only
+// in the step after the k-mers within the sequence. There, the count comes from the length, and the
+// vectors after the last k-mer are left out.
 template <SimdArch Simd, PackedSequenceType Seq, typename Emit>
 FISK_ALWAYS_INLINE
 inline auto packed_simd_emit_(Seq const& seq, std::size_t k, Emit& emit)
 {
-    std::uint64_t const kbits = (std::uint64_t{1} << k) - 1u;
     std::size_t const p_max = seq.length() - k;
-    return [&emit, kbits, p_max](
+    return [&emit, p_max](
         std::size_t pos, typename Simd::simd_vector vec, auto validity
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        (void) kbits;
         (void) p_max;
         if constexpr (PackedSequenceWithValidityType<Seq>) {
-            emit(pos, vec, valid_lanes_<Simd>(validity, kbits));
+            std::uint64_t const all_lanes = (std::uint64_t{1} << Simd::lanes) - 1u;
+            if constexpr (std::is_same_v<decltype(validity), AllValid>) {
+                emit(pos, vec, SimdVectorValidLanes<Simd>{all_lanes});
+            } else {
+                emit(pos, vec, SimdVectorValidLanes<Simd>{validity & all_lanes});
+            }
         } else if constexpr (std::is_same_v<decltype(validity), AllValid>) {
             emit(pos, vec, Simd::lanes);
         } else if (pos <= p_max) {
@@ -457,7 +429,7 @@ inline void for_each_kmer_packed_simd(Seq const& seq, std::size_t k, Func&& func
  * for_each_valid_lane() or store_valid_lanes(), or, for example with AVX512, stored contiguously
  * with
  *
- *     _mm512_mask_compressstoreu_epi64(out, valid_lanes.value, kmers.value);
+ *     _mm512_mask_compressstoreu_epi64(out, valid_lanes.lane_mask(), kmers.value);
  *
  * For single k-mers, use for_each_kmer_packed_checked_aligned(), which extracts them directly,
  * instead of taking them out of the vectors one at a time.

@@ -758,18 +758,19 @@ concept KmerVectorType = ContiguousKmerVectorType<T> || SpacedKmerVectorType<T>;
  * extraction functions that check the validity of the nucleotides, such as
  * for_each_kmer_packed_checked_simd().
  *
- * `value` is the lane mask in the form native to the arch, see SimdArch: a vector with all bits
- * set in the valid lanes and zero in the others, or the mask register of AVX512, which the masked
- * instructions of AVX512 take directly. bits() has bit `j` set for a valid lane `j`.
+ * `bits` has bit `j` set for a valid lane `j`, and no bits above the lanes. lane_mask() gives the
+ * lane mask in the form native to the arch, see SimdArch: a vector with all bits set in the valid
+ * lanes and zero in the others, for blends and other vector operations, or the mask register of
+ * AVX512, which holds the bits as they are.
  */
 template <SimdArch Simd>
 struct SimdVectorValidLanes
 {
-    typename Simd::lane_mask value;
+    std::uint64_t bits;
 
-    std::uint64_t bits() const noexcept
+    typename Simd::lane_mask lane_mask() const noexcept
     {
-        return Simd::lane_mask_to_bits(value);
+        return Simd::lane_mask_from_bits(bits);
     }
 };
 

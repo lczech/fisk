@@ -20,7 +20,8 @@ std::uint64_t run_var_checked_lsb_simd_neon(
         [&](
             std::size_t, auto kmers, SimdVectorValidLanes<SimdNEON> lanes
         ) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(valid_kmers_<SimdNEON>(kmer_value(kmers), lanes));
+            sink.consume(kmer_value(kmers));
+            do_not_optimize(lanes.bits);
         }
     );
     return sink.finalize();

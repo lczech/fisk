@@ -135,6 +135,11 @@ struct SimdScalar
         return m & 1;
     }
 
+    static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
+    {
+        return std::uint64_t{0} - (bits & 1);
+    }
+
     // Bit j set iff byte j of a and b are equal. The test of each byte for zero adds within its
     // low seven bits only, so that no carry crosses into the next byte, which keeps it exact. The
     // multiplication then gathers the eight high bits into the lowest byte.

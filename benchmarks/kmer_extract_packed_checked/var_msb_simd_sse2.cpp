@@ -20,7 +20,8 @@ std::uint64_t run_var_checked_msb_simd_sse2(
         [&](
             std::size_t, auto kmers, SimdVectorValidLanes<SimdSSE2> lanes
         ) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(valid_kmers_<SimdSSE2>(kmer_value(kmers), lanes));
+            sink.consume(kmer_value(kmers));
+            do_not_optimize(lanes.bits);
         }
     );
     return sink.finalize();

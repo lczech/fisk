@@ -146,7 +146,7 @@ inline void invoke_kmer_vector_callback(
  * lanes.
  *
  * Accepts `callback(pos, kmers, valid_lanes)`, see KmerVectorValidLanesCallback, where lane `j` of
- * `kmers` holds the k-mer starting at `pos + j`, valid if lane `j` of `valid_lanes` is.
+ * `kmers` holds the k-mer starting at `pos + j`, valid if bit `j` of `valid_lanes.bits` is set.
  */
 template <Encoding E, Layout L, SimdArch Simd, typename Callback>
 FISK_ALWAYS_INLINE
@@ -281,7 +281,8 @@ inline void for_each_valid_lane(std::size_t pos, V kmers, std::size_t valid_coun
  * @brief Call `func` with each valid k-mer or spaced k-mer of a vector, in lane order, as handed
  * out by for_each_kmer_packed_checked_simd().
  *
- * As the overload for a count of valid lanes, for the k-mers in the lanes set in `valid_lanes`.
+ * As the overload for a count of valid lanes, for the k-mers in the lanes whose bits are set in
+ * `valid_lanes.bits`.
  */
 template <KmerVectorType V, typename Func>
     requires KmerVectorLaneCallback<Func, V>
@@ -291,7 +292,7 @@ inline void for_each_valid_lane(
 ) {
     std::uint64_t words[V::lanes];
     std::memcpy(words, &kmers.value, sizeof(words));
-    std::uint64_t const bits = valid_lanes.bits();
+    std::uint64_t const bits = valid_lanes.bits;
 
     // All lanes valid, the usual case, as a loop with a fixed count, which the compilers unroll.
     // GCC keeps the loop over the set bits below as a loop, even for a constant mask.

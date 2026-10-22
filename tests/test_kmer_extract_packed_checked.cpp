@@ -76,8 +76,9 @@ static void check_valid_lanes_callback(
 
         alignas(64) std::uint64_t buf[lanes];
         Simd::store_aligned(kmer_value(kmers), buf);
-        std::uint64_t const bits = valid_lanes.bits();
+        std::uint64_t const bits = valid_lanes.bits;
         EXPECT_EQ(bits >> lanes, std::uint64_t{0});
+        EXPECT_EQ(Simd::lane_mask_to_bits(valid_lanes.lane_mask()), bits);
         for (std::size_t j = 0; j < lanes; ++j) {
             if ((bits >> j) & 1) {
                 EXPECT_TRUE(pos + j < num_kmers);
@@ -184,6 +185,22 @@ static void check_single_invalid()
         for (std::size_t at = 0; at < len; ++at) {
             std::string seq = base;
             seq[at] = 'N';
+            check_sequence<E, L>(seq);
+        }
+    }
+}
+
+// A run of valid nucleotides of each length up to 40 between two Ns, so that the k-mers in the
+// run are valid just for k up to its length, at offsets around the edges of the first block.
+template <Encoding E, Layout L>
+static void check_valid_runs()
+{
+    Splitmix64 rng(9009);
+    std::size_t const offsets[] = {0, 1, 20, 30, 31, 32, 33};
+    for (std::size_t run = 0; run <= 40; ++run) {
+        for (std::size_t offset : offsets) {
+            std::string const seq = random_sequence(rng, offset) + "N" + random_sequence(rng, run)
+                + "N" + random_sequence(rng, 40);
             check_sequence<E, L>(seq);
         }
     }
@@ -300,6 +317,16 @@ TEST(KmerExtractPackedChecked, SingleInvalidMsb)
 TEST(KmerExtractPackedChecked, SingleInvalidLsb)
 {
     check_single_invalid<Encoding::kACGT, Layout::kLSB>();
+}
+
+TEST(KmerExtractPackedChecked, ValidRunsMsb)
+{
+    check_valid_runs<Encoding::kACGT, Layout::kMSB>();
+}
+
+TEST(KmerExtractPackedChecked, ValidRunsLsb)
+{
+    check_valid_runs<Encoding::kACGT, Layout::kLSB>();
 }
 
 TEST(KmerExtractPackedChecked, AllValidEqualsUncheckedMsb)

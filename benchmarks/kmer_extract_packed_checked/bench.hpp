@@ -19,22 +19,11 @@
 using CheckedMsb = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, fisk::Layout::kMSB>;
 using CheckedLsb = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, fisk::Layout::kLSB>;
 
-// The k-mers of the valid lanes, with zero in the others: a stand-in for what a caller does with
-// the valid lanes, so that they are computed.
-template <typename Simd, typename Vector>
-inline Vector valid_kmers_(Vector v, fisk::SimdVectorValidLanes<Simd> lanes) noexcept
-{
-    // Vector lane masks (all ones or zero per lane) are and-ed in; AVX512 has a mask register.
-    if constexpr (requires { Simd::bitwise_and(v, lanes.value); }) {
-        return Simd::bitwise_and(v, lanes.value);
-    } else {
-        #if defined(FISK_HAS_AVX512)
-        return _mm512_maskz_mov_epi64(lanes.value, v);
-        #else
-        static_assert(sizeof(Simd) == 0, "Unhandled lane mask in valid_kmers_()");
-        #endif
-    }
-}
+// The variants that hand out vectors sum them whole, valid lanes or not, as a caller takes the
+// vectors with their valid lanes as they are, and keep the valid lanes with a do_not_optimize()
+// barrier, so that they are computed. Selecting the valid lanes for the sum, for example with
+// SimdVectorValidLanes::lane_mask(), would add work that callers do not need. The sums of the
+// vector variants hence only match within an arch, see bench_kmer_extract_packed_checked().
 
 /**
  * @brief Benchmark checked k-mer extraction from a PackedSequenceWithValidity, the same variants

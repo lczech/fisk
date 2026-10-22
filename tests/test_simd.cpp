@@ -364,6 +364,9 @@ static void check_simd_arch()
     Lanes<Simd> zeros{};
     EXPECT_TRUE(to_lanes<Simd>(Simd::zero()) == zeros);
     check_simd_lane_mask<Simd>(Simd::lane_mask_all(), (std::uint64_t{1} << Simd::lanes) - 1);
+    for (std::uint64_t bits = 0; bits < (std::uint64_t{1} << Simd::lanes); ++bits) {
+        check_simd_lane_mask<Simd>(Simd::lane_mask_from_bits(bits), bits);
+    }
 
     // A few random inputs, and the all-zero and all-one ones at the end.
     auto const byte_inputs = random_lanes<Simd>(7);
