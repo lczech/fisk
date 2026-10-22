@@ -249,12 +249,11 @@ inline BitExtractBlockTable make_bit_extract_block_table( std::uint64_t mask )
     BitExtractBlockTable table{};
     table.mask = mask;
 
-    // Helper: build a contiguous run mask of length len at bit position start.
-    auto make_run_mask64 = [](unsigned start, unsigned len) -> std::uint64_t
+    // Helper: build a contiguous run mask of length len at bit position start. Runs are never
+    // empty, as each one starts at a set bit of the mask.
+    auto make_run_mask64_ = [](unsigned start, unsigned len) -> std::uint64_t
     {
-        if (len == 0) {
-            return 0;
-        }
+        assert(len > 0);
         if (len >= 64) {
             return ~std::uint64_t{0};
         }
@@ -278,7 +277,7 @@ inline BitExtractBlockTable make_bit_extract_block_table( std::uint64_t mask )
         }
         unsigned end = bit - 1;
         unsigned len = end - start + 1;
-        std::uint64_t block_mask = make_run_mask64(start, len);
+        std::uint64_t block_mask = make_run_mask64_(start, len);
 
         // In PEXT output, this run occupies [out_pos .. out_pos+len-1].
         // The bits are currently at [start .. start+len-1].
