@@ -21,6 +21,7 @@
 #include "fisk/core/simd_neon.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
+#include "simd_lanes.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -41,6 +42,35 @@ static std::vector<std::string> const& test_sequences()
         }
         out.push_back(random_sequence(rng, 257));
         out.push_back(random_sequence(rng, 511));
+        return out;
+    }();
+    return seqs;
+}
+
+// Random sequences of the lengths 0..100 with lower and upper case nucleotides, without invalid
+// characters, with scattered ones, and with many, plus longer ones with runs of N, as in
+// assemblies, for the checked extraction.
+static std::vector<std::string> const& checked_test_sequences()
+{
+    static std::vector<std::string> const seqs = [] {
+        std::vector<std::string> out;
+        Splitmix64 rng(9119);
+        for (std::size_t len = 0; len <= 100; ++len) {
+            std::string seq = random_sequence(rng, len);
+            double const rates[] = {0.0, 0.02, 0.2};
+            inject_invalid(seq, rng, rates[len % 3], all_invalid_bytes());
+            out.push_back(std::move(seq));
+        }
+        for (std::size_t len : {257u, 511u}) {
+            std::string seq = random_sequence(rng, len);
+            inject_invalid(seq, rng, 0.01, kHandPickedInvalid);
+            for (std::size_t r = 0; r < 3; ++r) {
+                std::size_t const run = 1 + rng.get_uint64() % 60;
+                std::size_t const at = rng.get_uint64() % (seq.size() - run);
+                seq.replace(at, run, run, 'N');
+            }
+            out.push_back(std::move(seq));
+        }
         return out;
     }();
     return seqs;
@@ -150,6 +180,36 @@ static void check_kernel(
     }
 }
 
+// As check_kernel(), for the checked extraction, whose vectors come with their valid lanes.
+template <typename Kernel, Encoding E, Layout L, std::size_t N>
+static void check_checked_kernel(
+    std::array<std::string, N> const& mask_strings, PackedSequenceWithValidity<E, L> const& packed,
+    std::vector<SpacedEvent> const& expected
+) {
+    using Simd = typename Kernel::simd_arch;
+    std::size_t const span_k = mask_strings.front().size();
+    std::size_t const positions = packed.length() < span_k ? 0 : packed.length() - span_k + 1;
+    auto const kernels = make_kernels<Kernel, L>(mask_strings);
+    auto const collect = [&]<bool Shorthand>(std::size_t mask_count, auto const& extract) {
+        return collect_valid_lanes_events<Simd, E, L, Shorthand, true>(
+            mask_count, positions, extract
+        );
+    };
+    auto const extract_array = [&](auto const& callback) {
+        for_each_spaced_kmer_packed_checked_simd(packed, kernels, callback);
+    };
+    check_spaced_events(collect.template operator()<false>(N, extract_array), expected);
+
+    if constexpr (N == 1) {
+        auto const extract_single = [&](auto const& callback) {
+            for_each_spaced_kmer_packed_checked_simd(packed, kernels[0], callback);
+        };
+        check_spaced_events(collect.template operator()<false>(1, extract_single), expected);
+        check_spaced_events(collect.template operator()<true>(1, extract_single), expected);
+        check_spaced_events(collect.template operator()<true>(1, extract_array), expected);
+    }
+}
+
 // Checks the butterfly and block table kernels of every arch of the build, and the PEXT kernel, for
 // one set of masks.
 template <Encoding E, Layout L, std::size_t N>
@@ -183,6 +243,51 @@ static void check_all_kernels(std::array<std::string, N> const& mask_strings)
     }
 }
 
+// As check_all_kernels(), for the checked extraction, on sequences with invalid characters.
+template <Encoding E, Layout L, std::size_t N>
+static void check_all_checked_kernels(std::array<std::string, N> const& mask_strings)
+{
+    WordEncoderButterfly<E, L> const encoder;
+    std::vector<std::string> const mask_vector(mask_strings.begin(), mask_strings.end());
+    for (auto const& seq : checked_test_sequences()) {
+        auto const packed = pack_sequence_with_validity(seq, encoder);
+        auto const expected = oracle_spaced_events<E, L>(seq, mask_vector);
+        auto const check_arch = [&]<typename Simd>() {
+            check_checked_kernel<BitExtractKernelButterfly<Simd>>(mask_strings, packed, expected);
+            check_checked_kernel<BitExtractKernelBlock<Simd>>(mask_strings, packed, expected);
+        };
+        check_arch.template operator()<SimdScalar>();
+        #if defined(FISK_HAS_SSE2)
+        check_arch.template operator()<SimdSSE2>();
+        #endif
+        #if defined(FISK_HAS_AVX2)
+        check_arch.template operator()<SimdAVX2>();
+        #endif
+        #if defined(FISK_HAS_AVX512)
+        check_arch.template operator()<SimdAVX512>();
+        #endif
+        #if defined(FISK_HAS_NEON)
+        check_arch.template operator()<SimdNEON>();
+        #endif
+        #if defined(FISK_HAS_BMI2)
+        check_checked_kernel<BitExtractKernelPEXT>(mask_strings, packed, expected);
+        #endif
+    }
+}
+
+// As check_extraction(), for the checked extraction.
+template <Encoding E, Layout L>
+static void check_checked_extraction()
+{
+    Splitmix64 rng(9229);
+    for (std::size_t span_k = 1; span_k <= 32; ++span_k) {
+        check_all_checked_kernels<E, L>(random_masks<1>(rng, span_k));
+        check_all_checked_kernels<E, L>(random_masks<3>(rng, span_k));
+    }
+    check_all_checked_kernels<E, L, 1>({ std::string(32, '1') });
+    check_all_checked_kernels<E, L, 1>({ std::string("1").append(30, '0').append("1") });
+}
+
 // For every span in [1, 32], a single random mask, and a set of three random masks, plus masks
 // that keep all positions, or only the first and the last.
 template <Encoding E, Layout L>
@@ -208,6 +313,12 @@ struct NoopSpacedVectorCallback
 {
     template <typename V>
     void operator()(std::size_t, std::size_t, V const&, std::size_t) const {}
+};
+
+struct NoopSpacedValidLanesCallback
+{
+    template <typename V, typename Lanes>
+    void operator()(std::size_t, std::size_t, V const&, Lanes) const {}
 };
 
 // The kernels need to have the Layout of the sequence.
@@ -237,6 +348,24 @@ static_assert(CanExtractPackedSimd<
 >);
 #endif
 
+// The same for the checked extraction, which also needs the validity bits.
+template <typename Seq, typename Kernel>
+concept CanExtractPackedCheckedSimd = requires(Seq const& seq, Kernel const& kernel) {
+    for_each_spaced_kmer_packed_checked_simd(seq, kernel, NoopSpacedValidLanesCallback{});
+};
+static_assert(CanExtractPackedCheckedSimd<
+    PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>,
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdScalar>>
+>);
+static_assert(!CanExtractPackedCheckedSimd<
+    PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>,
+    SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdScalar>>
+>);
+static_assert(!CanExtractPackedCheckedSimd<
+    PackedSequence<Encoding::kACGT, Layout::kMSB>,
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdScalar>>
+>);
+
 // Spans outside of [1, 32] and sets of masks with different spans are rejected, also for sequences
 // shorter than the span.
 template <Layout L>
@@ -246,12 +375,19 @@ static void check_error_contract()
     WordEncoderButterfly<Encoding::kACGT, L> const encoder;
     for (std::string const& seq : {std::string{}, std::string(129, 'T')}) {
         auto const packed = pack_sequence(seq, encoder);
+        auto const checked = pack_sequence_with_validity(seq, encoder);
         for (std::size_t const span_k : {std::size_t{0}, std::size_t{33}}) {
             SpacedKmerMask<L, Kernel> kernel;
             static_cast<Kernel&>(kernel) = Kernel(3);
             kernel.span_k = span_k;
             EXPECT_THROW(
                 for_each_spaced_kmer_packed_simd(packed, kernel, NoopSpacedVectorCallback{}),
+                std::invalid_argument
+            );
+            EXPECT_THROW(
+                for_each_spaced_kmer_packed_checked_simd(
+                    checked, kernel, NoopSpacedValidLanesCallback{}
+                ),
                 std::invalid_argument
             );
         }
@@ -261,6 +397,12 @@ static void check_error_contract()
         };
         EXPECT_THROW(
             for_each_spaced_kmer_packed_simd(packed, mixed, NoopSpacedVectorCallback{}),
+            std::invalid_argument
+        );
+        EXPECT_THROW(
+            for_each_spaced_kmer_packed_checked_simd(
+                checked, mixed, NoopSpacedValidLanesCallback{}
+            ),
             std::invalid_argument
         );
     }
@@ -288,6 +430,26 @@ TEST(KmerSpacedPackedSimd, ActgMsb)
 TEST(KmerSpacedPackedSimd, ActgLsb)
 {
     check_extraction<Encoding::kACTG, Layout::kLSB>();
+}
+
+TEST(KmerSpacedPackedCheckedSimd, AcgtMsb)
+{
+    check_checked_extraction<Encoding::kACGT, Layout::kMSB>();
+}
+
+TEST(KmerSpacedPackedCheckedSimd, AcgtLsb)
+{
+    check_checked_extraction<Encoding::kACGT, Layout::kLSB>();
+}
+
+TEST(KmerSpacedPackedCheckedSimd, ActgMsb)
+{
+    check_checked_extraction<Encoding::kACTG, Layout::kMSB>();
+}
+
+TEST(KmerSpacedPackedCheckedSimd, ActgLsb)
+{
+    check_checked_extraction<Encoding::kACTG, Layout::kLSB>();
 }
 
 TEST(KmerSpacedPackedSimd, ErrorContract)

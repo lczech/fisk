@@ -253,62 +253,6 @@ static std::array<SpacedKmerMask<L, Kernel>, N> make_kernels(
     return kernels;
 }
 
-// Runs the extraction with a vector callback, and returns its spaced k-mers as events, taken out
-// of the vectors with for_each_valid_lane(), sorted by position and mask. Checks the structure of
-// the vectors on the way: one vector per mask for every `lanes` of the `positions` of the
-// sequence, the masks in order per vector, no valid lanes past the last position, and the same
-// count from store_valid_lanes(). With `Shorthand`, the callback is the single-mask form without
-// mask_idx.
-template <typename Simd, Encoding E, Layout L, bool Shorthand = false, typename Extract>
-static std::vector<SpacedEvent> collect_valid_lanes_events(
-    std::size_t mask_count, std::size_t positions, Extract&& extract
-) {
-    using V = SpacedKmerVector<E, L, Simd>;
-    using Lanes = SimdVectorValidLanes<Simd>;
-    constexpr std::size_t lanes = Simd::lanes;
-    std::vector<SpacedEvent> events;
-    std::size_t next_pos = 0;
-    std::size_t expected_mask = 0;
-    auto const on_vector = [&](
-        std::size_t pos, std::size_t mask_idx, V spaced_kmers, Lanes valid_lanes
-    ) {
-        EXPECT_EQ(mask_idx, expected_mask);
-        EXPECT_EQ(pos, next_pos);
-        if (++expected_mask == mask_count) {
-            expected_mask = 0;
-            next_pos += lanes;
-        }
-        EXPECT_TRUE(pos < positions);
-        if (pos >= positions) {
-            return;
-        }
-        EXPECT_EQ(valid_lanes.bits >> std::min(lanes, positions - pos), std::uint64_t{0});
-
-        std::size_t const before = events.size();
-        for_each_valid_lane(
-            pos, spaced_kmers, valid_lanes,
-            [&](std::size_t p, SpacedKmer<E, L> const& spaced_kmer) {
-                events.push_back({p, mask_idx, kmer_value(spaced_kmer)});
-            }
-        );
-        SpacedKmer<E, L> stored[lanes] = {};
-        EXPECT_EQ(store_valid_lanes(spaced_kmers, valid_lanes, stored), events.size() - before);
-    };
-    if constexpr (Shorthand) {
-        extract([&](std::size_t pos, V spaced_kmers, Lanes valid_lanes) {
-            on_vector(pos, 0, spaced_kmers, valid_lanes);
-        });
-    } else {
-        extract(on_vector);
-    }
-    EXPECT_EQ(expected_mask, std::size_t{0});
-    EXPECT_EQ(next_pos, (positions + lanes - 1) / lanes * lanes);
-    std::sort(events.begin(), events.end(), [](auto const& lhs, auto const& rhs) {
-        return std::tie(lhs.pos, lhs.mask_idx) < std::tie(rhs.pos, rhs.mask_idx);
-    });
-    return events;
-}
-
 // The number of positions of spaced k-mers of span `span_k` in `seq`.
 static std::size_t spaced_kmer_positions(std::string const& seq, std::size_t span_k)
 {

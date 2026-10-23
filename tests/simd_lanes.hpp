@@ -6,10 +6,12 @@
 // precisely the lane order of those intrinsics that the casts and the functions on k-mer vectors
 // must agree with, and memcpy is what they use internally.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -175,4 +177,75 @@ inline void check_kmer_vector(std::uint64_t seed)
             check(fisk::SimdVectorValidLanes<Simd>{bits}, bits);
         }
     });
+}
+
+// =================================================================================================
+//     Spaced K-mer Vectors with Valid Lanes
+// =================================================================================================
+
+// Runs the extraction with a vector callback, and returns its spaced k-mers as events, taken out
+// of the vectors with for_each_valid_lane(), sorted by position and mask. Checks the structure of
+// the vectors on the way: one vector per mask for every `lanes` of the `positions` of the
+// sequence, the masks in order per vector, no valid lanes past the last position, and the same
+// count from store_valid_lanes(). With `Shorthand`, the callback is the single-mask form without
+// mask_idx. With `TrailingVectors`, vectors past the last position are allowed, without valid
+// lanes, as the extraction from packed sequences emits whole steps.
+template <
+    typename Simd, fisk::Encoding E, fisk::Layout L, bool Shorthand = false,
+    bool TrailingVectors = false, typename Extract
+>
+inline std::vector<SpacedEvent> collect_valid_lanes_events(
+    std::size_t mask_count, std::size_t positions, Extract&& extract
+) {
+    using V = fisk::SpacedKmerVector<E, L, Simd>;
+    using Lanes = fisk::SimdVectorValidLanes<Simd>;
+    constexpr std::size_t lanes = Simd::lanes;
+    std::vector<SpacedEvent> events;
+    std::size_t next_pos = 0;
+    std::size_t expected_mask = 0;
+    auto const on_vector = [&](
+        std::size_t pos, std::size_t mask_idx, V spaced_kmers, Lanes valid_lanes
+    ) {
+        EXPECT_EQ(mask_idx, expected_mask);
+        EXPECT_EQ(pos, next_pos);
+        if (++expected_mask == mask_count) {
+            expected_mask = 0;
+            next_pos += lanes;
+        }
+        if (pos >= positions) {
+            EXPECT_TRUE(TrailingVectors);
+            EXPECT_EQ(valid_lanes.bits, std::uint64_t{0});
+            return;
+        }
+        EXPECT_EQ(valid_lanes.bits >> std::min(lanes, positions - pos), std::uint64_t{0});
+
+        std::size_t const before = events.size();
+        fisk::for_each_valid_lane(
+            pos, spaced_kmers, valid_lanes,
+            [&](std::size_t p, fisk::SpacedKmer<E, L> const& spaced_kmer) {
+                events.push_back({p, mask_idx, fisk::kmer_value(spaced_kmer)});
+            }
+        );
+        fisk::SpacedKmer<E, L> stored[lanes] = {};
+        EXPECT_EQ(
+            fisk::store_valid_lanes(spaced_kmers, valid_lanes, stored), events.size() - before
+        );
+    };
+    if constexpr (Shorthand) {
+        extract([&](std::size_t pos, V spaced_kmers, Lanes valid_lanes) {
+            on_vector(pos, 0, spaced_kmers, valid_lanes);
+        });
+    } else {
+        extract(on_vector);
+    }
+    EXPECT_EQ(expected_mask, std::size_t{0});
+    if constexpr (TrailingVectors) {
+        EXPECT_TRUE(next_pos >= (positions + lanes - 1) / lanes * lanes);
+    } else {
+        EXPECT_EQ(next_pos, (positions + lanes - 1) / lanes * lanes);
+    }
+    std::sort(events.begin(), events.end(), [](auto const& lhs, auto const& rhs) {
+        return std::tie(lhs.pos, lhs.mask_idx) < std::tie(rhs.pos, rhs.mask_idx);
+    });
+    return events;
 }

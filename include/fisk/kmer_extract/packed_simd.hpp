@@ -180,10 +180,15 @@ inline void emit_packed_simd_step_(
 // of the k-mers from `pos` on to `emit` with the validity of the k-mers from `pos` on. With
 // validity bits, the vector goes on with its valid lanes: all of them in a block of valid
 // nucleotides, and otherwise the low bits of the valid starts, see run_packed_blocks_()
-// (packed.hpp). Without them, it goes on with its count of k-mers, which is below all lanes only
-// in the step after the k-mers within the sequence. There, the count comes from the length, and the
+// (packed.hpp). With PackedValidity::kNucleotides, the vector goes on with the validity as it is
+// instead, AllValid or the validity window from `pos` on, for the caller to test its lanes against.
+// Without validity bits, it goes on with its count of k-mers, which is below all lanes only in the
+// step after the k-mers within the sequence. There, the count comes from the length, and the
 // vectors after the last k-mer are left out.
-template <SimdArch Simd, PackedSequenceType Seq, typename Emit>
+template <
+    SimdArch Simd, PackedValidity Form = PackedValidity::kStarts,
+    PackedSequenceType Seq, typename Emit
+>
 FISK_ALWAYS_INLINE
 inline auto packed_simd_emit_(Seq const& seq, std::size_t k, Emit& emit)
 {
@@ -192,7 +197,11 @@ inline auto packed_simd_emit_(Seq const& seq, std::size_t k, Emit& emit)
         std::size_t pos, typename Simd::simd_vector vec, auto validity
     ) FISK_ALWAYS_INLINE_LAMBDA {
         (void) p_max;
-        if constexpr (PackedSequenceWithValidityType<Seq>) {
+        if constexpr (PackedSequenceWithValidityType<Seq> && Form != PackedValidity::kStarts) {
+            // The validity window as it is, for the spaced k-mer extraction, which tests the lanes
+            // of each mask against it.
+            emit(pos, vec, validity);
+        } else if constexpr (PackedSequenceWithValidityType<Seq>) {
             std::uint64_t const all_lanes = (std::uint64_t{1} << Simd::lanes) - 1u;
             if constexpr (std::is_same_v<decltype(validity), AllValid>) {
                 emit(pos, vec, SimdVectorValidLanes<Simd>{all_lanes});
@@ -234,9 +243,13 @@ inline auto packed_simd_emit_(Seq const& seq, std::size_t k, Emit& emit)
  *
  * The vectors are emitted as `emit(pos, vec, valid_count)`, as for for_each_kmer_packed_simd().
  * For a sequence with validity bits, see PackedSequenceWithValidityType (core/types.hpp), they are
- * emitted as `emit(pos, vec, valid_lanes)` instead, as for for_each_kmer_packed_checked_simd().
+ * emitted as `emit(pos, vec, valid_lanes)` instead, as for for_each_kmer_packed_checked_simd(), or,
+ * with `Form` PackedValidity::kNucleotides, as `emit(pos, vec, validity)`, see packed_simd_emit_().
  */
-template <SimdArch Simd, bool Masked = true, PackedSequenceType Seq, typename Emit>
+template <
+    SimdArch Simd, bool Masked = true, PackedValidity Form = PackedValidity::kStarts,
+    PackedSequenceType Seq, typename Emit
+>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_narrow_width_(Seq const& seq, std::size_t k, Emit&& emit)
 {
@@ -257,7 +270,7 @@ inline void for_each_kmer_packed_simd_narrow_width_(Seq const& seq, std::size_t 
     std::uint64_t const mask = width_mask_(k);
     unsigned const k32 = static_cast<unsigned>(k);
     std::uint8_t const* const codes = seq.codes().data();
-    auto const emit_ = packed_simd_emit_<Simd>(seq, k, emit);
+    auto const emit_ = packed_simd_emit_<Simd, Form>(seq, k, emit);
 
     // Right shift that moves the k-mer at position `local` of a starting byte to the low bits.
     simd_vector const mask_v = Simd::broadcast(mask);
@@ -285,7 +298,7 @@ inline void for_each_kmer_packed_simd_narrow_width_(Seq const& seq, std::size_t 
     };
 
     // The steps over all bytes in which a k-mer starts, see run_packed_blocks_() (packed.hpp).
-    run_packed_blocks_<step_bytes>(seq, k, step_);
+    run_packed_blocks_<step_bytes, Form>(seq, k, step_);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -296,10 +309,13 @@ inline void for_each_kmer_packed_simd_narrow_width_(Seq const& seq, std::size_t 
  * @brief Extracts k in [1, 32] as vectors of k-mers.
  *
  * A k-mer of more than 29 bases can reach into a ninth byte, so that this combines two words.
- * `Masked` and `emit` are as for for_each_kmer_packed_simd_narrow_width_().
+ * `Masked`, `Form`, and `emit` are as for for_each_kmer_packed_simd_narrow_width_().
  * `Masked` only affects kLSB, as the shift down of kMSB leaves nothing above the k-mer.
  */
-template <SimdArch Simd, bool Masked = true, PackedSequenceType Seq, typename Emit>
+template <
+    SimdArch Simd, bool Masked = true, PackedValidity Form = PackedValidity::kStarts,
+    PackedSequenceType Seq, typename Emit
+>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k, Emit&& emit)
 {
@@ -318,7 +334,7 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
     std::uint64_t const mask = width_mask_(k);
     unsigned const k32 = static_cast<unsigned>(k);
     std::uint8_t const* const codes = seq.codes().data();
-    auto const emit_ = packed_simd_emit_<Simd>(seq, k, emit);
+    auto const emit_ = packed_simd_emit_<Simd, Form>(seq, k, emit);
 
     // The k-mer at position `local` of a starting byte spans up to nine bytes: the word at the
     // starting byte, and a ninth byte, for which we take the word `step_bytes` after it. That is
@@ -373,7 +389,7 @@ inline void for_each_kmer_packed_simd_full_width_(Seq const& seq, std::size_t k,
     };
 
     // As in the narrow-width loop.
-    run_packed_blocks_<step_bytes>(seq, k, step_);
+    run_packed_blocks_<step_bytes, Form>(seq, k, step_);
 }
 
 // -------------------------------------------------------------------------------------------------

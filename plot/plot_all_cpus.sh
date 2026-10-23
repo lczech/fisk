@@ -241,6 +241,7 @@ echo "Plotting vectors vs. scalars comparison"
 for csv in \
   "kmer_spaced_single.csv" "kmer_spaced_multi.csv" \
   "kmer_spaced_packed_single.csv" "kmer_spaced_packed_multi.csv" \
+  "kmer_spaced_packed_checked_single.csv" "kmer_spaced_packed_checked_multi.csv" \
   "kmer_extract_packed_checked.csv"
 do
   build_file_args "$csv" || continue
