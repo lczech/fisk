@@ -136,25 +136,6 @@ struct SimdSSE2
     //     Compare
     // -------------------------------------------
 
-    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
-    {
-        #if defined(FISK_HAS_SSE41)
-            return compare_eq_lanes_sse41_(a, b);
-        #else
-            return compare_eq_lanes_sse2_(a, b);
-        #endif
-    }
-
-    static lane_mask lane_mask_all() noexcept
-    {
-        return _mm_set1_epi64x(-1);
-    }
-
-    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
-    {
-        return static_cast<unsigned>(_mm_movemask_pd(_mm_castsi128_pd(m)));
-    }
-
     // Both 32-bit halves of lane j keep bit j and compare it to itself, as SSE2 has no 64-bit
     // compare.
     static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
@@ -168,23 +149,6 @@ struct SimdSSE2
     {
         return static_cast<unsigned>(_mm_movemask_epi8(_mm_cmpeq_epi8(a, b)));
     }
-
-    // SSE2 has no 64-bit compare. A lane is equal if both of its 32-bit halves are, so that each
-    // half is combined with the other half of its lane.
-    static lane_mask compare_eq_lanes_sse2_(simd_vector a, simd_vector b) noexcept
-    {
-        __m128i const halves = _mm_cmpeq_epi32(a, b);
-        return _mm_and_si128(halves, _mm_shuffle_epi32(halves, _MM_SHUFFLE(2, 3, 0, 1)));
-    }
-
-    #if defined(FISK_HAS_SSE41)
-
-    static lane_mask compare_eq_lanes_sse41_(simd_vector a, simd_vector b) noexcept
-    {
-        return _mm_cmpeq_epi64(a, b);
-    }
-
-    #endif // FISK_HAS_SSE41
 
     // -------------------------------------------
     //     Bytes

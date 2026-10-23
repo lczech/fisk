@@ -119,22 +119,6 @@ struct SimdScalar
     //     Compare
     // -------------------------------------------
 
-    // All bits set if a == b, zero otherwise.
-    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
-    {
-        return std::uint64_t{0} - static_cast<std::uint64_t>(a == b);
-    }
-
-    static lane_mask lane_mask_all() noexcept
-    {
-        return ~std::uint64_t{0};
-    }
-
-    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
-    {
-        return m & 1;
-    }
-
     static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
     {
         return std::uint64_t{0} - (bits & 1);

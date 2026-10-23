@@ -127,22 +127,6 @@ struct SimdAVX512
     //     Compare
     // -------------------------------------------
 
-    // The lane mask is the mask register of the compare, with bit j for lane j already.
-    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
-    {
-        return _mm512_cmpeq_epi64_mask(a, b);
-    }
-
-    static lane_mask lane_mask_all() noexcept
-    {
-        return static_cast<lane_mask>(0xFF);
-    }
-
-    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
-    {
-        return m;
-    }
-
     static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
     {
         return static_cast<lane_mask>(bits);

@@ -32,10 +32,10 @@ namespace fisk {
 // shift_left_lanes(). SimdSSE2 has interleave_low() and interleave_high() instead, to pick lanes
 // from vectors that were shifted as a whole.
 //
-// Comparing the lanes of two vectors gives a `lane_mask`, in the form native to the arch: a vector
-// with all bits set in the equal lanes and zero in the others, or the mask register of AVX512.
-// lane_mask_to_bits() turns it into bit `j` for lane `j`, as compare_eq_bytes_to_bits() does
-// for the bytes of two vectors, and lane_mask_from_bits() turns such bits back into a lane mask.
+// A `lane_mask` selects lanes in the form native to the arch: a vector with all bits set in the
+// selected lanes and zero in the others, or the mask register of AVX512. lane_mask_from_bits()
+// makes one from bit `j` for lane `j`, the form of compare_eq_bytes_to_bits() for the bytes of two
+// vectors, see SimdVectorValidLanes::lane_mask() (core/types.hpp).
 
 /**
  * @brief Concept for a SIMD arch, such as SimdAVX2.
@@ -70,9 +70,6 @@ concept SimdArch = requires(
     Simd::template store_truncated_u16<true>(v, bytes);
     Simd::template store_two_bit_codes<false>(v, bytes);
     Simd::template store_two_bit_codes<true>(v, bytes);
-    { Simd::compare_eq_lanes(v, v) } -> std::same_as<typename Simd::lane_mask>;
-    { Simd::lane_mask_all() } -> std::same_as<typename Simd::lane_mask>;
-    { Simd::lane_mask_to_bits(mask) } -> std::same_as<std::uint64_t>;
     { Simd::lane_mask_from_bits(value) } -> std::same_as<typename Simd::lane_mask>;
     { Simd::compare_eq_bytes_to_bits(v, v) } -> std::same_as<std::uint64_t>;
 };

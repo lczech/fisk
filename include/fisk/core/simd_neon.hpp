@@ -125,22 +125,6 @@ struct SimdNEON
     //     Compare
     // -------------------------------------------
 
-    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
-    {
-        return vceqq_u64(a, b);
-    }
-
-    static lane_mask lane_mask_all() noexcept
-    {
-        return vdupq_n_u64(~std::uint64_t{0});
-    }
-
-    // NEON has no movemask. Keep bit j of lane j, and add the lanes.
-    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
-    {
-        return vaddvq_u64(vandq_u64(m, vcombine_u64(vcreate_u64(1), vcreate_u64(2))));
-    }
-
     // Lane j keeps bit j and compares it to itself.
     static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
     {

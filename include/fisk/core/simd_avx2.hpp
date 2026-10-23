@@ -123,21 +123,6 @@ struct SimdAVX2
     //     Compare
     // -------------------------------------------
 
-    static lane_mask compare_eq_lanes(simd_vector a, simd_vector b) noexcept
-    {
-        return _mm256_cmpeq_epi64(a, b);
-    }
-
-    static lane_mask lane_mask_all() noexcept
-    {
-        return _mm256_set1_epi64x(-1);
-    }
-
-    static std::uint64_t lane_mask_to_bits(lane_mask m) noexcept
-    {
-        return static_cast<unsigned>(_mm256_movemask_pd(_mm256_castsi256_pd(m)));
-    }
-
     // Lane j keeps bit j and compares it to itself.
     static lane_mask lane_mask_from_bits(std::uint64_t bits) noexcept
     {

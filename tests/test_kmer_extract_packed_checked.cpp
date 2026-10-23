@@ -78,7 +78,6 @@ static void check_valid_lanes_callback(
         Simd::store_aligned(kmer_value(kmers), buf);
         std::uint64_t const bits = valid_lanes.bits;
         EXPECT_EQ(bits >> lanes, std::uint64_t{0});
-        EXPECT_EQ(Simd::lane_mask_to_bits(valid_lanes.lane_mask()), bits);
         for (std::size_t j = 0; j < lanes; ++j) {
             if ((bits >> j) & 1) {
                 EXPECT_TRUE(pos + j < num_kmers);
