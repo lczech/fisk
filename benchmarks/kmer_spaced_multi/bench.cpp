@@ -87,7 +87,7 @@ static void bench_kmer_spaced_multi_layout_(
     #endif
     #if defined(FISK_HAS_BMI2)
     BitExtractKernelDispatcher const simd_pext_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelPEXT<>>(bit_ext_masks)
+        make_spaced_kmer_kernels<BitExtractKernelPEXT>(bit_ext_masks)
     );
     #endif
 

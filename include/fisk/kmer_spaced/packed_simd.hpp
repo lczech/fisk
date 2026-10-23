@@ -77,8 +77,8 @@ inline void emit_spaced_kmers_packed_simd_(
  * kernel. It has the Encoding and Layout of the sequence. See above for the form of the callback.
  * A PackedSequenceWithValidity is taken as well, ignoring its validity bits.
  *
- * @tparam Kernel   Bit extraction kernel of a SIMD arch, see BitExtractKernelWithArch, tagged as
- *                  spaced k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel().
+ * @tparam Kernel   Bit extraction kernel of a SIMD arch, see BitExtractKernel, tagged as spaced
+ *                  k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel().
  *                  The spans of all kernels must be the same, and in [1, 32].
  * @tparam N        Number of kernels in the array.
  * @tparam Callback Callback function, called with vectors of spaced k-mers, see above.
@@ -86,7 +86,7 @@ inline void emit_spaced_kmers_packed_simd_(
 template <
     PackedSequenceType Seq, Layout L, typename Kernel, std::size_t N, typename Callback
 >
-    requires BitExtractKernelWithArch<Kernel> && (L == Seq::layout)
+    requires BitExtractKernel<Kernel> && (L == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_simd(
     Seq const& seq,
@@ -126,7 +126,7 @@ inline void for_each_spaced_kmer_packed_simd(
  * be called without it, as callback(pos, spaced_kmers, valid_count).
  */
 template <PackedSequenceType Seq, Layout L, typename Kernel, typename Callback>
-    requires BitExtractKernelWithArch<Kernel> && (L == Seq::layout)
+    requires BitExtractKernel<Kernel> && (L == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_simd(
     Seq const& seq,

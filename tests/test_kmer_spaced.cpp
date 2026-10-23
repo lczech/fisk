@@ -1201,7 +1201,7 @@ TEST(KmerSpacedSimd, BlockNeon)
 #if defined(FISK_HAS_BMI2)
 TEST(KmerSpacedSimd, Pext)
 {
-    check_simd_kernel<BitExtractKernelPEXT<>>();
+    check_simd_kernel<BitExtractKernelPEXT>();
 }
 #endif
 
@@ -1216,12 +1216,8 @@ TEST(KmerSpacedSimd, DispatcherMaskCounts)
     check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<9>()));
     check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<16>()));
 
-    #if defined(FISK_HAS_BMI2)
-    // Eight PEXT lanes and 9+ masks exercise the two-word position-presence bitset.
-    check_simd_dispatcher<BitExtractKernelPEXT<>>(to_vector(generated_masks<9>()));
-    check_simd_dispatcher<BitExtractKernelPEXT<>>(to_vector(generated_masks<16>()));
-    #elif defined(FISK_HAS_AVX512)
-    // AVX-512 likewise has eight lanes, reaching the two-word presence path above eight masks.
+    #if defined(FISK_HAS_AVX512)
+    // AVX-512 has eight lanes, reaching the two-word position-presence bitset above eight masks.
     check_simd_dispatcher<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<9>()));
     check_simd_dispatcher<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<16>()));
     #endif

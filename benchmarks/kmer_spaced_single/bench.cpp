@@ -76,7 +76,7 @@ static void bench_kmer_spaced_single_layout_(
     #endif
     #if defined(FISK_HAS_BMI2)
     auto const simd_pext_kernel
-        = make_spaced_kmer_kernel<BitExtractKernelPEXT<>>(bit_ext_mask);
+        = make_spaced_kmer_kernel<BitExtractKernelPEXT>(bit_ext_mask);
     #endif
 
     // Run the benchmark for all algorithms

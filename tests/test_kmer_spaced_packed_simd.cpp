@@ -150,7 +150,8 @@ static void check_kernel(
     }
 }
 
-// Checks the butterfly and block table kernels of every arch of the build for one set of masks.
+// Checks the butterfly and block table kernels of every arch of the build, and the PEXT kernel, for
+// one set of masks.
 template <Encoding E, Layout L, std::size_t N>
 static void check_all_kernels(std::array<std::string, N> const& mask_strings)
 {
@@ -175,6 +176,9 @@ static void check_all_kernels(std::array<std::string, N> const& mask_strings)
         #endif
         #if defined(FISK_HAS_NEON)
         check_arch.template operator()<SimdNEON>();
+        #endif
+        #if defined(FISK_HAS_BMI2)
+        check_kernel<BitExtractKernelPEXT>(mask_strings, packed, expected);
         #endif
     }
 }
@@ -206,7 +210,7 @@ struct NoopSpacedVectorCallback
     void operator()(std::size_t, std::size_t, V const&, std::size_t) const {}
 };
 
-// The kernels need to have the Layout of the sequence, and to be built on a SIMD arch.
+// The kernels need to have the Layout of the sequence.
 template <typename Seq, typename Kernel>
 concept CanExtractPackedSimd = requires(Seq const& seq, Kernel const& kernel) {
     for_each_spaced_kmer_packed_simd(seq, kernel, NoopSpacedVectorCallback{});
@@ -227,9 +231,9 @@ static_assert(!CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>, BitExtractKernelButterfly<SimdScalar>
 >);
 #if defined(FISK_HAS_BMI2)
-static_assert(!CanExtractPackedSimd<
+static_assert(CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>,
-    SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT<4>>
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT>
 >);
 #endif
 

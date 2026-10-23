@@ -12,7 +12,7 @@ using namespace fisk;
 
 std::uint64_t run_var_simd_pext_by_mask(
     std::string const& seq,
-    SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT<>> const& kernel,
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);

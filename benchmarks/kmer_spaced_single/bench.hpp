@@ -423,22 +423,22 @@ std::uint64_t run_var_simd_block_table_neon_by_position(
 #if defined(FISK_HAS_BMI2)
 std::uint64_t run_var_simd_pext_by_mask(
     std::string const& seq,
-    fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelPEXT<>> const& kernel,
+    fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelPEXT> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_simd_pext_by_mask(
     std::string const& seq,
-    fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelPEXT<>> const& kernel,
+    fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelPEXT> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_simd_pext_by_position(
     std::string const& seq,
-    fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelPEXT<>> const& kernel,
+    fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelPEXT> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_simd_pext_by_position(
     std::string const& seq,
-    fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelPEXT<>> const& kernel,
+    fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelPEXT> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif

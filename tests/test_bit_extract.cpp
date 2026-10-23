@@ -257,14 +257,12 @@ static void check_kernel()
 
 TEST(BitExtractSimd, KernelButterflyScalar)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelButterfly<SimdScalar>>);
     check_kernel<BitExtractKernelButterfly<SimdScalar>>();
 }
 
 #ifdef FISK_HAS_SSE2
 TEST(BitExtractSimd, KernelButterflySSE2)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelButterfly<SimdSSE2>>);
     check_kernel<BitExtractKernelButterfly<SimdSSE2>>();
 }
 #endif
@@ -272,7 +270,6 @@ TEST(BitExtractSimd, KernelButterflySSE2)
 #ifdef FISK_HAS_AVX2
 TEST(BitExtractSimd, KernelButterflyAVX2)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelButterfly<SimdAVX2>>);
     check_kernel<BitExtractKernelButterfly<SimdAVX2>>();
 }
 #endif
@@ -280,7 +277,6 @@ TEST(BitExtractSimd, KernelButterflyAVX2)
 #ifdef FISK_HAS_AVX512
 TEST(BitExtractSimd, KernelButterflyAVX512)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelButterfly<SimdAVX512>>);
     check_kernel<BitExtractKernelButterfly<SimdAVX512>>();
 }
 #endif
@@ -288,7 +284,6 @@ TEST(BitExtractSimd, KernelButterflyAVX512)
 #ifdef FISK_HAS_NEON
 TEST(BitExtractSimd, KernelButterflyNEON)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelButterfly<SimdNEON>>);
     check_kernel<BitExtractKernelButterfly<SimdNEON>>();
 }
 #endif
@@ -302,7 +297,6 @@ TEST(BitExtractSimd, KernelButterflyNEON)
 
 TEST(BitExtractSimd, KernelBlockScalar)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelBlock<SimdScalar>>);
     check_kernel<BitExtractKernelBlock<SimdScalar, 1>>();
     check_kernel<BitExtractKernelBlock<SimdScalar, 8>>();
     check_kernel<BitExtractKernelBlock<SimdScalar, 32>>();
@@ -311,7 +305,6 @@ TEST(BitExtractSimd, KernelBlockScalar)
 #ifdef FISK_HAS_SSE2
 TEST(BitExtractSimd, KernelBlockSSE2)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelBlock<SimdSSE2>>);
     check_kernel<BitExtractKernelBlock<SimdSSE2, 1>>();
     check_kernel<BitExtractKernelBlock<SimdSSE2, 8>>();
     check_kernel<BitExtractKernelBlock<SimdSSE2, 32>>();
@@ -321,7 +314,6 @@ TEST(BitExtractSimd, KernelBlockSSE2)
 #ifdef FISK_HAS_AVX2
 TEST(BitExtractSimd, KernelBlockAVX2)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelBlock<SimdAVX2>>);
     check_kernel<BitExtractKernelBlock<SimdAVX2, 1>>();
     check_kernel<BitExtractKernelBlock<SimdAVX2, 8>>();
     check_kernel<BitExtractKernelBlock<SimdAVX2, 32>>();
@@ -331,7 +323,6 @@ TEST(BitExtractSimd, KernelBlockAVX2)
 #ifdef FISK_HAS_AVX512
 TEST(BitExtractSimd, KernelBlockAVX512)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelBlock<SimdAVX512>>);
     check_kernel<BitExtractKernelBlock<SimdAVX512, 1>>();
     check_kernel<BitExtractKernelBlock<SimdAVX512, 8>>();
     check_kernel<BitExtractKernelBlock<SimdAVX512, 32>>();
@@ -341,7 +332,6 @@ TEST(BitExtractSimd, KernelBlockAVX512)
 #ifdef FISK_HAS_NEON
 TEST(BitExtractSimd, KernelBlockNEON)
 {
-    static_assert(BitExtractKernelWithArch<BitExtractKernelBlock<SimdNEON>>);
     check_kernel<BitExtractKernelBlock<SimdNEON, 1>>();
     check_kernel<BitExtractKernelBlock<SimdNEON, 8>>();
     check_kernel<BitExtractKernelBlock<SimdNEON, 32>>();
@@ -355,12 +345,7 @@ TEST(BitExtractSimd, KernelBlockNEON)
 #ifdef FISK_HAS_BMI2
 TEST(BitExtractSimd, KernelPext)
 {
-    // Not built on a SIMD arch, see BitExtractKernelWithArch.
-    static_assert(!BitExtractKernelWithArch<BitExtractKernelPEXT<4>>);
-    check_kernel<BitExtractKernelPEXT<1>>();
-    check_kernel<BitExtractKernelPEXT<2>>();
-    check_kernel<BitExtractKernelPEXT<4>>();
-    check_kernel<BitExtractKernelPEXT<8>>();
+    check_kernel<BitExtractKernelPEXT>();
 }
 #endif
 

@@ -93,6 +93,11 @@ static void bench_kmer_spaced_packed_multi_layout_(
         make_spaced_kmer_kernels<BitExtractKernelBlock<SimdNEON>>(bit_ext_masks)
     );
     #endif
+    #if defined(FISK_HAS_BMI2)
+    BitExtractKernelDispatcher const simd_pext_kernel(
+        make_spaced_kmer_kernels<BitExtractKernelPEXT>(bit_ext_masks)
+    );
+    #endif
 
     // Run the benchmark for all algorithms
     auto results = suite.run(
@@ -282,6 +287,20 @@ static void bench_kmer_spaced_packed_multi_layout_(
                 return run_var_simd_block_table_neon_scalars(
                     seq, simd_bt_neon_kernel, sink_buffer
                 );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_BMI2)
+        bench(
+            name("simd_pext_vectors"),
+            [&](Packed const& seq) {
+                return run_var_simd_pext_vectors(seq, simd_pext_kernel, sink_buffer);
+            }
+        ),
+        bench(
+            name("simd_pext_scalars"),
+            [&](Packed const& seq) {
+                return run_var_simd_pext_scalars(seq, simd_pext_kernel, sink_buffer);
             }
         ),
         #endif

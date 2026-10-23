@@ -355,6 +355,36 @@ std::uint64_t run_var_simd_block_table_neon_scalars(
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
+#if defined(FISK_HAS_BMI2)
+std::uint64_t run_var_simd_pext_vectors(
+    PackedMsb const& seq,
+    fisk::BitExtractKernelDispatcher<
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelPEXT>
+    > const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_pext_vectors(
+    PackedLsb const& seq,
+    fisk::BitExtractKernelDispatcher<
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelPEXT>
+    > const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_pext_scalars(
+    PackedMsb const& seq,
+    fisk::BitExtractKernelDispatcher<
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelPEXT>
+    > const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_simd_pext_scalars(
+    PackedLsb const& seq,
+    fisk::BitExtractKernelDispatcher<
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelPEXT>
+    > const& kernel,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
 std::uint64_t run_var_simd_butterfly_table_scalar_vectors(
     PackedMsb const& seq,
     fisk::BitExtractKernelDispatcher<

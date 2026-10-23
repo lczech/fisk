@@ -14,6 +14,7 @@
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/simd.hpp"
+#include "fisk/core/simd_scalar.hpp"
 
 namespace fisk {
 
@@ -22,7 +23,8 @@ namespace fisk {
 // =================================================================================================
 
 // A kernel implements a bit extraction algorithm for a SIMD arch (core/simd.hpp), with the tables
-// of one mask, and applies it to all lanes of a SIMD vector in parallel.
+// of one mask, and applies it to all lanes of a SIMD vector in parallel. It names that arch as
+// `simd_arch`, for functions that fill the vectors of the kernel with operations of the arch.
 //
 // The in and out arguments of load() and store() are expected to be aligned to the vector size.
 // For lane values held in registers, from_values() builds the vector without going through memory.
@@ -50,43 +52,26 @@ concept BitExtractKernel = requires(
     Kernel::from_values(values);
     kernel.bit_extract(v);
     { kernel.bit_extract_scalar(x) } -> std::same_as<std::uint64_t>;
-} && std::constructible_from<Kernel, std::uint64_t>;
-
-/**
- * @brief Concept for a bit extraction kernel that is built on a SIMD arch, which it names as
- * `simd_arch`, such as BitExtractKernelButterfly<SimdAVX2>.
- *
- * For functions that fill the vectors of the kernel with operations of that arch. The PEXT kernel
- * is not built on an arch, and hence does not model this.
- */
-template <typename Kernel>
-concept BitExtractKernelWithArch = BitExtractKernel<Kernel> && SimdArch<typename Kernel::simd_arch>;
+} && std::constructible_from<Kernel, std::uint64_t> && SimdArch<typename Kernel::simd_arch>;
 
 // =================================================================================================
-//     Pseudo-SIMD Kernels for PEXT
+//     PEXT Kernel
 // =================================================================================================
 
 #if defined(FISK_HAS_BMI2)
 
 /**
- * @brief Kernel for bit extract using hardware BMI2 PEXT, evaluated independently across lanes.
+ * @brief Kernel for bit extract using hardware BMI2 PEXT, on the single lane of SimdScalar.
  *
- * This is not true SIMD: each lane is processed by a separate `_pext_u64()` call.
- * However, grouping several independent extractions together can still improve throughput
- * by exposing instruction-level parallelism and helping to hide PEXT latency.
- *
- * Valid lane counts are 1, 2, 4, and 8, i.e., how many PEXT are being run.
+ * PEXT has no SIMD form, and CPUs with a fast PEXT run at most one per cycle, so that grouping
+ * several extractions into a vector of more lanes does not raise its throughput. The kernel hence
+ * takes the scalar arch, such that it can be used wherever the kernels of the SIMD archs are.
  */
-template <std::size_t Lanes = 8>
 struct BitExtractKernelPEXT
 {
-    static_assert(
-        Lanes == 1 || Lanes == 2 || Lanes == 4 || Lanes == 8,
-        "BitExtractKernelPEXT only supports 1, 2, 4, or 8 lanes."
-    );
-
-    using simd_vector = std::array<std::uint64_t, Lanes>;
-    static constexpr std::size_t lanes = Lanes;
+    using simd_arch = SimdScalar;
+    using simd_vector = SimdScalar::simd_vector;
+    static constexpr std::size_t lanes = SimdScalar::lanes;
     BitExtractMask mask{};
 
     BitExtractKernelPEXT() = default;
@@ -97,45 +82,22 @@ struct BitExtractKernelPEXT
 
     static simd_vector load(std::uint64_t const* a) noexcept
     {
-        simd_vector v{};
-        for (std::size_t i = 0; i < Lanes; ++i) {
-            v[i] = a[i];
-        }
-        return v;
+        return SimdScalar::load_aligned(a);
     }
 
     static void store(simd_vector const& v, std::uint64_t* out) noexcept
     {
-        for (std::size_t i = 0; i < Lanes; ++i) {
-            out[i] = v[i];
-        }
+        SimdScalar::store_aligned(v, out);
     }
 
-    static simd_vector from_values(simd_vector values) noexcept
+    static simd_vector from_values(std::array<std::uint64_t, lanes> values) noexcept
     {
-        return values;
+        return SimdScalar::from_values(values);
     }
 
-    simd_vector bit_extract(simd_vector const& x) const noexcept
+    simd_vector bit_extract(simd_vector x) const noexcept
     {
-        simd_vector out{};
-        if constexpr (Lanes >= 1) {
-            out[0] = bit_extract_pext(x[0], mask);
-        }
-        if constexpr (Lanes >= 2) {
-            out[1] = bit_extract_pext(x[1], mask);
-        }
-        if constexpr (Lanes >= 4) {
-            out[2] = bit_extract_pext(x[2], mask);
-            out[3] = bit_extract_pext(x[3], mask);
-        }
-        if constexpr (Lanes >= 8) {
-            out[4] = bit_extract_pext(x[4], mask);
-            out[5] = bit_extract_pext(x[5], mask);
-            out[6] = bit_extract_pext(x[6], mask);
-            out[7] = bit_extract_pext(x[7], mask);
-        }
-        return out;
+        return bit_extract_pext(x, mask);
     }
 
     std::uint64_t bit_extract_scalar(std::uint64_t x) const noexcept
