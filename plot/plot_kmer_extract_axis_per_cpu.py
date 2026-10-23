@@ -115,12 +115,15 @@ def main():
     usable = []
     for path in files:
         if load_technique_combo_pivot(path, args.unit)[1].empty:
-            print(f"Skipping {path}: no technique with more than one encoding/layout combination")
+            warn(f"Skipping {path}: no technique with more than one encoding/layout combination")
         else:
             usable.append(path)
     # Not an error: expected for result files from before encoding and layout were recorded.
     if not usable:
-        print("Nothing to plot.")
+        warn(
+            "Nothing to plot: no input file has a technique with several encoding/layout "
+            "combinations"
+        )
         return
 
     out = apply_unit_scale_suffix(args.out, args.unit, args.scale)

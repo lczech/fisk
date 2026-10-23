@@ -4,6 +4,7 @@ set -euo pipefail
 # Change to top level of git repo.
 # This ensures that the script can be called from any directory.
 cd `git rev-parse --show-toplevel`
+source plot/log.sh
 
 # Silence some warnings
 export QT_QPA_PLATFORM=xcb
@@ -35,7 +36,7 @@ if ((${#CPUS[@]} == 0)); then
   mapfile -t CPUS < <(find "$ROOT" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort)
 fi
 if ((${#CPUS[@]} == 0)); then
-  echo "No benchmark directories found." >&2
+  error "No benchmark directories found."
   exit 1
 fi
 
@@ -99,11 +100,11 @@ build_file_args() {
     if [[ -f "$f" ]]; then
       args+=( --file "$f" )
     else
-      echo "WARNING: ${csv_name} missing for ${cpu}, leaving it out of its plots" >&2
+      warn "${csv_name} missing for ${cpu}, leaving it out of its plots"
     fi
   done
   if ((${#args[@]} == 0)); then
-    echo "WARNING: ${csv_name} missing for all CPUs, skipping its plots" >&2
+    warn "${csv_name} missing for all CPUs, skipping its plots"
     return 1
   fi
 }

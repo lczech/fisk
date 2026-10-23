@@ -146,10 +146,10 @@ def main():
         if has_form_rows(path):
             usable.append(path)
         else:
-            print(f"Skipping {path}: no techniques with both vectors and scalars")
+            warn(f"Skipping {path}: no techniques with both vectors and scalars")
     # Not an error: expected for result files from before both forms were recorded.
     if not usable:
-        print("Nothing to plot.")
+        warn("Nothing to plot: no input file has techniques with both vectors and scalars")
         return
 
     out = apply_unit_scale_suffix(args.out, args.unit, args.scale)

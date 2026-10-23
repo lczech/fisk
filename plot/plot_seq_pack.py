@@ -33,6 +33,7 @@ from plot_common import (
     infer_platform,
     parse_case_fields,
     platform_from_csv_path,
+    warn,
 )
 
 
@@ -81,7 +82,7 @@ def select_views(df):
         if focused["benchmark"].str.startswith(EXTERNAL_PREFIXES).any():
             views[("references", encoding, layout)] = focused
         else:
-            print(f"Skipped focused {encoding}/{layout}: no external reference measurements")
+            warn(f"Skipped focused {encoding}/{layout}: no external reference measurements")
     return views
 
 

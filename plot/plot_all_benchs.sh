@@ -12,6 +12,7 @@ set -euo pipefail
 # Change to top level of git repo.
 # This ensures that the script can be called from any directory.
 cd `git rev-parse --show-toplevel`
+source plot/log.sh
 
 # Silence some warnings
 export QT_QPA_PLATFORM=xcb
@@ -26,7 +27,7 @@ if [[ $# -gt 1 ]]; then
 fi
 
 DIR="${1:-results}"
-[[ -d "$DIR" ]] || { echo "Not a directory: $DIR" >&2; exit 1; }
+[[ -d "$DIR" ]] || { error "Not a directory: $DIR"; exit 1; }
 
 DIR="${DIR%/}"
 NAME="$(basename "$DIR")"
@@ -75,7 +76,7 @@ wait_any() {
 run_plot() {
   local csv="$1"; shift
   if [[ ! -f "$csv" ]]; then
-    echo "WARNING: ${csv} missing, skipping its plot" >&2
+    warn "${csv} missing, skipping its plot"
     return 0
   fi
   while (( $(jobs -rp | wc -l) >= MAX_JOBS )); do

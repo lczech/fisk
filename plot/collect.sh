@@ -4,6 +4,7 @@ set -euo pipefail
 # Group matching plots by filename, naming copies after their CPU/compiler.
 # Example: CPU/kmer_extract_ops_log.png -> Collect/kmer_extract_ops_log/CPU.png.
 cd "$(git rev-parse --show-toplevel)"
+source plot/log.sh
 
 # --------------------------------------------------------------------
 # Arguments
@@ -17,11 +18,11 @@ fi
 selection="$1"
 if [[ "$selection" != "--all" ]]; then
     case "$selection" in
-        */*|.*) echo "Expected a plot filename, without a directory." >&2; exit 1 ;;
+        */*|.*) error "Expected a plot filename, without a directory."; exit 1 ;;
     esac
     case "$selection" in
         *.png|*.pdf|*.svg) ;;
-        *) echo "Expected a PNG, PDF, or SVG filename." >&2; exit 1 ;;
+        *) error "Expected a PNG, PDF, or SVG filename."; exit 1 ;;
     esac
 fi
 
@@ -48,7 +49,7 @@ for info in "$indir"/*/sys_info.txt; do
     # Reject ambiguous CPU labels before overwriting any collected file.
     for ((i = 0; i < ${#cpu_labels[@]}; ++i)); do
         if [[ "${cpu_labels[i]}" == "$cpu" ]]; then
-            echo "Conflicting CPU labels: ${cpu_dirs[i]} and $cpu_dir" >&2
+            error "Conflicting CPU labels: ${cpu_dirs[i]} and $cpu_dir"
             exit 1
         fi
     done
@@ -91,7 +92,7 @@ for file in "$outdir"/*/*.png "$outdir"/*/*.pdf "$outdir"/*/*.svg; do
         fi
     done
     if [[ "$refreshed" == false ]]; then
-        echo "Warning: retained without a current source: $file" >&2
+        warn "retained without a current source: $file"
         stale_count=$((stale_count + 1))
     fi
 done

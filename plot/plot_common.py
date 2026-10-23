@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import os
+import sys
 from pathlib import Path
 import matplotlib as mpl
 
@@ -80,6 +81,16 @@ def platform_compiler_sort_key(raw_label: str) -> tuple[int, int, str]:
     p_idx = PLATFORM_ORDER.index(platform) if platform in PLATFORM_ORDER else len(PLATFORM_ORDER)
     c_idx = COMPILER_ORDER.index(compiler) if compiler in COMPILER_ORDER else len(COMPILER_ORDER)
     return (p_idx, c_idx, raw_label)
+
+
+# Messages on stderr, as in plot/log.sh for the shell scripts: warn() for something that is left out
+# of a plot, such as a result table without the rows that the plot needs. The prefix is colored when
+# stderr is a terminal, and plain in logs.
+_WARN_PREFIX = "\033[1;33mWARNING:\033[0m" if sys.stderr.isatty() else "WARNING:"
+
+
+def warn(message: str) -> None:
+    print(f"{_WARN_PREFIX} {message}", file=sys.stderr)
 
 
 def parse_case_fields(df: pd.DataFrame, column: str = "case") -> pd.DataFrame:
