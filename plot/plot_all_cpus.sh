@@ -227,23 +227,28 @@ if build_file_args "seq_pack.csv"; then
 fi
 
 # ------------------------------------------------------------
-# Kmer spaced: by mask vs. by position, one panel per CPU
+# SIMD extraction: vectors vs. single k-mers, one panel per CPU
 # ------------------------------------------------------------
 
-# Not in the generic CSV_FILES loop above: a different plot script, which compares the two SIMD
-# emission orders (by_mask/by_position) side by side, instead of the platforms per benchmark.
-echo "Plotting kmer_spaced axis comparison"
-for csv in "kmer_spaced_single.csv" "kmer_spaced_multi.csv"; do
-  build_file_args "$csv" || exit 1
+# Not in the generic CSV_FILES loop above: a different plot script, which compares the vectors that
+# the SIMD extraction hands out with their single k-mers (`_vectors`/`_scalars`) side by side,
+# instead of the platforms per benchmark. Suites without result files yet are skipped.
+echo "Plotting vectors vs. scalars comparison"
+for csv in \
+  "kmer_spaced_single.csv" "kmer_spaced_multi.csv" \
+  "kmer_spaced_packed_single.csv" "kmer_spaced_packed_multi.csv" \
+  "kmer_extract_packed_checked.csv"
+do
+  build_file_args "$csv" || continue
 
   for EXT in "${FORMATS[@]}"; do
     for combo in "${COMBOS[@]}"; do
       UNIT="${combo%%:*}"
       SCALE="${combo##*:}"
 
-      run_job python ./plot/plot_kmer_spaced_axis_per_cpu.py "${args[@]}" \
+      run_job python ./plot/plot_vectors_scalars_per_cpu.py "${args[@]}" \
         --unit "$UNIT" --scale "$SCALE" \
-        --out "${OUT}/${csv%.csv}_axis_per_cpu.${EXT}"
+        --out "${OUT}/${csv%.csv}_vectors_scalars_per_cpu.${EXT}"
     done
   done
   wait # every plot for this csv is on disk before converting svg -> pdf below
@@ -252,8 +257,8 @@ for csv in "kmer_spaced_single.csv" "kmer_spaced_multi.csv"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
 
-    # Not produced if no result file has by_mask/by_position rows yet.
-    svg="${OUT}/${csv%.csv}_axis_per_cpu_${UNIT}_${SCALE}.svg"
+    # Not produced if no result file has both forms yet.
+    svg="${OUT}/${csv%.csv}_vectors_scalars_per_cpu_${UNIT}_${SCALE}.svg"
     if [[ -f "$svg" ]]; then
       inkscape "$svg" --export-filename="${svg%.svg}.pdf"
     fi

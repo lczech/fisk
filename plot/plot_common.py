@@ -156,31 +156,7 @@ BENCHMARKS_KEEP_EXTENDED = [
     "chunked_assume_valid",
     "pack_then_extract",
 
-    # Kmer spaced
-    "simd_butterfly_table_sse2_by_mask",
-    "simd_butterfly_table_sse2_by_position",
-    "simd_block_table_sse2_by_mask",
-    "simd_block_table_sse2_by_position",
-    "simd_butterfly_table_avx2_by_mask",
-    "simd_butterfly_table_avx2_by_position",
-    "simd_block_table_avx2_by_mask",
-    "simd_block_table_avx2_by_position",
-    "simd_butterfly_table_avx512_by_mask",
-    "simd_butterfly_table_avx512_by_position",
-    "simd_block_table_avx512_by_mask",
-    "simd_block_table_avx512_by_position",
-    "simd_butterfly_table_neon_by_mask",
-    "simd_butterfly_table_neon_by_position",
-    "simd_block_table_neon_by_mask",
-    "simd_block_table_neon_by_position",
-    "simd_pext_by_mask",
-    "simd_pext_by_position",
-    "simd_butterfly_table_scalar_by_mask",
-    "simd_butterfly_table_scalar_by_position",
-    "simd_block_table_scalar_by_mask",
-    "simd_block_table_scalar_by_position",
-
-    # Kmer spaced packed
+    # Kmer spaced, from text and from packed sequences
     "simd_butterfly_table_sse2_vectors",
     "simd_butterfly_table_sse2_scalars",
     "simd_block_table_sse2_vectors",
@@ -197,6 +173,8 @@ BENCHMARKS_KEEP_EXTENDED = [
     "simd_butterfly_table_neon_scalars",
     "simd_block_table_neon_vectors",
     "simd_block_table_neon_scalars",
+    "simd_pext_vectors",
+    "simd_pext_scalars",
     "simd_butterfly_table_scalar_vectors",
     "simd_butterfly_table_scalar_scalars",
     "simd_block_table_scalar_vectors",
@@ -240,31 +218,7 @@ BENCHMARKS_KEEP = [
     "chunked_assume_valid",
     "pack_then_extract",
 
-    # Kmer spaced
-    "simd_butterfly_table_sse2_by_mask",
-    "simd_butterfly_table_sse2_by_position",
-    "simd_block_table_sse2_by_mask",
-    "simd_block_table_sse2_by_position",
-    "simd_butterfly_table_avx2_by_mask",
-    "simd_butterfly_table_avx2_by_position",
-    "simd_block_table_avx2_by_mask",
-    "simd_block_table_avx2_by_position",
-    "simd_butterfly_table_avx512_by_mask",
-    "simd_butterfly_table_avx512_by_position",
-    "simd_block_table_avx512_by_mask",
-    "simd_block_table_avx512_by_position",
-    "simd_butterfly_table_neon_by_mask",
-    "simd_butterfly_table_neon_by_position",
-    "simd_block_table_neon_by_mask",
-    "simd_block_table_neon_by_position",
-    # "simd_pext_by_mask",
-    # "simd_pext_by_position",
-    # "simd_butterfly_table_scalar_by_mask",
-    # "simd_butterfly_table_scalar_by_position",
-    # "simd_block_table_scalar_by_mask",
-    # "simd_block_table_scalar_by_position",
-
-    # Kmer spaced packed
+    # Kmer spaced, from text and from packed sequences
     "simd_butterfly_table_sse2_vectors",
     "simd_butterfly_table_sse2_scalars",
     "simd_block_table_sse2_vectors",
@@ -281,6 +235,8 @@ BENCHMARKS_KEEP = [
     "simd_butterfly_table_neon_scalars",
     "simd_block_table_neon_vectors",
     "simd_block_table_neon_scalars",
+    # "simd_pext_vectors",
+    # "simd_pext_scalars",
     # "simd_butterfly_table_scalar_vectors",
     # "simd_butterfly_table_scalar_scalars",
     # "simd_block_table_scalar_vectors",
@@ -338,15 +294,16 @@ BENCHMARKS_KEEP_REDUCED = [
     "chunked_assume_valid",
     # "pack_then_extract",
 
-    # Kmer spaced. Both emission orders, as neither of them is fastest everywhere.
-    "simd_butterfly_table_sse2_by_mask",
-    "simd_butterfly_table_sse2_by_position",
-    "simd_butterfly_table_avx2_by_mask",
-    "simd_butterfly_table_avx2_by_position",
-    "simd_butterfly_table_avx512_by_mask",
-    "simd_butterfly_table_avx512_by_position",
-    "simd_butterfly_table_neon_by_mask",
-    "simd_butterfly_table_neon_by_position",
+    # Kmer spaced. Both forms: the vectors, and their single spaced k-mers, as the scalar
+    # techniques hand them out.
+    "simd_butterfly_table_sse2_vectors",
+    "simd_butterfly_table_sse2_scalars",
+    "simd_butterfly_table_avx2_vectors",
+    "simd_butterfly_table_avx2_scalars",
+    "simd_butterfly_table_avx512_vectors",
+    "simd_butterfly_table_avx512_scalars",
+    "simd_butterfly_table_neon_vectors",
+    "simd_butterfly_table_neon_scalars",
 ]
 
 BENCHMARK_RENAMES = {
@@ -376,31 +333,7 @@ BENCHMARK_RENAMES = {
     "chunked_assume_valid" : "Chunked packing (assume valid)",
     "pack_then_extract"    : "Pack, then extract (assume valid)",
 
-    # Kmer spaced
-    "simd_butterfly_table_sse2_by_mask"       : "SIMD Butterfly Table SSE2 (by mask)",
-    "simd_butterfly_table_sse2_by_position"   : "SIMD Butterfly Table SSE2 (by position)",
-    "simd_block_table_sse2_by_mask"           : "SIMD Block Table SSE2 (by mask)",
-    "simd_block_table_sse2_by_position"       : "SIMD Block Table SSE2 (by position)",
-    "simd_butterfly_table_avx2_by_mask"       : "SIMD Butterfly Table AVX2 (by mask)",
-    "simd_butterfly_table_avx2_by_position"   : "SIMD Butterfly Table AVX2 (by position)",
-    "simd_block_table_avx2_by_mask"           : "SIMD Block Table AVX2 (by mask)",
-    "simd_block_table_avx2_by_position"       : "SIMD Block Table AVX2 (by position)",
-    "simd_butterfly_table_avx512_by_mask"     : "SIMD Butterfly Table AVX512 (by mask)",
-    "simd_butterfly_table_avx512_by_position" : "SIMD Butterfly Table AVX512 (by position)",
-    "simd_block_table_avx512_by_mask"         : "SIMD Block Table AVX512 (by mask)",
-    "simd_block_table_avx512_by_position"     : "SIMD Block Table AVX512 (by position)",
-    "simd_butterfly_table_neon_by_mask"       : "SIMD Butterfly Table Neon (by mask)",
-    "simd_butterfly_table_neon_by_position"   : "SIMD Butterfly Table Neon (by position)",
-    "simd_block_table_neon_by_mask"           : "SIMD Block Table Neon (by mask)",
-    "simd_block_table_neon_by_position"       : "SIMD Block Table Neon (by position)",
-    "simd_pext_by_mask"                       : "SIMD PEXT (by mask)",
-    "simd_pext_by_position"                   : "SIMD PEXT (by position)",
-    "simd_butterfly_table_scalar_by_mask"     : "SIMD Butterfly Table scalar (by mask)",
-    "simd_butterfly_table_scalar_by_position" : "SIMD Butterfly Table scalar (by position)",
-    "simd_block_table_scalar_by_mask"         : "SIMD Block Table scalar (by mask)",
-    "simd_block_table_scalar_by_position"     : "SIMD Block Table scalar (by position)",
-
-    # Kmer spaced packed
+    # Kmer spaced, from text and from packed sequences
     "simd_butterfly_table_sse2_vectors"   : "SIMD Butterfly Table SSE2 (vectors)",
     "simd_butterfly_table_sse2_scalars"   : "SIMD Butterfly Table SSE2 (scalars)",
     "simd_block_table_sse2_vectors"       : "SIMD Block Table SSE2 (vectors)",
@@ -417,6 +350,8 @@ BENCHMARK_RENAMES = {
     "simd_butterfly_table_neon_scalars"   : "SIMD Butterfly Table Neon (scalars)",
     "simd_block_table_neon_vectors"       : "SIMD Block Table Neon (vectors)",
     "simd_block_table_neon_scalars"       : "SIMD Block Table Neon (scalars)",
+    "simd_pext_vectors"                   : "SIMD PEXT (vectors)",
+    "simd_pext_scalars"                   : "SIMD PEXT (scalars)",
     "simd_butterfly_table_scalar_vectors" : "SIMD Butterfly Table scalar (vectors)",
     "simd_butterfly_table_scalar_scalars" : "SIMD Butterfly Table scalar (scalars)",
     "simd_block_table_scalar_vectors"     : "SIMD Block Table scalar (vectors)",
@@ -453,14 +388,14 @@ BENCHMARK_RENAMES_REDUCED = {
     "pext"                  : "PEXT",
     "butterfly_table"       : "Butterfly Table",
 
-    "simd_butterfly_table_sse2_by_mask"       : "SIMD SSE2 (by mask)",
-    "simd_butterfly_table_sse2_by_position"   : "SIMD SSE2 (by position)",
-    "simd_butterfly_table_avx2_by_mask"       : "SIMD AVX2 (by mask)",
-    "simd_butterfly_table_avx2_by_position"   : "SIMD AVX2 (by position)",
-    "simd_butterfly_table_avx512_by_mask"     : "SIMD AVX512 (by mask)",
-    "simd_butterfly_table_avx512_by_position" : "SIMD AVX512 (by position)",
-    "simd_butterfly_table_neon_by_mask"       : "SIMD Neon (by mask)",
-    "simd_butterfly_table_neon_by_position"   : "SIMD Neon (by position)",
+    "simd_butterfly_table_sse2_vectors"   : "SIMD SSE2 (vectors)",
+    "simd_butterfly_table_sse2_scalars"   : "SIMD SSE2 (scalars)",
+    "simd_butterfly_table_avx2_vectors"   : "SIMD AVX2 (vectors)",
+    "simd_butterfly_table_avx2_scalars"   : "SIMD AVX2 (scalars)",
+    "simd_butterfly_table_avx512_vectors" : "SIMD AVX512 (vectors)",
+    "simd_butterfly_table_avx512_scalars" : "SIMD AVX512 (scalars)",
+    "simd_butterfly_table_neon_vectors"   : "SIMD Neon (vectors)",
+    "simd_butterfly_table_neon_scalars"   : "SIMD Neon (scalars)",
 
     # Kmer extract packed
     "aligned"     : "Scalar",
@@ -500,31 +435,8 @@ BENCHMARK_COLORS = {
     "pack_then_extract"    : "#7F7F7F",
 
 
-    # Kmer spaced. by_position uses a lighter tint of the by_mask color.
-    "simd_butterfly_table_sse2_by_mask"       : "#BB2F98",
-    "simd_butterfly_table_sse2_by_position"   : "#E6A8D4",
-    "simd_block_table_sse2_by_mask"           : "#006d2c",
-    "simd_block_table_sse2_by_position"       : "#74c476",
-    "simd_butterfly_table_avx2_by_mask"       : "#BB2F98",
-    "simd_butterfly_table_avx2_by_position"   : "#E6A8D4",
-    "simd_block_table_avx2_by_mask"           : "#006d2c",
-    "simd_block_table_avx2_by_position"       : "#74c476",
-    "simd_butterfly_table_avx512_by_mask"     : "#BB2F98",
-    "simd_butterfly_table_avx512_by_position" : "#E6A8D4",
-    "simd_block_table_avx512_by_mask"         : "#006d2c",
-    "simd_block_table_avx512_by_position"     : "#74c476",
-    "simd_butterfly_table_neon_by_mask"       : "#BB2F98",
-    "simd_butterfly_table_neon_by_position"   : "#E6A8D4",
-    "simd_block_table_neon_by_mask"           : "#006d2c",
-    "simd_block_table_neon_by_position"       : "#74c476",
-    "simd_pext_by_mask"                       : "#5F5F5F",
-    "simd_pext_by_position"                   : "#A8A8A8",
-    "simd_butterfly_table_scalar_by_mask"     : "#BB2F98",
-    "simd_butterfly_table_scalar_by_position" : "#E6A8D4",
-    "simd_block_table_scalar_by_mask"         : "#006d2c",
-    "simd_block_table_scalar_by_position"     : "#74c476",
-
-    # Kmer spaced packed. scalars uses a lighter tint of the vectors color.
+    # Kmer spaced, from text and from packed sequences. scalars use a lighter tint of the vectors
+    # color.
     "simd_butterfly_table_sse2_vectors"   : "#BB2F98",
     "simd_butterfly_table_sse2_scalars"   : "#E6A8D4",
     "simd_block_table_sse2_vectors"       : "#006d2c",
@@ -541,6 +453,8 @@ BENCHMARK_COLORS = {
     "simd_butterfly_table_neon_scalars"   : "#E6A8D4",
     "simd_block_table_neon_vectors"       : "#006d2c",
     "simd_block_table_neon_scalars"       : "#74c476",
+    "simd_pext_vectors"                   : "#5F5F5F",
+    "simd_pext_scalars"                   : "#A8A8A8",
     "simd_butterfly_table_scalar_vectors" : "#BB2F98",
     "simd_butterfly_table_scalar_scalars" : "#E6A8D4",
     "simd_block_table_scalar_vectors"     : "#006d2c",
@@ -598,31 +512,9 @@ BENCHMARK_ORDER = [
     # "instlatx",
     # "zp7",
 
-    # Kmer spaced
-    "simd_pext_by_mask",
-    "simd_pext_by_position",
-    "simd_butterfly_table_scalar_by_mask",
-    "simd_butterfly_table_scalar_by_position",
-    "simd_block_table_scalar_by_mask",
-    "simd_block_table_scalar_by_position",
-    "simd_butterfly_table_sse2_by_mask",
-    "simd_butterfly_table_sse2_by_position",
-    "simd_block_table_sse2_by_mask",
-    "simd_block_table_sse2_by_position",
-    "simd_butterfly_table_avx2_by_mask",
-    "simd_butterfly_table_avx2_by_position",
-    "simd_block_table_avx2_by_mask",
-    "simd_block_table_avx2_by_position",
-    "simd_butterfly_table_avx512_by_mask",
-    "simd_butterfly_table_avx512_by_position",
-    "simd_block_table_avx512_by_mask",
-    "simd_block_table_avx512_by_position",
-    "simd_butterfly_table_neon_by_mask",
-    "simd_butterfly_table_neon_by_position",
-    "simd_block_table_neon_by_mask",
-    "simd_block_table_neon_by_position",
-
-    # Kmer spaced packed
+    # Kmer spaced, from text and from packed sequences
+    "simd_pext_vectors",
+    "simd_pext_scalars",
     "simd_butterfly_table_scalar_vectors",
     "simd_butterfly_table_scalar_scalars",
     "simd_block_table_scalar_vectors",
@@ -951,8 +843,8 @@ def plot_axis_grid(
 ):
     """
     Grid of grouped bar charts, one panel per CPU/compiler (one CSV each): techniques on the
-    x-axis, one bar per "axis" value within each technique, e.g. two emission orders, or several
-    (encoding, layout) combinations.
+    x-axis, one bar per "axis" value within each technique, e.g. the vectors and single k-mers of a
+    SIMD extraction, or several (encoding, layout) combinations.
 
     `load_pivot(csv_path, unit)` returns (suite, pivot), with pivot index = technique, columns =
     axis values in display order, values in the display unit. `axis_labels`/`axis_colors` map each

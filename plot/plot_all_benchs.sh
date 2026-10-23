@@ -137,6 +137,14 @@ for EXT in png svg ; do
       --y-max "$PACKED_Y_MAX" \
       --out "${DIR}/kmer_extract_packed.${EXT}"
 
+    # Only the vectors and single k-mers of the SIMD extraction, as the other plots of this suite
+    # are in plot_all_cpus.sh.
+    CSV="${DIR}/kmer_extract_packed_checked.csv"
+    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
+      --file "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_extract_packed_checked_vectors_scalars.${EXT}"
+
 
     # Kmer Spaced Single
 
@@ -147,10 +155,10 @@ for EXT in png svg ; do
       --unit "$UNIT" --scale "$SCALE" \
       --out "${DIR}/kmer_spaced_single.${EXT}"
 
-    run_plot "$CSV" python ./plot/plot_kmer_spaced_axis_per_cpu.py \
+    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
       --file "$CSV" \
       --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/kmer_spaced_single_axis.${EXT}"
+      --out "${DIR}/kmer_spaced_single_vectors_scalars.${EXT}"
 
     run_plot "$CSV" python ./plot/plot_case_summary.py \
       "$CSV" \
@@ -179,10 +187,10 @@ for EXT in png svg ; do
       --unit "$UNIT" --scale "$SCALE" \
       --out "${DIR}/kmer_spaced_multi.${EXT}"
 
-    run_plot "$CSV" python ./plot/plot_kmer_spaced_axis_per_cpu.py \
+    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
       --file "$CSV" \
       --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/kmer_spaced_multi_axis.${EXT}"
+      --out "${DIR}/kmer_spaced_multi_vectors_scalars.${EXT}"
 
     run_plot "$CSV" python ./plot/plot_case_summary.py \
       "$CSV" \
@@ -211,6 +219,11 @@ for EXT in png svg ; do
       --unit "$UNIT" --scale "$SCALE" \
       --out "${DIR}/kmer_spaced_packed_single.${EXT}"
 
+    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
+      --file "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_single_vectors_scalars.${EXT}"
+
     run_plot "$CSV" python ./plot/plot_case_summary.py \
       "$CSV" \
       --unit "$UNIT" --scale "$SCALE" \
@@ -237,6 +250,11 @@ for EXT in png svg ; do
       "$CSV" \
       --unit "$UNIT" --scale "$SCALE" \
       --out "${DIR}/kmer_spaced_packed_multi.${EXT}"
+
+    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
+      --file "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --out "${DIR}/kmer_spaced_packed_multi_vectors_scalars.${EXT}"
 
     run_plot "$CSV" python ./plot/plot_case_summary.py \
       "$CSV" \

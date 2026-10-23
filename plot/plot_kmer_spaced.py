@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import sys
-from pathlib import Path
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,21 +12,10 @@ sys.path.insert(0, '.')
 from plot_common import *
 
 
-# The SIMD benchmarks carry a "_by_mask" or "_by_position" suffix for their emission order.
-# All others (the scalar baselines such as pext or block_table) have neither, and return None.
-def _axis_of(benchmark_name):
-    if benchmark_name.endswith("_by_mask"):
-        return "by_mask"
-    if benchmark_name.endswith("_by_position"):
-        return "by_position"
-    return None
-
-
 def make_grouped_bar_plot_impl_first(
     df, suite, title, outpath,
     unit: str = "ops", scale: str = "log",
     y_min: float | None = None, y_max: float | None = None,
-    axis: str | None = None,
 ):
     # Filter for this suite (if given)
     if suite is not None:
@@ -38,10 +26,6 @@ def make_grouped_bar_plot_impl_first(
 
     # Keep only selected benchmarks
     df = df[df["benchmark"].isin(BENCHMARKS_KEEP)]
-
-    # Restrict to one emission order, keeping the scalar baselines in both plots as a reference.
-    if axis is not None:
-        df = df[df["benchmark"].apply(lambda b: _axis_of(b) in (None, axis))]
 
     if df.empty:
         raise ValueError("No data left after filtering with BENCHMARKS_KEEP")
@@ -191,21 +175,11 @@ def main():
 
     out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
 
-    # Without benchmarks of an emission order, such as for the packed suites, a single plot.
-    if df["benchmark"].apply(_axis_of).isna().all():
-        make_grouped_bar_plot_impl_first(
-            df, suite, base_title, out,
-            unit=args.unit, scale=args.scale, y_min=args.y_min, y_max=args.y_max,
-        )
-        return
-
-    # One plot per emission order. See plot_kmer_spaced_axis_per_cpu.py for a side by side view.
-    for axis, axis_label in [("by_mask", "by mask"), ("by_position", "by position")]:
-        outpath = str(Path(out).with_stem(f"{Path(out).stem}_{axis}")) if out else None
-        make_grouped_bar_plot_impl_first(
-            df, suite, f"{base_title} ({axis_label})", outpath,
-            unit=args.unit, scale=args.scale, y_min=args.y_min, y_max=args.y_max, axis=axis,
-        )
+    # See plot_vectors_scalars_per_cpu.py for the vectors and single k-mers side by side.
+    make_grouped_bar_plot_impl_first(
+        df, suite, base_title, out,
+        unit=args.unit, scale=args.scale, y_min=args.y_min, y_max=args.y_max,
+    )
 
 
 if __name__ == "__main__":
