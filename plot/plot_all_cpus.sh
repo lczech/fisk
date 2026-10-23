@@ -88,7 +88,8 @@ run_job() {
 
 # Build the arguments --file A --file B for a given CSV name,
 # which is searched in the directories given above. Missing files are skipped so
-# a benchmark collected on only some CPUs can still be plotted.
+# a benchmark collected on only some CPUs can still be plotted. Without any file, it
+# returns 1, and the caller skips the plots of that CSV.
 build_file_args() {
   local csv_name="$1"
 
@@ -98,11 +99,11 @@ build_file_args() {
     if [[ -f "$f" ]]; then
       args+=( --file "$f" )
     else
-      echo "Skipping missing file: $f" >&2
+      echo "WARNING: ${csv_name} missing for ${cpu}, leaving it out of its plots" >&2
     fi
   done
   if ((${#args[@]} == 0)); then
-    echo "No ${csv_name} files found for the selected CPUs." >&2
+    echo "WARNING: ${csv_name} missing for all CPUs, skipping its plots" >&2
     return 1
   fi
 }
@@ -133,7 +134,7 @@ FORMATS=(
 
 echo "Plotting summaries"
 for csv in "${CSV_FILES[@]}"; do
-  build_file_args "$csv" || exit 1
+  build_file_args "$csv" || continue
 
   # Some kmer_extract techniques are run for several encodings and layouts; compare all of them
   # like-for-like at ACGT/MSB here (see the per-combination axis plot below). Older result files
@@ -272,30 +273,31 @@ done
 # Complements the kmer_extract summary above, which is restricted to ACGT/MSB: compares the
 # (encoding, layout) combinations of each technique that is run with more than one of them.
 echo "Plotting kmer_extract axis comparison"
-build_file_args "kmer_extract.csv" || exit 1
+if build_file_args "kmer_extract.csv"; then
 
-for EXT in "${FORMATS[@]}"; do
+  for EXT in "${FORMATS[@]}"; do
+    for combo in "${COMBOS[@]}"; do
+      UNIT="${combo%%:*}"
+      SCALE="${combo##*:}"
+
+      run_job python ./plot/plot_kmer_extract_axis_per_cpu.py "${args[@]}" \
+        --unit "$UNIT" --scale "$SCALE" \
+        --out "${OUT}/kmer_extract_axis_per_cpu.${EXT}"
+    done
+  done
+  wait # every plot is on disk before converting svg -> pdf below
+
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
 
-    run_job python ./plot/plot_kmer_extract_axis_per_cpu.py "${args[@]}" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${OUT}/kmer_extract_axis_per_cpu.${EXT}"
+    # Not produced if no result file has more than one encoding/layout combination yet.
+    svg="${OUT}/kmer_extract_axis_per_cpu_${UNIT}_${SCALE}.svg"
+    if [[ -f "$svg" ]]; then
+      inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+    fi
   done
-done
-wait # every plot is on disk before converting svg -> pdf below
-
-for combo in "${COMBOS[@]}"; do
-  UNIT="${combo%%:*}"
-  SCALE="${combo##*:}"
-
-  # Not produced if no result file has more than one encoding/layout combination yet.
-  svg="${OUT}/kmer_extract_axis_per_cpu_${UNIT}_${SCALE}.svg"
-  if [[ -f "$svg" ]]; then
-    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
-  fi
-done
+fi
 
 # ------------------------------------------------------------
 # Kmer extract packed: detailed cross-platform comparison
@@ -313,67 +315,68 @@ YLIM_PACKED_EXTENDED_OPS="16"
 YLIM_PACKED_REDUCED_NS="0.75"
 YLIM_PACKED_EXTENDED_NS="1.2"
 
-build_file_args "kmer_extract_packed.csv" || exit 1
+if build_file_args "kmer_extract_packed.csv"; then
 
-for combo in "${COMBOS[@]}"; do
-  UNIT="${combo%%:*}"
-  SCALE="${combo##*:}"
-  if [[ "$UNIT" == "ops" ]]; then
-    YLIM_PACKED_REDUCED="$YLIM_PACKED_REDUCED_OPS"
-    YLIM_PACKED_EXTENDED="$YLIM_PACKED_EXTENDED_OPS"
-  else
-    YLIM_PACKED_REDUCED="$YLIM_PACKED_REDUCED_NS"
-    YLIM_PACKED_EXTENDED="$YLIM_PACKED_EXTENDED_NS"
-  fi
-
-  # Regular: reduced variant set (scalar baseline + each ISA's dispatcher only), matching the
-  # per-CPU line plots' default and the narrow-width/full-width tier plots below -- a summary, not
-  # full detail.
-  run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-    --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
-    --out "${OUT}/kmer_extract_packed_per_cpu.png"
-
-  # Extended: every variant, including narrow-width/full-width/rolling, for internal checking.
-  run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-    --extended --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_EXTENDED" \
-    --out "${OUT}/kmer_extract_packed_per_cpu_ext.png"
-done
-wait
-
-# Complements the summary above (which averages over all cases) with per-(layout,k) grouped bar
-# charts and a platform summary, one variant per bar, so individual SIMD tiers/dispatchers stay
-# distinguishable rather than collapsed into one mean.
-# echo "Plotting kmer_extract_packed comparison"
-# python ./plot/plot_kmer_extract_packed_compare.py "${args[@]}" \
-#   --out-dir "$OUT"
-
-# Same per-CPU grouped-bar style as the summary above (bars = platform/compiler, x-axis =
-# implementation), but split by Layout and narrow-width/full-width k-tier instead of blending
-# everything into one mean. Reduced by default: at a fixed tier, each ISA's dispatcher bench already
-# resolves to whichever of narrow-width/full-width applies, so the narrow-width/full-width/rolling
-# detail rows would be redundant here.
-for layout in msb lsb; do
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
     if [[ "$UNIT" == "ops" ]]; then
       YLIM_PACKED_REDUCED="$YLIM_PACKED_REDUCED_OPS"
+      YLIM_PACKED_EXTENDED="$YLIM_PACKED_EXTENDED_OPS"
     else
       YLIM_PACKED_REDUCED="$YLIM_PACKED_REDUCED_NS"
+      YLIM_PACKED_EXTENDED="$YLIM_PACKED_EXTENDED_NS"
     fi
 
+    # Regular: reduced variant set (scalar baseline + each ISA's dispatcher only), matching the
+    # per-CPU line plots' default and the narrow-width/full-width tier plots below -- a summary, not
+    # full detail.
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-      --case-filter "layout=${layout}" --case-filter "k<=29" \
       --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
-      --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_narrow_width.png"
+      --out "${OUT}/kmer_extract_packed_per_cpu.png"
 
+    # Extended: every variant, including narrow-width/full-width/rolling, for internal checking.
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-      --case-filter "layout=${layout}" --case-filter "k>=30" --case-filter "k<=32" \
-      --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
-      --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_full_width.png"
+      --extended --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_EXTENDED" \
+      --out "${OUT}/kmer_extract_packed_per_cpu_ext.png"
   done
-done
-wait
+  wait
+
+  # Complements the summary above (which averages over all cases) with per-(layout,k) grouped bar
+  # charts and a platform summary, one variant per bar, so individual SIMD tiers/dispatchers stay
+  # distinguishable rather than collapsed into one mean.
+  # echo "Plotting kmer_extract_packed comparison"
+  # python ./plot/plot_kmer_extract_packed_compare.py "${args[@]}" \
+  #   --out-dir "$OUT"
+
+  # Same per-CPU grouped-bar style as the summary above (bars = platform/compiler, x-axis =
+  # implementation), but split by Layout and narrow-width/full-width k-tier instead of blending
+  # everything into one mean. Reduced by default: at a fixed tier, each ISA's dispatcher bench already
+  # resolves to whichever of narrow-width/full-width applies, so the narrow-width/full-width/rolling
+  # detail rows would be redundant here.
+  for layout in msb lsb; do
+    for combo in "${COMBOS[@]}"; do
+      UNIT="${combo%%:*}"
+      SCALE="${combo##*:}"
+      if [[ "$UNIT" == "ops" ]]; then
+        YLIM_PACKED_REDUCED="$YLIM_PACKED_REDUCED_OPS"
+      else
+        YLIM_PACKED_REDUCED="$YLIM_PACKED_REDUCED_NS"
+      fi
+
+      run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+        --case-filter "layout=${layout}" --case-filter "k<=29" \
+        --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
+        --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_narrow_width.png"
+
+      run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
+        --case-filter "layout=${layout}" --case-filter "k>=30" --case-filter "k<=32" \
+        --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
+        --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_full_width.png"
+    done
+  done
+  wait
+fi
 
 # ------------------------------------------------------------
 # Manuscript figures
@@ -384,44 +387,43 @@ wait
 Y_LIM_OPS="1.8"
 Y_LIM_NS="6.0"
 
-build_file_args "kmer_spaced_single.csv" || exit 1
-args_single=("${args[@]}")
-build_file_args "kmer_spaced_multi.csv" || exit 1
-args_multi=("${args[@]}")
+if build_file_args "kmer_spaced_single.csv" && args_single=("${args[@]}") \
+  && build_file_args "kmer_spaced_multi.csv" && args_multi=("${args[@]}"); then
 
-for combo in "${COMBOS[@]}"; do
-  UNIT="${combo%%:*}"
-  SCALE="${combo##*:}"
-  Y_LIM="$Y_LIM_OPS"
-  [[ "$UNIT" == "ns" ]] && Y_LIM="$Y_LIM_NS"
+  for combo in "${COMBOS[@]}"; do
+    UNIT="${combo%%:*}"
+    SCALE="${combo##*:}"
+    Y_LIM="$Y_LIM_OPS"
+    [[ "$UNIT" == "ns" ]] && Y_LIM="$Y_LIM_NS"
 
-  # Single mask spaced kmers
-  run_job python ./plot/plot_bars_per_cpu.py "${args_single[@]}" \
-    --reduced \
-    --unit "$UNIT" --scale "$SCALE" --y-max "$Y_LIM" \
-    --no-legend \
-    --title "(a) Extraction from sequence to spaced k-mers with a single mask" \
-    --out "${OUT}/Fig2a.svg"
+    # Single mask spaced kmers
+    run_job python ./plot/plot_bars_per_cpu.py "${args_single[@]}" \
+      --reduced \
+      --unit "$UNIT" --scale "$SCALE" --y-max "$Y_LIM" \
+      --no-legend \
+      --title "(a) Extraction from sequence to spaced k-mers with a single mask" \
+      --out "${OUT}/Fig2a.svg"
 
-  # Multi mask spaced kmers
-  run_job python ./plot/plot_bars_per_cpu.py "${args_multi[@]}" \
-    --reduced \
-    --unit "$UNIT" --scale "$SCALE" --y-max "$Y_LIM" \
-    --title "(b) Extraction from sequence to spaced k-mers with multiple masks" \
-    --out "${OUT}/Fig2b.svg"
-done
-wait
+    # Multi mask spaced kmers
+    run_job python ./plot/plot_bars_per_cpu.py "${args_multi[@]}" \
+      --reduced \
+      --unit "$UNIT" --scale "$SCALE" --y-max "$Y_LIM" \
+      --title "(b) Extraction from sequence to spaced k-mers with multiple masks" \
+      --out "${OUT}/Fig2b.svg"
+  done
+  wait
 
-for combo in "${COMBOS[@]}"; do
-  UNIT="${combo%%:*}"
-  SCALE="${combo##*:}"
+  for combo in "${COMBOS[@]}"; do
+    UNIT="${combo%%:*}"
+    SCALE="${combo##*:}"
 
-  svg="${OUT}/Fig2a_${UNIT}_${SCALE}.svg"
-  inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+    svg="${OUT}/Fig2a_${UNIT}_${SCALE}.svg"
+    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
 
-  svg="${OUT}/Fig2b_${UNIT}_${SCALE}.svg"
-  inkscape "$svg" --export-filename="${svg%.svg}.pdf"
-done
+    svg="${OUT}/Fig2b_${UNIT}_${SCALE}.svg"
+    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+  done
+fi
 
 DUOHASH_YLIM_OPS="0.3"
 DUOHASH_YLIM_NS="25"
@@ -430,35 +432,36 @@ DUOHASH_SUITES=(
   "multi"
 )
 
-build_file_args "DuoHash.csv" || exit 1
-args_duohash=("${args[@]}")
+if build_file_args "DuoHash.csv"; then
+  args_duohash=("${args[@]}")
 
-for suite in "${DUOHASH_SUITES[@]}"; do
-  for combo in "${COMBOS[@]}"; do
-    UNIT="${combo%%:*}"
-    SCALE="${combo##*:}"
-    DUOHASH_YLIM="$DUOHASH_YLIM_OPS"
-    [[ "$UNIT" == "ns" ]] && DUOHASH_YLIM="$DUOHASH_YLIM_NS"
+  for suite in "${DUOHASH_SUITES[@]}"; do
+    for combo in "${COMBOS[@]}"; do
+      UNIT="${combo%%:*}"
+      SCALE="${combo##*:}"
+      DUOHASH_YLIM="$DUOHASH_YLIM_OPS"
+      [[ "$UNIT" == "ns" ]] && DUOHASH_YLIM="$DUOHASH_YLIM_NS"
 
-    # DuoHash
-    run_job python ./plot/plot_bars_per_cpu.py "${args_duohash[@]}" \
-      --unit "$UNIT" --scale "$SCALE" --y-max "$DUOHASH_YLIM" \
-      --suite "${suite}" \
-      --untight \
-      --title "Spaced k-mer extraction, existing implementations, ${suite}" \
-      --out "${OUT}/DuoHash-${suite}.svg"
+      # DuoHash
+      run_job python ./plot/plot_bars_per_cpu.py "${args_duohash[@]}" \
+        --unit "$UNIT" --scale "$SCALE" --y-max "$DUOHASH_YLIM" \
+        --suite "${suite}" \
+        --untight \
+        --title "Spaced k-mer extraction, existing implementations, ${suite}" \
+        --out "${OUT}/DuoHash-${suite}.svg"
+    done
   done
-done
-wait
+  wait
 
-for suite in "${DUOHASH_SUITES[@]}"; do
-  for combo in "${COMBOS[@]}"; do
-    UNIT="${combo%%:*}"
-    SCALE="${combo##*:}"
-    svg="${OUT}/DuoHash-${suite}_${UNIT}_${SCALE}.svg"
-    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+  for suite in "${DUOHASH_SUITES[@]}"; do
+    for combo in "${COMBOS[@]}"; do
+      UNIT="${combo%%:*}"
+      SCALE="${combo##*:}"
+      svg="${OUT}/DuoHash-${suite}_${UNIT}_${SCALE}.svg"
+      inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+    done
   done
-done
+fi
 
 # ------------------------------------------------------------
 # Per-directory loop

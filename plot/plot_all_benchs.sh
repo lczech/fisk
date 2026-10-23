@@ -75,7 +75,7 @@ wait_any() {
 run_plot() {
   local csv="$1"; shift
   if [[ ! -f "$csv" ]]; then
-    echo "Skipped ${csv} (not found)"
+    echo "WARNING: ${csv} missing, skipping its plot" >&2
     return 0
   fi
   while (( $(jobs -rp | wc -l) >= MAX_JOBS )); do
