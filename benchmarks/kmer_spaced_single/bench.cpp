@@ -139,33 +139,17 @@ static void bench_kmer_spaced_single_layout_(
         // simd kernels
         #if defined(FISK_HAS_SSE2)
         bench(
-            name("simd_butterfly_table_sse2_by_mask"),
+            name("simd_butterfly_table_sse2_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_sse2_by_mask(
+                return run_var_simd_butterfly_table_sse2_scalars(
                     seq, simd_bf_sse2_kernel, sink_buffer
                 );
             }
         ),
         bench(
-            name("simd_butterfly_table_sse2_by_position"),
+            name("simd_block_table_sse2_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_sse2_by_position(
-                    seq, simd_bf_sse2_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_sse2_by_mask"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_sse2_by_mask(
-                    seq, simd_bt_sse2_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_sse2_by_position"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_sse2_by_position(
+                return run_var_simd_block_table_sse2_scalars(
                     seq, simd_bt_sse2_kernel, sink_buffer
                 );
             }
@@ -173,33 +157,17 @@ static void bench_kmer_spaced_single_layout_(
         #endif
         #if defined(FISK_HAS_AVX2)
         bench(
-            name("simd_butterfly_table_avx2_by_mask"),
+            name("simd_butterfly_table_avx2_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_avx2_by_mask(
+                return run_var_simd_butterfly_table_avx2_scalars(
                     seq, simd_bf_avx2_kernel, sink_buffer
                 );
             }
         ),
         bench(
-            name("simd_butterfly_table_avx2_by_position"),
+            name("simd_block_table_avx2_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_avx2_by_position(
-                    seq, simd_bf_avx2_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_avx2_by_mask"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_avx2_by_mask(
-                    seq, simd_bt_avx2_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_avx2_by_position"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_avx2_by_position(
+                return run_var_simd_block_table_avx2_scalars(
                     seq, simd_bt_avx2_kernel, sink_buffer
                 );
             }
@@ -207,33 +175,17 @@ static void bench_kmer_spaced_single_layout_(
         #endif
         #if defined(FISK_HAS_AVX512)
         bench(
-            name("simd_butterfly_table_avx512_by_mask"),
+            name("simd_butterfly_table_avx512_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_avx512_by_mask(
+                return run_var_simd_butterfly_table_avx512_scalars(
                     seq, simd_bf_avx512_kernel, sink_buffer
                 );
             }
         ),
         bench(
-            name("simd_butterfly_table_avx512_by_position"),
+            name("simd_block_table_avx512_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_avx512_by_position(
-                    seq, simd_bf_avx512_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_avx512_by_mask"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_avx512_by_mask(
-                    seq, simd_bt_avx512_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_avx512_by_position"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_avx512_by_position(
+                return run_var_simd_block_table_avx512_scalars(
                     seq, simd_bt_avx512_kernel, sink_buffer
                 );
             }
@@ -241,33 +193,17 @@ static void bench_kmer_spaced_single_layout_(
         #endif
         #if defined(FISK_HAS_NEON)
         bench(
-            name("simd_butterfly_table_neon_by_mask"),
+            name("simd_butterfly_table_neon_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_neon_by_mask(
+                return run_var_simd_butterfly_table_neon_scalars(
                     seq, simd_bf_neon_kernel, sink_buffer
                 );
             }
         ),
         bench(
-            name("simd_butterfly_table_neon_by_position"),
+            name("simd_block_table_neon_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_neon_by_position(
-                    seq, simd_bf_neon_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_neon_by_mask"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_neon_by_mask(
-                    seq, simd_bt_neon_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_neon_by_position"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_neon_by_position(
+                return run_var_simd_block_table_neon_scalars(
                     seq, simd_bt_neon_kernel, sink_buffer
                 );
             }
@@ -275,52 +211,134 @@ static void bench_kmer_spaced_single_layout_(
         #endif
         #if defined(FISK_HAS_BMI2)
         bench(
-            name("simd_pext_by_mask"),
+            name("simd_pext_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_pext_by_mask(seq, simd_pext_kernel, sink_buffer);
-            }
-        ),
-        bench(
-            name("simd_pext_by_position"),
-            [&](std::string const& seq) {
-                return run_var_simd_pext_by_position(seq, simd_pext_kernel, sink_buffer);
+                return run_var_simd_pext_scalars(seq, simd_pext_kernel, sink_buffer);
             }
         ),
         #endif
         bench(
-            name("simd_butterfly_table_scalar_by_mask"),
+            name("simd_butterfly_table_scalar_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_scalar_by_mask(
+                return run_var_simd_butterfly_table_scalar_scalars(
                     seq, simd_bf_scalar_kernel, sink_buffer
                 );
             }
         ),
         bench(
-            name("simd_butterfly_table_scalar_by_position"),
+            name("simd_block_table_scalar_scalars"),
             [&](std::string const& seq) {
-                return run_var_simd_butterfly_table_scalar_by_position(
-                    seq, simd_bf_scalar_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_scalar_by_mask"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_scalar_by_mask(
-                    seq, simd_bt_scalar_kernel, sink_buffer
-                );
-            }
-        ),
-        bench(
-            name("simd_block_table_scalar_by_position"),
-            [&](std::string const& seq) {
-                return run_var_simd_block_table_scalar_by_position(
+                return run_var_simd_block_table_scalar_scalars(
                     seq, simd_bt_scalar_kernel, sink_buffer
                 );
             }
         )
     );
     write_csv_rows(csv_os, suite_title, case_label, results, kSinkName);
+
+    // The variants that take the vectors whole, in their own suite.run(), see bench.hpp. Their sums
+    // match across all archs and kernels, as the invalid lanes hold the same values in each: the
+    // bits of the invalid characters, and zero past the end of the sequence.
+    auto const vector_results = suite.run(
+        sequences,
+        #if defined(FISK_HAS_SSE2)
+        bench(
+            name("simd_butterfly_table_sse2_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_butterfly_table_sse2_vectors(
+                    seq, simd_bf_sse2_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_sse2_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_block_table_sse2_vectors(
+                    seq, simd_bt_sse2_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX2)
+        bench(
+            name("simd_butterfly_table_avx2_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_butterfly_table_avx2_vectors(
+                    seq, simd_bf_avx2_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_avx2_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_block_table_avx2_vectors(
+                    seq, simd_bt_avx2_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX512)
+        bench(
+            name("simd_butterfly_table_avx512_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_butterfly_table_avx512_vectors(
+                    seq, simd_bf_avx512_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_avx512_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_block_table_avx512_vectors(
+                    seq, simd_bt_avx512_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_NEON)
+        bench(
+            name("simd_butterfly_table_neon_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_butterfly_table_neon_vectors(
+                    seq, simd_bf_neon_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_neon_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_block_table_neon_vectors(
+                    seq, simd_bt_neon_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_BMI2)
+        bench(
+            name("simd_pext_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_pext_vectors(seq, simd_pext_kernel, sink_buffer);
+            }
+        ),
+        #endif
+        bench(
+            name("simd_butterfly_table_scalar_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_butterfly_table_scalar_vectors(
+                    seq, simd_bf_scalar_kernel, sink_buffer
+                );
+            }
+        ),
+        bench(
+            name("simd_block_table_scalar_vectors"),
+            [&](std::string const& seq) {
+                return run_var_simd_block_table_scalar_vectors(
+                    seq, simd_bt_scalar_kernel, sink_buffer
+                );
+            }
+        )
+    );
+    write_csv_rows(csv_os, suite_title, case_label, vector_results, kSinkName);
 }
 
 void bench_kmer_spaced_single(
@@ -344,14 +362,13 @@ void bench_kmer_spaced_single(
     // they actually emit (e.g. one skipping windows a differently-behaved one still emits
     // for), which would make a wrapped buffer's leftover contents depend on which technique
     // last touched each slot; never wrapping sidesteps that regardless of whether it would
-    // in fact occur.
+    // in fact occur. The `_vectors` variants also write the lanes of their last vector past the
+    // end of the sequence, at most 8.
     std::size_t max_seq_len = 0;
     for (auto const& seq : sequences) {
         max_seq_len = std::max(max_seq_len, seq.size());
     }
-    std::vector<std::uint64_t> sink_buffer(
-        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
-    );
+    std::vector<std::uint64_t> sink_buffer(std::bit_ceil(max_seq_len + 8), 0);
 
     // Run a benchmark for each mask
     for (std::size_t m = 0; m < masks.size(); ++m) {

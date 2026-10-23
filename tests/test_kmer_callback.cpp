@@ -37,6 +37,12 @@ concept SpacedVectorCb =
 template <typename T>
 concept SpacedVectorSingleCb =
     SpacedKmerVectorCallback<T, Encoding::kACGT, Layout::kMSB, SimdScalar, true>;
+template <typename T>
+concept SpacedLanesCb =
+    SpacedKmerVectorValidLanesCallback<T, Encoding::kACGT, Layout::kMSB, SimdScalar, false>;
+template <typename T>
+concept SpacedLanesSingleCb =
+    SpacedKmerVectorValidLanesCallback<T, Encoding::kACGT, Layout::kMSB, SimdScalar, true>;
 
 // =================================================================================================
 //     Contiguous K-mers
@@ -106,3 +112,14 @@ static_assert(!SpacedVectorCb<decltype([](std::size_t, std::size_t, KV, std::siz
 static_assert(!SpacedVectorSingleCb<decltype([](std::size_t, std::size_t, S const&) {})>);
 static_assert(!SpacedSingleCb<decltype([](std::size_t, SV, std::size_t) {})>);
 static_assert(!SpacedSingleCb<decltype([](std::size_t, std::size_t, SV, std::size_t) {})>);
+
+// The same for the vector forms with valid lanes, which take neither a count of valid lanes nor
+// vectors of k-mers.
+static_assert(SpacedLanesCb<decltype([](std::size_t, std::size_t, SV, Lanes) {})>);
+static_assert(SpacedLanesSingleCb<decltype([](std::size_t, std::size_t, SV, Lanes) {})>);
+static_assert(!SpacedLanesCb<decltype([](std::size_t, SV, Lanes) {})>);
+static_assert(SpacedLanesSingleCb<decltype([](std::size_t, SV, Lanes) {})>);
+static_assert(!SpacedLanesCb<decltype([](std::size_t, std::size_t, SV, std::size_t) {})>);
+static_assert(!SpacedLanesSingleCb<decltype([](std::size_t, SV, std::size_t) {})>);
+static_assert(!SpacedLanesCb<decltype([](std::size_t, std::size_t, KV, Lanes) {})>);
+static_assert(!SpacedVectorCb<decltype([](std::size_t, std::size_t, SV, Lanes) {})>);

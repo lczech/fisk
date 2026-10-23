@@ -1,6 +1,5 @@
 #pragma once
 
-#include <bit>
 #include <cassert>
 #include <concepts>
 #include <cstddef>
@@ -74,6 +73,22 @@ concept SpacedKmerVectorCallback =
     (
         SingleMask &&
         std::invocable<Callback, std::size_t, SpacedKmerVector<E, L, Simd>, std::size_t>
+    );
+
+/**
+ * @brief A callback for vectors of spaced k-mers with their valid lanes, as
+ * `callback(pos, mask_idx, vec, valid_lanes)`, or, when `SingleMask` is true, also as
+ * `callback(pos, vec, valid_lanes)`, see SpacedKmerVector and SimdVectorValidLanes.
+ */
+template <typename Callback, Encoding E, Layout L, typename Simd, bool SingleMask>
+concept SpacedKmerVectorValidLanesCallback =
+    std::invocable<
+        Callback, std::size_t, std::size_t, SpacedKmerVector<E, L, Simd>, SimdVectorValidLanes<Simd>
+    > ||
+    (
+        SingleMask && std::invocable<
+            Callback, std::size_t, SpacedKmerVector<E, L, Simd>, SimdVectorValidLanes<Simd>
+        >
     );
 
 /**
@@ -238,6 +253,36 @@ inline void invoke_spaced_kmer_vector_callback(
     }
 }
 
+/**
+ * @brief Invoke a spaced k-mer extraction callback with a vector of the spaced k-mers of one mask
+ * at consecutive positions and its valid lanes.
+ *
+ * Accepts `callback(pos, mask_idx, spaced_kmers, valid_lanes)`, and, when `SingleMask` is true,
+ * also the shorthand `callback(pos, spaced_kmers, valid_lanes)`, see
+ * SpacedKmerVectorValidLanesCallback. Lane `j` holds the spaced k-mer of mask `mask_idx` starting
+ * at `pos + j`, valid if bit `j` of `valid_lanes.bits` is set.
+ */
+template <Encoding E, Layout L, SimdArch Simd, bool SingleMask, typename Callback>
+FISK_ALWAYS_INLINE
+inline void invoke_spaced_kmer_vector_valid_lanes_callback(
+    Callback&& callback, std::size_t mask_idx, std::size_t pos,
+    SpacedKmerVector<E, L, Simd> spaced_kmers, SimdVectorValidLanes<Simd> valid_lanes
+) {
+    using V = SpacedKmerVector<E, L, Simd>;
+    using Lanes = SimdVectorValidLanes<Simd>;
+    if constexpr (std::invocable<Callback, std::size_t, std::size_t, V, Lanes>) {
+        callback(pos, mask_idx, spaced_kmers, valid_lanes);
+    } else if constexpr (SingleMask && std::invocable<Callback, std::size_t, V, Lanes>) {
+        callback(pos, spaced_kmers, valid_lanes);
+    } else {
+        static_assert(
+            SpacedKmerVectorValidLanesCallback<Callback, E, L, Simd, SingleMask>,
+            "Callback must be callable as callback(pos, mask_idx, spaced_kmers, valid_lanes), or, "
+            "for a single mask, as callback(pos, spaced_kmers, valid_lanes)."
+        );
+    }
+}
+
 // =================================================================================================
 //     Valid Lanes of K-mer Vectors
 // =================================================================================================
@@ -279,7 +324,7 @@ inline void for_each_valid_lane(std::size_t pos, V kmers, std::size_t valid_coun
 
 /**
  * @brief Call `func` with each valid k-mer or spaced k-mer of a vector, in lane order, as handed
- * out by for_each_kmer_packed_checked_simd().
+ * out by for_each_kmer_packed_checked_simd() or for_each_spaced_kmer_ascii_checked_simd().
  *
  * As the overload for a count of valid lanes, for the k-mers in the lanes whose bits are set in
  * `valid_lanes.bits`.
@@ -294,17 +339,12 @@ inline void for_each_valid_lane(
     std::memcpy(words, &kmers.value, sizeof(words));
     std::uint64_t const bits = valid_lanes.bits;
 
-    // All lanes valid, the usual case, as a loop with a fixed count, which the compilers unroll.
-    // GCC keeps the loop over the set bits below as a loop, even for a constant mask.
-    if (bits == (std::uint64_t{1} << V::lanes) - 1) {
-        for (std::size_t j = 0; j < V::lanes; ++j) {
+    // A loop with a fixed count over all lanes, which tests the bit of each, rather than a loop
+    // over the set bits, whose number of iterations depends on the valid lanes.
+    for (std::size_t j = 0; j < V::lanes; ++j) {
+        if ((bits >> j) & 1u) {
             invoke_kmer_vector_lane_callback_<V>(func, pos + j, words[j]);
         }
-        return;
-    }
-    for (std::uint64_t rest = bits; rest != 0; rest &= rest - 1) {
-        std::size_t const j = static_cast<std::size_t>(std::countr_zero(rest));
-        invoke_kmer_vector_lane_callback_<V>(func, pos + j, words[j]);
     }
 }
 

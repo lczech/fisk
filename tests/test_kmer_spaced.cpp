@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
@@ -35,53 +36,6 @@ using namespace fisk;
 // =================================================================================================
 //     Helpers
 // =================================================================================================
-
-static bool event_less(SpacedEvent const& lhs, SpacedEvent const& rhs)
-{
-    if (lhs.pos != rhs.pos) {
-        return lhs.pos < rhs.pos;
-    }
-    if (lhs.mask_idx != rhs.mask_idx) {
-        return lhs.mask_idx < rhs.mask_idx;
-    }
-    return lhs.value < rhs.value;
-}
-
-static void check_event_multiset(
-    std::vector<SpacedEvent> got, std::vector<SpacedEvent> expected
-) {
-    std::sort(got.begin(), got.end(), event_less);
-    std::sort(expected.begin(), expected.end(), event_less);
-    check_spaced_events(got, expected);
-}
-
-static std::vector<SpacedEvent> events_for_mask(
-    std::vector<SpacedEvent> const& events, std::size_t mask_idx
-) {
-    std::vector<SpacedEvent> out;
-    for (auto const& event : events) {
-        if (event.mask_idx == mask_idx) {
-            out.push_back(event);
-        }
-    }
-    return out;
-}
-
-static void check_by_mask_events(
-    std::vector<SpacedEvent> const& got,
-    std::vector<SpacedEvent> const& expected,
-    std::size_t mask_count
-) {
-    check_event_multiset(got, expected);
-    for (std::size_t m = 0; m < mask_count; ++m) {
-        auto const got_mask = events_for_mask(got, m);
-        auto const expected_mask = events_for_mask(expected, m);
-        check_spaced_events(got_mask, expected_mask);
-        for (std::size_t i = 1; i < got_mask.size(); ++i) {
-            EXPECT_TRUE(got_mask[i - 1].pos <= got_mask[i].pos);
-        }
-    }
-}
 
 // Sequences around the span and the SIMD block width: empty, one short of a span, and a span plus
 // up to two blocks, with random content (rather than a periodic pattern, under which a k-mer taken
@@ -299,51 +253,105 @@ static std::array<SpacedKmerMask<L, Kernel>, N> make_kernels(
     return kernels;
 }
 
-// Checks both SIMD emission orders for one set of masks, for every sequence in the corpus: exact
-// order for by_position, and per-mask order for by_mask (see check_by_mask_events()). For a single
-// mask, also through the single-kernel overloads.
+// Runs the extraction with a vector callback, and returns its spaced k-mers as events, taken out
+// of the vectors with for_each_valid_lane(), sorted by position and mask. Checks the structure of
+// the vectors on the way: one vector per mask for every `lanes` of the `positions` of the
+// sequence, the masks in order per vector, no valid lanes past the last position, and the same
+// count from store_valid_lanes(). With `Shorthand`, the callback is the single-mask form without
+// mask_idx.
+template <typename Simd, Encoding E, Layout L, bool Shorthand = false, typename Extract>
+static std::vector<SpacedEvent> collect_valid_lanes_events(
+    std::size_t mask_count, std::size_t positions, Extract&& extract
+) {
+    using V = SpacedKmerVector<E, L, Simd>;
+    using Lanes = SimdVectorValidLanes<Simd>;
+    constexpr std::size_t lanes = Simd::lanes;
+    std::vector<SpacedEvent> events;
+    std::size_t next_pos = 0;
+    std::size_t expected_mask = 0;
+    auto const on_vector = [&](
+        std::size_t pos, std::size_t mask_idx, V spaced_kmers, Lanes valid_lanes
+    ) {
+        EXPECT_EQ(mask_idx, expected_mask);
+        EXPECT_EQ(pos, next_pos);
+        if (++expected_mask == mask_count) {
+            expected_mask = 0;
+            next_pos += lanes;
+        }
+        EXPECT_TRUE(pos < positions);
+        if (pos >= positions) {
+            return;
+        }
+        EXPECT_EQ(valid_lanes.bits >> std::min(lanes, positions - pos), std::uint64_t{0});
+
+        std::size_t const before = events.size();
+        for_each_valid_lane(
+            pos, spaced_kmers, valid_lanes,
+            [&](std::size_t p, SpacedKmer<E, L> const& spaced_kmer) {
+                events.push_back({p, mask_idx, kmer_value(spaced_kmer)});
+            }
+        );
+        SpacedKmer<E, L> stored[lanes] = {};
+        EXPECT_EQ(store_valid_lanes(spaced_kmers, valid_lanes, stored), events.size() - before);
+    };
+    if constexpr (Shorthand) {
+        extract([&](std::size_t pos, V spaced_kmers, Lanes valid_lanes) {
+            on_vector(pos, 0, spaced_kmers, valid_lanes);
+        });
+    } else {
+        extract(on_vector);
+    }
+    EXPECT_EQ(expected_mask, std::size_t{0});
+    EXPECT_EQ(next_pos, (positions + lanes - 1) / lanes * lanes);
+    std::sort(events.begin(), events.end(), [](auto const& lhs, auto const& rhs) {
+        return std::tie(lhs.pos, lhs.mask_idx) < std::tie(rhs.pos, rhs.mask_idx);
+    });
+    return events;
+}
+
+// The number of positions of spaced k-mers of span `span_k` in `seq`.
+static std::size_t spaced_kmer_positions(std::string const& seq, std::size_t span_k)
+{
+    return seq.size() < span_k ? 0 : seq.size() - span_k + 1;
+}
+
+// Checks the SIMD extraction for one set of masks, for every sequence in the corpus, through the
+// array overload, and, for a single mask, also through the single-kernel overload and the shorthand
+// without mask_idx.
 template <typename Kernel, Layout L, std::size_t N, typename Enc>
 static void check_simd_set(std::array<std::string, N> const& mask_array, Enc const& enc)
 {
+    using Simd = typename Kernel::simd_arch;
+    constexpr Encoding E = Enc::encoding;
     std::vector<std::string> const masks = to_vector(mask_array);
     auto const kernels = make_kernels<Kernel, L>(mask_array);
     std::size_t const span_k = masks.front().size();
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
-        auto const expected = oracle_spaced_events<Enc::encoding, L>(seq, masks);
-
-        auto const by_position = collect_spaced_callback_forms<L, N == 1>(
-            [&](auto const& callback) {
-                for_each_spaced_kmer_simd_by_position(seq, kernels, enc, callback);
-            }
+        auto const expected = oracle_spaced_events<E, L>(seq, masks);
+        std::size_t const positions = spaced_kmer_positions(seq, span_k);
+        auto const extract_array = [&](auto const& callback) {
+            for_each_spaced_kmer_ascii_checked_simd(seq, kernels, enc, callback);
+        };
+        check_spaced_events(
+            collect_valid_lanes_events<Simd, E, L>(N, positions, extract_array), expected
         );
-        for (auto const& got : by_position) {
-            check_spaced_events(got, expected);
-        }
-        auto const by_mask = collect_spaced_callback_forms<L, N == 1>([&](auto const& callback) {
-            for_each_spaced_kmer_simd_by_mask(seq, kernels, enc, callback);
-        });
-        for (auto const& got : by_mask) {
-            check_by_mask_events(got, expected, N);
-        }
 
         if constexpr (N == 1) {
-            auto const single_by_position = collect_spaced_callback_forms<L, true>(
-                [&](auto const& callback) {
-                    for_each_spaced_kmer_simd_by_position(seq, kernels[0], enc, callback);
-                }
+            auto const extract_single = [&](auto const& callback) {
+                for_each_spaced_kmer_ascii_checked_simd(seq, kernels[0], enc, callback);
+            };
+            check_spaced_events(
+                collect_valid_lanes_events<Simd, E, L>(1, positions, extract_single), expected
             );
-            for (auto const& got : single_by_position) {
-                check_spaced_events(got, expected);
-            }
-            auto const single_by_mask = collect_spaced_callback_forms<L, true>(
-                [&](auto const& callback) {
-                    for_each_spaced_kmer_simd_by_mask(seq, kernels[0], enc, callback);
-                }
+            check_spaced_events(
+                collect_valid_lanes_events<Simd, E, L, true>(1, positions, extract_single),
+                expected
             );
-            for (auto const& got : single_by_mask) {
-                check_by_mask_events(got, expected, N);
-            }
+            check_spaced_events(
+                collect_valid_lanes_events<Simd, E, L, true>(1, positions, extract_array),
+                expected
+            );
         }
     }
 }
@@ -377,27 +385,19 @@ static void check_simd_dispatcher_in_layout(std::vector<std::string> const& mask
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
         auto const expected = oracle_spaced_events<Encoding::kACGT, L>(seq, masks);
-        std::vector<SpacedEvent> by_position;
-        dispatcher.run([&](auto const& kernels) {
-            for_each_spaced_kmer_simd_by_position(
-                seq, kernels, CharEncoderTable<Encoding::kACGT>{},
-                [&](std::size_t pos, std::size_t mask_idx, auto const& value) {
-                    by_position.push_back({pos, mask_idx, kmer_value(value)});
-                }
-            );
-        });
-        check_spaced_events(by_position, expected);
-
-        std::vector<SpacedEvent> by_mask;
-        dispatcher.run([&](auto const& kernels) {
-            for_each_spaced_kmer_simd_by_mask(
-                seq, kernels, CharEncoderTable<Encoding::kACGT>{},
-                [&](std::size_t pos, std::size_t mask_idx, auto const& value) {
-                    by_mask.push_back({pos, mask_idx, kmer_value(value)});
-                }
-            );
-        });
-        check_by_mask_events(by_mask, expected, masks.size());
+        auto const extract = [&](auto const& callback) {
+            dispatcher.run([&](auto const& kernels) {
+                for_each_spaced_kmer_ascii_checked_simd(
+                    seq, kernels, CharEncoderTable<Encoding::kACGT>{}, callback
+                );
+            });
+        };
+        check_spaced_events(
+            collect_valid_lanes_events<typename Kernel::simd_arch, Encoding::kACGT, L>(
+                masks.size(), spaced_kmer_positions(seq, span_k), extract
+            ),
+            expected
+        );
     }
 }
 
@@ -1073,17 +1073,8 @@ TEST(KmerSpaced, InvalidSpan)
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         auto kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("1");
         kernel.span_k = k;
-        for_each_spaced_kmer_simd_by_position(
-            seq, kernel, CharEncoderTable<Encoding::kACGT>{},
-            [](std::size_t, auto const&) {}
-        );
-    });
-    check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        auto kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("1");
-        kernel.span_k = k;
-        for_each_spaced_kmer_simd_by_mask(
-            seq, kernel, CharEncoderTable<Encoding::kACGT>{},
-            [](std::size_t, auto const&) {}
+        for_each_spaced_kmer_ascii_checked_simd(
+            seq, kernel, CharEncoderTable<Encoding::kACGT>{}, [](std::size_t, auto, auto) {}
         );
     });
 }
@@ -1108,14 +1099,9 @@ TEST(KmerSpaced, MixedSpans)
         make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("10001")
     }};
     EXPECT_THROW(
-        for_each_spaced_kmer_simd_by_position(
-            seq, kernels, CharEncoderTable<Encoding::kACGT>{}, callback
-        ),
-        std::invalid_argument
-    );
-    EXPECT_THROW(
-        for_each_spaced_kmer_simd_by_mask(
-            seq, kernels, CharEncoderTable<Encoding::kACGT>{}, callback
+        for_each_spaced_kmer_ascii_checked_simd(
+            seq, kernels, CharEncoderTable<Encoding::kACGT>{},
+            [](std::size_t, std::size_t, auto, auto) {}
         ),
         std::invalid_argument
     );
@@ -1217,7 +1203,7 @@ TEST(KmerSpacedSimd, DispatcherMaskCounts)
     check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<16>()));
 
     #if defined(FISK_HAS_AVX512)
-    // AVX-512 has eight lanes, reaching the two-word position-presence bitset above eight masks.
+    // Many masks on eight lanes.
     check_simd_dispatcher<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<9>()));
     check_simd_dispatcher<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<16>()));
     #endif
@@ -1240,60 +1226,19 @@ TEST(KmerSpacedSimd, ActgForwarding)
 //     Selector
 // =================================================================================================
 
-static bool mode_matches_axis(SpacedKmerMode mode, SpacedKmerAxis axis)
-{
-    using Mode = SpacedKmerMode;
-    switch (mode) {
-        case Mode::kPext:
-        case Mode::kButterflyTable:
-            return true;
-
-        case Mode::kButterflyTableSSE2ByMask:
-        case Mode::kButterflyTableAVX2ByMask:
-        case Mode::kButterflyTableAVX512ByMask:
-        case Mode::kButterflyTableNeonByMask:
-            return axis != SpacedKmerAxis::kByPosition;
-
-        case Mode::kButterflyTableSSE2ByPosition:
-        case Mode::kButterflyTableAVX2ByPosition:
-        case Mode::kButterflyTableAVX512ByPosition:
-        case Mode::kButterflyTableNeonByPosition:
-            return axis != SpacedKmerAxis::kByMask;
-    }
-    return false;
-}
-
-TEST(KmerSpacedSelector, ValidationAndAxes)
+// The selector returns one of the modes of the build, for either Layout, one or several masks.
+TEST(KmerSpacedSelector, Validation)
 {
     auto const masks = make_spaced_kmer_masks({"10101", "11111"});
-    for (auto const axis : {
-        SpacedKmerAxis::kByMask, SpacedKmerAxis::kByPosition, SpacedKmerAxis::kEither
-    }) {
-        auto const mode = spaced_kmer_selector(masks, axis, 256);
-        EXPECT_TRUE(mode_matches_axis(mode, axis));
-    }
+    EXPECT_FALSE(spaced_kmer_mode_name(spaced_kmer_selector(masks, 256)).empty());
     auto const lsb_masks = make_spaced_kmer_masks<Layout::kLSB>({"11101", "11111"});
-    for (auto const axis : {
-        SpacedKmerAxis::kByMask, SpacedKmerAxis::kByPosition, SpacedKmerAxis::kEither
-    }) {
-        EXPECT_TRUE(mode_matches_axis(spaced_kmer_selector(lsb_masks, axis, 256), axis));
-    }
+    EXPECT_FALSE(spaced_kmer_mode_name(spaced_kmer_selector(lsb_masks, 256)).empty());
 
     auto const mask = make_spaced_kmer_mask("10101");
-    EXPECT_TRUE(mode_matches_axis(
-        spaced_kmer_selector(mask, SpacedKmerAxis::kByPosition, 256),
-        SpacedKmerAxis::kByPosition
-    ));
-    EXPECT_TRUE(mode_matches_axis(
-        spaced_kmer_selector(mask, SpacedKmerAxis::kByMask, 256),
-        SpacedKmerAxis::kByMask
-    ));
-    EXPECT_TRUE(mode_matches_axis(
-        spaced_kmer_selector(
-            make_spaced_kmer_mask(std::string(32, '1')), SpacedKmerAxis::kEither, 256
-        ),
-        SpacedKmerAxis::kEither
-    ));
+    EXPECT_FALSE(spaced_kmer_mode_name(spaced_kmer_selector(mask, 256)).empty());
+    EXPECT_FALSE(spaced_kmer_mode_name(
+        spaced_kmer_selector(make_spaced_kmer_mask(std::string(32, '1')), 256)
+    ).empty());
 
     auto with_span = [&](std::size_t span_k) {
         auto result = mask;
@@ -1301,12 +1246,10 @@ TEST(KmerSpacedSelector, ValidationAndAxes)
         return result;
     };
     EXPECT_ANY_THROW(spaced_kmer_selector(
-        std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>>{}, SpacedKmerAxis::kEither, 256
+        std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>>{}, 256
     ));
-    EXPECT_ANY_THROW(spaced_kmer_selector(with_span(0), SpacedKmerAxis::kEither, 256));
-    EXPECT_ANY_THROW(spaced_kmer_selector(with_span(33), SpacedKmerAxis::kEither, 256));
-    EXPECT_ANY_THROW(spaced_kmer_selector(mask, SpacedKmerAxis::kEither, 4));
-    EXPECT_ANY_THROW(
-        spaced_kmer_selector(raw_spaced_kmer_mask(0x3, 5), SpacedKmerAxis::kEither, 256)
-    );
+    EXPECT_ANY_THROW(spaced_kmer_selector(with_span(0), 256));
+    EXPECT_ANY_THROW(spaced_kmer_selector(with_span(33), 256));
+    EXPECT_ANY_THROW(spaced_kmer_selector(mask, 4));
+    EXPECT_ANY_THROW(spaced_kmer_selector(raw_spaced_kmer_mask(0x3, 5), 256));
 }

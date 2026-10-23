@@ -30,59 +30,29 @@ namespace fisk {
 // =================================================================================================
 
 /**
- * @brief Which emission order to restrict the selector to.
- *
- * The emission orders of for_each_spaced_kmer_simd_by_mask() and
- * for_each_spaced_kmer_simd_by_position() differ in observable behavior, so the selector does not
- * pick between them unless asked to via kEither.
- */
-enum class SpacedKmerAxis : int
-{
-    /** @brief pos is non-decreasing per mask, but not across the whole output. Often fastest. */
-    kByMask,
-
-    /** @brief pos is non-decreasing across the whole output, as in for_each_spaced_kmer(). */
-    kByPosition,
-
-    /** @brief Benchmark both emission orders, and return the fastest mode of either. */
-    kEither,
-};
-
-/**
  * @brief Spaced k-mer extraction modes.
  *
  * For simplicity, we currently only include the implementations that were most performant in our
- * benchmarks, i.e., hardware PEXT, the (scalar) Butterfly table, and its by_mask/by_position SIMD
- * accelerations. If needed, this can be trivially expanded to test for additional implementations.
- *
- * kPext and kButterflyTable are scalar, and always emit by position, so they are candidates for
- * every SpacedKmerAxis.
+ * benchmarks, i.e., hardware PEXT, the (scalar) Butterfly table, and its SIMD accelerations, see
+ * for_each_spaced_kmer_ascii_checked_simd(). If needed, this can be trivially expanded to test for
+ * additional implementations.
  */
 enum class SpacedKmerMode : int
 {
-    /** @brief Use hardware PEXT (scalar, always position-major). */
+    /** @brief Use hardware PEXT (scalar). */
     kPext,
 
-    /** @brief Use scalar butterfly table algorithm (scalar, always position-major). */
+    /** @brief Use scalar butterfly table algorithm. */
     kButterflyTable,
 
-    /** @brief SSE2 butterfly table, by_mask emission order. */
-    kButterflyTableSSE2ByMask,
-    /** @brief AVX2 butterfly table, by_mask emission order. */
-    kButterflyTableAVX2ByMask,
-    /** @brief AVX512 butterfly table, by_mask emission order. */
-    kButterflyTableAVX512ByMask,
-    /** @brief Neon butterfly table, by_mask emission order. */
-    kButterflyTableNeonByMask,
-
-    /** @brief SSE2 butterfly table, by_position emission order. */
-    kButterflyTableSSE2ByPosition,
-    /** @brief AVX2 butterfly table, by_position emission order. */
-    kButterflyTableAVX2ByPosition,
-    /** @brief AVX512 butterfly table, by_position emission order. */
-    kButterflyTableAVX512ByPosition,
-    /** @brief Neon butterfly table, by_position emission order. */
-    kButterflyTableNeonByPosition,
+    /** @brief SSE2 butterfly table. */
+    kButterflyTableSSE2,
+    /** @brief AVX2 butterfly table. */
+    kButterflyTableAVX2,
+    /** @brief AVX512 butterfly table. */
+    kButterflyTableAVX512,
+    /** @brief Neon butterfly table. */
+    kButterflyTableNeon,
 };
 
 inline std::string spaced_kmer_mode_name(SpacedKmerMode mode)
@@ -90,20 +60,14 @@ inline std::string spaced_kmer_mode_name(SpacedKmerMode mode)
     using Mode = SpacedKmerMode;
     switch (mode) {
         // Scalar
-        case Mode::kPext:                           return "PEXT";
-        case Mode::kButterflyTable:                 return "ButterflyTable";
+        case Mode::kPext:                  return "PEXT";
+        case Mode::kButterflyTable:        return "ButterflyTable";
 
-        // SIMD by mask
-        case Mode::kButterflyTableSSE2ByMask:       return "ButterflyTableSSE2ByMask";
-        case Mode::kButterflyTableAVX2ByMask:       return "ButterflyTableAVX2ByMask";
-        case Mode::kButterflyTableAVX512ByMask:     return "ButterflyTableAVX512ByMask";
-        case Mode::kButterflyTableNeonByMask:       return "ButterflyTableNeonByMask";
-
-        // SIMD by position
-        case Mode::kButterflyTableSSE2ByPosition:   return "ButterflyTableSSE2ByPosition";
-        case Mode::kButterflyTableAVX2ByPosition:   return "ButterflyTableAVX2ByPosition";
-        case Mode::kButterflyTableAVX512ByPosition: return "ButterflyTableAVX512ByPosition";
-        case Mode::kButterflyTableNeonByPosition:   return "ButterflyTableNeonByPosition";
+        // SIMD
+        case Mode::kButterflyTableSSE2:    return "ButterflyTableSSE2";
+        case Mode::kButterflyTableAVX2:    return "ButterflyTableAVX2";
+        case Mode::kButterflyTableAVX512:  return "ButterflyTableAVX512";
+        case Mode::kButterflyTableNeon:    return "ButterflyTableNeon";
 
         default: {
             throw std::invalid_argument(
@@ -128,16 +92,18 @@ inline std::string spaced_kmer_mode_name(SpacedKmerMode mode)
  * The selector returns only the mode. The caller is expected to do a single outer `switch`
  * and then instantiate the corresponding hot loop without any further runtime dispatch inside.
  *
+ * The SIMD candidates hand out vectors, see for_each_spaced_kmer_ascii_checked_simd(). They are
+ * timed with their spaced k-mers taken out one at a time, with for_each_valid_lane(), as the scalar
+ * candidates hand them out.
+ *
  * @param masks      Spaced k-mer masks, see make_spaced_kmer_masks(), all with the same span.
  *                   Their Layout is used for the benchmark.
- * @param axis       Which emission order to restrict candidates to; see SpacedKmerAxis.
  * @param seq_len    Length of the random benchmark sequence.
  * @return           The fastest spaced-k-mer extraction mode for this mask set on this build.
  */
 template <Layout L>
 inline SpacedKmerMode spaced_kmer_selector(
     std::vector<SpacedKmerMask<L, BitExtractMask>> const& masks,
-    SpacedKmerAxis const axis = SpacedKmerAxis::kByPosition,
     std::size_t const seq_len = (1 << 16)
 ) {
     if (masks.empty()) {
@@ -171,13 +137,6 @@ inline SpacedKmerMode spaced_kmer_selector(
     // SIMD kernels are created once per candidate below.
     auto const butterfly_tables = make_spaced_kmer_butterfly_tables(masks);
 
-    bool const want_by_mask     = (
-        (axis == SpacedKmerAxis::kByMask)     || (axis == SpacedKmerAxis::kEither)
-    );
-    bool const want_by_position = (
-        (axis == SpacedKmerAxis::kByPosition) || (axis == SpacedKmerAxis::kEither)
-    );
-
     struct CandidateResult
     {
         SpacedKmerMode mode;
@@ -198,7 +157,7 @@ inline SpacedKmerMode spaced_kmer_selector(
         // Timed runs. The callback is stateless on purpose: an accumulator captured by reference
         // escapes into the out-of-line std::visit bodies of BitExtractKernelDispatcher::run(),
         // where it gets loaded, added to, and stored back per value, which slows some candidates
-        // down (e.g. GCC by_mask) far more than others and skews the ranking.
+        // down (e.g. the SIMD ones with GCC) far more than others and skews the ranking.
         constexpr std::size_t repeats = 3;
         auto best = std::chrono::nanoseconds::max();
         for (std::size_t r = 0; r < repeats; ++r) {
@@ -225,7 +184,7 @@ inline SpacedKmerMode spaced_kmer_selector(
     };
 
     // ------------------------------------------------------------
-    // Scalar candidates: always position-major, valid under either axis.
+    // Scalar candidates
     // ------------------------------------------------------------
 
     #if defined(FISK_HAS_BMI2)
@@ -253,63 +212,56 @@ inline SpacedKmerMode spaced_kmer_selector(
     });
 
     // ------------------------------------------------------------
-    // SIMD candidates, per ISA, per requested axis.
+    // SIMD candidates, per ISA
     // ------------------------------------------------------------
 
-    // Benchmark the by_mask and/or by_position candidates for one kernel type.
-    auto benchmark_simd_candidates_ = [&]<typename Kernel>(
-        std::type_identity<Kernel>, SpacedKmerMode mode_by_mask, SpacedKmerMode mode_by_position
+    // Benchmark the candidate of one kernel type, with its spaced k-mers taken out of the vectors.
+    auto benchmark_simd_candidate_ = [&]<typename Kernel>(
+        std::type_identity<Kernel>, SpacedKmerMode mode
     ) {
         BitExtractKernelDispatcher<SpacedKmerMask<L, Kernel>> disp(
             make_spaced_kmer_kernels<Kernel>(masks)
         );
-        if (want_by_mask) {
-            benchmark_candidate_(mode_by_mask, [&](auto&& cb) {
-                disp.run([&](auto const& kernels) {
-                    for_each_spaced_kmer_simd_by_mask(
-                        std::string_view(seq), kernels,
-                        CharEncoderTable<Encoding::kACGT>{}, cb
-                    );
-                });
+        benchmark_candidate_(mode, [&](auto&& cb) {
+            disp.run([&](auto const& kernels) {
+                for_each_spaced_kmer_ascii_checked_simd(
+                    std::string_view(seq), kernels, CharEncoderTable<Encoding::kACGT>{},
+                    [&](std::size_t pos, std::size_t mask_idx, auto vec, auto valid_lanes) {
+                        for_each_valid_lane(
+                            pos, vec, valid_lanes,
+                            [&](std::size_t p, auto const& value) { cb(p, mask_idx, value); }
+                        );
+                    }
+                );
             });
-        }
-        if (want_by_position) {
-            benchmark_candidate_(mode_by_position, [&](auto&& cb) {
-                disp.run([&](auto const& kernels) {
-                    for_each_spaced_kmer_simd_by_position(
-                        std::string_view(seq), kernels,
-                        CharEncoderTable<Encoding::kACGT>{}, cb
-                    );
-                });
-            });
-        }
+        });
     };
 
     #if defined(FISK_HAS_SSE2)
-    benchmark_simd_candidates_(
+    benchmark_simd_candidate_(
         std::type_identity<BitExtractKernelButterfly<SimdSSE2>>{},
-        SpacedKmerMode::kButterflyTableSSE2ByMask, SpacedKmerMode::kButterflyTableSSE2ByPosition
+        SpacedKmerMode::kButterflyTableSSE2
     );
     #endif
 
     #if defined(FISK_HAS_AVX2)
-    benchmark_simd_candidates_(
+    benchmark_simd_candidate_(
         std::type_identity<BitExtractKernelButterfly<SimdAVX2>>{},
-        SpacedKmerMode::kButterflyTableAVX2ByMask, SpacedKmerMode::kButterflyTableAVX2ByPosition
+        SpacedKmerMode::kButterflyTableAVX2
     );
     #endif
 
     #if defined(FISK_HAS_AVX512)
-    benchmark_simd_candidates_(
+    benchmark_simd_candidate_(
         std::type_identity<BitExtractKernelButterfly<SimdAVX512>>{},
-        SpacedKmerMode::kButterflyTableAVX512ByMask, SpacedKmerMode::kButterflyTableAVX512ByPosition
+        SpacedKmerMode::kButterflyTableAVX512
     );
     #endif
 
     #if defined(FISK_HAS_NEON)
-    benchmark_simd_candidates_(
+    benchmark_simd_candidate_(
         std::type_identity<BitExtractKernelButterfly<SimdNEON>>{},
-        SpacedKmerMode::kButterflyTableNeonByMask, SpacedKmerMode::kButterflyTableNeonByPosition
+        SpacedKmerMode::kButterflyTableNeon
     );
     #endif
 
@@ -337,12 +289,9 @@ inline SpacedKmerMode spaced_kmer_selector(
 template <Layout L>
 inline SpacedKmerMode spaced_kmer_selector(
     SpacedKmerMask<L, BitExtractMask> const& mask,
-    SpacedKmerAxis const axis = SpacedKmerAxis::kByPosition,
     std::size_t const seq_len = (1 << 16)
 ) {
-    return spaced_kmer_selector(
-        std::vector<SpacedKmerMask<L, BitExtractMask>>{mask}, axis, seq_len
-    );
+    return spaced_kmer_selector(std::vector<SpacedKmerMask<L, BitExtractMask>>{mask}, seq_len);
 }
 
 } // namespace fisk
