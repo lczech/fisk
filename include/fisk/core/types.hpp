@@ -207,7 +207,10 @@ private:
  * @brief A PackedSequence that also records which of its nucleotides are valid.
  *
  * Bit `j` of byte `b` of validity() is set if nucleotide `8 * b + j` was one of `ACGTacgt` in the
- * input, for both layouts. The 2-bit code of an invalid nucleotide is unspecified.
+ * input, for both layouts. The 2-bit code of an invalid nucleotide is unspecified. The codes follow
+ * the Layout, so that a window of them is a k-mer as it is. The validity bits are only ever tested
+ * against masks, such as the validity_mask of a SpacedKmerMask, and hence keep the order of the
+ * sequence for both layouts.
  *
  * validity() holds exactly `ceil(length() / 8)` bytes, and its bits beyond the length are zero.
  * For a length above 0, they are followed by `validity_padding` zero bytes, as the codes are by
@@ -664,6 +667,12 @@ struct SpacedKmerMask : M
 
     // Number of positions that the mask spans, i.e., the k of the rolling window.
     std::size_t span_k = 0;
+
+    // The positions of the span that the mask keeps, in the order of the sequence for both
+    // layouts: bit `i` is set if position `i` of the span is kept. This is the order of the
+    // validity bits of a PackedSequenceWithValidity, so that a spaced k-mer at `pos` is valid if
+    // the validity bits from `pos` on have all bits of this mask set.
+    std::uint64_t validity_mask = 0;
 };
 
 template <typename T>

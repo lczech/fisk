@@ -34,6 +34,8 @@
 #include "kmer_spaced_multi/bench.hpp"
 #include "kmer_spaced_packed_single/bench.hpp"
 #include "kmer_spaced_packed_multi/bench.hpp"
+#include "kmer_spaced_packed_checked_single/bench.hpp"
+#include "kmer_spaced_packed_checked_multi/bench.hpp"
 #include "kmer_clark/bench.hpp"
 #include "bit_extract_blocks/bench.hpp"
 #include "bit_extract_weights/bench.hpp"
@@ -316,6 +318,26 @@ int main(int argc, char **argv)
     {
         auto os_kmer_spaced_packed_multi = get_ofstream(out_dir, "kmer_spaced_packed_multi.csv" );
         bench_kmer_spaced_packed_multi( sequences, multi_masks, os_kmer_spaced_packed_multi );
+    }
+
+    // Spaced kmers from a PackedSequenceWithValidity, single mask
+    {
+        auto os_kmer_spaced_packed_checked_single = get_ofstream(
+            out_dir, "kmer_spaced_packed_checked_single.csv"
+        );
+        bench_kmer_spaced_packed_checked_single(
+            sequences, single_masks, os_kmer_spaced_packed_checked_single
+        );
+    }
+
+    // Spaced kmers from a PackedSequenceWithValidity, multi masks
+    {
+        auto os_kmer_spaced_packed_checked_multi = get_ofstream(
+            out_dir, "kmer_spaced_packed_checked_multi.csv"
+        );
+        bench_kmer_spaced_packed_checked_multi(
+            sequences, multi_masks, os_kmer_spaced_packed_checked_multi
+        );
     }
 
     // Clark

@@ -73,6 +73,12 @@ TITLE_FROM_FILENAME = {
         "Extraction from a packed two-bit sequence to spaced k-mers with multiple masks",
     "kmer_spaced_packed_single.csv":
         "Extraction from a packed two-bit sequence to spaced k-mers with a single mask",
+    "kmer_spaced_packed_checked_multi.csv":
+        "Extraction from a packed two-bit sequence with validity to valid spaced k-mers with "
+        "multiple masks",
+    "kmer_spaced_packed_checked_single.csv":
+        "Extraction from a packed two-bit sequence with validity to valid spaced k-mers with a "
+        "single mask",
     "kmer_clark.csv":          "K-mer Clark test",
 }
 

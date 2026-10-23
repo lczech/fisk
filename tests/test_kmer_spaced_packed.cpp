@@ -37,6 +37,39 @@ static std::vector<std::string> const& test_sequences()
     return seqs;
 }
 
+// Random sequences of the lengths 0..160 with lower and upper case nucleotides, without invalid
+// characters, with scattered ones, and with many, plus longer ones around blocks of 32 positions,
+// and with runs of N of up to 100, as in assemblies, for the checked extraction.
+static std::vector<std::string> const& checked_test_sequences()
+{
+    static std::vector<std::string> const seqs = [] {
+        std::vector<std::string> out;
+        Splitmix64 rng(8008);
+        for (std::size_t len = 0; len <= 160; ++len) {
+            std::string seq = random_sequence(rng, len);
+            double const rates[] = {0.0, 0.02, 0.2};
+            inject_invalid(seq, rng, rates[len % 3], all_invalid_bytes());
+            out.push_back(std::move(seq));
+        }
+        for (std::size_t len : {511u, 512u, 513u, 1023u, 1024u, 1025u}) {
+            std::string seq = random_sequence(rng, len);
+            inject_invalid(seq, rng, 0.005, kHandPickedInvalid);
+            out.push_back(std::move(seq));
+        }
+        for (std::size_t i = 0; i < 4; ++i) {
+            std::string seq = random_sequence(rng, 1000);
+            for (std::size_t r = 0; r < 5; ++r) {
+                std::size_t const run = 1 + rng.get_uint64() % 100;
+                std::size_t const at = rng.get_uint64() % (seq.size() - run);
+                seq.replace(at, run, run, 'N');
+            }
+            out.push_back(std::move(seq));
+        }
+        return out;
+    }();
+    return seqs;
+}
+
 // For every span in [1, 32], a single random mask, and a set of three random masks, plus masks
 // that keep all positions, or only the first and the last.
 static std::vector<std::vector<std::string>> const& test_mask_sets()
@@ -82,6 +115,30 @@ struct NoopSpacedCallback
     void operator()(std::size_t, std::size_t, K const&) const {}
 };
 
+// Checks `extract(masks, callback)` against `expected`, in all callback forms, and for a single
+// mask also `extract(mask, callback)`, with the mask itself.
+template <Layout L, typename Masks, typename Extract>
+static void check_callback_forms(
+    Masks const& masks, std::vector<SpacedEvent> const& expected, Extract&& extract
+) {
+    auto const runs = collect_spaced_callback_forms<L, false>([&](auto const& callback) {
+        extract(masks, callback);
+    });
+    for (auto const& got : runs) {
+        check_spaced_events(got, expected);
+    }
+    if (masks.size() == 1) {
+        auto const single_runs = collect_spaced_callback_forms<L, true>(
+            [&](auto const& callback) {
+                extract(masks.front(), callback);
+            }
+        );
+        for (auto const& got : single_runs) {
+            check_spaced_events(got, expected);
+        }
+    }
+}
+
 // =================================================================================================
 //     Extraction
 // =================================================================================================
@@ -102,24 +159,11 @@ static void check_extraction()
             auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
 
             auto const check = [&](auto const& masks, auto const& bit_ext) {
-                auto const runs = collect_spaced_callback_forms<L, false>(
-                    [&](auto const& callback) {
-                        for_each_spaced_kmer_packed(packed, masks, bit_ext, callback);
+                check_callback_forms<L>(
+                    masks, expected, [&](auto const& mask_or_masks, auto const& callback) {
+                        for_each_spaced_kmer_packed(packed, mask_or_masks, bit_ext, callback);
                     }
                 );
-                for (auto const& got : runs) {
-                    check_spaced_events(got, expected);
-                }
-                if (masks.size() == 1) {
-                    auto const single_runs = collect_spaced_callback_forms<L, true>(
-                        [&](auto const& callback) {
-                            for_each_spaced_kmer_packed(packed, masks.front(), bit_ext, callback);
-                        }
-                    );
-                    for (auto const& got : single_runs) {
-                        check_spaced_events(got, expected);
-                    }
-                }
             };
 
             check(direct_masks, [](std::uint64_t x, BitExtractMask const& mask) {
@@ -143,6 +187,78 @@ static void check_extraction()
             });
             #endif
         }
+    }
+}
+
+// Checks the checked extraction against the oracle, which skips the spaced k-mers with an invalid
+// character at a position that their mask keeps, and the unchecked one on the same sequence, which
+// ignores the validity bits. The bit extraction does not depend on the validity, so that two
+// extractors suffice here.
+template <Encoding E, Layout L>
+static void check_checked_extraction()
+{
+    WordEncoderButterfly<E, L> const encoder;
+    for (auto const& mask_strings : test_mask_sets()) {
+        auto const direct_masks = make_spaced_kmer_masks<L>(mask_strings);
+        auto const butterfly_masks = make_spaced_kmer_butterfly_tables(direct_masks);
+
+        for (auto const& seq : checked_test_sequences()) {
+            auto const packed = pack_sequence_with_validity(seq, encoder);
+            auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
+
+            auto const check = [&](auto const& masks, auto const& bit_ext) {
+                check_callback_forms<L>(
+                    masks, expected, [&](auto const& mask_or_masks, auto const& callback) {
+                        for_each_spaced_kmer_packed_checked_aligned(
+                            packed, mask_or_masks, bit_ext, callback
+                        );
+                    }
+                );
+            };
+            check(direct_masks, [](std::uint64_t x, BitExtractMask const& mask) {
+                return bit_extract_bitloop(x, mask);
+            });
+            check(butterfly_masks, [](std::uint64_t x, BitExtractButterflyTable const& mask) {
+                return bit_extract_butterfly_table(x, mask);
+            });
+
+            // Unchecked, all positions, whose number the oracle gives for a sequence without
+            // invalid characters.
+            std::size_t calls = 0;
+            for_each_spaced_kmer_packed(
+                packed, direct_masks, bit_extract_bitloop,
+                [&](std::size_t, std::size_t, auto const&) { ++calls; }
+            );
+            std::size_t const span_k = mask_strings.front().size();
+            std::size_t const positions = seq.size() >= span_k ? seq.size() - span_k + 1 : 0;
+            EXPECT_EQ(calls, positions * mask_strings.size());
+        }
+    }
+}
+
+// Invalid nucleotides at positions that the mask skips leave the spaced k-mer valid, in the narrow
+// and in the full-width loop, and those at kept positions make it invalid.
+template <Layout L>
+static void check_invalid_in_gaps()
+{
+    WordEncoderButterfly<Encoding::kACGT, L> const encoder;
+    for (std::size_t span_k : {3u, 29u, 30u, 32u}) {
+        std::string const mask_string = std::string("1").append(span_k - 2, '0').append("1");
+        auto const mask = make_spaced_kmer_mask<L>(mask_string);
+
+        // Two spans with N in all of the gap, then a span of N, which reaches the kept positions of
+        // all later spans.
+        std::string seq = std::string("A").append(span_k - 2, 'N').append("C");
+        seq += seq;
+        seq.append(span_k, 'N');
+        auto const packed = pack_sequence_with_validity(seq, encoder);
+
+        std::vector<std::size_t> positions;
+        for_each_spaced_kmer_packed_checked_aligned(
+            packed, mask, bit_extract_bitloop,
+            [&](std::size_t pos, auto const&) { positions.push_back(pos); }
+        );
+        EXPECT_EQ(positions, (std::vector<std::size_t>{0, span_k}));
     }
 }
 
@@ -230,6 +346,32 @@ TEST(KmerSpacedPacked, ActgMsb)
 TEST(KmerSpacedPacked, ActgLsb)
 {
     check_extraction<Encoding::kACTG, Layout::kLSB>();
+}
+
+TEST(KmerSpacedPackedChecked, AcgtMsb)
+{
+    check_checked_extraction<Encoding::kACGT, Layout::kMSB>();
+}
+
+TEST(KmerSpacedPackedChecked, AcgtLsb)
+{
+    check_checked_extraction<Encoding::kACGT, Layout::kLSB>();
+}
+
+TEST(KmerSpacedPackedChecked, ActgMsb)
+{
+    check_checked_extraction<Encoding::kACTG, Layout::kMSB>();
+}
+
+TEST(KmerSpacedPackedChecked, ActgLsb)
+{
+    check_checked_extraction<Encoding::kACTG, Layout::kLSB>();
+}
+
+TEST(KmerSpacedPackedChecked, InvalidInGaps)
+{
+    check_invalid_in_gaps<Layout::kMSB>();
+    check_invalid_in_gaps<Layout::kLSB>();
 }
 
 TEST(KmerSpacedPacked, ErrorContract)

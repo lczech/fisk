@@ -714,6 +714,8 @@ SUITE_UNIT_NOUN = {
     "kmer_spaced_multi"   : "k-mers",
     "kmer_spaced_packed_single" : "k-mers",
     "kmer_spaced_packed_multi"  : "k-mers",
+    "kmer_spaced_packed_checked_single" : "k-mers",
+    "kmer_spaced_packed_checked_multi"  : "k-mers",
     "char_encoder"        : "bases",
     "seq_pack"            : "bases",
     "bit_extract_weights" : "ops",

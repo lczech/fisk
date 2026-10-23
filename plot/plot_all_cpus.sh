@@ -123,6 +123,8 @@ CSV_FILES=(
   "kmer_spaced_single.csv"
   "kmer_spaced_packed_multi.csv"
   "kmer_spaced_packed_single.csv"
+  "kmer_spaced_packed_checked_multi.csv"
+  "kmer_spaced_packed_checked_single.csv"
   # "kmer_clark.csv"
 )
 

@@ -1003,6 +1003,26 @@ static void check_mask_formatting()
             ),
             normalized
         );
+
+        // The validity mask has the kept positions in the order of the string, for both layouts,
+        // and the other representations keep it.
+        std::uint64_t expected_validity = 0;
+        for (std::size_t i = 0; i < mask_string.size(); ++i) {
+            if (mask_string[i] == '1') {
+                expected_validity |= std::uint64_t{1} << i;
+            }
+        }
+        EXPECT_EQ(mask.validity_mask, expected_validity);
+        EXPECT_EQ(make_spaced_kmer_butterfly_table(mask).validity_mask, expected_validity);
+        EXPECT_EQ(
+            make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(mask).validity_mask,
+            expected_validity
+        );
+
+        // A validity mask that does not match the kept positions makes the mask invalid.
+        auto mismatched = mask;
+        mismatched.validity_mask ^= std::uint64_t{1} << (mask_string.size() - 1);
+        EXPECT_TRUE(!is_valid_spaced_kmer_mask(mismatched));
     }
 
     for (std::size_t span_k = 1; span_k <= 32; ++span_k) {

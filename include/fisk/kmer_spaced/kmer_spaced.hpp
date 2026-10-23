@@ -144,6 +144,7 @@ inline SpacedKmerMask<L, M> convert_spaced_kmer_mask_(
     SpacedKmerMask<L, M> result;
     static_cast<M&>(result) = make(mask.mask);
     result.span_k = mask.span_k;
+    result.validity_mask = mask.validity_mask;
     return result;
 }
 
@@ -186,6 +187,13 @@ inline SpacedKmerMask<L, BitExtractMask> make_spaced_kmer_mask(std::string const
         static_assert(dependent_false_v<L>, "Unhandled Layout in make_spaced_kmer_mask()");
     }
     result.span_k = mask.size();
+
+    // The kept positions in the order of the string, for both layouts, see SpacedKmerMask.
+    for (std::size_t i = 0; i < mask.size(); ++i) {
+        if (mask[i] == '1') {
+            result.validity_mask |= std::uint64_t{1} << i;
+        }
+    }
     return result;
 }
 
@@ -343,12 +351,25 @@ inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k 
 }
 
 /**
- * @brief Check if a spaced k-mer mask is valid for its span, see above.
+ * @brief Check if a spaced k-mer mask is valid for its span, see above, and if its validity_mask
+ * holds the positions that it keeps, see SpacedKmerMask.
  */
 template <SpacedKmerMaskType Mask>
 inline bool is_valid_spaced_kmer_mask(Mask const& mask)
 {
-    return is_valid_spaced_kmer_mask(spaced_kmer_mask_bits_(mask), mask.span_k);
+    std::uint64_t const bits = spaced_kmer_mask_bits_(mask);
+    if (!is_valid_spaced_kmer_mask(bits, mask.span_k)) {
+        return false;
+    }
+
+    // The validity mask from the bits, whose first position is in the highest two bits for kMSB,
+    // and in the lowest two bits for kLSB.
+    std::uint64_t validity_mask = 0;
+    for (std::size_t i = 0; i < mask.span_k; ++i) {
+        std::size_t const lane = Mask::layout == Layout::kMSB ? mask.span_k - 1 - i : i;
+        validity_mask |= ((bits >> (2 * lane)) & 1u) << i;
+    }
+    return mask.validity_mask == validity_mask;
 }
 
 /**

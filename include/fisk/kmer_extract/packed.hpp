@@ -104,6 +104,15 @@ inline auto const& without_validity_(Seq const& seq) noexcept
 // time.
 struct AllValid {};
 
+// The form of the validity that the block loop below hands to its steps for k-mers that are not
+// all valid: the valid starts of contiguous k-mers, or the validity window of the nucleotides, for
+// spaced k-mers, which are tested per mask against the positions that it keeps.
+enum class PackedValidity
+{
+    kStarts,
+    kNucleotides
+};
+
 // The 8 bytes at `p` as a word with the bases in order: the first base is in the lowest bits for
 // kLSB, and in the highest bits for kMSB.
 template <Layout L>
@@ -129,10 +138,11 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 // k-mer extraction, see kmer_spaced/packed.hpp: `step(b, validity_at)` extracts the k-mers that
 // start in the `StepBytes` bytes from byte `b`, and `validity_at(pos)` is the validity of the k-mers
 // from `pos` on for them: either AllValid, or a word whose bit 0 is set if the k-mer at `pos` is
-// valid, see packed_kmer_is_valid_(). The steps cover all bytes in which a k-mer of length `k`
-// starts, and `seq` has to have at least `k` nucleotides. The words that the steps load reach past
-// the last k-mer, into the padding after the codes and after the validity bits, see PackedSequence
-// (core/types.hpp).
+// valid, see packed_kmer_is_valid_(). With PackedValidity::kNucleotides, the word is the validity
+// window at `pos` instead, see Validity above, which holds at least the k nucleotides from `pos`.
+// The steps cover all bytes in which a k-mer of length `k` starts, and `seq` has to have at least
+// `k` nucleotides. The words that the steps load reach past the last k-mer, into the padding after
+// the codes and after the validity bits, see PackedSequence (core/types.hpp).
 //
 // Without validity bits, all k-mers are valid. The steps whose k-mers are all within the sequence
 // run with AllValid, and the step after them, if any, with a word that is all ones up to the last
@@ -153,7 +163,10 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 // the sequence, and for the step after them. With validity bits, there are three: for the blocks
 // of all valid k-mers, for the other blocks, whose loop has a fixed count, and for the steps after
 // the last whole block.
-template <std::size_t StepBytes, PackedSequenceType Seq, typename Step>
+template <
+    std::size_t StepBytes, PackedValidity Form = PackedValidity::kStarts,
+    PackedSequenceType Seq, typename Step
+>
 FISK_ALWAYS_INLINE
 inline void run_packed_blocks_(Seq const& seq, std::size_t k, Step&& step)
 {
@@ -195,13 +208,19 @@ inline void run_packed_blocks_(Seq const& seq, std::size_t k, Step&& step)
         // The valid starts of a window `w`: bit `j` is set if bits `j` to `j + k - 1` of `w` are.
         // Each round of the loop doubles the length `len` of the runs of set bits that the bits
         // of `w` stand for, up to a power of two, and the last AND covers the remaining `k - len`
-        // bits with a run that overlaps the first one.
+        // bits with a run that overlaps the first one. With PackedValidity::kNucleotides, the
+        // window itself.
         auto const valid_starts_ = [k](std::uint64_t w) FISK_ALWAYS_INLINE_LAMBDA {
-            std::size_t len = 1;
-            for (; 2 * len <= k; len *= 2) {
-                w &= w >> len;
+            if constexpr (Form == PackedValidity::kStarts) {
+                std::size_t len = 1;
+                for (; 2 * len <= k; len *= 2) {
+                    w &= w >> len;
+                }
+                return w & (w >> (k - len));
+            } else {
+                (void) k;
+                return w;
             }
-            return w & (w >> (k - len));
         };
 
         // The steps of the block at `b`, with the given validity.
