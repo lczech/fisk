@@ -346,6 +346,25 @@ for EXT in png svg ; do
       --unit "$UNIT" --scale "$SCALE" \
       --out "${DIR}/kmer_spaced_packed_checked_multi_bars.${EXT}"
 
+
+    # Checked vs. Unchecked
+
+    # The unchecked suites that have a checked counterpart with the same techniques, as
+    # "<name> <unchecked csv> <checked csv>", where <name> is the name of both without the check.
+    # The plot is skipped if one of the two tables is missing.
+    for pair in \
+      "kmer_spaced_packed_single kmer_spaced_packed_single.csv kmer_spaced_packed_checked_single.csv" \
+      "kmer_spaced_packed_multi kmer_spaced_packed_multi.csv kmer_spaced_packed_checked_multi.csv" \
+      "kmer_extract_packed kmer_extract_packed.csv kmer_extract_packed_checked.csv" \
+      "seq_pack seq_pack.csv seq_pack_validity.csv"
+    do
+      read -r name unchecked checked <<< "$pair"
+      run_plot "${DIR}/${unchecked}" python ./plot/plot_checked_vs_unchecked_per_cpu.py \
+        --dir "$DIR" --unchecked "$unchecked" --checked "$checked" \
+        --unit "$UNIT" --scale "$SCALE" \
+        --out "${DIR}/${name}_checked_vs_unchecked.${EXT}"
+    done
+
   done
 done
 

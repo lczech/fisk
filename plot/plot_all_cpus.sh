@@ -274,6 +274,54 @@ do
 done
 
 # ------------------------------------------------------------
+# Checked vs. unchecked, one panel per CPU
+# ------------------------------------------------------------
+
+# The unchecked suites that have a checked counterpart with the same techniques, as
+# "<name> <unchecked csv> <checked csv>", where <name> is the name of both without the check. The
+# plot script leaves out the CPUs without both tables, and skips a pair that no CPU has.
+CHECKED_PAIRS=(
+  "kmer_spaced_packed_single kmer_spaced_packed_single.csv kmer_spaced_packed_checked_single.csv"
+  "kmer_spaced_packed_multi kmer_spaced_packed_multi.csv kmer_spaced_packed_checked_multi.csv"
+  "kmer_extract_packed kmer_extract_packed.csv kmer_extract_packed_checked.csv"
+  "seq_pack seq_pack.csv seq_pack_validity.csv"
+)
+
+dir_args=()
+for cpu in "${CPUS[@]}"; do
+  dir_args+=( --dir "${ROOT}/${cpu}" )
+done
+
+echo "Plotting checked vs. unchecked comparison"
+for pair in "${CHECKED_PAIRS[@]}"; do
+  read -r name unchecked checked <<< "$pair"
+
+  for EXT in "${FORMATS[@]}"; do
+    for combo in "${COMBOS[@]}"; do
+      UNIT="${combo%%:*}"
+      SCALE="${combo##*:}"
+
+      run_job python ./plot/plot_checked_vs_unchecked_per_cpu.py "${dir_args[@]}" \
+        --unchecked "$unchecked" --checked "$checked" \
+        --unit "$UNIT" --scale "$SCALE" \
+        --out "${OUT}/${name}_checked_vs_unchecked_per_cpu.${EXT}"
+    done
+  done
+  wait # every plot for this pair is on disk before converting svg -> pdf below
+
+  for combo in "${COMBOS[@]}"; do
+    UNIT="${combo%%:*}"
+    SCALE="${combo##*:}"
+
+    # Not produced if no CPU has both tables yet.
+    svg="${OUT}/${name}_checked_vs_unchecked_per_cpu_${UNIT}_${SCALE}.svg"
+    if [[ -f "$svg" ]]; then
+      inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+    fi
+  done
+done
+
+# ------------------------------------------------------------
 # Kmer extract: per encoding and layout, one panel per CPU
 # ------------------------------------------------------------
 
