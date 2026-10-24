@@ -709,6 +709,7 @@ BENCHMARK_COLORS.update(SEQ_PACK_COLORS)
 SUITE_UNIT_NOUN = {
     "kmer_extract"        : "k-mers",
     "kmer_extract_packed" : "k-mers",
+    "kmer_extract_packed_checked" : "k-mers",
     "kmer_clark"          : "k-mers",
     "kmer_spaced_single"  : "k-mers",
     "kmer_spaced_multi"   : "k-mers",
@@ -718,6 +719,7 @@ SUITE_UNIT_NOUN = {
     "kmer_spaced_packed_checked_multi"  : "k-mers",
     "char_encoder"        : "bases",
     "seq_pack"            : "bases",
+    "seq_pack_validity"   : "bases",
     "bit_extract_weights" : "ops",
     "bit_extract_blocks"  : "ops",
 }
@@ -749,6 +751,15 @@ def convert_for_display(ns_per_op, unit: str):
     if unit == "ns":
         return ns_per_op
     return ns_per_op_to_throughput(ns_per_op)
+
+
+def single_suite(df, suite: str | None = None) -> str | None:
+    """Return the suite of a plot, for its labels: `suite` if given, else the only suite in the
+    rows of `df`, else None, as for plots of a single result file without --suite."""
+    if suite is not None:
+        return suite
+    suites = df["suite"].dropna().unique()
+    return str(suites[0]) if len(suites) == 1 else None
 
 
 def ylabel_for_unit(unit: str, suite: str | None = None) -> str:

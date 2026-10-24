@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Sequence packing: four overview plots and two focused comparisons with external references.
 
-Each encoding/layout gets its own file. Y-limits are shared within each view set.
+Takes the tables of one packing suite, seq_pack or seq_pack_validity, and names the files after
+it. Each encoding/layout gets its own file. Y-limits are shared within each view set. The focused
+views are only made for tables with external references; seq_pack_validity has none.
 Use --summary for the existing CPU/compiler grouped-bar style across CSV files.
 
 Examples:
   python plot/plot_seq_pack.py results/seq_pack.csv --out-dir results
+  python plot/plot_seq_pack.py results/seq_pack_validity.csv --out-dir results
   python plot/plot_seq_pack.py --glob 'results/*/seq_pack.csv' --summary \
       --out-dir results/Summaries
 """
@@ -51,9 +54,9 @@ def load_results(csv_path):
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"{csv_path}: missing columns {sorted(missing)}")
-    df = df[df["suite"] == "seq_pack"].copy()
-    if df.empty:
-        raise ValueError(f"{csv_path}: no seq_pack rows")
+    suites = df["suite"].dropna().unique()
+    if len(suites) != 1:
+        raise ValueError(f"{csv_path}: expected the rows of one suite, got {sorted(suites)}")
     df = parse_case_fields(df)
     if not {"encoding", "layout"}.issubset(df.columns):
         raise ValueError(f"{csv_path}: cases must specify encoding and layout")
@@ -70,13 +73,15 @@ def load_results(csv_path):
 
 
 def select_views(df):
-    """Keep every overview variant; only show a focused view with reference measurements."""
+    """Keep every overview variant; only show a focused view with reference measurements, and
+    warn about missing ones only in a table that has them for some other case."""
     views = {}
+    has_references = df["benchmark"].str.startswith(EXTERNAL_PREFIXES).any()
     for encoding, layout in COMBINATIONS:
         rows = df[(df["encoding"] == encoding) & (df["layout"] == layout)]
         if not rows.empty:
             views[("overview", encoding, layout)] = rows
-        if encoding != "actg":
+        if encoding != "actg" or not has_references:
             continue
         focused = rows[rows["benchmark"].isin(SEQ_PACK_FOCUSED)]
         if focused["benchmark"].str.startswith(EXTERNAL_PREFIXES).any():
@@ -117,22 +122,22 @@ def shared_limits(views, args):
 #     Rendering
 # -------------------------------------------------------------------------------------------------
 
-def plot_views(files, views, limits, args):
+def plot_views(files, suite, views, limits, args):
     """Reuse the per-CPU and cross-CPU bar renderers for each fixed output convention."""
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     for (view, encoding, layout), rows in views.items():
         order = benchmark_order(rows)
         y_min, y_max = limits[view]
-        stem = f"seq_pack_{view}_{encoding}_{layout}"
+        stem = f"{suite}_{view}_{encoding}_{layout}"
         suffix = "_per_cpu" if args.summary else ""
         out = str(out_dir / f"{stem}{suffix}.{args.format}")
         heading = "All sequence-packing implementations" if view == "overview" else "External references vs fisk"
-        title = f"{heading}: {encoding.upper()} / {layout.upper()}"
+        title = f"{heading} ({suite}): {encoding.upper()} / {layout.upper()}"
         if args.summary:
             argv = [
                 "--legend-outside",
-                "--suite", "seq_pack", "--case-filter", f"encoding={encoding}",
+                "--suite", suite, "--case-filter", f"encoding={encoding}",
                 "--case-filter", f"layout={layout}", "--unit", args.unit, "--scale", args.scale,
                 "--y-min", str(y_min), "--y-max", str(y_max), "--title", title, "--out", out,
             ]
@@ -144,7 +149,7 @@ def plot_views(files, views, limits, args):
         else:
             title = f"{platform_from_csv_path(files[0])}\n{title}"
             make_impl_summary_plot(
-                rows, "seq_pack", title, apply_unit_scale_suffix(out, args.unit, args.scale),
+                rows, suite, title, apply_unit_scale_suffix(out, args.unit, args.scale),
                 benchmark_order=order, benchmark_colors=SEQ_PACK_COLORS,
                 unit=args.unit, scale=args.scale, y_min=y_min, y_max=y_max, show_range=False,
             )
@@ -176,8 +181,10 @@ def main(argv=None):
     df = pd.concat([load_results(path) for path in files], ignore_index=True)
     if "sink" in df.columns and df["sink"].nunique() > 1:
         parser.error("Inputs use different benchmark sink modes")
+    if df["suite"].nunique() > 1:
+        parser.error("Inputs are tables of different suites")
     views = select_views(df)
-    plot_views(files, views, shared_limits(views, args), args)
+    plot_views(files, df["suite"].iloc[0], views, shared_limits(views, args), args)
 
 
 if __name__ == "__main__":

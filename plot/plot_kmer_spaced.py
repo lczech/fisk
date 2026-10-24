@@ -20,6 +20,7 @@ def make_grouped_bar_plot_impl_first(
     # Filter for this suite (if given)
     if suite is not None:
         df = df[df["suite"] == suite]
+    label_suite = single_suite(df, suite)
 
     if df.empty:
         raise ValueError(f"No data found for suite: {suite}")
@@ -119,7 +120,7 @@ def make_grouped_bar_plot_impl_first(
                 )
 
     ax.set_title(title)
-    ax.set_ylabel(ylabel_for_unit(unit, suite))
+    ax.set_ylabel(ylabel_for_unit(unit, label_suite))
     ax.set_xticks(x)
     ax.set_xticklabels(impls, rotation=45, ha="right")
 

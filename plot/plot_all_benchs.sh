@@ -105,12 +105,14 @@ for EXT in png svg ; do
       --out "${DIR}/bit_extract_blocks.${EXT}"
 
 
-    # Sequence Packing
+    # Sequence Packing, without and with validity
 
-    CSV="${DIR}/seq_pack.csv"
-    run_plot "$CSV" python ./plot/plot_seq_pack.py \
-      "$CSV" --unit "$UNIT" --scale "$SCALE" --format "$EXT" \
-      --out-dir "$DIR"
+    for SUITE in seq_pack seq_pack_validity; do
+      CSV="${DIR}/${SUITE}.csv"
+      run_plot "$CSV" python ./plot/plot_seq_pack.py \
+        "$CSV" --unit "$UNIT" --scale "$SCALE" --format "$EXT" \
+        --out-dir "$DIR"
+    done
 
 
     # Kmer Extract
@@ -130,6 +132,7 @@ for EXT in png svg ; do
     # ceiling tuned for ns/op can't just be reused for ops/s) -- 0.7 for ns/op, matching the
     # existing tuned value; 16 for ops, matching YLIM_PACKED_REDUCED in plot_all_cpus.sh (checked
     # against the real cross-CPU max throughput for this suite).
+    # The checked suite uses the same limit, so that the two stay comparable.
     PACKED_Y_MAX="16"
     [[ "$UNIT" == "ns" ]] && PACKED_Y_MAX="0.7"
     run_plot "$CSV" python ./plot/plot_kmer_extract_packed.py \
@@ -138,9 +141,15 @@ for EXT in png svg ; do
       --y-max "$PACKED_Y_MAX" \
       --out "${DIR}/kmer_extract_packed.${EXT}"
 
-    # Only the vectors and single k-mers of the SIMD extraction, as the other plots of this suite
-    # are in plot_all_cpus.sh.
     CSV="${DIR}/kmer_extract_packed_checked.csv"
+    run_plot "$CSV" python ./plot/plot_kmer_extract_packed.py \
+      "$CSV" \
+      --unit "$UNIT" --scale "$SCALE" \
+      --y-max "$PACKED_Y_MAX" \
+      --out "${DIR}/kmer_extract_packed_checked.${EXT}"
+
+    # The vectors and single k-mers of the checked SIMD extraction. The cross-CPU plots of both
+    # suites are in plot_all_cpus.sh.
     run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
       --file "$CSV" \
       --unit "$UNIT" --scale "$SCALE" \

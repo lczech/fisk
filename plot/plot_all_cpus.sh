@@ -206,8 +206,11 @@ done
 # Sequence packing: separate encoding/layout views
 # ------------------------------------------------------------
 
+# Without and with validity. The file names start with the suite, followed by the view.
 echo "Plotting sequence-packing comparisons"
-if build_file_args "seq_pack.csv"; then
+for suite in "seq_pack" "seq_pack_validity"; do
+  build_file_args "${suite}.csv" || continue
+
   for EXT in "${FORMATS[@]}"; do
     for combo in "${COMBOS[@]}"; do
       UNIT="${combo%%:*}"
@@ -223,12 +226,12 @@ if build_file_args "seq_pack.csv"; then
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
-    for svg in "${OUT}"/seq_pack_*_per_cpu_"${UNIT}_${SCALE}".svg; do
+    for svg in "${OUT}/${suite}"_{overview,references}_*_per_cpu_"${UNIT}_${SCALE}".svg; do
       [[ -e "$svg" ]] || continue
       inkscape "$svg" --export-filename="${svg%.svg}.pdf"
     done
   done
-fi
+done
 
 # ------------------------------------------------------------
 # SIMD extraction: vectors vs. single k-mers, one panel per CPU
@@ -319,7 +322,9 @@ YLIM_PACKED_EXTENDED_OPS="16"
 YLIM_PACKED_REDUCED_NS="0.75"
 YLIM_PACKED_EXTENDED_NS="1.2"
 
-if build_file_args "kmer_extract_packed.csv"; then
+# Without and with validity, with the same limits, so that the two stay comparable.
+for suite in "kmer_extract_packed" "kmer_extract_packed_checked"; do
+  build_file_args "${suite}.csv" || continue
 
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
@@ -337,12 +342,12 @@ if build_file_args "kmer_extract_packed.csv"; then
     # full detail.
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
       --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
-      --out "${OUT}/kmer_extract_packed_per_cpu.png"
+      --out "${OUT}/${suite}_per_cpu.png"
 
     # Extended: every variant, including narrow-width/full-width/rolling, for internal checking.
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
       --extended --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_EXTENDED" \
-      --out "${OUT}/kmer_extract_packed_per_cpu_ext.png"
+      --out "${OUT}/${suite}_per_cpu_ext.png"
   done
   wait
 
@@ -371,16 +376,16 @@ if build_file_args "kmer_extract_packed.csv"; then
       run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
         --case-filter "layout=${layout}" --case-filter "k<=29" \
         --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
-        --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_narrow_width.png"
+        --out "${OUT}/${suite}_per_cpu_${layout}_narrow_width.png"
 
       run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
         --case-filter "layout=${layout}" --case-filter "k>=30" --case-filter "k<=32" \
         --reduced --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_REDUCED" \
-        --out "${OUT}/kmer_extract_packed_per_cpu_${layout}_full_width.png"
+        --out "${OUT}/${suite}_per_cpu_${layout}_full_width.png"
     done
   done
   wait
-fi
+done
 
 # ------------------------------------------------------------
 # Manuscript figures

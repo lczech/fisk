@@ -339,6 +339,7 @@ def main(argv=None) -> None:
         if df.empty:
             available = sorted(set(pd.concat(dfs)["suite"].astype(str)))
             raise SystemExit(f"No rows for suite='{suite}'. Available suites: {available}")
+    suite = single_suite(df, suite)
 
     df = apply_case_filters(df, args.case_filter, args.case_default)
     if df.empty:

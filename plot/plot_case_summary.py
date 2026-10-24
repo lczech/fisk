@@ -62,6 +62,7 @@ def make_impl_summary_plot(
     # Filter for this suite (if given)
     if suite is not None:
         df = df[df["suite"] == suite]
+    label_suite = single_suite(df, suite)
 
     # Filter benchmarks (if given)
     if benchmarks_keep is not None:
@@ -158,7 +159,7 @@ def make_impl_summary_plot(
 
     ax.set_title(title)
     # ax.set_xlabel("Implementation")
-    ax.set_ylabel(ylabel_for_unit(unit, suite))
+    ax.set_ylabel(ylabel_for_unit(unit, label_suite))
     ax.set_xticks(x)
     # ax.set_xticklabels(impls, rotation=45, ha="right")
     labels = [_label_for_benchmark(name, BENCHMARK_RENAMES) for name in impls]
