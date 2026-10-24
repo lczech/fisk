@@ -164,7 +164,7 @@ inline void encode_pext(std::string_view seq, std::uint8_t* out) noexcept
  */
 template <fisk::Layout L, bool UsePext = false, int Unroll = 1>
 FISK_ALWAYS_INLINE
-inline void pack_sequence(
+inline void pack_sequence_unchecked(
     std::string_view seq, fisk::PackedSequence<fisk::Encoding::kACTG, L>& out
 ) {
     out.resize(seq.size());

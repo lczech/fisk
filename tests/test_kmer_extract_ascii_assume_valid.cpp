@@ -19,9 +19,9 @@ using namespace fisk;
 //     Helpers and Oracle
 // =================================================================================================
 
-// The oracle (oracle.hpp) decodes directly from the ASCII input, independent of pack_sequence()/
-// for_each_kmer_packed_aligned(), since this file's whole point is to also exercise the packing
-// step.
+// The oracle (oracle.hpp) decodes directly from the ASCII input, independent of
+// pack_sequence_unchecked()/ for_each_kmer_packed_unchecked_bytewise_scalar(), since this file's
+// whole point is to also exercise the packing step.
 
 // Sequence lengths 0..300, each with random per-position content -- deliberately covering many
 // exact multiples, one-more, and one-less relationships against every chunk_size in
@@ -88,11 +88,11 @@ static std::vector<std::size_t> const& test_chunk_sizes()
     return sizes;
 }
 
-// Checks for_each_kmer_ascii_assume_valid() with the word encoder of the given conventions, for
-// every sequence in `seqs`, every valid k, and every chunk size: exact positions for every window,
-// and exact values for every window that consists of nucleotides only.
+// Checks for_each_kmer_ascii_unchecked_chunked_scalar() with the word encoder of the given
+// conventions, for every sequence in `seqs`, every valid k, and every chunk size: exact positions
+// for every window, and exact values for every window that consists of nucleotides only.
 template <Encoding E, Layout L>
-static void check_assume_valid(std::vector<std::string> const& seqs)
+static void check_chunked(std::vector<std::string> const& seqs)
 {
     WordEncoderButterfly<E, L> encoder;
     PackedSequence<E, L> scratch;
@@ -101,10 +101,12 @@ static void check_assume_valid(std::vector<std::string> const& seqs)
             auto const expected = oracle_kmers_all_windows<E, L>(seq, k);
             for (auto const chunk_size : test_chunk_sizes()) {
                 check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                    for_each_kmer_ascii_assume_valid(seq, k, encoder, chunk_size, callback);
+                    for_each_kmer_ascii_unchecked_chunked_scalar(
+                        seq, k, encoder, chunk_size, callback
+                    );
                 });
                 check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                    for_each_kmer_ascii_assume_valid(
+                    for_each_kmer_ascii_unchecked_chunked_scalar(
                         seq, k, encoder, chunk_size, scratch, callback
                     );
                 });
@@ -128,42 +130,42 @@ static std::vector<std::string> const& actg_test_sequences()
 }
 
 // =================================================================================================
-//     for_each_kmer_ascii_assume_valid()
+//     for_each_kmer_ascii_unchecked_chunked_scalar()
 // =================================================================================================
 
-TEST(KmerExtractAsciiAssumeValid, Msb)
+TEST(KmerExtractAsciiChunkedScalar, Msb)
 {
-    check_assume_valid<Encoding::kACGT, Layout::kMSB>(test_sequences());
+    check_chunked<Encoding::kACGT, Layout::kMSB>(test_sequences());
 }
 
-TEST(KmerExtractAsciiAssumeValid, Lsb)
+TEST(KmerExtractAsciiChunkedScalar, Lsb)
 {
-    check_assume_valid<Encoding::kACGT, Layout::kLSB>(test_sequences());
+    check_chunked<Encoding::kACGT, Layout::kLSB>(test_sequences());
 }
 
-TEST(KmerExtractAsciiAssumeValid, ActgMsb)
+TEST(KmerExtractAsciiChunkedScalar, ActgMsb)
 {
-    check_assume_valid<Encoding::kACTG, Layout::kMSB>(actg_test_sequences());
+    check_chunked<Encoding::kACTG, Layout::kMSB>(actg_test_sequences());
 }
 
-TEST(KmerExtractAsciiAssumeValid, ActgLsb)
+TEST(KmerExtractAsciiChunkedScalar, ActgLsb)
 {
-    check_assume_valid<Encoding::kACTG, Layout::kLSB>(actg_test_sequences());
+    check_chunked<Encoding::kACTG, Layout::kLSB>(actg_test_sequences());
 }
 
 // Invalid characters, under all four conventions, since which nucleotide an invalid character is
 // silently encoded as depends on the encoding's bit tricks.
-TEST(KmerExtractAsciiAssumeValid, InvalidInput)
+TEST(KmerExtractAsciiChunkedScalar, InvalidInput)
 {
-    check_assume_valid<Encoding::kACGT, Layout::kMSB>(invalid_sequences());
-    check_assume_valid<Encoding::kACGT, Layout::kLSB>(invalid_sequences());
-    check_assume_valid<Encoding::kACTG, Layout::kMSB>(invalid_sequences());
-    check_assume_valid<Encoding::kACTG, Layout::kLSB>(invalid_sequences());
+    check_chunked<Encoding::kACGT, Layout::kMSB>(invalid_sequences());
+    check_chunked<Encoding::kACGT, Layout::kLSB>(invalid_sequences());
+    check_chunked<Encoding::kACTG, Layout::kMSB>(invalid_sequences());
+    check_chunked<Encoding::kACTG, Layout::kLSB>(invalid_sequences());
 }
 
 // The convenience overload (no explicit chunk_size, so kDefaultAsciiChunkSize) must be exactly
 // correct as well, in both callback forms.
-TEST(KmerExtractAsciiAssumeValid, ConvenienceOverload)
+TEST(KmerExtractAsciiChunkedScalar, ConvenienceOverload)
 {
     WordEncoderButterfly<Encoding::kACGT, Layout::kMSB> encoder;
     PackedSequence<Encoding::kACGT, Layout::kMSB> scratch;
@@ -171,17 +173,17 @@ TEST(KmerExtractAsciiAssumeValid, ConvenienceOverload)
         for (auto const k : all_ks()) {
             auto const expected = oracle_kmers_all_windows<Encoding::kACGT, Layout::kMSB>(seq, k);
             check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& cb) {
-                for_each_kmer_ascii_assume_valid(seq, k, encoder, cb);
+                for_each_kmer_ascii_unchecked_chunked_scalar(seq, k, encoder, cb);
             });
             check_kmer_callbacks<Encoding::kACGT, Layout::kMSB>(expected, k, [&](auto const& cb) {
-                for_each_kmer_ascii_assume_valid(seq, k, encoder, scratch, cb);
+                for_each_kmer_ascii_unchecked_chunked_scalar(seq, k, encoder, scratch, cb);
             });
         }
     }
 }
 
 // Separate caller-owned buffers make same-encoder extraction inside a callback safe.
-TEST(KmerExtractAsciiAssumeValid, ScratchEnablesNestedSameEncoder)
+TEST(KmerExtractAsciiChunkedScalar, ScratchEnablesNestedSameEncoder)
 {
     constexpr Encoding E = Encoding::kACGT;
     constexpr Layout L = Layout::kMSB;
@@ -196,12 +198,12 @@ TEST(KmerExtractAsciiAssumeValid, ScratchEnablesNestedSameEncoder)
     std::vector<std::size_t> outer_positions;
     std::vector<std::uint64_t> outer_values;
 
-    for_each_kmer_ascii_assume_valid(
+    for_each_kmer_ascii_unchecked_chunked_scalar(
         outer, k, encoder, outer_scratch,
         [&](std::size_t outer_pos, Kmer<E, L> outer_kmer) {
             std::vector<std::size_t> inner_positions;
             std::vector<std::uint64_t> inner_values;
-            for_each_kmer_ascii_assume_valid(
+            for_each_kmer_ascii_unchecked_chunked_scalar(
                 inner, k, encoder, inner_scratch,
                 [&](std::size_t inner_pos, Kmer<E, L> inner_kmer) {
                     inner_positions.push_back(inner_pos);
@@ -220,38 +222,40 @@ TEST(KmerExtractAsciiAssumeValid, ScratchEnablesNestedSameEncoder)
 //     Error Contract
 // =================================================================================================
 
-TEST(KmerExtractAsciiAssumeValid, InvalidKThrows)
+TEST(KmerExtractAsciiChunkedScalar, InvalidKThrows)
 {
     WordEncoderButterfly<Encoding::kACGT, Layout::kMSB> encoder;
     PackedSequence<Encoding::kACGT, Layout::kMSB> scratch;
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        for_each_kmer_ascii_assume_valid(seq, k, encoder, [](KmerAcgtMsb) {});
+        for_each_kmer_ascii_unchecked_chunked_scalar(seq, k, encoder, [](KmerAcgtMsb) {});
     });
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        for_each_kmer_ascii_assume_valid(seq, k, encoder, std::size_t{7}, [](KmerAcgtMsb) {});
+        for_each_kmer_ascii_unchecked_chunked_scalar(
+            seq, k, encoder, std::size_t{7}, [](KmerAcgtMsb) {}
+        );
     });
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        for_each_kmer_ascii_assume_valid(
+        for_each_kmer_ascii_unchecked_chunked_scalar(
             seq, k, encoder, std::size_t{7}, scratch, [](KmerAcgtMsb) {}
         );
     });
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        for_each_kmer_ascii_assume_valid(seq, k, encoder, scratch, [](KmerAcgtMsb) {});
+        for_each_kmer_ascii_unchecked_chunked_scalar(seq, k, encoder, scratch, [](KmerAcgtMsb) {});
     });
 }
 
-TEST(KmerExtractAsciiAssumeValid, InvalidChunkSizeThrows)
+TEST(KmerExtractAsciiChunkedScalar, InvalidChunkSizeThrows)
 {
     WordEncoderButterfly<Encoding::kACGT, Layout::kMSB> encoder;
     PackedSequence<Encoding::kACGT, Layout::kMSB> scratch;
     EXPECT_THROW(
-        for_each_kmer_ascii_assume_valid(
+        for_each_kmer_ascii_unchecked_chunked_scalar(
             "ACGTACGT", 3, encoder, std::size_t{0}, [](KmerAcgtMsb) {}
         ),
         std::invalid_argument
     );
     EXPECT_THROW(
-        for_each_kmer_ascii_assume_valid(
+        for_each_kmer_ascii_unchecked_chunked_scalar(
             "ACGTACGT", 3, encoder, std::size_t{0}, scratch, [](KmerAcgtMsb) {}
         ),
         std::invalid_argument

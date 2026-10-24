@@ -17,7 +17,7 @@ std::uint64_t run_var_simd_pext_scalars(
     std::uint64_t result = 0;
     kernel.run([&](auto const& kernels_arr) {
         auto sink = make_sink(sink_buffer);
-        for_each_spaced_kmer_packed_simd(
+        for_each_spaced_kmer_packed_unchecked_bytewise_simd(
             seq, kernels_arr,
             [&](
                 std::size_t pos, std::size_t /*mask_idx*/, auto spaced_kmers,

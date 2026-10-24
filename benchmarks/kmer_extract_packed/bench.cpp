@@ -40,10 +40,10 @@ void bench_kmer_extract_packed(
     packed_lsb.reserve(sequences.size());
     for (auto const& seq : sequences) {
         packed_msb.push_back(
-            pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{})
+            pack_sequence_unchecked(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{})
         );
         packed_lsb.push_back(
-            pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{})
+            pack_sequence_unchecked(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{})
         );
     }
 

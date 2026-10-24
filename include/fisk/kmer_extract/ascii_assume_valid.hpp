@@ -17,11 +17,11 @@
 namespace fisk {
 
 // =================================================================================================
-//     K-mer Extraction from ASCII, Assuming Valid Input
+//     K-mer Extraction from ASCII, Unchecked, Chunked
 // =================================================================================================
 
 /**
- * @brief Default chunk size, in bases, for for_each_kmer_ascii_assume_valid().
+ * @brief Default chunk size, in bases, for for_each_kmer_ascii_unchecked_chunked_scalar().
  *
  * Packs down to a 16 KiB buffer, which fits comfortably in L1 cache.
  */
@@ -35,13 +35,13 @@ FISK_NOINLINE_COLD
 inline void throw_invalid_chunk_size_()
 {
     throw std::invalid_argument(
-        "Invalid call to for_each_kmer_ascii_assume_valid() with chunk_size == 0"
+        "Invalid call to for_each_kmer_ascii_unchecked_chunked_scalar() with chunk_size == 0"
     );
 }
 
 // One reused buffer per thread and Encoder, shared across all callback types.
 template <WordEncoder Encoder>
-inline PackedSequence<Encoder::encoding, Encoder::layout>& ascii_assume_valid_buffer_()
+inline PackedSequence<Encoder::encoding, Encoder::layout>& ascii_chunked_buffer_()
 {
     thread_local PackedSequence<Encoder::encoding, Encoder::layout> buffer;
     return buffer;
@@ -52,7 +52,7 @@ inline PackedSequence<Encoder::encoding, Encoder::layout>& ascii_assume_valid_bu
 // The impl functions do not check for sequences shorter than K themselves, hence the check here.
 template <WordEncoder Encoder, unsigned K, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_ascii_assume_valid_chunked_(
+inline void for_each_kmer_ascii_unchecked_chunked_scalar_fixed_k_(
     std::string_view seq,
     Encoder const& encoder,
     std::size_t chunk_size,
@@ -83,35 +83,36 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
         std::size_t const chunk_end = std::min(chunk_start + chunk_size, seq_len);
         std::size_t const view_end  = std::min(chunk_end + margin, seq_len);
 
-        pack_sequence(seq.substr(chunk_start, view_end - chunk_start), encoder, scratch);
+        pack_sequence_unchecked(seq.substr(chunk_start, view_end - chunk_start), encoder, scratch);
         if (scratch.length() < K) {
             continue;
         }
         ChunkCallback chunk_func{func, chunk_start};
         if constexpr (K >= 30) {
-            for_each_kmer_packed_aligned_full_width_<K>(scratch, chunk_func);
+            for_each_kmer_packed_bytewise_scalar_full_width_<K>(scratch, chunk_func);
         } else {
-            for_each_kmer_packed_aligned_narrow_width_<K>(scratch, chunk_func);
+            for_each_kmer_packed_bytewise_scalar_narrow_width_<K>(scratch, chunk_func);
         }
     }
 }
 
 // -------------------------------------------------------------------------------------------------
-//     for_each_kmer_ascii_assume_valid()
+//     for_each_kmer_ascii_unchecked_chunked_scalar()
 // -------------------------------------------------------------------------------------------------
 
 /**
  * @brief Extract all k-mers for k in [1, 32] from an ASCII sequence that is known to contain only
  * valid nucleotides, and call a callback on each, using caller-provided temporary storage.
  *
- * Faster than for_each_kmer(), as it does no validity checking, and encodes the input a whole word
- * at a time. The sequence is processed in chunks of `chunk_size` bases, so that memory use stays
- * small and constant regardless of sequence length.
+ * Faster than the checked extraction from text, such as
+ * for_each_kmer_ascii_checked_rolling_scalar(), as it does no validity checking, and encodes the
+ * input a whole word at a time. The sequence is processed in chunks of `chunk_size` bases, so that
+ * memory use stays small and constant regardless of sequence length.
  *
  * The input should only consist of the characters `ACGT` (upper or lower case). Any other character
  * is silently encoded as one of the four nucleotides, changing every k-mer that overlaps it. If
  * this is acceptable (for instance for quick homology checks), this function is faster than the
- * checked alternatives, such as for_each_kmer().
+ * checked alternatives.
  *
  * The callback receives a `Kmer<Encoder::encoding, Encoder::layout>`, in sequence order. It may be
  * called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start position of the
@@ -129,7 +130,7 @@ inline void for_each_kmer_ascii_assume_valid_chunked_(
  */
 template <WordEncoder Encoder, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_ascii_assume_valid(
+inline void for_each_kmer_ascii_unchecked_chunked_scalar(
     std::string_view seq, std::size_t k, Encoder const& encoder,
     std::size_t chunk_size,
     PackedSequence<Encoder::encoding, Encoder::layout>& scratch,
@@ -146,49 +147,49 @@ inline void for_each_kmer_ascii_assume_valid(
     }
 
     // `func` is called from every chunk, so it is passed on as an lvalue, never forwarded.
-    #define FISK_ASCII_ASSUME_VALID_CASE_(K_) \
+    #define FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(K_) \
         case K_: \
-            for_each_kmer_ascii_assume_valid_chunked_<Encoder, K_>( \
+            for_each_kmer_ascii_unchecked_chunked_scalar_fixed_k_<Encoder, K_>( \
                 seq, encoder, chunk_size, scratch, func \
             ); \
             break;
 
     switch (k) {
-        FISK_ASCII_ASSUME_VALID_CASE_(1)
-        FISK_ASCII_ASSUME_VALID_CASE_(2)
-        FISK_ASCII_ASSUME_VALID_CASE_(3)
-        FISK_ASCII_ASSUME_VALID_CASE_(4)
-        FISK_ASCII_ASSUME_VALID_CASE_(5)
-        FISK_ASCII_ASSUME_VALID_CASE_(6)
-        FISK_ASCII_ASSUME_VALID_CASE_(7)
-        FISK_ASCII_ASSUME_VALID_CASE_(8)
-        FISK_ASCII_ASSUME_VALID_CASE_(9)
-        FISK_ASCII_ASSUME_VALID_CASE_(10)
-        FISK_ASCII_ASSUME_VALID_CASE_(11)
-        FISK_ASCII_ASSUME_VALID_CASE_(12)
-        FISK_ASCII_ASSUME_VALID_CASE_(13)
-        FISK_ASCII_ASSUME_VALID_CASE_(14)
-        FISK_ASCII_ASSUME_VALID_CASE_(15)
-        FISK_ASCII_ASSUME_VALID_CASE_(16)
-        FISK_ASCII_ASSUME_VALID_CASE_(17)
-        FISK_ASCII_ASSUME_VALID_CASE_(18)
-        FISK_ASCII_ASSUME_VALID_CASE_(19)
-        FISK_ASCII_ASSUME_VALID_CASE_(20)
-        FISK_ASCII_ASSUME_VALID_CASE_(21)
-        FISK_ASCII_ASSUME_VALID_CASE_(22)
-        FISK_ASCII_ASSUME_VALID_CASE_(23)
-        FISK_ASCII_ASSUME_VALID_CASE_(24)
-        FISK_ASCII_ASSUME_VALID_CASE_(25)
-        FISK_ASCII_ASSUME_VALID_CASE_(26)
-        FISK_ASCII_ASSUME_VALID_CASE_(27)
-        FISK_ASCII_ASSUME_VALID_CASE_(28)
-        FISK_ASCII_ASSUME_VALID_CASE_(29)
-        FISK_ASCII_ASSUME_VALID_CASE_(30)
-        FISK_ASCII_ASSUME_VALID_CASE_(31)
-        FISK_ASCII_ASSUME_VALID_CASE_(32)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(1)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(2)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(3)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(4)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(5)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(6)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(7)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(8)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(9)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(10)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(11)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(12)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(13)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(14)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(15)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(16)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(17)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(18)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(19)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(20)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(21)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(22)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(23)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(24)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(25)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(26)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(27)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(28)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(29)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(30)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(31)
+        FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_(32)
     }
 
-    #undef FISK_ASCII_ASSUME_VALID_CASE_
+    #undef FISK_KMER_ASCII_CHUNKED_SCALAR_CASE_
 }
 
 /**
@@ -199,12 +200,12 @@ inline void for_each_kmer_ascii_assume_valid(
  */
 template <WordEncoder Encoder, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_ascii_assume_valid(
+inline void for_each_kmer_ascii_unchecked_chunked_scalar(
     std::string_view seq, std::size_t k, Encoder const& encoder,
     std::size_t chunk_size, Func&& func
 ) {
-    for_each_kmer_ascii_assume_valid(
-        seq, k, encoder, chunk_size, ascii_assume_valid_buffer_<Encoder>(), std::forward<Func>(func)
+    for_each_kmer_ascii_unchecked_chunked_scalar(
+        seq, k, encoder, chunk_size, ascii_chunked_buffer_<Encoder>(), std::forward<Func>(func)
     );
 }
 
@@ -213,14 +214,14 @@ inline void for_each_kmer_ascii_assume_valid(
  */
 template <WordEncoder Encoder, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_ascii_assume_valid(
+inline void for_each_kmer_ascii_unchecked_chunked_scalar(
     std::string_view seq,
     std::size_t k,
     Encoder const& encoder,
     PackedSequence<Encoder::encoding, Encoder::layout>& scratch,
     Func&& func
 ) {
-    for_each_kmer_ascii_assume_valid(
+    for_each_kmer_ascii_unchecked_chunked_scalar(
         seq, k, encoder, kDefaultAsciiChunkSize, scratch, std::forward<Func>(func)
     );
 }
@@ -230,10 +231,10 @@ inline void for_each_kmer_ascii_assume_valid(
  */
 template <WordEncoder Encoder, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_ascii_assume_valid(
+inline void for_each_kmer_ascii_unchecked_chunked_scalar(
     std::string_view seq, std::size_t k, Encoder const& encoder, Func&& func
 ) {
-    for_each_kmer_ascii_assume_valid(
+    for_each_kmer_ascii_unchecked_chunked_scalar(
         seq, k, encoder, kDefaultAsciiChunkSize, std::forward<Func>(func)
     );
 }

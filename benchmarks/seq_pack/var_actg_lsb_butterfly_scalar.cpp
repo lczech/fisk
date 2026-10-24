@@ -10,6 +10,6 @@ std::uint64_t run_var_actg_lsb_butterfly_scalar(
     std::string const& seq,
     PackedSequence<Encoding::kACTG, Layout::kLSB>& out
 ) {
-    pack_sequence(seq, WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>{}, out);
+    pack_sequence_unchecked(seq, WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>{}, out);
     return 0;
 }

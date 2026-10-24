@@ -13,7 +13,7 @@ std::uint64_t run_var_simd_avx2(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_simd(seq, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
+    for_each_kmer_ascii_checked_rolling_avx2(seq, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
         sink.consume(kmer_value(kmer));
     });
     return sink.finalize();

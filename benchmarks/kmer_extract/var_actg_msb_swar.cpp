@@ -13,7 +13,7 @@ std::uint64_t run_var_actg_msb_swar(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_swar<Encoding::kACTG, Layout::kMSB>(
+    for_each_kmer_ascii_checked_rolling_swar<Encoding::kACTG, Layout::kMSB>(
         seq, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(kmer_value(kmer));
         }

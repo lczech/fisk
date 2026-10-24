@@ -31,7 +31,7 @@ using namespace fisk;
 // under test.
 
 // Decode base `i` per PackedSequence's documented contract (see Layout in core/types.hpp),
-// independent of pack_sequence()'s internals.
+// independent of pack_sequence_unchecked()'s internals.
 template <PackedSequenceType Seq>
 static int decode_base(Seq const& s, std::size_t i)
 {
@@ -89,8 +89,8 @@ static void check_packed(std::string const& seq, Seq const& packed)
     check_zero_beyond_length(packed);
 }
 
-// Checks pack_sequence() -- both overloads, and reuse of one PackedSequence across calls -- for a
-// given word encoder, on valid and invalid input.
+// Checks pack_sequence_unchecked() -- both overloads, and reuse of one PackedSequence across calls
+// -- for a given word encoder, on valid and invalid input.
 template <typename Encoder>
 static void check_seq_pack()
 {
@@ -99,17 +99,17 @@ static void check_seq_pack()
 
     for (auto const* seqs : {&test_sequences(), &invalid_sequences()}) {
         for (auto const& seq : *seqs) {
-            pack_sequence(seq, encoder, out);
+            pack_sequence_unchecked(seq, encoder, out);
             check_packed(seq, out);
 
-            auto const out2 = pack_sequence(seq, encoder);
+            auto const out2 = pack_sequence_unchecked(seq, encoder);
             check_packed(seq, out2);
         }
     }
 
     // Reuse must not leak stale bytes from a previous, larger pack.
-    pack_sequence(std::string(100, 'T'), encoder, out);
-    pack_sequence(std::string("AC"), encoder, out);
+    pack_sequence_unchecked(std::string(100, 'T'), encoder, out);
+    pack_sequence_unchecked(std::string("AC"), encoder, out);
     check_packed(std::string("AC"), out);
 }
 
@@ -217,21 +217,20 @@ static void check_validity(std::string const& seq, PackedSequenceWithValidity<E,
     check_zero_beyond_length(packed);
 }
 
-// Checks pack_sequence_with_validity() -- both overloads, the overload of pack_sequence() that
+// Checks pack_sequence_checked() -- both overloads, the overload of pack_sequence_unchecked() that
 // forwards to it, and reuse across calls -- for a given word encoder. Its codes have to be the
-// same as those of pack_sequence(), including the unspecified ones of invalid characters.
+// same as those of pack_sequence_unchecked(), including the unspecified ones of invalid characters.
 template <typename Encoder>
 static void check_seq_pack_validity()
 {
     Encoder encoder{};
     PackedSequence<Encoder::encoding, Encoder::layout> plain;
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> out;
-    PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> forwarded;
 
     for (auto const& seq : validity_sequences()) {
-        pack_sequence(seq, encoder, plain);
+        pack_sequence_unchecked(seq, encoder, plain);
 
-        pack_sequence_with_validity(seq, encoder, out);
+        pack_sequence_checked(seq, encoder, out);
         check_packed(seq, out);
         check_validity(seq, out);
         EXPECT_EQ(out.length(), plain.length());
@@ -241,17 +240,14 @@ static void check_seq_pack_validity()
             out_codes.begin(), out_codes.end(), plain_codes.begin(), plain_codes.end()
         ));
 
-        auto const out2 = pack_sequence_with_validity(seq, encoder);
+        auto const out2 = pack_sequence_checked(seq, encoder);
         check_packed(seq, out2);
         check_validity(seq, out2);
-
-        pack_sequence(seq, encoder, forwarded);
-        check_validity(seq, forwarded);
     }
 
     // Reuse must not leak stale bits from a previous, larger pack.
-    pack_sequence_with_validity(std::string(100, 'T'), encoder, out);
-    pack_sequence_with_validity(std::string("ANC"), encoder, out);
+    pack_sequence_checked(std::string(100, 'T'), encoder, out);
+    pack_sequence_checked(std::string("ANC"), encoder, out);
     check_packed(std::string("ANC"), out);
     check_validity(std::string("ANC"), out);
 }
@@ -364,16 +360,21 @@ template <typename Encoder, Encoding E, Layout L>
 constexpr bool tagged_as = Encoder::encoding == E && Encoder::layout == L;
 
 template <typename Encoder, typename Out>
-concept PackableInto = requires(std::string_view seq, Encoder encoder, Out& out) {
-    pack_sequence(seq, encoder, out);
+concept UncheckedPackableInto = requires(std::string_view seq, Encoder encoder, Out& out) {
+    pack_sequence_unchecked(seq, encoder, out);
+};
+
+template <typename Encoder, typename Out>
+concept CheckedPackableInto = requires(std::string_view seq, Encoder encoder, Out& out) {
+    pack_sequence_checked(seq, encoder, out);
 };
 
 using UntaggedWordEncoder = decltype([](std::uint64_t word) -> std::uint64_t { return word; });
 
 } // namespace
 
-// Every word encoder satisfies the concept that pack_sequence() requires; the per-character
-// encoders do not, and neither does a bare callable that states no conventions.
+// Every word encoder satisfies the concept that pack_sequence_unchecked() requires; the
+// per-character encoders do not, and neither does a bare callable that states no conventions.
 static_assert( WordEncoder<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>>);
 static_assert( WordEncoder<WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>>);
 #if defined(FISK_HAS_BMI2)
@@ -388,7 +389,7 @@ static_assert( WordEncoder<WordEncoderFold<Encoding::kACTG, Layout::kMSB, SimdSS
 #endif
 static_assert(!WordEncoder<CharEncoderTable<Encoding::kACGT>>);
 static_assert(!WordEncoder<UntaggedWordEncoder>);
-static_assert(!PackableInto<UntaggedWordEncoder, AcgtMsb>);
+static_assert(!UncheckedPackableInto<UntaggedWordEncoder, AcgtMsb>);
 
 // Scalar word encoders carry `encoding` as a pure tag that packing never consults, so the
 // byte-level tests below could not catch a wrong one; check that each instantiation forwards its
@@ -412,7 +413,7 @@ static_assert(tagged_as<WordEncoderPext<Encoding::kACGT, Layout::kLSB>, Encoding
 static_assert(tagged_as<WordEncoderPext<Encoding::kACGT, Layout::kMSB>, Encoding::kACGT, Layout::kMSB>);
 #endif // FISK_HAS_BMI2
 
-// The number of lanes is what selects the vector loop of pack_sequence().
+// The number of lanes is what selects the vector loop of pack_sequence_unchecked().
 static_assert(WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>::lanes == 1);
 static_assert(WordEncoderDirect<Encoding::kACGT, Layout::kMSB>::lanes == 1);
 static_assert(WordEncoderFold<Encoding::kACGT, Layout::kMSB>::lanes == 1);
@@ -458,21 +459,21 @@ static_assert(WordEncoderDirectDouble<Encoding::kACGT, Layout::kMSB, SimdNEON>::
 
 // The packed sequence type follows the encoder's tags.
 static_assert(std::is_same_v<
-    decltype(pack_sequence("", WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{})),
+    decltype(pack_sequence_unchecked("", WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{})),
     AcgtMsb
 >);
 
 // Packing into an existing sequence of a different encoding or layout does not compile.
-static_assert( PackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>, AcgtMsb>);
-static_assert(!PackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>, ActgMsb>);
-static_assert(!PackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>, AcgtLsb>);
+static_assert( UncheckedPackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>, AcgtMsb>);
+static_assert(!UncheckedPackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>, ActgMsb>);
+static_assert(!UncheckedPackableInto<WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>, AcgtLsb>);
 
 // Nor can a sequence of one encoding be passed where another is expected.
 static_assert(!std::is_convertible_v<ActgMsb const&, AcgtMsb const&>);
 
 // A sequence with validity is not a plain one, so that its codes cannot be resized without its
-// validity bits, but it gives one with sequence(). Packing it with either function fills its
-// validity, see check_seq_pack_validity().
+// validity bits, but it gives one with sequence(). Only pack_sequence_checked() packs it, so that
+// its validity is always filled (see check_seq_pack_validity()), and it packs nothing else.
 using AcgtMsbWithValidity = PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>;
 static_assert(!std::is_convertible_v<AcgtMsbWithValidity&, AcgtMsb&>);
 static_assert(!std::is_convertible_v<AcgtMsbWithValidity const&, AcgtMsb const&>);
@@ -480,15 +481,19 @@ static_assert(std::is_same_v<
     decltype(std::declval<AcgtMsbWithValidity const&>().sequence()), AcgtMsb const&
 >);
 static_assert(std::is_same_v<
-    decltype(pack_sequence_with_validity("", WordEncoderDirect<Encoding::kACGT, Layout::kMSB>{})),
+    decltype(pack_sequence_checked("", WordEncoderDirect<Encoding::kACGT, Layout::kMSB>{})),
     AcgtMsbWithValidity
 >);
 static_assert(
-    PackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kMSB>, AcgtMsbWithValidity>
+    CheckedPackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kMSB>, AcgtMsbWithValidity>
 );
 static_assert(
-    !PackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kLSB>, AcgtMsbWithValidity>
+    !CheckedPackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kLSB>, AcgtMsbWithValidity>
 );
+static_assert(
+    !UncheckedPackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kMSB>, AcgtMsbWithValidity>
+);
+static_assert(!CheckedPackableInto<WordEncoderDirect<Encoding::kACGT, Layout::kMSB>, AcgtMsb>);
 
 // Both are packed sequences, and only the one with validity has validity bits. A type with
 // validity bits but without the rest of a packed sequence is neither.

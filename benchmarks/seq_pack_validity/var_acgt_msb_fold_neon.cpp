@@ -12,7 +12,7 @@ std::uint64_t run_var_validity_acgt_msb_fold_neon(
     std::string const& seq,
     PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>& out
 ) {
-    pack_sequence_with_validity(
+    pack_sequence_checked(
         seq, WordEncoderFold<Encoding::kACGT, Layout::kMSB, SimdNEON>{}, out
     );
     return 0;

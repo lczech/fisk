@@ -89,14 +89,14 @@ static void check_simd_arch()
 {
     using simd_vector = typename Simd::simd_vector;
     auto const narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_simd_narrow_width_<Simd>(seq, k, func);
+        for_each_kmer_packed_bytewise_simd_narrow_width_<Simd>(seq, k, func);
     };
     auto const full_width = [](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_simd_full_width_<Simd>(seq, k, func);
+        for_each_kmer_packed_bytewise_simd_full_width_<Simd>(seq, k, func);
     };
     // The dispatcher hands on the vectors as KmerVector<E, L, Simd>, checked here as raw vectors.
     auto const dispatch = [](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_simd<Simd>(
+        for_each_kmer_packed_unchecked_bytewise_simd<Simd>(
             seq, k, [&](std::size_t pos, KmerVector<E, L, Simd> kmers, std::size_t n) {
                 func(pos, kmer_value(kmers), n);
             }
@@ -117,12 +117,12 @@ static void check_simd_arch()
     };
     auto const narrow_width_unmasked = masked_after(
         [](auto const& seq, std::size_t k, auto const& func) {
-            for_each_kmer_packed_simd_narrow_width_<Simd, false>(seq, k, func);
+            for_each_kmer_packed_bytewise_simd_narrow_width_<Simd, false>(seq, k, func);
         }
     );
     auto const full_width_unmasked = masked_after(
         [](auto const& seq, std::size_t k, auto const& func) {
-            for_each_kmer_packed_simd_full_width_<Simd, false>(seq, k, func);
+            for_each_kmer_packed_bytewise_simd_full_width_<Simd, false>(seq, k, func);
         }
     );
 
@@ -151,14 +151,14 @@ static void check_simd_arch()
             // The single k-mers of the dispatcher, from for_each_valid_lane() in both callback
             // forms, and from store_valid_lanes().
             check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                for_each_kmer_packed_simd<Simd>(
+                for_each_kmer_packed_unchecked_bytewise_simd<Simd>(
                     packed, k, [&](std::size_t pos, auto kmers, std::size_t n) {
                         for_each_valid_lane(pos, kmers, n, callback);
                     }
                 );
             });
             check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                for_each_kmer_packed_simd<Simd>(
+                for_each_kmer_packed_unchecked_bytewise_simd<Simd>(
                     packed, k, [&](std::size_t pos, auto kmers, std::size_t n) {
                         Kmer<E, L> stored[Simd::lanes];
                         std::size_t const count = store_valid_lanes(kmers, n, stored);
@@ -174,7 +174,9 @@ static void check_simd_arch()
 
     auto const throws_for = [&](auto const& extract, std::size_t max_k) {
         check_invalid_k_throws(max_k, [&](std::string const& seq, std::size_t k) {
-            extract(pack_sequence(seq, encoder), k, [](std::size_t, auto, std::size_t) {});
+            extract(
+                pack_sequence_unchecked(seq, encoder), k, [](std::size_t, auto, std::size_t) {}
+            );
         });
     };
     throws_for(narrow_width, 29);

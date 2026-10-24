@@ -162,13 +162,13 @@ static void check_kernel(
     using Simd = typename Kernel::simd_arch;
     auto const kernels = make_kernels<Kernel, L>(mask_strings);
     auto const extract_array = [&](auto const& callback) {
-        for_each_spaced_kmer_packed_simd(packed, kernels, callback);
+        for_each_spaced_kmer_packed_unchecked_bytewise_simd(packed, kernels, callback);
     };
     check_spaced_events(collect_vector_events<Simd, E, L>(N, extract_array), expected);
 
     if constexpr (N == 1) {
         auto const extract_single = [&](auto const& callback) {
-            for_each_spaced_kmer_packed_simd(packed, kernels[0], callback);
+            for_each_spaced_kmer_packed_unchecked_bytewise_simd(packed, kernels[0], callback);
         };
         check_spaced_events(collect_vector_events<Simd, E, L>(1, extract_single), expected);
         check_spaced_events(
@@ -196,13 +196,13 @@ static void check_checked_kernel(
         );
     };
     auto const extract_array = [&](auto const& callback) {
-        for_each_spaced_kmer_packed_checked_simd(packed, kernels, callback);
+        for_each_spaced_kmer_packed_checked_bytewise_simd(packed, kernels, callback);
     };
     check_spaced_events(collect.template operator()<false>(N, extract_array), expected);
 
     if constexpr (N == 1) {
         auto const extract_single = [&](auto const& callback) {
-            for_each_spaced_kmer_packed_checked_simd(packed, kernels[0], callback);
+            for_each_spaced_kmer_packed_checked_bytewise_simd(packed, kernels[0], callback);
         };
         check_spaced_events(collect.template operator()<false>(1, extract_single), expected);
         check_spaced_events(collect.template operator()<true>(1, extract_single), expected);
@@ -218,7 +218,7 @@ static void check_all_kernels(std::array<std::string, N> const& mask_strings)
     WordEncoderButterfly<E, L> const encoder;
     std::vector<std::string> const mask_vector(mask_strings.begin(), mask_strings.end());
     for (auto const& seq : test_sequences()) {
-        auto const packed = pack_sequence(seq, encoder);
+        auto const packed = pack_sequence_unchecked(seq, encoder);
         auto const expected = oracle_spaced_events<E, L>(seq, mask_vector);
         auto const check_arch = [&]<typename Simd>() {
             check_kernel<BitExtractKernelButterfly<Simd>>(mask_strings, packed, expected);
@@ -250,7 +250,7 @@ static void check_all_checked_kernels(std::array<std::string, N> const& mask_str
     WordEncoderButterfly<E, L> const encoder;
     std::vector<std::string> const mask_vector(mask_strings.begin(), mask_strings.end());
     for (auto const& seq : checked_test_sequences()) {
-        auto const packed = pack_sequence_with_validity(seq, encoder);
+        auto const packed = pack_sequence_checked(seq, encoder);
         auto const expected = oracle_spaced_events<E, L>(seq, mask_vector);
         auto const check_arch = [&]<typename Simd>() {
             check_checked_kernel<BitExtractKernelButterfly<Simd>>(mask_strings, packed, expected);
@@ -324,7 +324,7 @@ struct NoopSpacedValidLanesCallback
 // The kernels need to have the Layout of the sequence.
 template <typename Seq, typename Kernel>
 concept CanExtractPackedSimd = requires(Seq const& seq, Kernel const& kernel) {
-    for_each_spaced_kmer_packed_simd(seq, kernel, NoopSpacedVectorCallback{});
+    for_each_spaced_kmer_packed_unchecked_bytewise_simd(seq, kernel, NoopSpacedVectorCallback{});
 };
 static_assert(CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>,
@@ -351,7 +351,7 @@ static_assert(CanExtractPackedSimd<
 // The same for the checked extraction, which also needs the validity bits.
 template <typename Seq, typename Kernel>
 concept CanExtractPackedCheckedSimd = requires(Seq const& seq, Kernel const& kernel) {
-    for_each_spaced_kmer_packed_checked_simd(seq, kernel, NoopSpacedValidLanesCallback{});
+    for_each_spaced_kmer_packed_checked_bytewise_simd(seq, kernel, NoopSpacedValidLanesCallback{});
 };
 static_assert(CanExtractPackedCheckedSimd<
     PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>,
@@ -374,18 +374,20 @@ static void check_error_contract()
     using Kernel = BitExtractKernelButterfly<SimdScalar>;
     WordEncoderButterfly<Encoding::kACGT, L> const encoder;
     for (std::string const& seq : {std::string{}, std::string(129, 'T')}) {
-        auto const packed = pack_sequence(seq, encoder);
-        auto const checked = pack_sequence_with_validity(seq, encoder);
+        auto const packed = pack_sequence_unchecked(seq, encoder);
+        auto const checked = pack_sequence_checked(seq, encoder);
         for (std::size_t const span_k : {std::size_t{0}, std::size_t{33}}) {
             SpacedKmerMask<L, Kernel> kernel;
             static_cast<Kernel&>(kernel) = Kernel(3);
             kernel.span_k = span_k;
             EXPECT_THROW(
-                for_each_spaced_kmer_packed_simd(packed, kernel, NoopSpacedVectorCallback{}),
+                for_each_spaced_kmer_packed_unchecked_bytewise_simd(
+                    packed, kernel, NoopSpacedVectorCallback{}
+                ),
                 std::invalid_argument
             );
             EXPECT_THROW(
-                for_each_spaced_kmer_packed_checked_simd(
+                for_each_spaced_kmer_packed_checked_bytewise_simd(
                     checked, kernel, NoopSpacedValidLanesCallback{}
                 ),
                 std::invalid_argument
@@ -396,11 +398,13 @@ static void check_error_contract()
             make_spaced_kmer_kernel<Kernel, L>("101"), make_spaced_kmer_kernel<Kernel, L>("1001")
         };
         EXPECT_THROW(
-            for_each_spaced_kmer_packed_simd(packed, mixed, NoopSpacedVectorCallback{}),
+            for_each_spaced_kmer_packed_unchecked_bytewise_simd(
+                packed, mixed, NoopSpacedVectorCallback{}
+            ),
             std::invalid_argument
         );
         EXPECT_THROW(
-            for_each_spaced_kmer_packed_checked_simd(
+            for_each_spaced_kmer_packed_checked_bytewise_simd(
                 checked, mixed, NoopSpacedValidLanesCallback{}
             ),
             std::invalid_argument

@@ -101,28 +101,28 @@ static void check_checked_extractors(
         std::size_t const num_kmers = packed.length() >= k ? packed.length() - k + 1 : 0;
 
         check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-            for_each_kmer_packed_checked_aligned(packed, k, callback);
+            for_each_kmer_packed_checked_bytewise_scalar(packed, k, callback);
         });
         check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-            for_each_kmer_packed_checked_rolling(packed, k, callback);
+            for_each_kmer_packed_checked_rolling_scalar(packed, k, callback);
         });
 
         auto const check_simd = [&]<typename Simd>() {
             check_valid_lanes_callback<Simd>(expected, k, num_kmers, [&](auto const& callback) {
-                for_each_kmer_packed_checked_simd<Simd>(packed, k, callback);
+                for_each_kmer_packed_checked_bytewise_simd<Simd>(packed, k, callback);
             });
 
             // The single valid k-mers, from for_each_valid_lane() in both callback forms, and
             // from store_valid_lanes(), without their positions.
             check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                for_each_kmer_packed_checked_simd<Simd>(
+                for_each_kmer_packed_checked_bytewise_simd<Simd>(
                     packed, k, [&](std::size_t pos, auto kmers, auto valid_lanes) {
                         for_each_valid_lane(pos, kmers, valid_lanes, callback);
                     }
                 );
             });
             std::vector<std::uint64_t> stored_values;
-            for_each_kmer_packed_checked_simd<Simd>(
+            for_each_kmer_packed_checked_bytewise_simd<Simd>(
                 packed, k, [&](std::size_t, auto kmers, auto valid_lanes) {
                     Kmer<E, L> stored[Simd::lanes];
                     std::size_t const count = store_valid_lanes(kmers, valid_lanes, stored);
@@ -154,7 +154,7 @@ static void check_checked_extractors(
 template <Encoding E, Layout L>
 static void check_sequence(std::string const& seq)
 {
-    auto const packed = pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{});
+    auto const packed = pack_sequence_checked(seq, WordEncoderButterfly<E, L>{});
     check_checked_extractors(packed, [&](std::size_t k) {
         return oracle_kmers_skipping_invalid<E, L>(seq, k);
     });
@@ -211,16 +211,18 @@ template <Encoding E, Layout L>
 static void check_all_valid_equals_unchecked()
 {
     for (auto const& seq : test_sequences()) {
-        auto packed = pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{});
+        auto packed = pack_sequence_checked(seq, WordEncoderButterfly<E, L>{});
         auto const validity = packed.validity();
         for (std::size_t i = 0; i < packed.length(); ++i) {
             validity[i / 8] = static_cast<std::uint8_t>(validity[i / 8] | (1u << (i % 8)));
         }
         check_checked_extractors(packed, [&](std::size_t k) {
             std::vector<ExpectedKmer> expected;
-            for_each_kmer_packed_aligned(packed, k, [&](std::size_t pos, Kmer<E, L> kmer) {
-                expected.push_back({pos, kmer_value(kmer)});
-            });
+            for_each_kmer_packed_unchecked_bytewise_scalar(
+                packed, k, [&](std::size_t pos, Kmer<E, L> kmer) {
+                    expected.push_back({pos, kmer_value(kmer)});
+                }
+            );
             return expected;
         });
     }
@@ -236,7 +238,7 @@ static void check_invalid_in_validity_only()
     std::string const seq = random_sequence(rng, 200);
     std::size_t const invalid_at[] = {0, 1, 31, 32, 63, 64, 95, 96, 150, 199};
     for (std::size_t at : invalid_at) {
-        auto packed = pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{});
+        auto packed = pack_sequence_checked(seq, WordEncoderButterfly<E, L>{});
         auto const validity = packed.validity();
         validity[at / 8] = static_cast<std::uint8_t>(validity[at / 8] & ~(1u << (at % 8)));
         std::string marked = seq;
@@ -248,13 +250,13 @@ static void check_invalid_in_validity_only()
         for (std::size_t k = 1; k <= 32; ++k) {
             auto const expected = oracle_kmers_skipping_invalid<E, L>(seq, k);
             check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                for_each_kmer_packed_aligned(packed, k, callback);
+                for_each_kmer_packed_unchecked_bytewise_scalar(packed, k, callback);
             });
             check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                for_each_kmer_packed_rolling(packed, k, callback);
+                for_each_kmer_packed_unchecked_rolling_scalar(packed, k, callback);
             });
             check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-                for_each_kmer_packed_simd<SimdScalar>(
+                for_each_kmer_packed_unchecked_bytewise_simd<SimdScalar>(
                     packed, k, [&](std::size_t pos, auto kmers, std::size_t valid_count) {
                         for_each_valid_lane(pos, kmers, valid_count, callback);
                     }
@@ -270,17 +272,19 @@ static void check_throws()
 {
     auto const check_extractor = [](auto const& extract) {
         check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-            extract(pack_sequence_with_validity(seq, WordEncoderButterfly<E, L>{}), k);
+            extract(pack_sequence_checked(seq, WordEncoderButterfly<E, L>{}), k);
         });
     };
     check_extractor([](auto const& seq, std::size_t k) {
-        for_each_kmer_packed_checked_aligned(seq, k, [](Kmer<E, L>) {});
+        for_each_kmer_packed_checked_bytewise_scalar(seq, k, [](Kmer<E, L>) {});
     });
     check_extractor([](auto const& seq, std::size_t k) {
-        for_each_kmer_packed_checked_rolling(seq, k, [](Kmer<E, L>) {});
+        for_each_kmer_packed_checked_rolling_scalar(seq, k, [](Kmer<E, L>) {});
     });
     check_extractor([](auto const& seq, std::size_t k) {
-        for_each_kmer_packed_checked_simd<SimdScalar>(seq, k, [](std::size_t, auto, auto) {});
+        for_each_kmer_packed_checked_bytewise_simd<SimdScalar>(
+            seq, k, [](std::size_t, auto, auto) {}
+        );
     });
 }
 

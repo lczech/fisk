@@ -15,7 +15,7 @@ std::uint64_t run_var_checked_lsb_simd_neon(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_checked_simd<SimdNEON>(
+    for_each_kmer_packed_checked_bytewise_simd<SimdNEON>(
         seq, k,
         [&](
             std::size_t, auto kmers, SimdVectorValidLanes<SimdNEON> lanes

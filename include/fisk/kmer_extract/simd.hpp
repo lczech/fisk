@@ -47,13 +47,13 @@ constexpr T increment_or_reset_(T count, bool keep) noexcept
  * @brief Consume a contiguous run of valid two-bit codes.
  *
  * `base` is the index into the original sequence of `codes[0]`, used to report the start position
- * of each emitted k-mer to the callback. `mask` and `top_shift` are as in for_each_kmer_rolling(),
- * for Layout::kMSB and Layout::kLSB, respectively. For MSB, `mask` is only applied to the emitted
- * k-mers, see window_bits_().
+ * of each emitted k-mer to the callback. `mask` and `top_shift` are as in
+ * for_each_kmer_ascii_checked_rolling_scalar(), for Layout::kMSB and Layout::kLSB, respectively.
+ * For MSB, `mask` is only applied to the emitted k-mers, see kmer_ascii_rolling_window_bits_().
  */
 template<Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE
-inline void for_each_kmer_in_valid_run_(
+inline void for_each_kmer_ascii_checked_rolling_valid_run_(
     std::uint8_t const* codes,
     std::size_t len,
     std::size_t base,
@@ -79,7 +79,8 @@ inline void for_each_kmer_in_valid_run_(
                 kmer = (kmer >> 2) | (std::uint64_t{codes[idx]} << top_shift);
             } else {
                 static_assert(
-                    dependent_false_v<L>, "Unhandled Layout in for_each_kmer_in_valid_run_()"
+                    dependent_false_v<L>,
+                    "Unhandled Layout in for_each_kmer_ascii_checked_rolling_valid_run_()"
                 );
             }
         }
@@ -93,8 +94,10 @@ inline void for_each_kmer_in_valid_run_(
 
         // The last character processed above, at index base + idx - 1, just completed the first
         // valid k-mer, which hence starts at base + idx - k.
-        assert_fits_width_(window_bits_<L>(kmer, mask), k);
-        invoke_kmer_callback<E, L>(func, base + idx - k, window_bits_<L>(kmer, mask));
+        assert_fits_width_(kmer_ascii_rolling_window_bits_<L>(kmer, mask), k);
+        invoke_kmer_callback<E, L>(
+            func, base + idx - k, kmer_ascii_rolling_window_bits_<L>(kmer, mask)
+        );
 
         // Saturate valid so we do not keep incrementing a counter that is only used
         // as a threshold predicate.
@@ -109,11 +112,14 @@ inline void for_each_kmer_in_valid_run_(
             kmer = (kmer >> 2) | (std::uint64_t{codes[idx]} << top_shift);
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in for_each_kmer_in_valid_run_()"
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_ascii_checked_rolling_valid_run_()"
             );
         }
-        assert_fits_width_(window_bits_<L>(kmer, mask), k);
-        invoke_kmer_callback<E, L>(func, base + idx + 1 - k, window_bits_<L>(kmer, mask));
+        assert_fits_width_(kmer_ascii_rolling_window_bits_<L>(kmer, mask), k);
+        invoke_kmer_callback<E, L>(
+            func, base + idx + 1 - k, kmer_ascii_rolling_window_bits_<L>(kmer, mask)
+        );
     }
 }
 
@@ -122,16 +128,16 @@ inline void for_each_kmer_in_valid_run_(
  * validity.
  *
  * Bit j of `valid_bits` is set iff `codes[j]` is a valid code. Fully valid blocks are handed to
- * for_each_kmer_in_valid_run_(). Other blocks are rolled in one character at a time, with invalid
- * characters resetting the window; this is branch-free apart from the emission, as splitting the
- * block into valid runs instead would mispredict on scattered invalid characters. Codes of invalid
- * characters are hence rolled into the k-mer as well, and must be within 0-3, too.
+ * for_each_kmer_ascii_checked_rolling_valid_run_(). Other blocks are rolled in one character at a
+ * time, with invalid characters resetting the window; this is branch-free apart from the emission,
+ * as splitting the block into valid runs instead would mispredict on scattered invalid characters.
+ * Codes of invalid characters are hence rolled into the k-mer as well, and must be within 0-3, too.
  * `base` is the index into the original sequence of `codes[0]`. The other parameters are as for
- * for_each_kmer_in_valid_run_().
+ * for_each_kmer_ascii_checked_rolling_valid_run_().
  */
 template<Encoding E, Layout L, unsigned Width, typename Func>
 FISK_ALWAYS_INLINE
-inline void for_each_kmer_in_block_(
+inline void for_each_kmer_ascii_checked_rolling_block_(
     std::uint8_t const* codes,
     std::uint32_t valid_bits,
     std::size_t base,
@@ -142,14 +148,17 @@ inline void for_each_kmer_in_block_(
     std::size_t& valid,
     Func&& func
 ) {
-    static_assert(Width >= 1 && Width <= 32, "for_each_kmer_in_block_() supports 1 to 32 lanes");
+    static_assert(
+        Width >= 1 && Width <= 32,
+        "for_each_kmer_ascii_checked_rolling_block_() supports 1 to 32 lanes"
+    );
     constexpr std::uint32_t all_valid = (Width == 32)
         ? 0xFFFFFFFFu
         : ((std::uint32_t{1} << Width) - 1u);
 
     // Fast path: whole block valid.
     if (valid_bits == all_valid) {
-        for_each_kmer_in_valid_run_<E, L>(
+        for_each_kmer_ascii_checked_rolling_valid_run_<E, L>(
             codes, Width, base, k, mask, top_shift, kmer, valid, std::forward<Func>(func)
         );
         return;
@@ -162,14 +171,19 @@ inline void for_each_kmer_in_block_(
         } else if constexpr (L == Layout::kLSB) {
             kmer = (kmer >> 2) | (std::uint64_t{codes[j]} << top_shift);
         } else {
-            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_kmer_in_block_()");
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_ascii_checked_rolling_block_()"
+            );
         }
 
         valid = increment_or_reset_(valid, ((valid_bits >> j) & 1u) != 0);
 
         if (valid >= k) {
-            assert_fits_width_(window_bits_<L>(kmer, mask), k);
-            invoke_kmer_callback<E, L>(func, base + j + 1 - k, window_bits_<L>(kmer, mask));
+            assert_fits_width_(kmer_ascii_rolling_window_bits_<L>(kmer, mask), k);
+            invoke_kmer_callback<E, L>(
+                func, base + j + 1 - k, kmer_ascii_rolling_window_bits_<L>(kmer, mask)
+            );
         }
     }
 }
@@ -178,13 +192,14 @@ inline void for_each_kmer_in_block_(
  * @brief Iterate the k-mers ending in `data[begin, end)` one character at a time, continuing from
  * the state that a block-wise main loop left behind.
  *
- * The same loop as in for_each_kmer_rolling(), with the encoder of for_each_kmer(). Used as the
- * scalar tail of the block-wise extractors, and as their full fallback where they have no blocks.
- * The other parameters are as for for_each_kmer_in_valid_run_().
+ * The same loop as in for_each_kmer_ascii_checked_rolling_scalar(), with the lookup table encoder
+ * CharEncoderTable. Used as the scalar tail of the block-wise extractors, and as their full
+ * fallback where they have no blocks.
+ * The other parameters are as for for_each_kmer_ascii_checked_rolling_valid_run_().
  */
 template<Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE
-inline void for_each_kmer_scalar_tail_(
+inline void for_each_kmer_ascii_checked_rolling_tail_(
     char const* data,
     std::size_t begin,
     std::size_t end,
@@ -204,19 +219,24 @@ inline void for_each_kmer_scalar_tail_(
         } else if constexpr (L == Layout::kLSB) {
             kmer = (kmer >> 2) | (std::uint64_t{code & 0x03u} << top_shift);
         } else {
-            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_kmer_scalar_tail_()");
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_kmer_ascii_checked_rolling_tail_()"
+            );
         }
         valid = (code < 4) ? (valid + 1) : 0;
 
         if (valid >= k) {
-            assert_fits_width_(window_bits_<L>(kmer, mask), k);
-            invoke_kmer_callback<E, L>(func, i + 1 - k, window_bits_<L>(kmer, mask));
+            assert_fits_width_(kmer_ascii_rolling_window_bits_<L>(kmer, mask), k);
+            invoke_kmer_callback<E, L>(
+                func, i + 1 - k, kmer_ascii_rolling_window_bits_<L>(kmer, mask)
+            );
         }
     }
 }
 
 // =================================================================================================
-//     K-mer Extraction SIMD AVX2
+//     K-mer Extraction AVX2
 // =================================================================================================
 
 // AVX2 vectorizes the encoding and validity check of 32 characters at a time; the k-mers themselves
@@ -230,7 +250,7 @@ inline void for_each_kmer_scalar_tail_(
  *
  * Returns a 32-bit mask with bit i set iff lane i is valid A/C/G/T (case-insensitive). Invalid
  * lanes are not zeroed: their codes are arbitrary values within 0-3, which is all that
- * for_each_kmer_in_block_() needs.
+ * for_each_kmer_ascii_checked_rolling_block_() needs.
  */
 template <Encoding E>
 inline std::uint32_t encode_32_nts_avx2_(char const* data, std::uint8_t* codes) noexcept
@@ -284,25 +304,31 @@ inline std::uint32_t encode_32_nts_avx2_(char const* data, std::uint8_t* codes) 
 #endif
 
 /**
- * @brief SIMD-assisted iteration over all valid k-mers in a sequence.
+ * @brief AVX2-assisted iteration over all valid k-mers in a sequence.
  *
- * This AVX2 version vectorizes nucleotide encoding and validity testing in blocks
- * of 32 characters, then rolls the k-mers over each block, with a tight inner loop for fully valid
- * blocks, see for_each_kmer_in_block_().
+ * Vectorizes nucleotide encoding and validity testing with AVX2 in blocks of 32 characters, then
+ * rolls the k-mers over each block, with a tight inner loop for fully valid blocks, see
+ * for_each_kmer_ascii_checked_rolling_block_(). This is a fixed AVX2 loop, not generic over the
+ * SIMD archs of core/simd.hpp. Without AVX2, all characters take the scalar path, see
+ * for_each_kmer_ascii_checked_rolling_tail_().
  *
  * Invalid characters reset the valid-window state and suppress any overlapping k-mers.
  *
- * The callback receives a Kmer<E, L>, ACGT/MSB by default, as for for_each_kmer():
+ * The callback receives a Kmer<E, L>, ACGT/MSB by default:
  *
- *     for_each_kmer_simd(seq, k, func);                                 // Kmer<kACGT, kMSB>
- *     for_each_kmer_simd<Encoding::kACTG, Layout::kLSB>(seq, k, func);  // Kmer<kACTG, kLSB>
+ *     // Kmer<kACGT, kMSB>
+ *     for_each_kmer_ascii_checked_rolling_avx2(seq, k, func);
+ *     // Kmer<kACTG, kLSB>
+ *     for_each_kmer_ascii_checked_rolling_avx2<Encoding::kACTG, Layout::kLSB>(seq, k, func);
  *
- * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, see for_each_kmer_rolling().
+ * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, see
+ * for_each_kmer_ascii_checked_rolling_scalar().
  */
 template<Encoding E = Encoding::kACGT, Layout L = Layout::kMSB, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
-{
+inline void for_each_kmer_ascii_checked_rolling_avx2(
+    std::string_view seq, std::size_t k, Func&& func
+) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
@@ -313,7 +339,7 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
     std::size_t const seq_len = seq.size();
     char const* data = seq.data();
 
-    // Rolling constants for MSB and LSB, see for_each_kmer_rolling().
+    // Rolling constants for MSB and LSB, see for_each_kmer_ascii_checked_rolling_scalar().
     std::uint64_t const mask = (k == 32)
         ? ~std::uint64_t{0}
         : ((std::uint64_t{1} << (2 * k)) - 1u);
@@ -329,7 +355,7 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
 
     for (; i + 32 <= seq_len; i += 32) {
         std::uint32_t const valid_bits = encode_32_nts_avx2_<E>(data + i, codes.data());
-        for_each_kmer_in_block_<E, L, 32>(
+        for_each_kmer_ascii_checked_rolling_block_<E, L, 32>(
             codes.data(), valid_bits, i, k, mask, top_shift, kmer, valid, std::forward<Func>(func)
         );
     }
@@ -337,7 +363,7 @@ inline void for_each_kmer_simd(std::string_view seq, std::size_t k, Func&& func)
     #endif
 
     // Scalar tail, and full fallback if AVX2 is unavailable.
-    for_each_kmer_scalar_tail_<E, L>(
+    for_each_kmer_ascii_checked_rolling_tail_<E, L>(
         data, i, seq_len, k, mask, top_shift, kmer, valid, std::forward<Func>(func)
     );
 }
@@ -399,18 +425,21 @@ inline std::uint32_t encode_8_nts_swar_(char const* data, std::uint8_t* codes) n
 /**
  * @brief Iterate over all valid k-mers in a sequence, with 8-character blocks encoded via SWAR.
  *
- * Portable reference implementation of the block-wise structure of for_each_kmer_simd(), with
- * 8-character blocks encoded via SWAR (SIMD within a register) on plain 64-bit words, so that it
- * needs no SIMD instructions. Kept for testing and benchmarking: on valid input it is roughly on
- * par with for_each_kmer(), and behind it with frequent invalid characters, so regular callers
- * should use for_each_kmer(), or for_each_kmer_simd() where AVX2 is available.
+ * Portable reference implementation of the block-wise structure of
+ * for_each_kmer_ascii_checked_rolling_avx2(), with 8-character blocks encoded via SWAR (SIMD within
+ * a register) on plain 64-bit words, so that it needs no SIMD instructions. Kept for testing and
+ * benchmarking: on valid input it is roughly on par with
+ * for_each_kmer_ascii_checked_rolling_scalar(), and behind it with frequent invalid characters, so
+ * regular callers should use that, or for_each_kmer_ascii_checked_rolling_avx2() where AVX2 is
+ * available.
  *
- * E and L, and the callback, are as for for_each_kmer_simd().
+ * E and L, and the callback, are as for for_each_kmer_ascii_checked_rolling_avx2().
  */
 template<Encoding E = Encoding::kACGT, Layout L = Layout::kMSB, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_swar(std::string_view seq, std::size_t k, Func&& func)
-{
+inline void for_each_kmer_ascii_checked_rolling_swar(
+    std::string_view seq, std::size_t k, Func&& func
+) {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }
@@ -421,7 +450,7 @@ inline void for_each_kmer_swar(std::string_view seq, std::size_t k, Func&& func)
     std::size_t const seq_len = seq.size();
     char const* data = seq.data();
 
-    // Rolling constants for MSB and LSB, see for_each_kmer_rolling().
+    // Rolling constants for MSB and LSB, see for_each_kmer_ascii_checked_rolling_scalar().
     std::uint64_t const mask = (k == 32)
         ? ~std::uint64_t{0}
         : ((std::uint64_t{1} << (2 * k)) - 1u);
@@ -434,13 +463,13 @@ inline void for_each_kmer_swar(std::string_view seq, std::size_t k, Func&& func)
     alignas(8) std::array<std::uint8_t, 8> codes{};
     for (; i + 8 <= seq_len; i += 8) {
         std::uint32_t const valid_bits = encode_8_nts_swar_<E>(data + i, codes.data());
-        for_each_kmer_in_block_<E, L, 8>(
+        for_each_kmer_ascii_checked_rolling_block_<E, L, 8>(
             codes.data(), valid_bits, i, k, mask, top_shift, kmer, valid, std::forward<Func>(func)
         );
     }
 
     // Scalar tail.
-    for_each_kmer_scalar_tail_<E, L>(
+    for_each_kmer_ascii_checked_rolling_tail_<E, L>(
         data, i, seq_len, k, mask, top_shift, kmer, valid, std::forward<Func>(func)
     );
 }

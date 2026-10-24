@@ -507,7 +507,7 @@ inline std::size_t common_spaced_kmer_span_(Masks const& masks)
  */
 template<typename Mask, typename F>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_mask(Mask const& mask, F&& f)
+inline void for_each_mask_(Mask const& mask, F&& f)
 {
     f(mask);
 }
@@ -517,7 +517,7 @@ inline void for_each_mask(Mask const& mask, F&& f)
  */
 template<typename Mask, typename Alloc, typename F>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_mask(std::vector<Mask, Alloc> const& masks, F&& f)
+inline void for_each_mask_(std::vector<Mask, Alloc> const& masks, F&& f)
 {
     for (auto const& mask : masks) {
         f(mask);
@@ -525,10 +525,11 @@ inline void for_each_mask(std::vector<Mask, Alloc> const& masks, F&& f)
 }
 
 /**
- * @brief Shared implementation behind both for_each_spaced_kmer() overloads below.
+ * @brief Shared implementation behind both for_each_spaced_kmer_ascii_checked_rolling_scalar()
+ * overloads below.
  *
  * `SingleMask` is set by each overload, mirroring the single mask vs std::vector<Mask> distinction
- * that for_each_mask() above is overloaded on. `L` is the Layout of the masks, and `span_k` their
+ * that for_each_mask_() above is overloaded on. `L` is the Layout of the masks, and `span_k` their
  * common span, as checked by the overloads.
  */
 template<
@@ -536,7 +537,7 @@ template<
     typename MaskOrMasks, typename Enc, typename BitExtract, typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_(
+inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
     std::string_view seq,
     std::size_t const span_k,
     MaskOrMasks const& masks,
@@ -556,7 +557,7 @@ inline void for_each_spaced_kmer_(
     // extraction and the validity check below only look at the bits of the mask. Hence, the masks
     // must not have bits above the span, and `bit_ext` must ignore all bits outside of the mask.
     // LSB shifts new bases in at the top of the span instead, and shifts them out below.
-    for_each_mask(masks, [&]([[maybe_unused]] auto const& mask) {
+    for_each_mask_(masks, [&]([[maybe_unused]] auto const& mask) {
         assert(is_valid_spaced_kmer_mask(mask));
         assert(bit_ext(~std::uint64_t{0}, mask) == bit_ext(spaced_kmer_mask_bits_(mask), mask));
     });
@@ -594,7 +595,10 @@ inline void for_each_spaced_kmer_(
                 | ((static_cast<std::uint64_t>(code < 4) * 0x03u) << top_shift)
             ;
         } else {
-            static_assert(dependent_false_v<L>, "Unhandled Layout in for_each_spaced_kmer_()");
+            static_assert(
+                dependent_false_v<L>,
+                "Unhandled Layout in for_each_spaced_kmer_ascii_checked_rolling_scalar_()"
+            );
         }
 
         // Start position of the spaced k-mer. This underflows while i < span_k - 1, but is never
@@ -604,7 +608,7 @@ inline void for_each_spaced_kmer_(
 
         // Apply the callback for all masks that are satisfied at this position.
         std::size_t mask_idx = 0;
-        for_each_mask(masks, [&](auto const& mask) {
+        for_each_mask_(masks, [&](auto const& mask) {
             if ((valid_bits & mask.mask) == mask.mask) {
                 auto const word = bit_ext(kmer_bits, mask);
                 assert_fits_width_(word, spaced_kmer_weight(mask.mask));
@@ -645,14 +649,14 @@ inline void for_each_spaced_kmer_(
 template<typename Mask, typename Enc, typename BitExtract, typename Callback>
     requires SpacedKmerMaskType<Mask> && CharEncoder<std::remove_cvref_t<Enc>>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer(
+inline void for_each_spaced_kmer_ascii_checked_rolling_scalar(
     std::string_view seq,
     Mask const& mask,
     Enc&& enc,
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    for_each_spaced_kmer_<true, Mask::layout>(
+    for_each_spaced_kmer_ascii_checked_rolling_scalar_<true, Mask::layout>(
         seq, check_spaced_kmer_span_(mask.span_k), mask, std::forward<Enc>(enc),
         std::forward<BitExtract>(bit_ext), std::forward<Callback>(callback)
     );
@@ -670,7 +674,7 @@ inline void for_each_spaced_kmer(
 template<typename Mask, typename Alloc, typename Enc, typename BitExtract, typename Callback>
     requires SpacedKmerMaskType<Mask> && CharEncoder<std::remove_cvref_t<Enc>>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer(
+inline void for_each_spaced_kmer_ascii_checked_rolling_scalar(
     std::string_view seq,
     std::vector<Mask, Alloc> const& masks,
     Enc&& enc,
@@ -680,7 +684,7 @@ inline void for_each_spaced_kmer(
     if (masks.empty()) {
         return;
     }
-    for_each_spaced_kmer_<false, Mask::layout>(
+    for_each_spaced_kmer_ascii_checked_rolling_scalar_<false, Mask::layout>(
         seq, common_spaced_kmer_span_(masks), masks, std::forward<Enc>(enc),
         std::forward<BitExtract>(bit_ext), std::forward<Callback>(callback)
     );

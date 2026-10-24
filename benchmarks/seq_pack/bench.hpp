@@ -12,7 +12,7 @@
 #include "fisk/core/simd_neon.hpp"
 
 /**
- * @brief Benchmark pack_sequence() across all four encoding x layout combinations.
+ * @brief Benchmark pack_sequence_unchecked() across all four encoding x layout combinations.
  *
  * Each combination (encoding=acgt/actg, layout=lsb/msb) runs as its own comparison group: within
  * one group, all candidates are supposed to agree bit-for-bit (same encoding,

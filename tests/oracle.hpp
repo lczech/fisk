@@ -412,7 +412,7 @@ inline void sweep_packed_extractors(
     constexpr auto L = Encoder::layout;
 
     auto check_sequence = [&](std::string const& seq) {
-        auto const packed = fisk::pack_sequence(seq, encoder);
+        auto const packed = fisk::pack_sequence_unchecked(seq, encoder);
         check_zero_beyond_length(packed);
         for (std::size_t k = 1; k <= max_k; ++k) {
             check_one(seq, packed, k, oracle_kmers_all_windows<E, L>(seq, k));

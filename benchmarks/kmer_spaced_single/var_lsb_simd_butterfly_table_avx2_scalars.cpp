@@ -16,7 +16,7 @@ std::uint64_t run_var_simd_butterfly_table_avx2_scalars(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_spaced_kmer_ascii_checked_simd(
+    for_each_spaced_kmer_ascii_checked_rolling_simd(
         std::string_view(seq), kernel, CharEncoderTable<Encoding::kACGT>{},
         [&](std::size_t pos, auto spaced_kmers, auto valid_lanes) FISK_ALWAYS_INLINE_LAMBDA {
             for_each_valid_lane(

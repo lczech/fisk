@@ -12,7 +12,7 @@ std::uint64_t run_var_fastdna_pext_ordered(
     std::string const& seq,
     PackedSequence<Encoding::kACTG, Layout::kMSB>& out
 ) {
-    fastdna::pack_sequence<Layout::kMSB, true, 1>(seq, out);
+    fastdna::pack_sequence_unchecked<Layout::kMSB, true, 1>(seq, out);
     return 0;
 }
 

@@ -21,9 +21,9 @@
 // encoding with LSB layout, so that the kernels are compared in that group. The table maps all of
 // their algorithms to fisk. Only the two that differ from fisk's word encoders are ported here:
 //
-//   cute-nucleotides         Method                                      fisk
-//   -----------------------  ------------------------------------------  -----------------------------
-//   n_to_bits_lut            Scalar table, OR into 64-bit words          WordEncoderDirect<SimdScalar>;
+//   cute-nucleotides Method fisk ----------------------- ------------------------------------------
+//   ----------------------------- n_to_bits_lut Scalar table, OR into 64-bit words
+//   WordEncoderDirect<SimdScalar>;
 //                                                                        tails of the ported kernels
 //   n_to_bits_pext           Four PEXT on the words of a 32-byte vector  WordEncoderPext<SimdAVX2>
 //   n_to_bits_shift          Mask, two shift-OR rounds, byte shuffle     WordEncoderFold
@@ -31,9 +31,9 @@
 //                                                                        same idea as
 //                                                                        WordEncoderDirect, which
 //                                                                        multiplies with vpmaddubsw
-//   n_to_bits_movemask       vpermq, byte unpacks, two vpmovmskb         Ported: encode_movemask()
-//   bits_to_n_*              Decoding packed bases to ASCII              None, not ported
-//   n_to_bits2_*, bits_to_n2_*  Five-letter alphabet with N, 7 bits per  None, not ported: fisk keeps
+//   n_to_bits_movemask vpermq, byte unpacks, two vpmovmskb Ported: encode_movemask() bits_to_n_*
+//   Decoding packed bases to ASCII None, not ported n_to_bits2_*, bits_to_n2_* Five-letter alphabet
+//   with N, 7 bits per None, not ported: fisk keeps
 //                            3 bases                                     validity bits instead
 //
 // MIT License
@@ -191,7 +191,7 @@ inline void encode_movemask(std::string_view seq, std::uint8_t* out) noexcept
  */
 template <typename Kernel>
 FISK_ALWAYS_INLINE
-inline void pack_sequence(
+inline void pack_sequence_unchecked(
     std::string_view seq,
     Kernel kernel,
     fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out

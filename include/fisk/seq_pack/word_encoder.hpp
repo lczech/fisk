@@ -21,8 +21,9 @@ namespace fisk {
 // =================================================================================================
 
 // Each of these encodes 8 ASCII characters, loaded as one little-endian word, into their packed
-// 2-bit codes, for use with pack_sequence(). They assume valid input: an invalid character is
-// packed as an arbitrary code at its own position, without affecting any other position.
+// 2-bit codes, for use with pack_sequence_unchecked(). They assume valid input: an invalid
+// character is packed as an arbitrary code at its own position, without affecting any other
+// position.
 //
 // WordEncoderPext and WordEncoderButterfly gather the code bits under a mask, via hardware PEXT
 // or the software butterfly network. WordEncoderFold and WordEncoderDirect instead move the codes
@@ -32,7 +33,7 @@ namespace fisk {
 // PEXT per word. WordEncoderDirectDouble is a variant of WordEncoderDirect that processes two
 // vectors of the arch per step.
 //
-// For pack_sequence_with_validity(), they also store which characters are valid nucleotides, one
+// For pack_sequence_checked(), they also store which characters are valid nucleotides, one
 // bit each, see valid_nucleotide_bits(). That only depends on the loaded characters, so that their
 // store_valid_bits() takes those, not the codes.
 
@@ -41,15 +42,16 @@ namespace fisk {
 // -----------------------------------------------------------------------------
 
 /**
- * @brief Concept for anything usable as a word encoder for pack_sequence().
+ * @brief Concept for anything usable as a word encoder for pack_sequence_unchecked().
  *
- * Requires the encoder to state both conventions its output is in, from which pack_sequence()
- * derives the type of the PackedSequence it fills, and to encode one 8-character word at a time.
+ * Requires the encoder to state both conventions its output is in, from which
+ * pack_sequence_unchecked() derives the type of the PackedSequence it fills, and to encode one
+ * 8-character word at a time.
  *
- * It also states the number of `lanes`, that is, words that it encodes at once. With more than
- * one, pack_sequence() additionally uses `simd_vector`, `load_unaligned()`, `store_packed()`, and
- * the call operator on a whole vector, as provided by the encoders that take a SIMD arch, and
- * pack_sequence_with_validity() also `store_valid_bits()`.
+ * It also states the number of `lanes`, that is, words that it encodes at once. With more than one,
+ * pack_sequence_unchecked() additionally uses `simd_vector`, `load_unaligned()`, `store_packed()`,
+ * and the call operator on a whole vector, as provided by the encoders that take a SIMD arch, and
+ * pack_sequence_checked() also `store_valid_bits()`.
  */
 template <typename T>
 concept WordEncoder = requires(T const encoder, std::uint64_t word) {
@@ -225,7 +227,7 @@ inline void store_valid_nucleotide_bits_(typename Simd::simd_vector v, std::uint
  * @brief Encode 8 ASCII characters into packed 2-bit codes via a single hardware PEXT call.
  *
  * PEXT has no vector form, so that the SIMD arch serves to process `lanes` words per step: the
- * steps before the PEXT of each word, and their validity for pack_sequence_with_validity(), see
+ * steps before the PEXT of each word, and their validity for pack_sequence_checked(), see
  * store_valid_bits(), are done on all of them at once.
  */
 template <Encoding E, Layout L, SimdArch Simd = SimdScalar>

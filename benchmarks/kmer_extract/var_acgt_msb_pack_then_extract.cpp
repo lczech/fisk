@@ -14,10 +14,10 @@ std::uint64_t run_var_acgt_msb_pack_then_extract(
     PackedAcgtMsb& scratch,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    pack_sequence(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, scratch);
+    pack_sequence_unchecked(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{}, scratch);
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_aligned(scratch, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
-        sink.consume(kmer_value(kmer));
-    });
+    for_each_kmer_packed_unchecked_bytewise_scalar(
+        scratch, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA { sink.consume(kmer_value(kmer)); }
+    );
     return sink.finalize();
 }

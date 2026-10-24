@@ -15,7 +15,7 @@ std::uint64_t run_var_simd_block_table_sse2_vectors(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_spaced_kmer_packed_checked_simd(
+    for_each_spaced_kmer_packed_checked_bytewise_simd(
         seq, kernel,
         [&](
             std::size_t /*pos*/, auto spaced_kmers, auto valid_lanes

@@ -20,7 +20,7 @@ std::uint64_t run_var_simd_block_table_sse2_scalars(
     std::uint64_t result = 0;
     kernel.run([&](auto const& kernels_arr) {
         auto sink = make_sink(sink_buffer);
-        for_each_spaced_kmer_ascii_checked_simd(
+        for_each_spaced_kmer_ascii_checked_rolling_simd(
             std::string_view(seq), kernels_arr, CharEncoderTable<Encoding::kACGT>{},
             [&](
                 std::size_t pos, std::size_t /*mask_idx*/, auto spaced_kmers, auto valid_lanes

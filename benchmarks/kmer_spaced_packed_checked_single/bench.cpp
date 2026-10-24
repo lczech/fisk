@@ -372,10 +372,10 @@ void bench_kmer_spaced_packed_checked_single(
     packed_lsb.reserve(sequences.size());
     for (auto const& seq : sequences) {
         packed_msb.push_back(
-            pack_sequence_with_validity(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{})
+            pack_sequence_checked(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kMSB>{})
         );
         packed_lsb.push_back(
-            pack_sequence_with_validity(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{})
+            pack_sequence_checked(seq, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{})
         );
     }
 

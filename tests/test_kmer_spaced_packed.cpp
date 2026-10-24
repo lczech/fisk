@@ -155,13 +155,15 @@ static void check_extraction()
         auto const butterfly_masks = make_spaced_kmer_butterfly_tables(direct_masks);
 
         for (auto const& seq : test_sequences()) {
-            auto const packed = pack_sequence(seq, encoder);
+            auto const packed = pack_sequence_unchecked(seq, encoder);
             auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
 
             auto const check = [&](auto const& masks, auto const& bit_ext) {
                 check_callback_forms<L>(
                     masks, expected, [&](auto const& mask_or_masks, auto const& callback) {
-                        for_each_spaced_kmer_packed(packed, mask_or_masks, bit_ext, callback);
+                        for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
+                            packed, mask_or_masks, bit_ext, callback
+                        );
                     }
                 );
             };
@@ -203,13 +205,13 @@ static void check_checked_extraction()
         auto const butterfly_masks = make_spaced_kmer_butterfly_tables(direct_masks);
 
         for (auto const& seq : checked_test_sequences()) {
-            auto const packed = pack_sequence_with_validity(seq, encoder);
+            auto const packed = pack_sequence_checked(seq, encoder);
             auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
 
             auto const check = [&](auto const& masks, auto const& bit_ext) {
                 check_callback_forms<L>(
                     masks, expected, [&](auto const& mask_or_masks, auto const& callback) {
-                        for_each_spaced_kmer_packed_checked_aligned(
+                        for_each_spaced_kmer_packed_checked_bytewise_scalar(
                             packed, mask_or_masks, bit_ext, callback
                         );
                     }
@@ -225,7 +227,7 @@ static void check_checked_extraction()
             // Unchecked, all positions, whose number the oracle gives for a sequence without
             // invalid characters.
             std::size_t calls = 0;
-            for_each_spaced_kmer_packed(
+            for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
                 packed, direct_masks, bit_extract_bitloop,
                 [&](std::size_t, std::size_t, auto const&) { ++calls; }
             );
@@ -251,10 +253,10 @@ static void check_invalid_in_gaps()
         std::string seq = std::string("A").append(span_k - 2, 'N').append("C");
         seq += seq;
         seq.append(span_k, 'N');
-        auto const packed = pack_sequence_with_validity(seq, encoder);
+        auto const packed = pack_sequence_checked(seq, encoder);
 
         std::vector<std::size_t> positions;
-        for_each_spaced_kmer_packed_checked_aligned(
+        for_each_spaced_kmer_packed_checked_bytewise_scalar(
             packed, mask, bit_extract_bitloop,
             [&](std::size_t pos, auto const&) { positions.push_back(pos); }
         );
@@ -269,7 +271,9 @@ static void check_invalid_in_gaps()
 // Masks need to have the Layout of the sequence.
 template <typename Seq, typename Mask>
 concept CanExtractPacked = requires(Seq const& seq, Mask const& mask) {
-    for_each_spaced_kmer_packed(seq, mask, bit_extract_bitloop, NoopSpacedCallback{});
+    for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
+        seq, mask, bit_extract_bitloop, NoopSpacedCallback{}
+    );
 };
 static_assert(CanExtractPacked<
     PackedSequence<Encoding::kACGT, Layout::kMSB>, SpacedKmerMask<Layout::kMSB, BitExtractMask>
@@ -292,17 +296,17 @@ static void check_error_contract()
 {
     WordEncoderButterfly<Encoding::kACGT, L> const encoder;
     for (std::string const& seq : {std::string{}, std::string(129, 'T')}) {
-        auto const packed = pack_sequence(seq, encoder);
+        auto const packed = pack_sequence_unchecked(seq, encoder);
         for (std::size_t const span_k : {std::size_t{0}, std::size_t{33}}) {
             auto const mask = raw_spaced_kmer_mask<L>(span_k);
             EXPECT_THROW(
-                for_each_spaced_kmer_packed(
+                for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
                     packed, mask, bit_extract_bitloop, NoopSpacedCallback{}
                 ),
                 std::invalid_argument
             );
             EXPECT_THROW(
-                for_each_spaced_kmer_packed(
+                for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
                     packed, std::vector{mask}, bit_extract_bitloop, NoopSpacedCallback{}
                 ),
                 std::invalid_argument
@@ -311,12 +315,14 @@ static void check_error_contract()
 
         auto const mixed = make_spaced_kmer_masks<L>({"101", "1001"});
         EXPECT_THROW(
-            for_each_spaced_kmer_packed(packed, mixed, bit_extract_bitloop, NoopSpacedCallback{}),
+            for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
+                packed, mixed, bit_extract_bitloop, NoopSpacedCallback{}
+            ),
             std::invalid_argument
         );
 
         std::size_t calls = 0;
-        for_each_spaced_kmer_packed(
+        for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
             packed, std::vector<SpacedKmerMask<L, BitExtractMask>>{}, bit_extract_bitloop,
             [&](std::size_t, std::size_t, auto const&) { ++calls; }
         );

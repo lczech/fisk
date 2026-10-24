@@ -15,8 +15,10 @@ std::uint64_t run_var_actg_msb_ascii_shift(
 ) {
     auto sink = make_sink(sink_buffer);
     CharEncoderAscii<Encoding::kACTG> const encoder;
-    for_each_kmer_rolling(seq, k, encoder, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
-        sink.consume(kmer_value(kmer));
-    });
+    for_each_kmer_ascii_checked_rolling_scalar(
+        seq, k, encoder, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
+            sink.consume(kmer_value(kmer));
+        }
+    );
     return sink.finalize();
 }

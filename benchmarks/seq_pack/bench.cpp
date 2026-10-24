@@ -12,8 +12,8 @@ namespace {
 
 // Order-insensitive checksum over a PackedSequence: sufficient for cross-validation within one
 // encoding/layout group (bit match expected), and to keep the compiler from optimizing
-// pack_sequence() calls away, without adding an order-sensitive (and more expensive) reduction to
-// the timed region.
+// pack_sequence_unchecked() calls away, without adding an order-sensitive (and more expensive)
+// reduction to the timed region.
 template <Encoding E, Layout L>
 std::uint64_t pack_sequence_sink(PackedSequence<E, L> const& s)
 {

@@ -19,9 +19,10 @@ using namespace fisk;
 //     Helpers
 // =================================================================================================
 
-// Checks for_each_kmer_rolling() and for_each_kmer_reextract(), the two extractors that take an
-// encoder, against the oracle for one (seq, k) in Layout L, in both callback forms. `as_seen` is
-// `seq` as the encoder sees it, for the oracle.
+// Checks for_each_kmer_ascii_checked_rolling_scalar() and
+// for_each_kmer_ascii_checked_reextract_scalar(), the two extractors that take an encoder, against
+// the oracle for one (seq, k) in Layout L, in both callback forms. `as_seen` is `seq` as the
+// encoder sees it, for the oracle.
 template <Layout L, typename Enc>
 static void check_encoder_impls_in_layout(
     std::string const& seq, std::size_t k, Enc const& enc, std::string const& as_seen
@@ -29,10 +30,10 @@ static void check_encoder_impls_in_layout(
     constexpr auto E = Enc::encoding;
     auto const expected = oracle_kmers_skipping_invalid<E, L>(as_seen, k);
     check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-        for_each_kmer_rolling<L>(seq, k, enc, callback);
+        for_each_kmer_ascii_checked_rolling_scalar<L>(seq, k, enc, callback);
     });
     check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-        for_each_kmer_reextract<L>(seq, k, enc, callback);
+        for_each_kmer_ascii_checked_reextract_scalar<L>(seq, k, enc, callback);
     });
 }
 
@@ -52,27 +53,25 @@ static void check_encoder_impls(std::string const& seq, std::size_t k, Enc const
     check_encoder_impls(seq, k, enc, seq);
 }
 
-// Checks the three extractors that take no encoder, for_each_kmer(), for_each_kmer_simd() and
-// for_each_kmer_swar(), against the oracle for one (seq, k), under the conventions E and L.
+// Checks the two extractors that take no encoder, for_each_kmer_ascii_checked_rolling_avx2() and
+// for_each_kmer_ascii_checked_rolling_swar(), against the oracle for one (seq, k), under the
+// conventions E and L.
 template <Encoding E, Layout L>
 static void check_encoder_free_impls(std::string const& seq, std::size_t k)
 {
     auto const expected = oracle_kmers_skipping_invalid<E, L>(seq, k);
     check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-        for_each_kmer<E, L>(seq, k, callback);
+        for_each_kmer_ascii_checked_rolling_avx2<E, L>(seq, k, callback);
     });
     check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-        for_each_kmer_simd<E, L>(seq, k, callback);
-    });
-    check_kmer_callbacks<E, L>(expected, k, [&](auto const& callback) {
-        for_each_kmer_swar<E, L>(seq, k, callback);
+        for_each_kmer_ascii_checked_rolling_swar<E, L>(seq, k, callback);
     });
 }
 
-// Checks all five for_each_kmer variants against the oracle for one (seq, k): exact positions and
+// Checks all four extractors from text against the oracle for one (seq, k): exact positions and
 // values, in order, skipping every window that overlaps an invalid character. The two
 // encoder-taking extractors are checked with the ACGT table encoder in both layouts, and the
-// other three under all four conventions.
+// other two under all four conventions.
 static void check_all_impls(std::string const& seq, std::size_t k)
 {
     check_encoder_impls(seq, k, CharEncoderTable<Encoding::kACGT>{});
@@ -111,7 +110,7 @@ static std::vector<std::string> const& valid_sequences()
 // =================================================================================================
 
 // Correct k-mers, correct positions, correct order, correct encoding and layout, for every
-// length/k combination in the shared sequence set, checked against all five implementations.
+// length/k combination in the shared sequence set, checked against all four implementations.
 TEST(KmerExtract, OracleAcgtTable)
 {
     for (auto const& seq : valid_sequences()) {
@@ -121,8 +120,9 @@ TEST(KmerExtract, OracleAcgtTable)
     }
 }
 
-// Same, but with an ACTG-ordered encoder, to prove for_each_kmer_rolling()/for_each_kmer_reextract()
-// do not hardcode ACGT ordering. The other three are already checked under ACTG above.
+// Same, but with an ACTG-ordered encoder, to prove for_each_kmer_ascii_checked_rolling_scalar()
+// and for_each_kmer_ascii_checked_reextract_scalar() do not hardcode ACGT ordering. The other two
+// are already checked under ACTG above.
 TEST(KmerExtract, OracleActgTable)
 {
     for (auto const& seq : valid_sequences()) {
@@ -141,19 +141,16 @@ TEST(KmerExtract, InvalidKThrows)
 {
     CharEncoderTable<Encoding::kACGT> const table;
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        for_each_kmer_rolling(seq, k, table, [](KmerAcgtMsb) {});
+        for_each_kmer_ascii_checked_rolling_scalar(seq, k, table, [](KmerAcgtMsb) {});
     });
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        for_each_kmer_reextract(seq, k, table, [](KmerAcgtMsb) {});
+        for_each_kmer_ascii_checked_reextract_scalar(seq, k, table, [](KmerAcgtMsb) {});
     });
     check_invalid_k_throws(32, [](std::string const& seq, std::size_t k) {
-        for_each_kmer_simd(seq, k, [](KmerAcgtMsb) {});
+        for_each_kmer_ascii_checked_rolling_avx2(seq, k, [](KmerAcgtMsb) {});
     });
     check_invalid_k_throws(32, [](std::string const& seq, std::size_t k) {
-        for_each_kmer_swar(seq, k, [](KmerAcgtMsb) {});
-    });
-    check_invalid_k_throws(32, [](std::string const& seq, std::size_t k) {
-        for_each_kmer(seq, k, [](KmerAcgtMsb) {});
+        for_each_kmer_ascii_checked_rolling_swar(seq, k, [](KmerAcgtMsb) {});
     });
 }
 
@@ -213,14 +210,16 @@ TEST(KmerExtract, InvalidCharacterPlacement)
     }
 }
 
-// A user-defined encoder has to state which Encoding its codes are in, so that the loops can tag the
-// k-mers they build from them. A bare callable carries no such statement, and must be rejected at
-// compile time rather than silently producing k-mers of an assumed convention.
+// A user-defined encoder has to state which Encoding its codes are in, so that the loops can tag
+// the k-mers they build from them. A bare callable carries no such statement, and must be rejected
+// at compile time rather than silently producing k-mers of an assumed convention.
 namespace {
 
 template <typename Enc>
 concept RollingAccepts = requires(Enc enc) {
-    for_each_kmer_rolling(std::string_view{}, std::size_t{1}, enc, [](auto) {});
+    for_each_kmer_ascii_checked_rolling_scalar(
+        std::string_view{}, std::size_t{1}, enc, [](auto) {}
+    );
 };
 
 using UntaggedEncoder = decltype([](char) -> std::uint8_t { return 0; });
@@ -240,20 +239,20 @@ TEST(KmerExtract, DefaultConventions)
     CharEncoderTable<Encoding::kACGT> const table;
     std::size_t count = 0;
     auto const callback = [&](KmerAcgtMsb) { ++count; };
-    for_each_kmer_rolling(seq, 3, table, callback);
-    for_each_kmer_reextract(seq, 3, table, callback);
-    for_each_kmer(seq, 3, callback);
-    for_each_kmer_simd(seq, 3, callback);
-    for_each_kmer_swar(seq, 3, callback);
-    EXPECT_EQ(count, std::size_t{15});
+    for_each_kmer_ascii_checked_rolling_scalar(seq, 3, table, callback);
+    for_each_kmer_ascii_checked_reextract_scalar(seq, 3, table, callback);
+    for_each_kmer_ascii_checked_rolling_avx2(seq, 3, callback);
+    for_each_kmer_ascii_checked_rolling_swar(seq, 3, callback);
+    EXPECT_EQ(count, std::size_t{12});
 }
 
 // Custom encoder whose invalid sentinel is not exactly 4 (255 here, and lowercase bases are
-// deliberately "invalid" under it), checking that for_each_kmer_rolling()/for_each_kmer_reextract()
-// honor the documented ">= 4 is invalid" contract rather than special-casing the value 4. Only
-// applies to these two, since neither for_each_kmer_simd()/for_each_kmer_swar() nor the
-// for_each_kmer() convenience wrapper take a custom encoder. Also shows the shape a user-defined
-// encoder takes: a functor that states its encoding.
+// deliberately "invalid" under it), checking that for_each_kmer_ascii_checked_rolling_scalar() and
+// for_each_kmer_ascii_checked_reextract_scalar() honor the documented ">= 4 is invalid" contract
+// rather than special-casing the value 4. Only applies to these two, since neither
+// for_each_kmer_ascii_checked_rolling_avx2() nor for_each_kmer_ascii_checked_rolling_swar() take a
+// custom encoder. Also shows the shape a user-defined encoder takes: a functor that states its
+// encoding.
 namespace {
 
 struct SentinelNotFourEncoder
@@ -315,11 +314,11 @@ TEST(KmerExtract, InvalidInjectionFuzz)
 //     SIMD Block Boundaries
 // =================================================================================================
 
-// for_each_kmer_simd() processes 32-character AVX2 blocks (falling back to a scalar tail), and
-// for_each_kmer_swar() processes 8-character blocks; both then finish with a byte-at-a-time
-// remainder. 16 and 64 are included pre-emptively, matching the SSE2/AVX512 block widths already
-// used elsewhere in the codebase, so this generator needs no changes if k-mer extraction grows
-// those variants too.
+// for_each_kmer_ascii_checked_rolling_avx2() processes 32-character AVX2 blocks (falling back to a
+// scalar tail), and for_each_kmer_ascii_checked_rolling_swar() processes 8-character blocks; both
+// then finish with a byte-at-a-time remainder. 16 and 64 are included pre-emptively, matching the
+// SSE2/AVX512 block widths already used elsewhere in the codebase, so this generator needs no
+// changes if k-mer extraction grows those variants too.
 //
 // For each block size, builds sequences one-under/on/one-over one and two block widths, with an
 // invalid marker at the last character of a block, the first character of the next, or straddling
@@ -375,8 +374,8 @@ TEST(KmerExtract, SimdBlockBoundaries)
 // =================================================================================================
 
 // A single deterministic, easy-to-eyeball mixed-case sequence, checked end-to-end through every
-// implementation. Per-character case handling is already exhaustively covered in test_char_encoder.cpp;
-// this just confirms it survives all the way through k-mer assembly.
+// implementation. Per-character case handling is already exhaustively covered in
+// test_char_encoder.cpp; this just confirms it survives all the way through k-mer assembly.
 TEST(KmerExtract, MixedCase)
 {
     std::string const seq = "AcGtACgtacGTAcGtACgtacGTAcGtACgt";
@@ -390,8 +389,8 @@ TEST(KmerExtract, MixedCase)
 //     kmer_decode()
 // =================================================================================================
 
-// Round-trips kmer_decode() against the oracle: decoding an oracle-computed k-mer must give back the
-// (uppercased) substring it was extracted from.
+// Round-trips kmer_decode() against the oracle: decoding an oracle-computed k-mer must give back
+// the (uppercased) substring it was extracted from.
 TEST(KmerExtract, KmerDecode)
 {
     for (auto const& seq : valid_sequences()) {

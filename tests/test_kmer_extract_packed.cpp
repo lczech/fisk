@@ -50,21 +50,21 @@ static void check_packed_variant(Extract const& extract)
         }
     );
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
-        extract(pack_sequence(seq, encoder), k, [](Kmer<E, L>) {});
+        extract(pack_sequence_unchecked(seq, encoder), k, [](Kmer<E, L>) {});
     });
 }
 
 // The extractors under test, each wrapped once so that it can be handed to the checks above under
 // every convention.
 static constexpr auto packed_rolling = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_rolling(seq, k, func);
+    for_each_kmer_packed_unchecked_rolling_scalar(seq, k, func);
 };
 static constexpr auto packed_aligned = [](auto const& seq, std::size_t k, auto const& func) {
-    for_each_kmer_packed_aligned(seq, k, func);
+    for_each_kmer_packed_unchecked_bytewise_scalar(seq, k, func);
 };
 
 // =================================================================================================
-//     for_each_kmer_packed_rolling()
+//     for_each_kmer_packed_unchecked_rolling_scalar()
 // =================================================================================================
 
 TEST(KmerExtractPacked, RollingMsb)
@@ -88,25 +88,25 @@ TEST(KmerExtractPacked, RollingActgLsb)
 }
 
 // =================================================================================================
-//     for_each_kmer_packed_aligned()
+//     for_each_kmer_packed_unchecked_bytewise_scalar()
 // =================================================================================================
 
-TEST(KmerExtractPacked, AlignedMsb)
+TEST(KmerExtractPacked, BytewiseMsb)
 {
     check_packed_variant<Encoding::kACGT, Layout::kMSB>(packed_aligned);
 }
 
-TEST(KmerExtractPacked, AlignedLsb)
+TEST(KmerExtractPacked, BytewiseLsb)
 {
     check_packed_variant<Encoding::kACGT, Layout::kLSB>(packed_aligned);
 }
 
-TEST(KmerExtractPacked, AlignedActgMsb)
+TEST(KmerExtractPacked, BytewiseActgMsb)
 {
     check_packed_variant<Encoding::kACTG, Layout::kMSB>(packed_aligned);
 }
 
-TEST(KmerExtractPacked, AlignedActgLsb)
+TEST(KmerExtractPacked, BytewiseActgLsb)
 {
     check_packed_variant<Encoding::kACTG, Layout::kLSB>(packed_aligned);
 }

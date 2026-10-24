@@ -150,7 +150,9 @@ static void check_scalar_variant(
         auto const expected = oracle_spaced_events<Enc::encoding, Mask::layout>(seq, mask_strings);
         auto const runs = collect_spaced_callback_forms<Mask::layout, false>(
             [&](auto const& callback) {
-                for_each_spaced_kmer(seq, masks, enc, bit_extract, callback);
+                for_each_spaced_kmer_ascii_checked_rolling_scalar(
+                    seq, masks, enc, bit_extract, callback
+                );
             }
         );
         for (auto const& got : runs) {
@@ -160,7 +162,9 @@ static void check_scalar_variant(
         if (masks.size() == 1) {
             auto const single_runs = collect_spaced_callback_forms<Mask::layout, true>(
                 [&](auto const& callback) {
-                    for_each_spaced_kmer(seq, masks.front(), enc, bit_extract, callback);
+                    for_each_spaced_kmer_ascii_checked_rolling_scalar(
+                        seq, masks.front(), enc, bit_extract, callback
+                    );
                 }
             );
             for (auto const& got : single_runs) {
@@ -274,7 +278,7 @@ static void check_simd_set(std::array<std::string, N> const& mask_array, Enc con
         auto const expected = oracle_spaced_events<E, L>(seq, masks);
         std::size_t const positions = spaced_kmer_positions(seq, span_k);
         auto const extract_array = [&](auto const& callback) {
-            for_each_spaced_kmer_ascii_checked_simd(seq, kernels, enc, callback);
+            for_each_spaced_kmer_ascii_checked_rolling_simd(seq, kernels, enc, callback);
         };
         check_spaced_events(
             collect_valid_lanes_events<Simd, E, L>(N, positions, extract_array), expected
@@ -282,7 +286,7 @@ static void check_simd_set(std::array<std::string, N> const& mask_array, Enc con
 
         if constexpr (N == 1) {
             auto const extract_single = [&](auto const& callback) {
-                for_each_spaced_kmer_ascii_checked_simd(seq, kernels[0], enc, callback);
+                for_each_spaced_kmer_ascii_checked_rolling_simd(seq, kernels[0], enc, callback);
             };
             check_spaced_events(
                 collect_valid_lanes_events<Simd, E, L>(1, positions, extract_single), expected
@@ -330,7 +334,7 @@ static void check_simd_dispatcher_in_layout(std::vector<std::string> const& mask
         auto const expected = oracle_spaced_events<Encoding::kACGT, L>(seq, masks);
         auto const extract = [&](auto const& callback) {
             dispatcher.run([&](auto const& kernels) {
-                for_each_spaced_kmer_ascii_checked_simd(
+                for_each_spaced_kmer_ascii_checked_rolling_simd(
                     seq, kernels, CharEncoderTable<Encoding::kACGT>{}, callback
                 );
             });
@@ -385,7 +389,7 @@ static_assert(CanCanonical<KmerAcgtMsb>);
 // Spaced k-mer extraction only accepts masks that are tagged with their Layout.
 template <typename Mask>
 concept CanExtractWith = requires(std::string_view seq, Mask const& mask) {
-    for_each_spaced_kmer(
+    for_each_spaced_kmer_ascii_checked_rolling_scalar(
         seq, mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop,
         [](std::size_t, auto const&) {}
     );
@@ -731,7 +735,7 @@ static void check_emitted_kmers()
 
     std::size_t emitted = 0;
     for (auto const& seq : sequence_corpus(span_k, 8)) {
-        for_each_spaced_kmer(
+        for_each_spaced_kmer_ascii_checked_rolling_scalar(
             std::string_view(seq), masks, CharEncoderTable<Encoding::kACGT>{},
             bit_extract_bitloop,
             [&](std::size_t pos, std::size_t mask_idx, auto const& kmer) {
@@ -788,12 +792,12 @@ TEST(KmerSpaced, LayoutsAgreeViaConversion)
         for (auto const& seq : sequence_corpus(mask_string.size(), 8)) {
             std::vector<std::pair<std::size_t, SpacedKmerAcgtMsb>> msb;
             std::vector<std::pair<std::size_t, SpacedKmerAcgtLsb>> lsb;
-            for_each_spaced_kmer(
+            for_each_spaced_kmer_ascii_checked_rolling_scalar(
                 std::string_view(seq), msb_mask, CharEncoderTable<Encoding::kACGT>{},
                 bit_extract_bitloop,
                 [&](std::size_t pos, auto const& kmer) { msb.emplace_back(pos, kmer); }
             );
-            for_each_spaced_kmer(
+            for_each_spaced_kmer_ascii_checked_rolling_scalar(
                 std::string_view(seq), lsb_mask, CharEncoderTable<Encoding::kACGT>{},
                 bit_extract_bitloop,
                 [&](std::size_t pos, auto const& kmer) { lsb.emplace_back(pos, kmer); }
@@ -818,7 +822,7 @@ TEST(KmerSpaced, AllOnesMaskMatchesContiguousKmers)
         auto const mask = make_spaced_kmer_mask(std::string(k, '1'));
         for (auto const& seq : sequence_corpus(k, 4)) {
             std::vector<std::uint64_t> spaced_values;
-            for_each_spaced_kmer(
+            for_each_spaced_kmer_ascii_checked_rolling_scalar(
                 std::string_view(seq), mask, CharEncoderTable<Encoding::kACGT>{},
                 bit_extract_bitloop,
                 [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& kmer) {
@@ -827,7 +831,7 @@ TEST(KmerSpaced, AllOnesMaskMatchesContiguousKmers)
             );
 
             std::vector<std::uint64_t> contiguous_values;
-            for_each_kmer_rolling(
+            for_each_kmer_ascii_checked_rolling_scalar(
                 std::string_view(seq), k, CharEncoderTable<Encoding::kACGT>{},
                 [&](auto const& kmer) { contiguous_values.push_back(kmer_value(kmer)); }
             );
@@ -1027,7 +1031,7 @@ TEST(KmerSpaced, InvalidSpan)
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         auto mask = make_spaced_kmer_mask("1");
         mask.span_k = k;
-        for_each_spaced_kmer(
+        for_each_spaced_kmer_ascii_checked_rolling_scalar(
             seq, mask, CharEncoderTable<Encoding::kACGT>{}, extract,
             [](std::size_t, auto const&) {}
         );
@@ -1036,7 +1040,7 @@ TEST(KmerSpaced, InvalidSpan)
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         auto kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("1");
         kernel.span_k = k;
-        for_each_spaced_kmer_ascii_checked_simd(
+        for_each_spaced_kmer_ascii_checked_rolling_simd(
             seq, kernel, CharEncoderTable<Encoding::kACGT>{}, [](std::size_t, auto, auto) {}
         );
     });
@@ -1050,7 +1054,7 @@ TEST(KmerSpaced, MixedSpans)
 
     auto const masks = make_spaced_kmer_masks({"101", "10001"});
     EXPECT_THROW(
-        for_each_spaced_kmer(
+        for_each_spaced_kmer_ascii_checked_rolling_scalar(
             seq, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop, callback
         ),
         std::invalid_argument
@@ -1062,7 +1066,7 @@ TEST(KmerSpaced, MixedSpans)
         make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("10001")
     }};
     EXPECT_THROW(
-        for_each_spaced_kmer_ascii_checked_simd(
+        for_each_spaced_kmer_ascii_checked_rolling_simd(
             seq, kernels, CharEncoderTable<Encoding::kACGT>{},
             [](std::size_t, std::size_t, auto, auto) {}
         ),
@@ -1076,7 +1080,7 @@ TEST(KmerSpaced, EmptyMasks)
     std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>> const masks;
     for (std::string const& seq : {std::string{}, std::string("ACGTACGTACGT")}) {
         std::size_t count = 0;
-        for_each_spaced_kmer(
+        for_each_spaced_kmer_ascii_checked_rolling_scalar(
             seq, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop,
             [&](std::size_t, std::size_t, auto const&) { ++count; }
         );

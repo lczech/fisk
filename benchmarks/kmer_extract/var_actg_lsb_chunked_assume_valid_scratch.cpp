@@ -14,7 +14,7 @@ std::uint64_t run_var_actg_lsb_chunked_assume_valid_scratch(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_ascii_assume_valid(
+    for_each_kmer_ascii_unchecked_chunked_scalar(
         seq, k, WordEncoderButterfly<Encoding::kACTG, Layout::kLSB>{}, scratch,
         [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA { sink.consume(kmer_value(kmer)); }
     );

@@ -519,14 +519,17 @@ static_assert(EncodableFromString<KmerAcgtMsb>);
 static_assert(!EncodableFromString<SpacedKmerAcgtMsb>);
 static_assert(!EncodableFromString<std::uint64_t>);
 
-// The default template arguments must be ACGT/MSB, matching what for_each_kmer() emits.
+// The default template arguments must be ACGT/MSB, matching what the extraction emits by default.
 TEST(Kmer, EncodeDefaultsMatchForEachKmer)
 {
     static_assert(std::is_same_v<decltype(kmer_encode("ACG")), KmerAcgtMsb>);
 
     for (auto const& seq : random_seqs(11, 8, 161616)) {
         std::vector<KmerAcgtMsb> from_for_each;
-        for_each_kmer(seq, seq.size(), [&](KmerAcgtMsb kmer) { from_for_each.push_back(kmer); });
+        for_each_kmer_ascii_checked_rolling_scalar(
+            seq, seq.size(), CharEncoderTable<Encoding::kACGT>{},
+            [&](KmerAcgtMsb kmer) { from_for_each.push_back(kmer); }
+        );
         ASSERT_EQ(from_for_each.size(), std::size_t{1});
         EXPECT_EQ(kmer_encode(seq), from_for_each[0]);
     }

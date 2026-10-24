@@ -12,7 +12,7 @@ std::uint64_t run_var_acgt_lsb_direct_sse2(
     std::string const& seq,
     PackedSequence<Encoding::kACGT, Layout::kLSB>& out
 ) {
-    pack_sequence(seq, WordEncoderDirect<Encoding::kACGT, Layout::kLSB, SimdSSE2>{}, out);
+    pack_sequence_unchecked(seq, WordEncoderDirect<Encoding::kACGT, Layout::kLSB, SimdSSE2>{}, out);
     return 0;
 }
 

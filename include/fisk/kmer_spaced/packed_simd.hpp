@@ -20,13 +20,13 @@ namespace fisk {
 //     Spaced K-mer Extraction from a PackedSequence, SIMD
 // =================================================================================================
 
-// The SIMD counterpart of for_each_spaced_kmer_packed() (kmer_spaced/packed.hpp), for the bit
-// extraction kernels of a SIMD arch (bit_extract/simd.hpp), such as
-// BitExtractKernelButterfly<SimdAVX2>, created via make_spaced_kmer_kernel(). The vectors of the
-// k-mer extraction from packed sequences (kmer_extract/packed_simd.hpp) hold the windows of
+// The SIMD counterpart of for_each_spaced_kmer_packed_unchecked_bytewise_scalar()
+// (kmer_spaced/packed.hpp), for the bit extraction kernels of a SIMD arch (bit_extract/simd.hpp),
+// such as BitExtractKernelButterfly<SimdAVX2>, created via make_spaced_kmer_kernel(). The vectors
+// of the k-mer extraction from packed sequences (kmer_extract/packed_simd.hpp) hold the windows of
 // consecutive spans, and each kernel extracts its spaced k-mers from all of them at once. As in
-// for_each_spaced_kmer_packed(), the windows still hold the neighboring bases above the span,
-// which the bit extraction does not take.
+// for_each_spaced_kmer_packed_unchecked_bytewise_scalar(), the windows still hold the neighboring
+// bases above the span, which the bit extraction does not take.
 //
 // The callback is called with vectors, as `callback(pos, mask_idx, spaced_kmers, valid_count)`,
 // or, for a single kernel, also as `callback(pos, spaced_kmers, valid_count)`: lane `j` of the
@@ -35,10 +35,10 @@ namespace fisk {
 // positions, the masks are emitted in their order. The spaced k-mers have the Encoding and Layout
 // of the sequence. For single spaced k-mers, use for_each_valid_lane() in the callback.
 //
-// The checked counterpart, for_each_spaced_kmer_packed_checked_simd(), takes a
+// The checked counterpart, for_each_spaced_kmer_packed_checked_bytewise_simd(), takes a
 // PackedSequenceWithValidity, and calls back with the valid lanes of each vector instead of a
 // count, as `callback(pos, mask_idx, spaced_kmers, valid_lanes)`, or, for a single kernel, also as
-// `callback(pos, spaced_kmers, valid_lanes)`, as for_each_spaced_kmer_ascii_checked_simd()
+// `callback(pos, spaced_kmers, valid_lanes)`, as for_each_spaced_kmer_ascii_checked_rolling_simd()
 // (kmer_spaced/simd.hpp): lane `j` is valid if all positions that mask `mask_idx` keeps are valid
 // nucleotides in the span at `pos + j`. The vectors cover all positions in their order, and those
 // after the last spaced k-mer, up to the end of the last step of the loop, have no valid lanes.
@@ -54,7 +54,7 @@ template <
     Encoding E, Layout L, typename Kernel, std::size_t N, typename Callback, typename Vector
 >
 FISK_ALWAYS_INLINE
-inline void emit_spaced_kmers_packed_simd_(
+inline void emit_spaced_kmers_packed_unchecked_bytewise_simd_(
     std::array<Kernel, N> const& kernels, std::size_t pos, Vector windows,
     std::size_t valid_count, Callback& callback
 ) {
@@ -73,16 +73,16 @@ inline void emit_spaced_kmers_packed_simd_(
     }(std::make_index_sequence<N>{});
 }
 
-// As emit_spaced_kmers_packed_simd_(), with the valid lanes of each kernel, from the `validity` of
-// the windows, see run_packed_blocks_() (kmer_extract/packed.hpp): AllValid, or the validity window
-// at `pos`, as PackedValidity::kNucleotides, against which each lane tests the positions that the
-// mask keeps, its validity_mask, see SpacedKmerMask.
+// As emit_spaced_kmers_packed_unchecked_bytewise_simd_(), with the valid lanes of each kernel, from
+// the `validity` of the windows, see run_packed_bytewise_blocks_() (kmer_extract/packed.hpp):
+// AllValid, or the validity window at `pos`, as PackedValidity::kNucleotides, against which each
+// lane tests the positions that the mask keeps, its validity_mask, see SpacedKmerMask.
 template <
     Encoding E, Layout L, typename Kernel, std::size_t N, typename Callback, typename Vector,
     typename Validity
 >
 FISK_ALWAYS_INLINE
-inline void emit_valid_spaced_kmers_packed_simd_(
+inline void emit_spaced_kmers_packed_checked_bytewise_simd_(
     std::array<SpacedKmerMask<L, Kernel>, N> const& kernels, std::size_t pos, Vector windows,
     Validity validity, Callback& callback
 ) {
@@ -138,7 +138,7 @@ template <
 >
     requires BitExtractKernel<Kernel> && (L == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_packed_simd(
+inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
     Seq const& seq,
     std::array<SpacedKmerMask<L, Kernel>, N> const& kernels,
     Callback&& callback
@@ -159,12 +159,18 @@ inline void for_each_spaced_kmer_packed_simd(
     auto const emit = [&](
         std::size_t pos, auto windows, std::size_t valid_count
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        emit_spaced_kmers_packed_simd_<E, L>(kernels, pos, windows, valid_count, callback);
+        emit_spaced_kmers_packed_unchecked_bytewise_simd_<E, L>(
+            kernels, pos, windows, valid_count, callback
+        );
     };
     if (span_k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_<Simd, false>(without_validity_(seq), span_k, emit);
+        for_each_kmer_packed_bytewise_simd_narrow_width_<Simd, false>(
+            without_validity_(seq), span_k, emit
+        );
     } else {
-        for_each_kmer_packed_simd_full_width_<Simd, false>(without_validity_(seq), span_k, emit);
+        for_each_kmer_packed_bytewise_simd_full_width_<Simd, false>(
+            without_validity_(seq), span_k, emit
+        );
     }
 }
 
@@ -178,24 +184,26 @@ inline void for_each_spaced_kmer_packed_simd(
 template <PackedSequenceType Seq, Layout L, typename Kernel, typename Callback>
     requires BitExtractKernel<Kernel> && (L == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_packed_simd(
+inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
     Seq const& seq,
     SpacedKmerMask<L, Kernel> const& kernel,
     Callback&& callback
 ) {
     std::array<SpacedKmerMask<L, Kernel>, 1> const kernels{{kernel}};
-    for_each_spaced_kmer_packed_simd(seq, kernels, std::forward<Callback>(callback));
+    for_each_spaced_kmer_packed_unchecked_bytewise_simd(
+        seq, kernels, std::forward<Callback>(callback)
+    );
 }
 
 /**
  * @brief Iterate a PackedSequenceWithValidity, extract its spaced k-mers with SIMD bit extraction,
  * and call a callback on them with their valid lanes, for an array of kernels.
  *
- * As for_each_spaced_kmer_packed_simd(), with the valid lanes of each vector instead of its count,
- * see above: a spaced k-mer is valid if the positions that its mask keeps are valid by the validity
- * bits of `seq`, see pack_sequence_with_validity(). As in
- * for_each_spaced_kmer_packed_checked_aligned(), the loop tests a block of 32 positions at once,
- * and the blocks whose nucleotides are all valid run without a test per lane.
+ * As for_each_spaced_kmer_packed_unchecked_bytewise_simd(), with the valid lanes of each vector
+ * instead of its count, see above: a spaced k-mer is valid if the positions that its mask keeps are
+ * valid by the validity bits of `seq`, see pack_sequence_checked(). As in
+ * for_each_spaced_kmer_packed_checked_bytewise_scalar(), the loop tests a block of 32 positions at
+ * once, and the blocks whose nucleotides are all valid run without a test per lane.
  *
  * @tparam Kernel   Bit extraction kernel of a SIMD arch, see BitExtractKernel, tagged as spaced
  *                  k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel().
@@ -206,7 +214,7 @@ inline void for_each_spaced_kmer_packed_simd(
 template <Encoding E, Layout L, typename Kernel, std::size_t N, typename Callback>
     requires BitExtractKernel<Kernel>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_packed_checked_simd(
+inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
     PackedSequenceWithValidity<E, L> const& seq,
     std::array<SpacedKmerMask<L, Kernel>, N> const& kernels,
     Callback&& callback
@@ -225,13 +233,15 @@ inline void for_each_spaced_kmer_packed_checked_simd(
     auto const emit = [&](
         std::size_t pos, auto windows, auto validity
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        emit_valid_spaced_kmers_packed_simd_<E, L>(kernels, pos, windows, validity, callback);
+        emit_spaced_kmers_packed_checked_bytewise_simd_<E, L>(
+            kernels, pos, windows, validity, callback
+        );
     };
     constexpr PackedValidity form = PackedValidity::kNucleotides;
     if (span_k <= 29) {
-        for_each_kmer_packed_simd_narrow_width_<Simd, false, form>(seq, span_k, emit);
+        for_each_kmer_packed_bytewise_simd_narrow_width_<Simd, false, form>(seq, span_k, emit);
     } else {
-        for_each_kmer_packed_simd_full_width_<Simd, false, form>(seq, span_k, emit);
+        for_each_kmer_packed_bytewise_simd_full_width_<Simd, false, form>(seq, span_k, emit);
     }
 }
 
@@ -245,13 +255,15 @@ inline void for_each_spaced_kmer_packed_checked_simd(
 template <Encoding E, Layout L, typename Kernel, typename Callback>
     requires BitExtractKernel<Kernel>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_packed_checked_simd(
+inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
     PackedSequenceWithValidity<E, L> const& seq,
     SpacedKmerMask<L, Kernel> const& kernel,
     Callback&& callback
 ) {
     std::array<SpacedKmerMask<L, Kernel>, 1> const kernels{{kernel}};
-    for_each_spaced_kmer_packed_checked_simd(seq, kernels, std::forward<Callback>(callback));
+    for_each_spaced_kmer_packed_checked_bytewise_simd(
+        seq, kernels, std::forward<Callback>(callback)
+    );
 }
 
 } // namespace fisk

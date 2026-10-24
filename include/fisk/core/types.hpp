@@ -87,8 +87,8 @@ inline constexpr bool dependent_false_v = false;
  * static members.
  *
  * The codes can be written through codes(), for example to pack a sequence by other means than
- * pack_sequence(). Writers keep the unused bits of the last byte zero. The size of the codes and
- * the padding after them only change with resize(), which keeps both intact.
+ * pack_sequence_unchecked(). Writers keep the unused bits of the last byte zero. The size of the
+ * codes and the padding after them only change with resize(), which keeps both intact.
  */
 template <Encoding E, Layout L>
 class PackedSequence
@@ -696,10 +696,10 @@ concept SpacedKmerMaskType = is_spaced_kmer_mask_<T>::value;
  * conventions and the SIMD arch.
  *
  * The vector counterpart of Kmer, as handed out by the SIMD extraction functions, such as
- * for_each_kmer_packed_simd(). As for Kmer, this is an aggregate with the vector as its public
- * `value`, so that it is passed exactly like the bare vector. Use for_each_valid_lane() or
- * store_valid_lanes() to get the single k-mers, and `value` or kmer_value() for the vector, for
- * example for the operations of the arch.
+ * for_each_kmer_packed_unchecked_bytewise_simd(). As for Kmer, this is an aggregate with the vector
+ * as its public `value`, so that it is passed exactly like the bare vector. Use
+ * for_each_valid_lane() or store_valid_lanes() to get the single k-mers, and `value` or
+ * kmer_value() for the vector, for example for the operations of the arch.
  *
  * The template takes the arch rather than its vector type, as GCC warns about vector types that
  * are spelled out as template arguments.
@@ -731,7 +731,8 @@ concept ContiguousKmerVectorType = std::same_as<
  * SpacedKmer, tagged with their conventions and the SIMD arch.
  *
  * The vector counterpart of SpacedKmer, as handed out by the SIMD spaced k-mer extraction
- * functions, such as for_each_spaced_kmer_packed_simd(), and otherwise the same as KmerVector.
+ * functions, such as for_each_spaced_kmer_packed_unchecked_bytewise_simd(), and otherwise the same
+ * as KmerVector.
  */
 template <Encoding E, Layout L, SimdArch Simd>
 struct SpacedKmerVector
@@ -765,7 +766,7 @@ concept KmerVectorType = ContiguousKmerVectorType<T> || SpacedKmerVectorType<T>;
 /**
  * @brief The lanes of a SIMD vector of k-mers or spaced k-mers that hold valid ones, for the
  * extraction functions that check the validity of the nucleotides, such as
- * for_each_kmer_packed_checked_simd().
+ * for_each_kmer_packed_checked_bytewise_simd().
  *
  * `bits` has bit `j` set for a valid lane `j`, and no bits above the lanes. lane_mask() gives the
  * lane mask in the form native to the arch, see SimdArch: a vector with all bits set in the valid

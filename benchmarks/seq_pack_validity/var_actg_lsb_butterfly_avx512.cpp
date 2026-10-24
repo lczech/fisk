@@ -12,7 +12,7 @@ std::uint64_t run_var_validity_actg_lsb_butterfly_avx512(
     std::string const& seq,
     PackedSequenceWithValidity<Encoding::kACTG, Layout::kLSB>& out
 ) {
-    pack_sequence_with_validity(
+    pack_sequence_checked(
         seq, WordEncoderButterfly<Encoding::kACTG, Layout::kLSB, SimdAVX512>{}, out
     );
     return 0;

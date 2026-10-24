@@ -11,7 +11,7 @@ std::uint64_t run_var_actg_ascii_assume_valid(
     std::string const& seq,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    CharEncoderAscii<Encoding::kACTG, InputValidity::kAssumeValid> const encoder;
+    CharEncoderAscii<Encoding::kACTG, InputCheck::kUnchecked> const encoder;
     auto sink = make_sink(sink_buffer);
     for (char c : seq) {
         sink.consume(encoder(c));

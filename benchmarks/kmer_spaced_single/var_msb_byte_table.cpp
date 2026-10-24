@@ -15,7 +15,7 @@ std::uint64_t run_var_byte_table(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_spaced_kmer(
+    for_each_spaced_kmer_ascii_checked_rolling_scalar(
         std::string_view(seq), mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_byte_table,
         [&](
             std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer

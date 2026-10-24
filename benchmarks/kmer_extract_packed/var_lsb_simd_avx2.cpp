@@ -15,7 +15,7 @@ std::uint64_t run_var_lsb_simd_avx2(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_simd<SimdAVX2>(
+    for_each_kmer_packed_unchecked_bytewise_simd<SimdAVX2>(
         seq, k, [&](std::size_t, auto kmers, std::size_t) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(kmer_value(kmers));
         }

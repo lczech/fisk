@@ -303,8 +303,8 @@ inline void invoke_kmer_vector_lane_callback_(Func& func, std::size_t pos, std::
 
 /**
  * @brief Call `func` with each of the first `valid_count` k-mers of a vector of k-mers or spaced
- * k-mers, in lane order, as handed out by for_each_kmer_packed_simd() or
- * for_each_spaced_kmer_packed_simd().
+ * k-mers, in lane order, as handed out by for_each_kmer_packed_unchecked_bytewise_simd() or
+ * for_each_spaced_kmer_packed_unchecked_bytewise_simd().
  *
  * `func` takes single k-mers or spaced k-mers, as `func(pos, kmer)` or `func(kmer)`, see
  * KmerVectorLaneCallback, where the k-mer in lane `j` starts at `pos + j`.
@@ -324,7 +324,8 @@ inline void for_each_valid_lane(std::size_t pos, V kmers, std::size_t valid_coun
 
 /**
  * @brief Call `func` with each valid k-mer or spaced k-mer of a vector, in lane order, as handed
- * out by for_each_kmer_packed_checked_simd() or for_each_spaced_kmer_ascii_checked_simd().
+ * out by for_each_kmer_packed_checked_bytewise_simd() or
+ * for_each_spaced_kmer_ascii_checked_rolling_simd().
  *
  * As the overload for a count of valid lanes, for the k-mers in the lanes whose bits are set in
  * `valid_lanes.bits`.

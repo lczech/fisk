@@ -23,11 +23,12 @@ using PackedActgLsb = fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::
  * and exception handling might also cause the compiler to emit different inlinining. Lastly, we
  * benchmark full re-extraction of each k-mer (slow) vs shifting between iterations.
  *
- * Additionally, for input known to be valid: for_each_kmer_ascii_assume_valid(), which packs the
- * sequence in chunks and extracts from those, against packing the whole sequence first and then
- * extracting via for_each_kmer_packed_aligned(). Both run for both Encodings and both Layouts, and
- * pack with the butterfly word encoder. The Encoding only affects the packing step (ACTG needs no
- * bit fold, unlike ACGT), not the extraction from the packed sequence.
+ * Additionally, for input known to be valid: for_each_kmer_ascii_unchecked_chunked_scalar(), which
+ * packs the sequence in chunks and extracts from those, against packing the whole sequence first
+ * and then extracting via for_each_kmer_packed_unchecked_bytewise_scalar(). Both run for both
+ * Encodings and both Layouts, and pack with the butterfly word encoder. The Encoding only affects
+ * the packing step (ACTG needs no bit fold, unlike ACGT), not the extraction from the packed
+ * sequence.
  */
 void bench_kmer_extract(
     std::vector<std::string> const& sequences,

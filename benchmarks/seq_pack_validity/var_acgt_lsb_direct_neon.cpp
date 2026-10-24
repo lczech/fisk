@@ -12,7 +12,7 @@ std::uint64_t run_var_validity_acgt_lsb_direct_neon(
     std::string const& seq,
     PackedSequenceWithValidity<Encoding::kACGT, Layout::kLSB>& out
 ) {
-    pack_sequence_with_validity(
+    pack_sequence_checked(
         seq, WordEncoderDirect<Encoding::kACGT, Layout::kLSB, SimdNEON>{}, out
     );
     return 0;

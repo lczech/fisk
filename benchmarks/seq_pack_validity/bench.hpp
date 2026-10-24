@@ -12,7 +12,7 @@
 #include "fisk/core/simd_neon.hpp"
 
 /**
- * @brief Benchmark pack_sequence_with_validity() across all four encoding x layout combinations.
+ * @brief Benchmark pack_sequence_checked() across all four encoding x layout combinations.
  *
  * The same variants as bench_seq_pack(), each packing into a PackedSequenceWithValidity instead,
  * so that the cost of the validity bits is the difference to the matching variant there.

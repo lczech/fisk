@@ -12,7 +12,7 @@ std::uint64_t run_var_acgt_msb_pext_sse2(
     std::string const& seq,
     PackedSequence<Encoding::kACGT, Layout::kMSB>& out
 ) {
-    pack_sequence(seq, WordEncoderPext<Encoding::kACGT, Layout::kMSB, SimdSSE2>{}, out);
+    pack_sequence_unchecked(seq, WordEncoderPext<Encoding::kACGT, Layout::kMSB, SimdSSE2>{}, out);
     return 0;
 }
 

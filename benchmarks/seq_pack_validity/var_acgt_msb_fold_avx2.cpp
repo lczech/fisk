@@ -12,7 +12,7 @@ std::uint64_t run_var_validity_acgt_msb_fold_avx2(
     std::string const& seq,
     PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>& out
 ) {
-    pack_sequence_with_validity(
+    pack_sequence_checked(
         seq, WordEncoderFold<Encoding::kACGT, Layout::kMSB, SimdAVX2>{}, out
     );
     return 0;

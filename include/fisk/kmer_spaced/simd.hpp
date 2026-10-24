@@ -39,7 +39,7 @@ namespace fisk {
 // `top_shift`, i.e., the top of the span.
 template<Layout L, typename Enc>
 FISK_ALWAYS_INLINE
-inline void spaced_kmer_simd_shift_in_(
+inline void spaced_kmer_ascii_rolling_simd_shift_in_(
     char c,
     Enc&& enc,
     std::size_t top_shift,
@@ -64,7 +64,9 @@ inline void spaced_kmer_simd_shift_in_(
         rolling_valid_pos = (rolling_valid_pos >> 2)
             | (static_cast<std::uint64_t>(code < 4) * (std::uint64_t{0x03u} << top_shift));
     } else {
-        static_assert(dependent_false_v<L>, "Unhandled Layout in spaced_kmer_simd_shift_in_()");
+        static_assert(
+            dependent_false_v<L>, "Unhandled Layout in spaced_kmer_ascii_rolling_simd_shift_in_()"
+        );
     }
 }
 
@@ -73,7 +75,7 @@ inline void spaced_kmer_simd_shift_in_(
 // lanes from `count` on hold zero, and are not valid.
 template<typename Kernel, typename Enc>
 FISK_ALWAYS_INLINE
-inline void spaced_kmer_simd_fill_lanes_(
+inline void spaced_kmer_ascii_rolling_simd_fill_lanes_(
     char const* data,
     std::size_t count,
     Enc&& enc,
@@ -86,7 +88,7 @@ inline void spaced_kmer_simd_fill_lanes_(
     FISK_PRAGMA_UNROLL_16
     for (std::size_t lane = 0; lane < Kernel::lanes; ++lane) {
         if (lane < count) {
-            spaced_kmer_simd_shift_in_<Kernel::layout>(
+            spaced_kmer_ascii_rolling_simd_shift_in_<Kernel::layout>(
                 data[lane], enc, top_shift, rolling_kmer, rolling_valid_pos
             );
             lane_kmers[lane]  = rolling_kmer;
@@ -185,7 +187,7 @@ inline std::vector<SpacedKmerMask<L, Kernel>> make_spaced_kmer_kernels(
 template<typename Kernel, std::size_t NMasks, typename Enc, typename Callback>
     requires SpacedKmerMaskType<Kernel>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_ascii_checked_simd(
+inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     std::string_view seq,
     std::array<Kernel, NMasks> const& kernels,
     Enc&& enc,
@@ -198,7 +200,7 @@ inline void for_each_spaced_kmer_ascii_checked_simd(
     constexpr std::size_t lanes = Kernel::lanes;
 
     // Input boundary checks. The masks must not have bits above the span, see
-    // spaced_kmer_simd_shift_in_().
+    // spaced_kmer_ascii_rolling_simd_shift_in_().
     std::size_t const span_k = common_spaced_kmer_span_(kernels);
     for ([[maybe_unused]] auto const& kernel : kernels) {
         assert(is_valid_spaced_kmer_mask(kernel));
@@ -217,7 +219,9 @@ inline void for_each_spaced_kmer_ascii_checked_simd(
     std::uint64_t rolling_valid_pos = 0;
     std::size_t i = 0;
     for (; i + 1 < span_k; ++i) {
-        spaced_kmer_simd_shift_in_<L>(data[i], enc, top_shift, rolling_kmer, rolling_valid_pos);
+        spaced_kmer_ascii_rolling_simd_shift_in_<L>(
+            data[i], enc, top_shift, rolling_kmer, rolling_valid_pos
+        );
     }
 
     // The lane k-mers and their valid bits. The lane k-mers are held in registers, see
@@ -228,7 +232,7 @@ inline void for_each_spaced_kmer_ascii_checked_simd(
     // Emit the spaced k-mers of all masks for the lanes of the `count` characters at `i`. A lane
     // is valid for a mask if its valid bits cover all bits of the mask.
     auto const emit = [&](std::size_t count) FISK_ALWAYS_INLINE_LAMBDA {
-        spaced_kmer_simd_fill_lanes_<Kernel>(
+        spaced_kmer_ascii_rolling_simd_fill_lanes_<Kernel>(
             data + i, count, enc, top_shift, rolling_kmer, rolling_valid_pos, lane_kmers,
             lane_valids
         );
@@ -269,14 +273,14 @@ inline void for_each_spaced_kmer_ascii_checked_simd(
 template<typename Kernel, typename Enc, typename Callback>
     requires SpacedKmerMaskType<Kernel>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_ascii_checked_simd(
+inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     std::string_view seq,
     Kernel const& kernel,
     Enc&& enc,
     Callback&& callback
 ) {
     std::array<Kernel, 1> const kernels{{kernel}};
-    for_each_spaced_kmer_ascii_checked_simd(
+    for_each_spaced_kmer_ascii_checked_rolling_simd(
         seq, kernels, std::forward<Enc>(enc), std::forward<Callback>(callback)
     );
 }

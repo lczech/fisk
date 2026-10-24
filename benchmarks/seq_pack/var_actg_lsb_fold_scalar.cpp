@@ -10,6 +10,6 @@ std::uint64_t run_var_actg_lsb_fold_scalar(
     std::string const& seq,
     PackedSequence<Encoding::kACTG, Layout::kLSB>& out
 ) {
-    pack_sequence(seq, WordEncoderFold<Encoding::kACTG, Layout::kLSB>{}, out);
+    pack_sequence_unchecked(seq, WordEncoderFold<Encoding::kACTG, Layout::kLSB>{}, out);
     return 0;
 }

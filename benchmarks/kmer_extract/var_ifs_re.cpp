@@ -14,7 +14,7 @@ std::uint64_t run_var_ifs_re(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_reextract(
+    for_each_kmer_ascii_checked_reextract_scalar(
         seq, k, CharEncoderIfs<Encoding::kACGT>{}, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(kmer_value(kmer));
         }

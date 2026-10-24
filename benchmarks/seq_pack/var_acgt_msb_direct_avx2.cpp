@@ -12,7 +12,7 @@ std::uint64_t run_var_acgt_msb_direct_avx2(
     std::string const& seq,
     PackedSequence<Encoding::kACGT, Layout::kMSB>& out
 ) {
-    pack_sequence(seq, WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX2>{}, out);
+    pack_sequence_unchecked(seq, WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX2>{}, out);
     return 0;
 }
 

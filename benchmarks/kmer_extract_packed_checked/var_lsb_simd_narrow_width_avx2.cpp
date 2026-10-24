@@ -21,7 +21,7 @@ std::uint64_t run_var_checked_lsb_simd_narrow_width_avx2(
         sink.consume(v);
         do_not_optimize(lanes.bits);
     };
-    for_each_kmer_packed_simd_narrow_width_<SimdAVX2>(seq, k, consume);
+    for_each_kmer_packed_bytewise_simd_narrow_width_<SimdAVX2>(seq, k, consume);
     return sink.finalize();
 }
 

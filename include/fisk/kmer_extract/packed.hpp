@@ -48,14 +48,15 @@ namespace fisk {
 // produced with. The loops themselves compute in raw std::uint64_t throughout and only adopt the
 // type at the point of emission, so that tagging costs no instructions.
 //
-// Two public functions cover the full documented k in [1, 32]: for_each_kmer_packed_aligned()
-// (the fast path) and for_each_kmer_packed_rolling() (a simpler reference baseline, not
-// recommended for production). Both internally specialize for k <= 29 (where a single
-// 64-bit accumulator suffices) vs k > 29 (needing an extra byte for spilling).
+// Two public functions cover the full documented k in [1, 32]:
+// for_each_kmer_packed_unchecked_bytewise_scalar() (the fast path) and
+// for_each_kmer_packed_unchecked_rolling_scalar() (a simpler reference baseline, not recommended
+// for production). Both internally specialize for k <= 29 (where a single 64-bit accumulator
+// suffices) vs k > 29 (needing an extra byte for spilling).
 //
-// Their checked counterparts, for_each_kmer_packed_checked_aligned() and
-// for_each_kmer_packed_checked_rolling(), take a PackedSequenceWithValidity instead, and emit only
-// the k-mers whose nucleotides are all valid by its validity bits.
+// Their checked counterparts, for_each_kmer_packed_checked_bytewise_scalar() and
+// for_each_kmer_packed_checked_rolling_scalar(), take a PackedSequenceWithValidity instead, and
+// emit only the k-mers whose nucleotides are all valid by its validity bits.
 
 // -------------------------------------------------------------------------------------------------
 //     Details
@@ -134,15 +135,15 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 //     Block Loop
 // -------------------------------------------------------------------------------------------------
 
-// The main loop of the aligned and the SIMD extraction, see packed_simd.hpp, and of the spaced
+// The main loop of the bytewise scalar and SIMD extraction, see packed_simd.hpp, and of the spaced
 // k-mer extraction, see kmer_spaced/packed.hpp: `step(b, validity_at)` extracts the k-mers that
-// start in the `StepBytes` bytes from byte `b`, and `validity_at(pos)` is the validity of the k-mers
-// from `pos` on for them: either AllValid, or a word whose bit 0 is set if the k-mer at `pos` is
-// valid, see packed_kmer_is_valid_(). With PackedValidity::kNucleotides, the word is the validity
-// window at `pos` instead, see Validity above, which holds at least the k nucleotides from `pos`.
-// The steps cover all bytes in which a k-mer of length `k` starts, and `seq` has to have at least
-// `k` nucleotides. The words that the steps load reach past the last k-mer, into the padding after
-// the codes and after the validity bits, see PackedSequence (core/types.hpp).
+// start in the `StepBytes` bytes from byte `b`, and `validity_at(pos)` is the validity of the
+// k-mers from `pos` on for them: either AllValid, or a word whose bit 0 is set if the k-mer at
+// `pos` is valid, see packed_kmer_is_valid_(). With PackedValidity::kNucleotides, the word is the
+// validity window at `pos` instead, see Validity above, which holds at least the k nucleotides from
+// `pos`. The steps cover all bytes in which a k-mer of length `k` starts, and `seq` has to have at
+// least `k` nucleotides. The words that the steps load reach past the last k-mer, into the padding
+// after the codes and after the validity bits, see PackedSequence (core/types.hpp).
 //
 // Without validity bits, all k-mers are valid. The steps whose k-mers are all within the sequence
 // run with AllValid, and the step after them, if any, with a word that is all ones up to the last
@@ -151,13 +152,13 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 // With validity bits, see PackedSequenceWithValidityType (core/types.hpp), the steps run in blocks
 // of 8 bytes, that is, 32 positions, and each block is tested once: with one load of the validity
 // bits at its start, which covers its 32 positions and the k - 1 nucleotides after them, the low
-// `31 + k` bits of `block_mask`. If they are all valid, the block runs with AllValid. Otherwise, the
-// block computes the valid starts of that window once, see Validity above, which hold the validity
-// of all of its k-mers: the word at `pos` has bit `j` set if the k-mer at `pos + j` is valid, for
-// the k-mers up to the end of the block, so that a vector of consecutive k-mers takes its valid
-// lanes from the low bits. After the last whole block, each step computes the valid starts of the
-// windows of its k-mers instead. The validity bits are zero after the end of the sequence, which
-// makes its last k-mers invalid without a test of their own.
+// `31 + k` bits of `block_mask`. If they are all valid, the block runs with AllValid. Otherwise,
+// the block computes the valid starts of that window once, see Validity above, which hold the
+// validity of all of its k-mers: the word at `pos` has bit `j` set if the k-mer at `pos + j` is
+// valid, for the k-mers up to the end of the block, so that a vector of consecutive k-mers takes
+// its valid lanes from the low bits. After the last whole block, each step computes the valid
+// starts of the windows of its k-mers instead. The validity bits are zero after the end of the
+// sequence, which makes its last k-mers invalid without a test of their own.
 //
 // Each copy of the step is inlined. Without validity bits, there are two: for the k-mers within
 // the sequence, and for the step after them. With validity bits, there are three: for the blocks
@@ -168,7 +169,7 @@ template <
     PackedSequenceType Seq, typename Step
 >
 FISK_ALWAYS_INLINE
-inline void run_packed_blocks_(Seq const& seq, std::size_t k, Step&& step)
+inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& step)
 {
     static_assert(8 % StepBytes == 0, "Steps have to fill a block.");
     assert(k >= 1 && seq.length() >= k);
@@ -252,8 +253,8 @@ inline void run_packed_blocks_(Seq const& seq, std::size_t k, Step&& step)
     }
 }
 
-// Whether the k-mer with the given `validity` is valid, see run_packed_blocks_(): either AllValid,
-// or a word whose bit 0 is set for a valid k-mer.
+// Whether the k-mer with the given `validity` is valid, see run_packed_bytewise_blocks_(): either
+// AllValid, or a word whose bit 0 is set for a valid k-mer.
 template <typename Validity>
 FISK_ALWAYS_INLINE
 inline bool packed_kmer_is_valid_(Validity validity) noexcept
@@ -267,7 +268,7 @@ inline bool packed_kmer_is_valid_(Validity validity) noexcept
 }
 
 // =================================================================================================
-//     Aligned
+//     Bytewise
 // =================================================================================================
 
 // Emit the k-mer `kmer` at `pos`, if it is valid by its `validity`, see packed_kmer_is_valid_().
@@ -286,12 +287,14 @@ inline void invoke_kmer_callback_if_valid_(
 // "full-width" case below (k <= 32), which needs to read an extra byte.
 //
 // K is a template parameter, so that all shifts and masks are compile-time constants regardless of
-// the call site, with one instantiation per K in for_each_kmer_packed_aligned()'s dispatch.
+// the call site, with one instantiation per K in for_each_kmer_packed_unchecked_bytewise_scalar()'s
+// dispatch.
 //
-// For a sequence with validity bits, see run_packed_blocks_(), only the valid k-mers are emitted.
+// For a sequence with validity bits, see run_packed_bytewise_blocks_(), only the valid k-mers are
+// emitted.
 template <unsigned K, PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_narrow_width_(Seq const& seq, Func&& func)
+inline void for_each_kmer_packed_bytewise_scalar_narrow_width_(Seq const& seq, Func&& func)
 {
     static_assert(K >= 1 && K <= 29, "K must be in [1, 29]");
     constexpr Encoding E = Seq::encoding;
@@ -300,11 +303,11 @@ inline void for_each_kmer_packed_aligned_narrow_width_(Seq const& seq, Func&& fu
     // The 2k bits of a k-mer in the codes.
     std::uint64_t const mask = width_mask_(K);
 
-    // The codes, read up into their padding, see run_packed_blocks_().
+    // The codes, read up into their padding, see run_packed_bytewise_blocks_().
     std::uint8_t const* const codes = seq.codes().data();
 
     // One step: the 4 k-mers that start in byte `b`, from one 8-byte load, each shifted to the low
-    // bits and masked. `validity_at` gives their validity, see run_packed_blocks_().
+    // bits and masked. `validity_at` gives their validity, see run_packed_bytewise_blocks_().
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         std::uint64_t word = load_packed_word_<L>(codes + b);
         if constexpr (L == Layout::kMSB) {
@@ -325,7 +328,7 @@ inline void for_each_kmer_packed_aligned_narrow_width_(Seq const& seq, Func&& fu
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_aligned_narrow_width_()"
+                "Unhandled Layout in for_each_kmer_packed_bytewise_scalar_narrow_width_()"
             );
         }
 
@@ -352,15 +355,15 @@ inline void for_each_kmer_packed_aligned_narrow_width_(Seq const& seq, Func&& fu
         invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
     };
 
-    // The steps over all bytes in which a k-mer starts, see run_packed_blocks_().
-    run_packed_blocks_<1>(seq, K, step_);
+    // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks_().
+    run_packed_bytewise_blocks_<1>(seq, K, step_);
 }
 
 // k in [30, 32] needs a 9th margin byte beyond the main 8-byte word, which breaks the narrow-width
 // single-shift exploit above. These three cases instead get their own specializations, where every
 // shift is a compile-time constant via the K template parameter for best optimization potential.
 template <Layout L, unsigned K>
-inline std::uint64_t aligned_boundary_window_(
+inline std::uint64_t kmer_packed_bytewise_boundary_window_(
     std::uint64_t hi, std::uint64_t lo, unsigned local, std::uint64_t mask
 ) {
     // Shift values are compile-time constants.
@@ -370,7 +373,9 @@ inline std::uint64_t aligned_boundary_window_(
     } else if constexpr (L == Layout::kLSB) {
         start = 2 * local;
     } else {
-        static_assert(dependent_false_v<L>, "Unhandled Layout in aligned_boundary_window_()");
+        static_assert(
+            dependent_false_v<L>, "Unhandled Layout in kmer_packed_bytewise_boundary_window_()"
+        );
     }
     std::uint64_t bits;
     if (start >= 64) {
@@ -383,10 +388,10 @@ inline std::uint64_t aligned_boundary_window_(
     return bits & mask;
 }
 
-// As for_each_kmer_packed_aligned_narrow_width_(), for k in [30, 32].
+// As for_each_kmer_packed_bytewise_scalar_narrow_width_(), for k in [30, 32].
 template <unsigned K, PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_full_width_(Seq const& seq, Func&& func)
+inline void for_each_kmer_packed_bytewise_scalar_full_width_(Seq const& seq, Func&& func)
 {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
     constexpr Encoding E = Seq::encoding;
@@ -397,7 +402,8 @@ inline void for_each_kmer_packed_aligned_full_width_(Seq const& seq, Func&& func
     std::uint8_t const* const codes = seq.codes().data();
 
     // One step: the 4 k-mers that start in byte `b`, from an 8-byte load and the byte after it,
-    // combined by aligned_boundary_window_(). `validity_at` as in the narrow-width loop.
+    // combined by kmer_packed_bytewise_boundary_window_(). `validity_at` as in the narrow-width
+    // loop.
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         std::uint64_t const word = load_packed_word_<L>(codes + b);
         std::uint64_t const ninth = codes[b + 8];
@@ -412,14 +418,14 @@ inline void for_each_kmer_packed_aligned_full_width_(Seq const& seq, Func&& func
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_aligned_full_width_()"
+                "Unhandled Layout in for_each_kmer_packed_bytewise_scalar_full_width_()"
             );
         }
 
-        auto const v0 = aligned_boundary_window_<L, K>(hi, lo, 0, mask);
-        auto const v1 = aligned_boundary_window_<L, K>(hi, lo, 1, mask);
-        auto const v2 = aligned_boundary_window_<L, K>(hi, lo, 2, mask);
-        auto const v3 = aligned_boundary_window_<L, K>(hi, lo, 3, mask);
+        auto const v0 = kmer_packed_bytewise_boundary_window_<L, K>(hi, lo, 0, mask);
+        auto const v1 = kmer_packed_bytewise_boundary_window_<L, K>(hi, lo, 1, mask);
+        auto const v2 = kmer_packed_bytewise_boundary_window_<L, K>(hi, lo, 2, mask);
+        auto const v3 = kmer_packed_bytewise_boundary_window_<L, K>(hi, lo, 3, mask);
 
         #if defined(FISK_BENCHMARK_SINK_MODE)
         do_not_optimize(v0);
@@ -439,14 +445,14 @@ inline void for_each_kmer_packed_aligned_full_width_(Seq const& seq, Func&& func
     };
 
     // As in the narrow-width loop.
-    run_packed_blocks_<1>(seq, K, step_);
+    run_packed_bytewise_blocks_<1>(seq, K, step_);
 }
 
-// The dispatch of for_each_kmer_packed_aligned() and for_each_kmer_packed_checked_aligned() to the
-// loops of each k.
+// The dispatch of for_each_kmer_packed_unchecked_bytewise_scalar() and
+// for_each_kmer_packed_checked_bytewise_scalar() to the loops of each k.
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned_(Seq const& seq, std::size_t k, Func&& func)
+inline void for_each_kmer_packed_bytewise_scalar_(Seq const& seq, std::size_t k, Func&& func)
 {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -457,56 +463,56 @@ inline void for_each_kmer_packed_aligned_(Seq const& seq, std::size_t k, Func&& 
 
     // Local X-macro, undefined right below: the 29 narrow-width cases are otherwise identical aside
     // from their K, and spelling each out longhand would bury that in repetition.
-    #define FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(K_) \
+    #define FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(K_) \
         case K_: \
-            for_each_kmer_packed_aligned_narrow_width_<K_>(seq, func); \
+            for_each_kmer_packed_bytewise_scalar_narrow_width_<K_>(seq, func); \
             break;
 
     switch (k) {
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(1)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(2)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(3)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(4)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(5)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(6)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(7)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(8)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(9)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(10)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(11)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(12)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(13)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(14)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(15)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(16)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(17)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(18)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(19)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(20)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(21)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(22)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(23)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(24)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(25)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(26)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(27)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(28)
-        FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_(29)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(1)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(2)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(3)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(4)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(5)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(6)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(7)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(8)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(9)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(10)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(11)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(12)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(13)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(14)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(15)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(16)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(17)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(18)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(19)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(20)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(21)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(22)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(23)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(24)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(25)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(26)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(27)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(28)
+        FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(29)
         case 30: {
-            for_each_kmer_packed_aligned_full_width_<30>(seq, func);
+            for_each_kmer_packed_bytewise_scalar_full_width_<30>(seq, func);
             break;
         }
         case 31: {
-            for_each_kmer_packed_aligned_full_width_<31>(seq, func);
+            for_each_kmer_packed_bytewise_scalar_full_width_<31>(seq, func);
             break;
         }
         case 32: {
-            for_each_kmer_packed_aligned_full_width_<32>(seq, func);
+            for_each_kmer_packed_bytewise_scalar_full_width_<32>(seq, func);
             break;
         }
     }
 
-    #undef FISK_PACKED_ALIGNED_NARROW_WIDTH_CASE_
+    #undef FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_
 }
 
 /**
@@ -514,7 +520,7 @@ inline void for_each_kmer_packed_aligned_(Seq const& seq, std::size_t k, Func&& 
  * callback on each. The recommended, fastest variant in this file.
  *
  * A PackedSequenceWithValidity is taken as well, ignoring its validity bits, see
- * for_each_kmer_packed_checked_aligned() for its valid k-mers only.
+ * for_each_kmer_packed_checked_bytewise_scalar() for its valid k-mers only.
  *
  * Internally dispatches to a separate implementation for each k, so that the extraction loop is
  * fully specialized for whichever k is used at runtime.
@@ -524,26 +530,27 @@ inline void for_each_kmer_packed_aligned_(Seq const& seq, std::size_t k, Func&& 
  */
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_aligned(Seq const& seq, std::size_t k, Func&& func)
-{
-    for_each_kmer_packed_aligned_(without_validity_(seq), k, func);
+inline void for_each_kmer_packed_unchecked_bytewise_scalar(
+    Seq const& seq, std::size_t k, Func&& func
+) {
+    for_each_kmer_packed_bytewise_scalar_(without_validity_(seq), k, func);
 }
 
 /**
  * @brief Extract the valid k-mers for k in [1, 32] directly from a PackedSequenceWithValidity, and
  * call a callback on each.
  *
- * As for_each_kmer_packed_aligned(), emitting only the k-mers whose nucleotides are all valid by
- * the validity bits of `seq`, see pack_sequence_with_validity(). The loop tests a block of 32
- * positions at once, and the blocks whose nucleotides are all valid run without a test per k-mer,
- * as do most blocks of sequences whose invalid nucleotides come in runs, such as assemblies.
+ * As for_each_kmer_packed_unchecked_bytewise_scalar(), emitting only the k-mers whose nucleotides
+ * are all valid by the validity bits of `seq`, see pack_sequence_checked(). The loop tests a block
+ * of 32 positions at once, and the blocks whose nucleotides are all valid run without a test per
+ * k-mer, as do most blocks of sequences whose invalid nucleotides come in runs, such as assemblies.
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_checked_aligned(
+inline void for_each_kmer_packed_checked_bytewise_scalar(
     PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
 ) {
-    for_each_kmer_packed_aligned_(seq, k, func);
+    for_each_kmer_packed_bytewise_scalar_(seq, k, func);
 }
 
 // =================================================================================================
@@ -552,7 +559,7 @@ inline void for_each_kmer_packed_checked_aligned(
 
 // The rolling loops fold one byte of codes at a time into an accumulator, and extract the four
 // k-mers that end in it. Each fold depends serially on the previous one, as opposed to the
-// independent loads of the aligned loops above, which is what makes them slower.
+// independent loads of the bytewise loops above, which is what makes them slower.
 //
 // For a sequence with validity bits, see PackedSequenceWithValidityType, only the valid k-mers are
 // emitted. The validity bits are folded into an accumulator of their own, one byte per 8
@@ -564,8 +571,9 @@ inline void for_each_kmer_packed_checked_aligned(
 // k <= 29 fits in a single 64-bit accumulator.
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_narrow_width_(Seq const& seq, std::size_t k, Func&& func)
-{
+inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
+    Seq const& seq, std::size_t k, Func&& func
+) {
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
     constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
@@ -596,7 +604,7 @@ inline void for_each_kmer_packed_rolling_narrow_width_(Seq const& seq, std::size
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_narrow_width_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_narrow_width_()"
             );
         }
     };
@@ -644,7 +652,7 @@ inline void for_each_kmer_packed_rolling_narrow_width_(Seq const& seq, std::size
             } else {
                 static_assert(
                     dependent_false_v<L>,
-                    "Unhandled Layout in for_each_kmer_packed_rolling_narrow_width_()"
+                    "Unhandled Layout in for_each_kmer_packed_rolling_scalar_narrow_width_()"
                 );
             }
             auto const word = (acc >> shift) & mask;
@@ -660,8 +668,9 @@ inline void for_each_kmer_packed_rolling_narrow_width_(Seq const& seq, std::size
 // for k <= 29.
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_full_width_(Seq const& seq, std::size_t k, Func&& func)
-{
+inline void for_each_kmer_packed_rolling_scalar_full_width_(
+    Seq const& seq, std::size_t k, Func&& func
+) {
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
     constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
@@ -688,7 +697,7 @@ inline void for_each_kmer_packed_rolling_full_width_(Seq const& seq, std::size_t
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_full_width_()"
             );
         }
         int case_id;
@@ -727,7 +736,7 @@ inline void for_each_kmer_packed_rolling_full_width_(Seq const& seq, std::size_t
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_full_width_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_full_width_()"
             );
         }
     };
@@ -778,10 +787,11 @@ inline void for_each_kmer_packed_rolling_full_width_(Seq const& seq, std::size_t
     }
 }
 
-// The dispatch of for_each_kmer_packed_rolling() and for_each_kmer_packed_checked_rolling().
+// The dispatch of for_each_kmer_packed_unchecked_rolling_scalar() and
+// for_each_kmer_packed_checked_rolling_scalar().
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_(Seq const& seq, std::size_t k, Func&& func)
+inline void for_each_kmer_packed_rolling_scalar_(Seq const& seq, std::size_t k, Func&& func)
 {
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
@@ -790,9 +800,9 @@ inline void for_each_kmer_packed_rolling_(Seq const& seq, std::size_t k, Func&& 
         return;
     }
     if (k <= 29) {
-        for_each_kmer_packed_rolling_narrow_width_(seq, k, func);
+        for_each_kmer_packed_rolling_scalar_narrow_width_(seq, k, func);
     } else {
-        for_each_kmer_packed_rolling_full_width_(seq, k, func);
+        for_each_kmer_packed_rolling_scalar_full_width_(seq, k, func);
     }
 }
 
@@ -800,37 +810,40 @@ inline void for_each_kmer_packed_rolling_(Seq const& seq, std::size_t k, Func&& 
  * @brief Extract all k-mers for k in [1, 32] from a PackedSequence via a rolling
  * accumulator, folding one byte at a time.
  *
- * Kept only as a slower algorithmic comparison baseline; prefer for_each_kmer_packed_aligned()
- * for production use. As that, takes a PackedSequenceWithValidity as well, ignoring its validity.
+ * Kept only as a slower algorithmic comparison baseline; prefer
+ * for_each_kmer_packed_unchecked_bytewise_scalar() for production use. As that, takes a
+ * PackedSequenceWithValidity as well, ignoring its validity.
  *
- * For k <= 29, delegates to for_each_kmer_packed_rolling_narrow_width_() (single 64-bit
- * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_full_width_() (hi:lo pair)
- * instead, since a single 64-bit accumulator no longer fits.
+ * For k <= 29, delegates to for_each_kmer_packed_rolling_scalar_narrow_width_() (single 64-bit
+ * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_scalar_full_width_() (hi:lo
+ * pair) instead, since a single 64-bit accumulator no longer fits.
  *
  * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
  * position of the k-mer in the sequence. See invoke_kmer_callback().
  */
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling(Seq const& seq, std::size_t k, Func&& func)
-{
-    for_each_kmer_packed_rolling_(without_validity_(seq), k, func);
+inline void for_each_kmer_packed_unchecked_rolling_scalar(
+    Seq const& seq, std::size_t k, Func&& func
+) {
+    for_each_kmer_packed_rolling_scalar_(without_validity_(seq), k, func);
 }
 
 /**
  * @brief Extract the valid k-mers for k in [1, 32] directly from a PackedSequenceWithValidity,
  * using a rolling accumulator.
  *
- * As for_each_kmer_packed_rolling(), emitting only the k-mers whose nucleotides are all valid, as
- * for_each_kmer_packed_checked_aligned(). The validity bits roll along with the codes. Kept as a
- * baseline as well; prefer for_each_kmer_packed_checked_aligned().
+ * As for_each_kmer_packed_unchecked_rolling_scalar(), emitting only the k-mers whose nucleotides
+ * are all valid, as for_each_kmer_packed_checked_bytewise_scalar(). The validity bits roll along
+ * with the codes. Kept as a baseline as well; prefer
+ * for_each_kmer_packed_checked_bytewise_scalar().
  */
 template <Encoding E, Layout L, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_checked_rolling(
+inline void for_each_kmer_packed_checked_rolling_scalar(
     PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
 ) {
-    for_each_kmer_packed_rolling_(seq, k, func);
+    for_each_kmer_packed_rolling_scalar_(seq, k, func);
 }
 
 } // namespace fisk

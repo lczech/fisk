@@ -12,7 +12,7 @@ std::uint64_t run_var_actg_msb_fold_avx512(
     std::string const& seq,
     PackedSequence<Encoding::kACTG, Layout::kMSB>& out
 ) {
-    pack_sequence(seq, WordEncoderFold<Encoding::kACTG, Layout::kMSB, SimdAVX512>{}, out);
+    pack_sequence_unchecked(seq, WordEncoderFold<Encoding::kACTG, Layout::kMSB, SimdAVX512>{}, out);
     return 0;
 }
 

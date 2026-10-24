@@ -13,7 +13,7 @@ std::uint64_t run_var_checked_lsb_aligned(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_checked_aligned(
+    for_each_kmer_packed_checked_bytewise_scalar(
         seq, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA { sink.consume(kmer_value(kmer)); }
     );
     return sink.finalize();

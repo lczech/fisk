@@ -15,7 +15,7 @@ std::uint64_t run_var_simd_butterfly_table_avx2_vectors(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_spaced_kmer_packed_simd(
+    for_each_spaced_kmer_packed_unchecked_bytewise_simd(
         seq, kernel,
         [&](
             std::size_t /*pos*/, auto spaced_kmers, std::size_t /*valid_count*/

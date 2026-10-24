@@ -13,7 +13,7 @@ std::uint64_t run_var_block_table_unrolled8(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_spaced_kmer_packed_checked_aligned(
+    for_each_spaced_kmer_packed_checked_bytewise_scalar(
         seq,
         masks,
         bit_extract_block_table_unrolled<8>,

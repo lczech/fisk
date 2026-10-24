@@ -12,7 +12,9 @@ std::uint64_t run_var_actg_msb_direct_double_sse2(
     std::string const& seq,
     PackedSequence<Encoding::kACTG, Layout::kMSB>& out
 ) {
-    pack_sequence(seq, WordEncoderDirectDouble<Encoding::kACTG, Layout::kMSB, SimdSSE2>{}, out);
+    pack_sequence_unchecked(
+        seq, WordEncoderDirectDouble<Encoding::kACTG, Layout::kMSB, SimdSSE2>{}, out
+    );
     return 0;
 }
 

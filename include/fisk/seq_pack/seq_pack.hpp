@@ -62,7 +62,7 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
  * @brief Pack `seq` into the codes at `codes`, and with `WithValidity`, also its validity bits
  * into `valid`.
  *
- * The loop shared by pack_sequence() and pack_sequence_with_validity(). `codes` has to hold
+ * The loop shared by pack_sequence_unchecked() and pack_sequence_checked(). `codes` has to hold
  * `ceil(seq.size() / 4)` bytes, all of which are written, including the unused bits of the last
  * one. Without `WithValidity`, `valid` is unused and may be null. With it, `valid` has to hold
  * `ceil(seq.size() / 8)` bytes, all of which are written as well.
@@ -156,7 +156,7 @@ inline void pack_sequence_(
 }
 
 // -----------------------------------------------------------------------------
-//     Pack Sequence
+//     Pack Sequence Unchecked
 // -----------------------------------------------------------------------------
 
 /**
@@ -170,14 +170,15 @@ inline void pack_sequence_(
  *
  * `Encoder::encoding` and `Encoder::layout` (see Encoding and Layout in core/types.hpp) select
  * the out type. Passing an encoder whose encoding or layout differs from `out`'s is a compile
- * error.
+ * error. A PackedSequenceWithValidity is not taken, so that its validity cannot go stale; see
+ * pack_sequence_checked() for it.
  *
  * Forced inline, as the compilers otherwise tend to keep this out of line, where they optimize
  * the loops less well for the given encoder.
  */
 template <WordEncoder Encoder>
 FISK_ALWAYS_INLINE
-inline void pack_sequence(
+inline void pack_sequence_unchecked(
     std::string_view seq,
     Encoder const& encoder,
     PackedSequence<Encoder::encoding, Encoder::layout>& out
@@ -195,30 +196,28 @@ inline void pack_sequence(
  * calls, to avoid attributing repeated heap allocation to whatever is being measured.
  */
 template <WordEncoder Encoder>
-inline PackedSequence<Encoder::encoding, Encoder::layout> pack_sequence(
+inline PackedSequence<Encoder::encoding, Encoder::layout> pack_sequence_unchecked(
     std::string_view seq,
     Encoder const& encoder
 ) {
     PackedSequence<Encoder::encoding, Encoder::layout> out;
-    pack_sequence(seq, encoder, out);
+    pack_sequence_unchecked(seq, encoder, out);
     return out;
 }
 
 // -----------------------------------------------------------------------------
-//     Pack Sequence With Validity
+//     Pack Sequence Checked
 // -----------------------------------------------------------------------------
 
 /**
  * @brief Pack a whole ASCII sequence into a PackedSequenceWithValidity, reusing existing storage.
  *
- * As pack_sequence(), and also records which characters are valid nucleotides, from the same
- * loads of the input, see `store_valid_bits()` of the word encoders.
- *
- * Calling pack_sequence() with a PackedSequenceWithValidity forwards to this as well.
+ * As pack_sequence_unchecked(), and also records which characters are valid nucleotides, from the
+ * same loads of the input, see `store_valid_bits()` of the word encoders.
  */
 template <WordEncoder Encoder>
 FISK_ALWAYS_INLINE
-inline void pack_sequence_with_validity(
+inline void pack_sequence_checked(
     std::string_view seq,
     Encoder const& encoder,
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& out
@@ -230,30 +229,16 @@ inline void pack_sequence_with_validity(
 /**
  * @brief Pack a whole ASCII sequence into a freshly allocated PackedSequenceWithValidity.
  *
- * Convenience wrapper around the in-place overload above, see pack_sequence().
+ * Convenience wrapper around the in-place overload above, see pack_sequence_unchecked().
  */
 template <WordEncoder Encoder>
-inline PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> pack_sequence_with_validity(
+inline PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> pack_sequence_checked(
     std::string_view seq,
     Encoder const& encoder
 ) {
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> out;
-    pack_sequence_with_validity(seq, encoder, out);
+    pack_sequence_checked(seq, encoder, out);
     return out;
-}
-
-/**
- * @brief Same as pack_sequence_with_validity(), so that packing a PackedSequenceWithValidity
- * always fills its validity.
- */
-template <WordEncoder Encoder>
-FISK_ALWAYS_INLINE
-inline void pack_sequence(
-    std::string_view seq,
-    Encoder const& encoder,
-    PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& out
-) {
-    pack_sequence_with_validity(seq, encoder, out);
 }
 
 } // namespace fisk
