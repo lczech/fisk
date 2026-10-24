@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sequence packing: four overview plots and two focused FastDNA comparisons.
+"""Sequence packing: four overview plots and two focused comparisons with external references.
 
 Each encoding/layout gets its own file. Y-limits are shared within each view set.
 Use --summary for the existing CPU/compiler grouped-bar style across CSV files.
@@ -21,6 +21,7 @@ import pandas as pd
 from plot_bars_per_cpu import main as plot_platform_bars
 from plot_case_summary import make_impl_summary_plot
 from plot_common import (
+    EXTERNAL_PREFIXES,
     SEQ_PACK_COLORS,
     SEQ_PACK_FOCUSED,
     SEQ_PACK_ORDER,
@@ -77,10 +78,10 @@ def select_views(df):
         if encoding != "actg":
             continue
         focused = rows[rows["benchmark"].isin(SEQ_PACK_FOCUSED)]
-        if focused["benchmark"].str.startswith("fastdna_").any():
-            views[("fastdna", encoding, layout)] = focused
+        if focused["benchmark"].str.startswith(EXTERNAL_PREFIXES).any():
+            views[("references", encoding, layout)] = focused
         else:
-            print(f"Skipped focused {encoding}/{layout}: no FastDNA measurements")
+            print(f"Skipped focused {encoding}/{layout}: no external reference measurements")
     return views
 
 
@@ -93,7 +94,7 @@ def benchmark_order(rows):
 def shared_limits(views, args):
     """Compute one y-range per view set, from the values actually plotted."""
     limits = {}
-    for view in ["overview", "fastdna"]:
+    for view in ["overview", "references"]:
         selected = [rows for key, rows in views.items() if key[0] == view]
         if not selected:
             continue
@@ -125,7 +126,7 @@ def plot_views(files, views, limits, args):
         stem = f"seq_pack_{view}_{encoding}_{layout}"
         suffix = "_per_cpu" if args.summary else ""
         out = str(out_dir / f"{stem}{suffix}.{args.format}")
-        heading = "All sequence-packing implementations" if view == "overview" else "FastDNA references vs fisk"
+        heading = "All sequence-packing implementations" if view == "overview" else "External references vs fisk"
         title = f"{heading}: {encoding.upper()} / {layout.upper()}"
         if args.summary:
             argv = [

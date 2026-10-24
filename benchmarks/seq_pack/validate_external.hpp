@@ -12,7 +12,7 @@
 #include "fisk/core/random.hpp"
 #include "seq_pack/bench.hpp"
 
-namespace fastdna_validation {
+namespace external_validation {
 
 // =================================================================================================
 //     Byte Comparison
@@ -95,6 +95,10 @@ inline void check_sequences(std::vector<std::string> const& sequences)
     check_kernel<Layout::kMSB>("fisk_pext_msb", run_var_actg_msb_pext, sequences);
     check_kernel<Layout::kLSB>("fisk_pext_lsb", run_var_actg_lsb_pext, sequences);
     #endif
+    #if defined(FISK_HAS_AVX2)
+    check_kernel<Layout::kLSB>("cute_mul", run_var_cute_mul, sequences);
+    check_kernel<Layout::kLSB>("cute_movemask", run_var_cute_movemask, sequences);
+    #endif
 }
 
 /**
@@ -125,4 +129,4 @@ inline void validate(std::vector<std::string> const& sequences)
     check_sequences(sequences);
 }
 
-} // namespace fastdna_validation
+} // namespace external_validation

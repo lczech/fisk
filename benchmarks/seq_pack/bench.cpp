@@ -4,7 +4,7 @@
 
 #include "microbench.hpp"
 #include "seq_pack/bench.hpp"
-#include "seq_pack/validate_fastdna.hpp"
+#include "seq_pack/validate_external.hpp"
 
 using namespace fisk;
 
@@ -35,7 +35,7 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
     std::cout << "\n=== sequence pack ===\n";
     std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
-    fastdna_validation::validate(sequences);
+    external_validation::validate(sequences);
 
     write_csv_header(csv_os);
 
@@ -392,6 +392,20 @@ void bench_seq_pack(std::vector<std::string> const& sequences, std::ostream& csv
             .finalize([&out]() { return pack_sequence_sink(out); });
         auto results = suite.run(
             sequences,
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "cute_mul",
+                [&](std::string const& seq) {
+                    return run_var_cute_mul(seq, out);
+                }
+            ),
+            bench(
+                "cute_movemask",
+                [&](std::string const& seq) {
+                    return run_var_cute_movemask(seq, out);
+                }
+            ),
+            #endif
             #if defined(FISK_HAS_BMI2)
             bench(
                 "fastdna_pext_unordered",

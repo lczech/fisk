@@ -716,12 +716,17 @@ BENCHMARKS_KEEP_REDUCED += PACKED_KMER_VARIANT_ORDER_REDUCED
 #     Sequence Packing
 # -------------------------------------------------------------------------------------------------
 
+# Benchmark name prefixes of the external reference implementations, see benchmarks/external.
+EXTERNAL_PREFIXES = ("fastdna_", "cute_")
+
 SEQ_PACK_ORDER = [
     "fastdna_lut",
     "fastdna_pext_ordered",
     "fastdna_pext_unordered",
     "fastdna_pext_unordered_unroll2",
     "fastdna_pext_unordered_unroll4",
+    "cute_mul",
+    "cute_movemask",
     "pext",
     "butterfly_scalar", "butterfly_sse2", "butterfly_avx2", "butterfly_avx512", "butterfly_neon",
     "fold_scalar", "fold_sse2", "fold_avx2", "fold_avx512", "fold_neon",
@@ -736,6 +741,8 @@ SEQ_PACK_FOCUSED = [
     "fastdna_pext_unordered",
     "fastdna_pext_unordered_unroll2",
     "fastdna_pext_unordered_unroll4",
+    "cute_mul",
+    "cute_movemask",
     "direct_scalar",
     "direct_sse2", "direct_double_sse2",
     "direct_avx2", "direct_double_avx2",
@@ -748,6 +755,8 @@ BENCHMARK_RENAMES.update({
     "fastdna_pext_unordered": "FastDNA\nunordered PEXT",
     "fastdna_pext_unordered_unroll2": "FastDNA\nunordered PEXT (2x)",
     "fastdna_pext_unordered_unroll4": "FastDNA\nunordered PEXT (4x)",
+    "cute_mul": "cute-nucleotides\nmul",
+    "cute_movemask": "cute-nucleotides\nmovemask",
     "butterfly": "Butterfly scalar (legacy)",
 })
 
@@ -757,6 +766,8 @@ SEQ_PACK_COLORS = {
     "fastdna_pext_unordered": "#FFBB78",
     "fastdna_pext_unordered_unroll2": "#FF7F0E",
     "fastdna_pext_unordered_unroll4": "#B55B0B",
+    "cute_mul": "#9E9AC8",
+    "cute_movemask": "#6A51A3",
     "pext": BENCHMARK_COLORS["pext"],
     "butterfly": "#BB2F98",
 }

@@ -351,3 +351,20 @@ std::uint64_t run_var_fastdna_pext_unordered_unroll4(
 );
 
 #endif // FISK_HAS_BMI2
+
+// =================================================================================================
+//     cute-nucleotides References
+// =================================================================================================
+
+/**
+ * @brief Adapted kernels; see external/cute_nucleotides.hpp for the format adjustments, and for how
+ * their other algorithms map to the word encoders of fisk.
+ */
+#if defined(FISK_HAS_AVX2)
+std::uint64_t run_var_cute_mul(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+std::uint64_t run_var_cute_movemask(
+    std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::kLSB>& out
+);
+#endif // FISK_HAS_AVX2
