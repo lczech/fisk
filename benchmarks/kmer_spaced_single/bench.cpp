@@ -7,7 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include "fisk/kmer_spaced/selector.hpp"
 #include "kmer_spaced_single/bench.hpp"
 #include "microbench.hpp"
 #include "utils.hpp"
@@ -40,10 +39,6 @@ static void bench_kmer_spaced_single_layout_(
     auto const bit_ext_mask = make_spaced_kmer_mask<L>(mask);
     auto const bit_ext_block_mask = make_spaced_kmer_block_table(bit_ext_mask);
     auto const bit_ext_butterfly_table = make_spaced_kmer_butterfly_table(bit_ext_mask);
-
-    // Just to test the selector
-    std::cout << "fastest mode " << prefix << ": ";
-    std::cout << spaced_kmer_mode_name(spaced_kmer_selector(bit_ext_mask)) << "\n";
 
     // simd kernels
     auto const simd_bf_scalar_kernel

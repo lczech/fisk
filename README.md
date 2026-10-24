@@ -40,7 +40,7 @@ add_subdirectory(path/to/fisk)
 target_link_libraries(your_target PRIVATE fisk::fisk)
 ```
 
-Both approaches add `include/` to your target include path. `#include "fisk/fisk.hpp"` for the whole library, or include just the headers you need (e.g., `fisk/kmer_spaced/selector.hpp`). See [Implementation](#implementation) below for an overview of what is where.
+Both approaches add `include/` to your target include path. `#include "fisk/fisk.hpp"` for the whole library, or include just the headers you need (e.g., `fisk/kmer_spaced/packed.hpp`). See [Implementation](#implementation) below for an overview of what is where.
 
 By default, `fisk::fisk` does not force any instruction-set-specific flags onto consumers. To enable the accelerated code paths (PEXT/BMI2, SIMD, ...), turn on the relevant option before linking against it: `FISK_ENABLE_BMI2`, `FISK_ENABLE_SSE2`, `FISK_ENABLE_SSSE3`, `FISK_ENABLE_SSE41`, `FISK_ENABLE_AVX2`, `FISK_ENABLE_AVX512`, `FISK_ENABLE_NEON`. Each only takes effect if the compiler and target actually support it, so enabling several at once is safe. The selector functions (e.g., `bit_extract_selector()`) can be used to pick the fastest one available at runtime.
 
@@ -102,7 +102,7 @@ or directly via the resulting binary: `./bin/fisk_tests`.
 
 The repository separates the library (bit extraction and k-mer functionality, for general reuse) from the benchmark program used to produce the results in the manuscript:
 
- - `include/fisk/`: The library. Header-only, organized by theme; `#include` the specific headers you need (e.g., `fisk/kmer_spaced/selector.hpp`), or `fisk/fisk.hpp` for everything at once.
+ - `include/fisk/`: The library. Header-only, organized by theme; `#include` the specific headers you need (e.g., `fisk/kmer_spaced/packed.hpp`), or `fisk/fisk.hpp` for everything at once.
  - `benchmarks/`: The benchmark program (`main.cpp` and driver code) used to produce the results in the manuscript. Not needed to use the library itself.
  - `tests/`: Unit test suite (built as `fisk_tests`, see [Tests](#tests) above). Not needed to use the library itself.
  - `results/`: Recorded benchmark results for all hardware architectures we tested.
@@ -123,15 +123,12 @@ Overview of the library headers (in `include/fisk/`), and their most important f
  - `kmer_spaced/simd.hpp`: SIMD variant of the spaced k-mer extraction, taking one of the `bit_extract/simd.hpp` kernels, created via `make_spaced_kmer_kernel()`, emitting vectors of spaced k-mers with their valid lanes, as `SpacedKmerVector` and `SimdVectorValidLanes`; `for_each_valid_lane()` hands out their single valid spaced k-mers.
  - `kmer_spaced/packed.hpp`: Spaced k-mer extraction reading directly from an already-packed `PackedSequence`, with the same masks and bit extract functions. The checked variant, `for_each_spaced_kmer_packed_checked_aligned()`, emits only the valid spaced k-mers of a `PackedSequenceWithValidity`.
  - `kmer_spaced/packed_simd.hpp`: SIMD variant of the spaced k-mer extraction from a `PackedSequence`, with the same kernels as `kmer_spaced/simd.hpp`, emitting vectors of spaced k-mers, as `SpacedKmerVector`; `for_each_valid_lane()` hands out their single spaced k-mers. The checked variant, `for_each_spaced_kmer_packed_checked_simd()`, emits them with their valid lanes for a `PackedSequenceWithValidity`.
- - `kmer_spaced/selector.hpp`: Helper that runs a quick benchmark to find the most performant spaced k-mer extraction algorithm for a given mask. Similar to `bit_extract/selector.hpp`.
 
 The `benchmarks/` directory contains the driver code for the benchmark program: `main.cpp`, `arg_parser.hpp`, `microbench.hpp`, `utils.hpp`, `seq_data.hpp`, `kmer_clark.hpp`, and one `bench_*.hpp` per benchmark shown in the manuscript. These might be useful to see how each algorithm is intended to be called and used.
 
 Functions that process k-mers are mostly templated here, in order to allow us to benchmark different implemenations of, e.g., the nucleotide to two-bit encoding and the bit extraction. Thus, to use these function in your code, you might want to replace those template parameters with hard-coded versions for simplicity - no need to use any of the sub-par alterative implementations if you can just use the fastest one.
 
 To use this in our own code, we recommend to use PEXT for bit extraction where possible, and a SIMD-accelerated Butterfly network otherwise. In the simplest case, use `bit_extract_selector()` as a dynamic check to test this, and a switch as shown in `switch_bit_extract_mode()` and `run_bit_extract_mode()` to run. This avoids overhead for function pointers in the hot loop per extracted value.
-
-Similarly, for spaced k-mer extraction, use `spaced_kmer_selector()` to decide which extraction algorithm to use dynamically on a given hardware, and again a switch outside of the hot loop to dispatch between the algorithms.
 
 A spaced k-mer is valid if the positions that its mask keeps hold valid nucleotides (`ACGTacgt`); invalid characters, such as `N`, at the positions that the mask skips do not matter. The extraction from ASCII input and the checked extraction from a `PackedSequenceWithValidity` both emit exactly these spaced k-mers, and skip the others.
 

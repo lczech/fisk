@@ -19,7 +19,6 @@
 #include "fisk/core/kmer_hash.hpp"
 #include "fisk/core/cast.hpp"
 #include "fisk/kmer_spaced/kmer_spaced.hpp"
-#include "fisk/kmer_spaced/selector.hpp"
 #include "fisk/kmer_spaced/simd.hpp"
 #include "fisk/core/simd_scalar.hpp"
 #include "fisk/core/simd_sse2.hpp"
@@ -1069,7 +1068,6 @@ TEST(KmerSpaced, MixedSpans)
         ),
         std::invalid_argument
     );
-    EXPECT_THROW((void) spaced_kmer_selector(masks), std::invalid_argument);
 }
 
 // An empty set of masks emits nothing, for any sequence.
@@ -1184,36 +1182,4 @@ TEST(KmerSpacedSimd, ActgForwarding)
     check_simd_set<BitExtractKernelButterfly<SimdScalar>, Layout::kLSB>(
         masks, CharEncoderTable<Encoding::kACTG>{}
     );
-}
-
-// =================================================================================================
-//     Selector
-// =================================================================================================
-
-// The selector returns one of the modes of the build, for either Layout, one or several masks.
-TEST(KmerSpacedSelector, Validation)
-{
-    auto const masks = make_spaced_kmer_masks({"10101", "11111"});
-    EXPECT_FALSE(spaced_kmer_mode_name(spaced_kmer_selector(masks, 256)).empty());
-    auto const lsb_masks = make_spaced_kmer_masks<Layout::kLSB>({"11101", "11111"});
-    EXPECT_FALSE(spaced_kmer_mode_name(spaced_kmer_selector(lsb_masks, 256)).empty());
-
-    auto const mask = make_spaced_kmer_mask("10101");
-    EXPECT_FALSE(spaced_kmer_mode_name(spaced_kmer_selector(mask, 256)).empty());
-    EXPECT_FALSE(spaced_kmer_mode_name(
-        spaced_kmer_selector(make_spaced_kmer_mask(std::string(32, '1')), 256)
-    ).empty());
-
-    auto with_span = [&](std::size_t span_k) {
-        auto result = mask;
-        result.span_k = span_k;
-        return result;
-    };
-    EXPECT_ANY_THROW(spaced_kmer_selector(
-        std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>>{}, 256
-    ));
-    EXPECT_ANY_THROW(spaced_kmer_selector(with_span(0), 256));
-    EXPECT_ANY_THROW(spaced_kmer_selector(with_span(33), 256));
-    EXPECT_ANY_THROW(spaced_kmer_selector(mask, 4));
-    EXPECT_ANY_THROW(spaced_kmer_selector(raw_spaced_kmer_mask(0x3, 5), 256));
 }
