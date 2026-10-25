@@ -5,10 +5,11 @@
 #include <utility>
 #include <vector>
 
+#include "fisk/core/cast.hpp"
 #include "fisk/core/random.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
-#include "fisk/sequence_pack/pack_sequence.hpp"
+#include "fisk/sequence_pack/word_encoder.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"

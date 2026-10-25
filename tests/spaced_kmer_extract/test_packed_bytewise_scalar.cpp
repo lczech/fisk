@@ -2,13 +2,16 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/random.hpp"
+#include "fisk/core/types.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
+#include "fisk/sequence_pack/word_encoder.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "fisk/spaced_kmer_extract/packed_bytewise_scalar.hpp"
-#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
@@ -275,6 +278,7 @@ concept CanExtractPacked = requires(Seq const& seq, Mask const& mask) {
         seq, mask, bit_extract_bitloop, NoopSpacedCallback{}
     );
 };
+
 static_assert(CanExtractPacked<
     PackedSequence<Encoding::kACGT, Layout::kMSB>, SpacedKmerMask<Layout::kMSB, BitExtractMask>
 >);
@@ -334,53 +338,53 @@ static void check_error_contract()
 //     Tests
 // =================================================================================================
 
-TEST(KmerSpacedPacked, AcgtMsb)
+TEST(SpacedKmerExtractPackedBytewiseScalar, UncheckedAcgtMsb)
 {
     check_extraction<Encoding::kACGT, Layout::kMSB>();
 }
 
-TEST(KmerSpacedPacked, AcgtLsb)
+TEST(SpacedKmerExtractPackedBytewiseScalar, UncheckedAcgtLsb)
 {
     check_extraction<Encoding::kACGT, Layout::kLSB>();
 }
 
-TEST(KmerSpacedPacked, ActgMsb)
+TEST(SpacedKmerExtractPackedBytewiseScalar, UncheckedActgMsb)
 {
     check_extraction<Encoding::kACTG, Layout::kMSB>();
 }
 
-TEST(KmerSpacedPacked, ActgLsb)
+TEST(SpacedKmerExtractPackedBytewiseScalar, UncheckedActgLsb)
 {
     check_extraction<Encoding::kACTG, Layout::kLSB>();
 }
 
-TEST(KmerSpacedPackedChecked, AcgtMsb)
+TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedAcgtMsb)
 {
     check_checked_extraction<Encoding::kACGT, Layout::kMSB>();
 }
 
-TEST(KmerSpacedPackedChecked, AcgtLsb)
+TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedAcgtLsb)
 {
     check_checked_extraction<Encoding::kACGT, Layout::kLSB>();
 }
 
-TEST(KmerSpacedPackedChecked, ActgMsb)
+TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedActgMsb)
 {
     check_checked_extraction<Encoding::kACTG, Layout::kMSB>();
 }
 
-TEST(KmerSpacedPackedChecked, ActgLsb)
+TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedActgLsb)
 {
     check_checked_extraction<Encoding::kACTG, Layout::kLSB>();
 }
 
-TEST(KmerSpacedPackedChecked, InvalidInGaps)
+TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedInvalidInGaps)
 {
     check_invalid_in_gaps<Layout::kMSB>();
     check_invalid_in_gaps<Layout::kLSB>();
 }
 
-TEST(KmerSpacedPacked, ErrorContract)
+TEST(SpacedKmerExtractPackedBytewiseScalar, ErrorContract)
 {
     check_error_contract<Layout::kMSB>();
     check_error_contract<Layout::kLSB>();

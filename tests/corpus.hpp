@@ -115,3 +115,31 @@ inline std::vector<std::size_t> const& test_ks()
     };
     return ks;
 }
+
+// =================================================================================================
+//     Spaced K-mer Masks
+// =================================================================================================
+
+// Keep both endpoints and vary retained interior positions across every legal span.
+inline std::string mask_for_span(std::size_t span_k)
+{
+    std::string mask(span_k, '0');
+    mask.front() = '1';
+    mask.back() = '1';
+    for (std::size_t i = 1; i + 1 < span_k; ++i) {
+        if ((i % 3) != 0) {
+            mask[i] = '1';
+        }
+    }
+    return mask;
+}
+
+// Valid spaced k-mer masks of different shapes, with skipped positions as '0' and as '*'.
+inline std::vector<std::string> const& valid_spaced_kmer_masks()
+{
+    static std::vector<std::string> const masks = {
+        "1", "101", "1*01", "1101", "11111", "10001",
+        "10000000000000000000000000000001", std::string(32, '1')
+    };
+    return masks;
+}

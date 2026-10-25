@@ -4,6 +4,8 @@
 
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/simd_scalar.hpp"
+#include "fisk/core/types.hpp"
+#include "testing.hpp"
 
 using namespace fisk;
 

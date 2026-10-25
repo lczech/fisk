@@ -1,24 +1,25 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <stdexcept>
 #include <string>
-#include <tuple>
+#include <utility>
 #include <vector>
 
 #include "fisk/bit_extract/simd.hpp"
+#include "fisk/core/cast.hpp"
+#include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/random.hpp"
-#include "fisk/core/simd.hpp"
-#include "fisk/spaced_kmer_extract/mask.hpp"
-#include "fisk/spaced_kmer_extract/packed_bytewise_simd.hpp"
-#include "fisk/spaced_kmer_extract/ascii_rolling_simd.hpp"
-#include "fisk/sequence_pack/pack_sequence.hpp"
-#include "fisk/core/simd_scalar.hpp"
-#include "fisk/core/simd_sse2.hpp"
 #include "fisk/core/simd_avx2.hpp"
 #include "fisk/core/simd_avx512.hpp"
 #include "fisk/core/simd_neon.hpp"
+#include "fisk/core/simd_scalar.hpp"
+#include "fisk/core/simd_sse2.hpp"
+#include "fisk/core/types.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
+#include "fisk/sequence_pack/word_encoder.hpp"
+#include "fisk/spaced_kmer_extract/mask.hpp"
+#include "fisk/spaced_kmer_extract/packed_bytewise_simd.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "simd_lanes.hpp"
@@ -326,6 +327,7 @@ template <typename Seq, typename Kernel>
 concept CanExtractPackedSimd = requires(Seq const& seq, Kernel const& kernel) {
     for_each_spaced_kmer_packed_unchecked_bytewise_simd(seq, kernel, NoopSpacedVectorCallback{});
 };
+
 static_assert(CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>,
     SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdScalar>>
@@ -341,11 +343,14 @@ static_assert(!CanExtractPackedSimd<
 static_assert(!CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>, BitExtractKernelButterfly<SimdScalar>
 >);
+
 #if defined(FISK_HAS_BMI2)
+
 static_assert(CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>,
     SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT>
 >);
+
 #endif
 
 // The same for the checked extraction, which also needs the validity bits.
@@ -353,6 +358,7 @@ template <typename Seq, typename Kernel>
 concept CanExtractPackedCheckedSimd = requires(Seq const& seq, Kernel const& kernel) {
     for_each_spaced_kmer_packed_checked_bytewise_simd(seq, kernel, NoopSpacedValidLanesCallback{});
 };
+
 static_assert(CanExtractPackedCheckedSimd<
     PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>,
     SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdScalar>>
@@ -416,47 +422,47 @@ static void check_error_contract()
 //     Tests
 // =================================================================================================
 
-TEST(KmerSpacedPackedSimd, AcgtMsb)
+TEST(SpacedKmerExtractPackedBytewiseSimd, UncheckedAcgtMsb)
 {
     check_extraction<Encoding::kACGT, Layout::kMSB>();
 }
 
-TEST(KmerSpacedPackedSimd, AcgtLsb)
+TEST(SpacedKmerExtractPackedBytewiseSimd, UncheckedAcgtLsb)
 {
     check_extraction<Encoding::kACGT, Layout::kLSB>();
 }
 
-TEST(KmerSpacedPackedSimd, ActgMsb)
+TEST(SpacedKmerExtractPackedBytewiseSimd, UncheckedActgMsb)
 {
     check_extraction<Encoding::kACTG, Layout::kMSB>();
 }
 
-TEST(KmerSpacedPackedSimd, ActgLsb)
+TEST(SpacedKmerExtractPackedBytewiseSimd, UncheckedActgLsb)
 {
     check_extraction<Encoding::kACTG, Layout::kLSB>();
 }
 
-TEST(KmerSpacedPackedCheckedSimd, AcgtMsb)
+TEST(SpacedKmerExtractPackedBytewiseSimd, CheckedAcgtMsb)
 {
     check_checked_extraction<Encoding::kACGT, Layout::kMSB>();
 }
 
-TEST(KmerSpacedPackedCheckedSimd, AcgtLsb)
+TEST(SpacedKmerExtractPackedBytewiseSimd, CheckedAcgtLsb)
 {
     check_checked_extraction<Encoding::kACGT, Layout::kLSB>();
 }
 
-TEST(KmerSpacedPackedCheckedSimd, ActgMsb)
+TEST(SpacedKmerExtractPackedBytewiseSimd, CheckedActgMsb)
 {
     check_checked_extraction<Encoding::kACTG, Layout::kMSB>();
 }
 
-TEST(KmerSpacedPackedCheckedSimd, ActgLsb)
+TEST(SpacedKmerExtractPackedBytewiseSimd, CheckedActgLsb)
 {
     check_checked_extraction<Encoding::kACTG, Layout::kLSB>();
 }
 
-TEST(KmerSpacedPackedSimd, ErrorContract)
+TEST(SpacedKmerExtractPackedBytewiseSimd, ErrorContract)
 {
     check_error_contract<Layout::kMSB>();
     check_error_contract<Layout::kLSB>();

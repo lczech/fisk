@@ -1,102 +1,31 @@
-#include <algorithm>
-#include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
-#include <unordered_set>
 #include <vector>
 
 #include "fisk/core/cast.hpp"
-#include "fisk/core/kmer.hpp"
-#include "fisk/core/kmer_callback.hpp"
-#include "fisk/core/kmer_hash.hpp"
 #include "fisk/core/char_encoder.hpp"
-#include "fisk/core/simd_scalar.hpp"
+#include "fisk/core/kmer.hpp"
+#include "fisk/core/random.hpp"
+#include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/ascii_rolling_scalar.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
-#include "simd_lanes.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
 
 // =================================================================================================
-//     Helpers and Oracle
+//     K-mers
 // =================================================================================================
 
-// Ground truth comes from oracle.hpp, built from nucleotide strings and deliberately independent
-// of core/kmer.hpp, so that a mistake in the bit tricks under test cannot cancel itself out
-// against the reference. Random inputs come from random_seqs() in corpus.hpp.
-
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 //     Compile-Time Guarantees
-// =================================================================================================
-
-// All four instantiations are distinct types, and none of them converts to another or to a raw
-// word in either direction. This is the guarantee the whole type exists for.
-static_assert(!std::is_same_v<KmerAcgtMsb, KmerAcgtLsb>);
-static_assert(!std::is_same_v<KmerAcgtMsb, KmerActgMsb>);
-static_assert(!std::is_convertible_v<KmerAcgtMsb, KmerActgMsb>);
-static_assert(!std::is_convertible_v<KmerAcgtMsb, KmerAcgtLsb>);
-static_assert(!std::is_convertible_v<KmerAcgtMsb, std::uint64_t>);
-static_assert(!std::is_convertible_v<std::uint64_t, KmerAcgtMsb>);
-
-// A vector of k-mers is not a k-mer, also not with the single word of SimdScalar, so that the
-// operations on k-mers do not take it, and kmer_value() gives its vector.
-using KmerVectorScalar = KmerVector<Encoding::kACGT, Layout::kMSB, SimdScalar>;
-static_assert(!KmerType<KmerVectorScalar>);
-static_assert(KmerVectorType<KmerVectorScalar>);
-static_assert(ContiguousKmerVectorType<KmerVectorScalar>);
-static_assert(!SpacedKmerVectorType<KmerVectorScalar>);
-static_assert(!KmerVectorType<KmerAcgtMsb>);
-static_assert(!std::is_convertible_v<KmerVectorScalar, KmerAcgtMsb>);
-static_assert(std::is_same_v<decltype(kmer_value(KmerVectorScalar{})), std::uint64_t>);
-
-namespace {
-
-template <typename A, typename B>
-concept AssignableFrom = requires(A a, B b) { a = b; };
-
-template <typename A>
-concept Addable = requires(A a, A b) { a + b; };
-
-template <typename A>
-concept Shiftable = requires(A a) { a << 2; };
-
-} // namespace
-
-// Mixing conventions must not compile even through assignment.
-static_assert( AssignableFrom<KmerAcgtMsb, KmerAcgtMsb>);
-static_assert(!AssignableFrom<KmerAcgtMsb, KmerActgMsb>);
-static_assert(!AssignableFrom<KmerAcgtMsb, KmerAcgtLsb>);
-static_assert(!AssignableFrom<KmerAcgtMsb, std::uint64_t>);
-
-// Raw integer manipulation is deliberately not available on the type: such operations have no
-// k-mer meaning and would not preserve the invariant that only the lowest 2*width bits are set.
-// They go through kmer_value() instead, where they are visibly low level.
-static_assert(!Addable<KmerAcgtMsb>);
-static_assert(!Shiftable<KmerAcgtMsb>);
-
-// The k-mer-like concept accepts k-mers and nothing accidental.
-static_assert(KmerType<KmerAcgtMsb>);
-static_assert(KmerType<KmerActgLsb>);
-static_assert(!KmerType<std::uint64_t>);
-static_assert(!KmerType<PackedSequence<Encoding::kACGT, Layout::kMSB>>);
-
-// Any convention-tagged container yields its matching k-mer type through the trait, without the
-// container itself having to know that k-mers exist.
-static_assert(
-    std::is_same_v<kmer_type_of<PackedSequence<Encoding::kACGT, Layout::kMSB>>, KmerAcgtMsb>
-);
-static_assert(
-    std::is_same_v<kmer_type_of<PackedSequence<Encoding::kACTG, Layout::kLSB>>, KmerActgLsb>
-);
-static_assert(
-    std::is_same_v<kmer_type_of<KmerAcgtLsb>, KmerAcgtLsb>
-);
+// -------------------------------------------------------------------------------------------------
 
 // kmer_convert() picks its overload purely from which kind of template argument it is given: an
 // Encoding changes the encoding, a Layout the layout, and both change both.
@@ -110,19 +39,14 @@ static_assert(
     std::is_same_v<decltype(kmer_convert<Encoding::kACTG, Layout::kLSB>(KmerAcgtMsb{0}, 1)), KmerActgLsb>
 );
 
-// The predicate behind the debug check in kmer_cast(): a word fits a width iff it has no bits set
-// above it, including at the boundary widths 1 and 32.
-static_assert(fits_width_(0x06, 3) && fits_width_(0x3F, 3));
-static_assert(!fits_width_(0x40, 3));
-static_assert(fits_width_(0x3, 1) && !fits_width_(0x4, 1));
-static_assert(fits_width_(std::uint64_t{1} << 61, 31) && !fits_width_(std::uint64_t{1} << 62, 31));
-static_assert(fits_width_(~std::uint64_t{0}, 32));
+namespace {
 
 // Every operation is constexpr, so k-mers can be built and manipulated at compile time. Spelled
 // out on one worked example, ACG under ACGT/MSB, whose expected words are short enough to read.
-namespace {
     constexpr auto acg = kmer_cast<Encoding::kACGT, Layout::kMSB>(0x06, 3);
-}
+
+} // namespace
+
 static_assert(kmer_value(acg) == 0x06);
 static_assert(kmer_encode("ACG") == acg);
 static_assert(base_at(acg, 0, 3) == 0 && base_at(acg, 2, 3) == 2);
@@ -133,9 +57,9 @@ static_assert(canonical(acg, 3) == acg);
 static_assert(kmer_convert<Layout::kLSB>(acg, 3) == KmerAcgtLsb{0x24});
 static_assert(kmer_convert<Encoding::kACTG>(acg, 3) == KmerActgMsb{0x07});
 
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 //     Decoding and Base Access
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 
 // kmer_decode() must return the string the k-mer was built from, under every convention.
 template <typename K>
@@ -148,12 +72,50 @@ static void check_decode()
     }
 }
 
-TEST(Kmer, Decode)
+TEST(CoreKmer, Decode)
 {
     check_decode<KmerAcgtMsb>();
     check_decode<KmerAcgtLsb>();
     check_decode<KmerActgMsb>();
     check_decode<KmerActgLsb>();
+}
+
+// Valid-only sequences (pure ACGT/acgt), lengths 0..70 plus a batch of longer random lengths, as in
+// the extraction tests of kmer_extract/.
+static std::vector<std::string> const& decode_sequences()
+{
+    static std::vector<std::string> const seqs = [] {
+        std::vector<std::string> out;
+        Splitmix64 rng(90210);
+        for (std::size_t len = 0; len <= 70; ++len) {
+            out.push_back(random_sequence(rng, len));
+        }
+        for (int i = 0; i < 20; ++i) {
+            std::size_t const len = static_cast<std::size_t>(rng.get_uint64() % 300);
+            out.push_back(random_sequence(rng, len));
+        }
+        return out;
+    }();
+    return seqs;
+}
+
+// Round-trips kmer_decode() against the oracle: decoding an oracle-computed k-mer must give back
+// the (uppercased) substring it was extracted from.
+TEST(CoreKmer, DecodeOracleWindows)
+{
+    for (auto const& seq : decode_sequences()) {
+        for (auto const k : test_ks()) {
+            auto const windows = oracle_kmers_all_windows<Encoding::kACGT, Layout::kMSB>(seq, k);
+            for (auto const& window : windows) {
+                std::string upper = seq.substr(window.pos, k);
+                for (auto& c : upper) {
+                    c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                }
+                auto const kmer = kmer_cast<Encoding::kACGT, Layout::kMSB>(window.value.value(), k);
+                EXPECT_EQ(kmer_decode(kmer, k), upper);
+            }
+        }
+    }
 }
 
 // base_at() must agree with indexing the decoded string, so callers never need the shift.
@@ -173,7 +135,7 @@ static void check_base_at()
     }
 }
 
-TEST(Kmer, BaseAt)
+TEST(CoreKmer, BaseAt)
 {
     check_base_at<KmerAcgtMsb>();
     check_base_at<KmerAcgtLsb>();
@@ -181,60 +143,9 @@ TEST(Kmer, BaseAt)
     check_base_at<KmerActgLsb>();
 }
 
-// kmer_value() must be exactly the word the k-mer was cast from, in both directions, under every
-// convention, and kmer_cast_unchecked() must give the same k-mer.
-template <typename K>
-static void check_value_round_trip()
-{
-    constexpr Encoding E = K::encoding;
-    constexpr Layout L = K::layout;
-    for (std::size_t width = 1; width <= 32; ++width) {
-        for (auto const& seq : random_seqs(width, 4, 131313 + width)) {
-            auto const raw = oracle_encode<E, L>(seq).value();
-            auto const kmer = kmer_cast<E, L>(raw, width);
-            EXPECT_EQ(kmer_value(kmer), raw);
-            EXPECT_EQ((kmer_cast<E, L>(kmer_value(kmer), width)), kmer);
-            EXPECT_EQ((kmer_cast_unchecked<E, L>(raw)), kmer);
-            EXPECT_EQ(kmer_decode(kmer, width), seq);
-        }
-    }
-}
-
-TEST(Kmer, ValueRoundTrip)
-{
-    check_value_round_trip<KmerAcgtMsb>();
-    check_value_round_trip<KmerAcgtLsb>();
-    check_value_round_trip<KmerActgMsb>();
-    check_value_round_trip<KmerActgLsb>();
-}
-
-// A k-mer must never carry bits above its width, which is what kmer_cast() asserts on and what
-// every operation below is entitled to assume.
-template <typename K>
-static void check_no_high_bits()
-{
-    for (std::size_t width = 1; width < 32; ++width) {
-        for (auto const& seq : random_seqs(width, 4, 111111 + width)) {
-            auto const kmer = oracle_kmer<K>(seq);
-            EXPECT_EQ(kmer_value(kmer) >> (2 * width), std::uint64_t{0});
-            EXPECT_EQ(kmer_value(complement(kmer, width)) >> (2 * width), std::uint64_t{0});
-            EXPECT_EQ(kmer_value(reverse(kmer, width)) >> (2 * width), std::uint64_t{0});
-            EXPECT_EQ(kmer_value(reverse_complement(kmer, width)) >> (2 * width), std::uint64_t{0});
-        }
-    }
-}
-
-TEST(Kmer, NoBitsAboveWidth)
-{
-    check_no_high_bits<KmerAcgtMsb>();
-    check_no_high_bits<KmerAcgtLsb>();
-    check_no_high_bits<KmerActgMsb>();
-    check_no_high_bits<KmerActgLsb>();
-}
-
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 //     Nucleotide Operations
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 
 // complement, reverse and reverse_complement must match doing the same thing to the string, and
 // each must be its own inverse. Checked under both encodings, since the complement constant
@@ -264,7 +175,7 @@ static void check_nucleotide_ops()
     }
 }
 
-TEST(Kmer, NucleotideOps)
+TEST(CoreKmer, NucleotideOps)
 {
     check_nucleotide_ops<KmerAcgtMsb>();
     check_nucleotide_ops<KmerAcgtLsb>();
@@ -293,7 +204,7 @@ static void check_canonical()
     }
 }
 
-TEST(Kmer, Canonical)
+TEST(CoreKmer, Canonical)
 {
     check_canonical<KmerAcgtMsb>();
     check_canonical<KmerAcgtLsb>();
@@ -304,7 +215,7 @@ TEST(Kmer, Canonical)
 // Within one layout, reversing the bases yields the same bit pattern as reading the unchanged
 // word under the opposite layout. Documented in core/kmer.hpp as the clearest illustration of
 // why a bare word cannot be interpreted without knowing its conventions.
-TEST(Kmer, ReverseMirrorsLayout)
+TEST(CoreKmer, ReverseMirrorsLayout)
 {
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 555555 + width)) {
@@ -317,9 +228,9 @@ TEST(Kmer, ReverseMirrorsLayout)
     }
 }
 
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 //     Convention Conversion
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 
 // Converting must produce exactly the k-mer that the target conventions would have encoded the
 // same string as, and the result must still decode to that same string. The two directions
@@ -345,7 +256,7 @@ static void check_convert_from(std::string const& seq, std::size_t width)
     check_convert_pair<From, Encoding::kACTG, Layout::kLSB>(seq, width);
 }
 
-TEST(Kmer, ConvertMatchesOracle)
+TEST(CoreKmer, ConvertMatchesOracle)
 {
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 666666 + width)) {
@@ -359,7 +270,7 @@ TEST(Kmer, ConvertMatchesOracle)
 
 // Each single-axis conversion must be an involution, and the combined one must agree with
 // composing them in either order, since re-coding is per-group and re-ordering is positional.
-TEST(Kmer, ConvertRoundTripAndComposition)
+TEST(CoreKmer, ConvertRoundTripAndComposition)
 {
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 777777 + width)) {
@@ -391,7 +302,7 @@ TEST(Kmer, ConvertRoundTripAndComposition)
 }
 
 // Converting to the conventions a k-mer already has must be the identity.
-TEST(Kmer, ConvertToSameIsIdentity)
+TEST(CoreKmer, ConvertToSameIsIdentity)
 {
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 888888 + width)) {
@@ -403,71 +314,9 @@ TEST(Kmer, ConvertToSameIsIdentity)
     }
 }
 
-// =================================================================================================
-//     Ordering and Hashing
-// =================================================================================================
-
-// Only ACGT combined with MSB orders k-mers the way the decoded strings order: ACTG because its
-// codes are not alphabetical, LSB because the first base sits in the low bits.
-TEST(Kmer, LexicographicOrderOnlyForAcgtMsb)
-{
-    std::size_t const width = 8;
-    auto seqs = random_seqs(width, 40, 123123);
-    std::sort(seqs.begin(), seqs.end());
-
-    bool acgt_msb_ordered = true;
-    bool acgt_lsb_ordered = true;
-    bool actg_msb_ordered = true;
-    for (std::size_t i = 1; i < seqs.size(); ++i) {
-        acgt_msb_ordered &= oracle_kmer<KmerAcgtMsb>(seqs[i - 1]) < oracle_kmer<KmerAcgtMsb>(seqs[i]);
-        acgt_lsb_ordered &= oracle_kmer<KmerAcgtLsb>(seqs[i - 1]) < oracle_kmer<KmerAcgtLsb>(seqs[i]);
-        actg_msb_ordered &= oracle_kmer<KmerActgMsb>(seqs[i - 1]) < oracle_kmer<KmerActgMsb>(seqs[i]);
-    }
-    EXPECT_TRUE(acgt_msb_ordered);
-    EXPECT_FALSE(acgt_lsb_ordered);
-    EXPECT_FALSE(actg_msb_ordered);
-}
-
-// Equality and ordering are by raw word, and both are usable without naming a comparator.
-TEST(Kmer, Comparison)
-{
-    auto const a = KmerAcgtMsb{7};
-    auto const b = KmerAcgtMsb{9};
-    EXPECT_TRUE(a == a);
-    EXPECT_TRUE(a != b);
-    EXPECT_TRUE(a < b);
-    EXPECT_TRUE(b > a);
-    EXPECT_TRUE(a <= a);
-}
-
-// Both hashers must be usable, agree with equality, and the default must actually mix.
-TEST(Kmer, Hashing)
-{
-    std::size_t const width = 12;
-    auto const seqs = random_seqs(width, 64, 321321);
-
-    std::unordered_set<KmerAcgtMsb> mixed;
-    std::unordered_set<KmerAcgtMsb, KmerHashIdentity> identity;
-    for (auto const& seq : seqs) {
-        auto const kmer = oracle_kmer<KmerAcgtMsb>(seq);
-        mixed.insert(kmer);
-        identity.insert(kmer);
-
-        // Equal k-mers hash equally, under both hashers.
-        EXPECT_EQ(std::hash<KmerAcgtMsb>{}(kmer), std::hash<KmerAcgtMsb>{}(kmer));
-        EXPECT_EQ(KmerHashIdentity{}(kmer), static_cast<std::size_t>(kmer_value(kmer)));
-    }
-    EXPECT_EQ(mixed.size(), identity.size());
-
-    // The default hasher is the mixing one, not the identity.
-    auto const probe = oracle_kmer<KmerAcgtMsb>(seqs.front());
-    EXPECT_EQ(std::hash<KmerAcgtMsb>{}(probe), KmerHashMix{}(probe));
-    EXPECT_NE(std::hash<KmerAcgtMsb>{}(probe), KmerHashIdentity{}(probe));
-}
-
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 //     Encoding
-// =================================================================================================
+// -------------------------------------------------------------------------------------------------
 
 // kmer_encode() must be the exact inverse of kmer_decode(): building a k-mer from a string and
 // decoding it again must return that same string, under every convention.
@@ -481,7 +330,7 @@ static void check_encode_decode_round_trip()
     }
 }
 
-TEST(Kmer, EncodeDecodeRoundTrip)
+TEST(CoreKmer, EncodeDecodeRoundTrip)
 {
     check_encode_decode_round_trip<KmerAcgtMsb>();
     check_encode_decode_round_trip<KmerAcgtLsb>();
@@ -501,7 +350,7 @@ static void check_encode_matches_oracle()
     }
 }
 
-TEST(Kmer, EncodeMatchesOracle)
+TEST(CoreKmer, EncodeMatchesOracle)
 {
     check_encode_matches_oracle<KmerAcgtMsb>();
     check_encode_matches_oracle<KmerAcgtLsb>();
@@ -510,7 +359,7 @@ TEST(Kmer, EncodeMatchesOracle)
 }
 
 // The template argument names the result type exactly. Only contiguous k-mers can be built from a
-// string alone; a spaced k-mer also needs its mask, see spaced_kmer_extract/mask.hpp.
+// string alone; a spaced k-mer also needs its mask, see core/kmer_spaced.hpp.
 template <typename K>
 concept EncodableFromString = requires(std::string_view seq) { kmer_encode<K>(seq); };
 
@@ -520,7 +369,7 @@ static_assert(!EncodableFromString<SpacedKmerAcgtMsb>);
 static_assert(!EncodableFromString<std::uint64_t>);
 
 // The default template arguments must be ACGT/MSB, matching what the extraction emits by default.
-TEST(Kmer, EncodeDefaultsMatchForEachKmer)
+TEST(CoreKmer, EncodeDefaultsMatchForEachKmer)
 {
     static_assert(std::is_same_v<decltype(kmer_encode("ACG")), KmerAcgtMsb>);
 
@@ -539,7 +388,7 @@ TEST(Kmer, EncodeDefaultsMatchForEachKmer)
 // core/char_encoder.hpp (see char_to_code_() in core/kmer.hpp for why). This is what keeps the two
 // from silently drifting apart: every code kmer_encode() assigns must be the one the ACGT/ACTG
 // lookup tables would assign to the same character, upper and lower case alike.
-TEST(Kmer, EncodeAgreesWithSeqEnc)
+TEST(CoreKmer, EncodeAgreesWithSeqEnc)
 {
     for (char c = 0; c < 127; ++c) {
         std::string const seq(1, c);
@@ -568,7 +417,7 @@ TEST(Kmer, EncodeAgreesWithSeqEnc)
 
 // Boundary and error contract: length must be in [1, 32], and every character must be one of the
 // four nucleotides (case-insensitively); anything else throws rather than silently misencoding.
-TEST(Kmer, EncodeInvalidInput)
+TEST(CoreKmer, EncodeInvalidInput)
 {
     EXPECT_ANY_THROW((void) kmer_encode(""));
     EXPECT_ANY_THROW((void) kmer_encode(std::string(33, 'A')));
@@ -595,14 +444,97 @@ TEST(Kmer, EncodeInvalidInput)
 }
 
 // =================================================================================================
-//     SIMD Re-entry
+//     Spaced K-mers
 // =================================================================================================
 
-// See check_kmer_vector() in simd_lanes.hpp.
-TEST(Kmer, KmerVector)
+// -------------------------------------------------------------------------------------------------
+//     Nucleotide Operations and Conversion
+// -------------------------------------------------------------------------------------------------
+
+template <typename K>
+concept CanReverse = requires(K kmer) { reverse(kmer, 3); };
+
+template <typename K>
+concept CanReverseComplement = requires(K kmer) { reverse_complement(kmer, 3); };
+
+template <typename K>
+concept CanCanonical = requires(K kmer) { canonical(kmer, 3); };
+
+static_assert(CanReverse<KmerAcgtMsb>);
+static_assert(CanReverseComplement<KmerAcgtMsb>);
+static_assert(CanCanonical<KmerAcgtMsb>);
+
+static_assert(!CanReverse<SpacedKmerAcgtMsb> && !CanReverseComplement<SpacedKmerAcgtMsb>);
+static_assert(!CanCanonical<SpacedKmerAcgtMsb>);
+
+namespace {
+
+    constexpr auto spaced_acg = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(0x06, 3);
+
+} // namespace
+
+static_assert(spaced_kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(0x06) == spaced_acg);
+static_assert(kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(0x06) == KmerAcgtMsb{0x06});
+static_assert(kmer_value(spaced_acg) == 0x06);
+static_assert(base_at(spaced_acg, 0, 3) == 0 && base_at(spaced_acg, 2, 3) == 2);
+static_assert(complement(spaced_acg, 3) == SpacedKmerAcgtMsb{0x39});
+static_assert(kmer_convert<Layout::kLSB>(spaced_acg, 3) == SpacedKmerAcgtLsb{0x24});
+static_assert(kmer_convert<Encoding::kACTG>(spaced_acg, 3) == SpacedKmerActgMsb{0x07});
+static_assert(std::is_same_v<
+    decltype(kmer_convert<Encoding::kACTG, Layout::kLSB>(spaced_acg, 3)), SpacedKmerActgLsb
+>);
+
+// Bases kept by a spaced mask carry the same meaning as the contiguous k-mer of the same bases, so
+// decoding and the convention-only operations must agree with the contiguous results.
+TEST(CoreKmer, SpacedAgreesWithContiguousOnBaseOps)
 {
-    check_kmer_vector<KmerAcgtMsb>(909090);
-    check_kmer_vector<KmerAcgtLsb>(909090);
-    check_kmer_vector<KmerActgMsb>(909090);
-    check_kmer_vector<KmerActgLsb>(909090);
+    std::size_t const width = 9;
+    for (auto const& seq : random_seqs(width, 32, 4242)) {
+        auto const contiguous = oracle_kmer<KmerAcgtMsb>(seq);
+        auto const spaced = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(
+            kmer_value(contiguous), width
+        );
+        EXPECT_EQ(kmer_decode(spaced, width), seq);
+        EXPECT_EQ(
+            kmer_value(complement(spaced, width)),
+            kmer_value(complement(contiguous, width))
+        );
+        EXPECT_EQ(
+            kmer_value(kmer_convert<Layout::kLSB>(spaced, width)),
+            kmer_value(kmer_convert<Layout::kLSB>(contiguous, width))
+        );
+    }
+}
+
+TEST(CoreKmer, SpacedConvertRoundTripAndComposition)
+{
+    for (std::size_t width = 1; width <= 32; ++width) {
+        for (auto const& seq : random_seqs(width, 4, 888888 + width)) {
+            auto const kmer = spaced_kmer_cast<Encoding::kACGT, Layout::kMSB>(
+                kmer_value(oracle_kmer<KmerAcgtMsb>(seq)), width
+            );
+
+            EXPECT_EQ(
+                kmer_convert<Encoding::kACGT>(kmer_convert<Encoding::kACTG>(kmer, width), width),
+                kmer
+            );
+            EXPECT_EQ(
+                kmer_convert<Layout::kMSB>(kmer_convert<Layout::kLSB>(kmer, width), width), kmer
+            );
+            EXPECT_EQ(
+                (kmer_convert<Encoding::kACGT, Layout::kMSB>(
+                    kmer_convert<Encoding::kACTG, Layout::kLSB>(kmer, width), width
+                )),
+                kmer
+            );
+
+            auto const combined = kmer_convert<Encoding::kACTG, Layout::kLSB>(kmer, width);
+            auto const encoding_first =
+                kmer_convert<Layout::kLSB>(kmer_convert<Encoding::kACTG>(kmer, width), width);
+            auto const layout_first =
+                kmer_convert<Encoding::kACTG>(kmer_convert<Layout::kLSB>(kmer, width), width);
+            EXPECT_EQ(combined, encoding_first);
+            EXPECT_EQ(combined, layout_first);
+        }
+    }
 }

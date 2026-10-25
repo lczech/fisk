@@ -1,4 +1,6 @@
+
 #include "fisk/core/char_encoder.hpp"
+#include "fisk/core/types.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 
@@ -61,18 +63,17 @@ static_assert(
 
 // Each technique must produce exactly the oracle's code for every byte value, under both
 // encodings, including kInvalidNucleotide for everything that is not ACGT in either case.
-
-TEST(CharEncoder, Ifs)
+TEST(CoreCharEncoder, Ifs)
 {
     check_encoder<CharEncoderIfs>();
 }
 
-TEST(CharEncoder, Switch)
+TEST(CoreCharEncoder, Switch)
 {
     check_encoder<CharEncoderSwitch>();
 }
 
-TEST(CharEncoder, Table)
+TEST(CoreCharEncoder, Table)
 {
     check_encoder<CharEncoderTable>();
 }
@@ -84,7 +85,7 @@ TEST(CharEncoder, Table)
 template <Encoding E>
 using CharEncoderAsciiChecked = CharEncoderAscii<E, InputCheck::kChecked>;
 
-TEST(CharEncoder, Ascii)
+TEST(CoreCharEncoder, Ascii)
 {
     check_encoder<CharEncoderAsciiChecked>();
 }
@@ -92,7 +93,7 @@ TEST(CharEncoder, Ascii)
 // The kUnchecked variant must agree with the (default, kChecked) checked variant on the
 // characters it actually supports. For any other byte its code is unspecified, but it must still
 // be a valid-looking 0-3 code, as documented in core/char_encoder.hpp.
-TEST(CharEncoder, AsciiUnchecked)
+TEST(CoreCharEncoder, AsciiUnchecked)
 {
     for (int i = 0; i < 256; ++i) {
         auto const c = static_cast<char>(i);
@@ -127,7 +128,7 @@ static void check_techniques_agree_under()
     }
 }
 
-TEST(CharEncoder, TechniquesAgree)
+TEST(CoreCharEncoder, TechniquesAgree)
 {
     check_techniques_agree_under<Encoding::kACGT>();
     check_techniques_agree_under<Encoding::kACTG>();

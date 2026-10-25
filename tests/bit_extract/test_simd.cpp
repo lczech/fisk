@@ -1,188 +1,18 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <type_traits>
 #include <vector>
 
-#include "fisk/bit_extract/bit_extract.hpp"
-#include "fisk/bit_extract/selector.hpp"
 #include "fisk/bit_extract/simd.hpp"
-#include "fisk/core/random.hpp"
-#include "fisk/core/simd_scalar.hpp"
-#include "fisk/core/simd_sse2.hpp"
 #include "fisk/core/simd_avx2.hpp"
 #include "fisk/core/simd_avx512.hpp"
 #include "fisk/core/simd_neon.hpp"
+#include "fisk/core/simd_scalar.hpp"
+#include "fisk/core/simd_sse2.hpp"
+#include "bit_extract/common.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
-
-// =================================================================================================
-//     Helpers and Oracle
-// =================================================================================================
-
-// Ground truth for bit extraction (PEXT semantics), written independently:
-// Walk the mask from bit 0 up, and for every set mask bit, append the corresponding bit of `x`
-// to the output. Every algorithm is checked against this for the same (x, mask).
-static std::uint64_t bit_extract_oracle(std::uint64_t x, std::uint64_t mask)
-{
-    std::uint64_t out_val = 0;
-    std::uint64_t out_pos = 0;
-    for (unsigned bit = 0; bit < 64; ++bit) {
-        std::uint64_t const bit_mask = std::uint64_t{1} << bit;
-        if (mask & bit_mask) {
-            if (x & bit_mask) {
-                out_val |= (std::uint64_t{1} << out_pos);
-            }
-            ++out_pos;
-        }
-    }
-    return out_val;
-}
-
-static std::vector<std::uint64_t> const& edge_case_masks()
-{
-    static std::vector<std::uint64_t> const masks = {
-        0x0000000000000000ULL,
-        0xFFFFFFFFFFFFFFFFULL,
-        0x0000000000000001ULL, // single bit, position 0
-        0x0000000080000000ULL, // single bit, position 31
-        0x8000000000000000ULL, // single bit, position 63
-        0x5555555555555555ULL, // alternating bits: 32 runs of length 1, the block table's max
-        0x00000000FFFF0000ULL, // one contiguous run
-        0xF0F0F0F0F0F0F0F0ULL, // several contiguous runs of length 4
-    };
-    return masks;
-}
-
-static std::vector<std::uint64_t> const& random_masks()
-{
-    static std::vector<std::uint64_t> const masks = [] {
-        std::vector<std::uint64_t> m;
-        Splitmix64 rng(1001);
-        for (int i = 0; i < 50; ++i) {
-            m.push_back(rng.get_uint64());
-        }
-        return m;
-    }();
-    return masks;
-}
-
-static std::vector<std::uint64_t> const& random_values()
-{
-    static std::vector<std::uint64_t> const values = [] {
-        std::vector<std::uint64_t> v;
-        Splitmix64 rng(2002);
-        for (int i = 0; i < 100; ++i) {
-            v.push_back(rng.get_uint64());
-        }
-        return v;
-    }();
-    return values;
-}
-
-// Run `func(value, mask)` against bit_extract_oracle() for the full shared mask x value set.
-template <typename Func>
-static void check_against_oracle(Func&& func)
-{
-    std::vector<std::uint64_t> masks = edge_case_masks();
-    for (auto const m : random_masks()) {
-        masks.push_back(m);
-    }
-
-    std::vector<std::uint64_t> values = {
-        0x0000000000000000ULL,
-        0xFFFFFFFFFFFFFFFFULL,
-    };
-    for (auto const v : random_values()) {
-        values.push_back(v);
-    }
-
-    for (auto const mask : masks) {
-        for (auto const value : values) {
-            EXPECT_EQ(func(value, mask), bit_extract_oracle(value, mask));
-        }
-    }
-}
-
-// =================================================================================================
-//     Bit Extraction Tests
-// =================================================================================================
-
-TEST(BitExtract, Bitloop)
-{
-    check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        return bit_extract_bitloop(x, BitExtractMask(mask));
-    });
-}
-
-TEST(BitExtract, Split32)
-{
-    check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        return bit_extract_split32(x, BitExtractMask(mask));
-    });
-}
-
-TEST(BitExtract, ByteTable)
-{
-    check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        return bit_extract_byte_table(x, BitExtractMask(mask));
-    });
-}
-
-// The tables must not be constructible from a raw mask, as that would skip the preprocessing.
-static_assert(!std::is_aggregate_v<BitExtractBlockTable>);
-static_assert(!std::is_aggregate_v<BitExtractButterflyTable>);
-static_assert(!std::is_constructible_v<BitExtractBlockTable, std::uint64_t>);
-static_assert(!std::is_constructible_v<BitExtractButterflyTable, std::uint64_t>);
-
-TEST(BitExtract, BlockTable)
-{
-    check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = make_bit_extract_block_table(mask);
-        return bit_extract_block_table(x, table);
-    });
-}
-
-// bit_extract_block_table_unrolled<UF>() is the same algorithm at different compile-time unroll
-// factors; run every supported UF against the same oracle rather than treating them as separate
-// tests, since they are not distinct algorithms.
-template <std::size_t UF>
-static void check_block_table_unrolled()
-{
-    check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = make_bit_extract_block_table(mask);
-        return bit_extract_block_table_unrolled<UF>(x, table);
-    });
-}
-
-TEST(BitExtract, BlockTableUnrolled)
-{
-    check_block_table_unrolled<1>();
-    check_block_table_unrolled<2>();
-    check_block_table_unrolled<4>();
-    check_block_table_unrolled<8>();
-    check_block_table_unrolled<16>();
-    check_block_table_unrolled<32>();
-}
-
-TEST(BitExtract, ButterflyTable)
-{
-    check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = make_bit_extract_butterfly_table(mask);
-        return bit_extract_butterfly_table(x, table);
-    });
-}
-
-#ifdef FISK_HAS_BMI2
-TEST(BitExtract, Pext)
-{
-    check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        return bit_extract_pext(x, BitExtractMask(mask));
-    });
-}
-#endif
 
 // =================================================================================================
 //     SIMD Kernel Tests
@@ -251,9 +81,9 @@ static void check_kernel()
     }
 }
 
-// -----------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 //     Butterfly Kernels
-// -----------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 
 TEST(BitExtractSimd, KernelButterflyScalar)
 {
@@ -261,40 +91,47 @@ TEST(BitExtractSimd, KernelButterflyScalar)
 }
 
 #ifdef FISK_HAS_SSE2
+
 TEST(BitExtractSimd, KernelButterflySSE2)
 {
     check_kernel<BitExtractKernelButterfly<SimdSSE2>>();
 }
+
 #endif
 
 #ifdef FISK_HAS_AVX2
+
 TEST(BitExtractSimd, KernelButterflyAVX2)
 {
     check_kernel<BitExtractKernelButterfly<SimdAVX2>>();
 }
+
 #endif
 
 #ifdef FISK_HAS_AVX512
+
 TEST(BitExtractSimd, KernelButterflyAVX512)
 {
     check_kernel<BitExtractKernelButterfly<SimdAVX512>>();
 }
+
 #endif
 
 #ifdef FISK_HAS_NEON
+
 TEST(BitExtractSimd, KernelButterflyNEON)
 {
     check_kernel<BitExtractKernelButterfly<SimdNEON>>();
 }
+
 #endif
 
-// -----------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 //     Block Kernels
-// -----------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 
 // Each ISA tier is swept over UF = 1, 8 (the library default), and 32 (the low and high
 // extremes plus the default of the or_reduce_ compile-time balanced-tree reduction).
-
 TEST(BitExtractSimd, KernelBlockScalar)
 {
     check_kernel<BitExtractKernelBlock<SimdScalar, 1>>();
@@ -303,121 +140,61 @@ TEST(BitExtractSimd, KernelBlockScalar)
 }
 
 #ifdef FISK_HAS_SSE2
+
 TEST(BitExtractSimd, KernelBlockSSE2)
 {
     check_kernel<BitExtractKernelBlock<SimdSSE2, 1>>();
     check_kernel<BitExtractKernelBlock<SimdSSE2, 8>>();
     check_kernel<BitExtractKernelBlock<SimdSSE2, 32>>();
 }
+
 #endif
 
 #ifdef FISK_HAS_AVX2
+
 TEST(BitExtractSimd, KernelBlockAVX2)
 {
     check_kernel<BitExtractKernelBlock<SimdAVX2, 1>>();
     check_kernel<BitExtractKernelBlock<SimdAVX2, 8>>();
     check_kernel<BitExtractKernelBlock<SimdAVX2, 32>>();
 }
+
 #endif
 
 #ifdef FISK_HAS_AVX512
+
 TEST(BitExtractSimd, KernelBlockAVX512)
 {
     check_kernel<BitExtractKernelBlock<SimdAVX512, 1>>();
     check_kernel<BitExtractKernelBlock<SimdAVX512, 8>>();
     check_kernel<BitExtractKernelBlock<SimdAVX512, 32>>();
 }
+
 #endif
 
 #ifdef FISK_HAS_NEON
+
 TEST(BitExtractSimd, KernelBlockNEON)
 {
     check_kernel<BitExtractKernelBlock<SimdNEON, 1>>();
     check_kernel<BitExtractKernelBlock<SimdNEON, 8>>();
     check_kernel<BitExtractKernelBlock<SimdNEON, 32>>();
 }
+
 #endif
 
-// -----------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 //     PEXT Kernel
-// -----------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------
 
 #ifdef FISK_HAS_BMI2
+
 TEST(BitExtractSimd, KernelPext)
 {
     check_kernel<BitExtractKernelPEXT>();
 }
+
 #endif
-
-// =================================================================================================
-//     Selector Tests
-// =================================================================================================
-
-TEST(BitExtractSelector, RunBitExtractMode)
-{
-    // run_bit_extract_mode() dispatches a BitExtractMode to the corresponding already-tested
-    // algorithm above; the point here is dispatch correctness (does each mode route to the right
-    // implementation), not re-proving algorithm correctness.
-
-    std::vector<BitExtractMode> modes = {
-        BitExtractMode::kBlockTable,
-        BitExtractMode::kBlockTableUnrolled2,
-        BitExtractMode::kBlockTableUnrolled4,
-        BitExtractMode::kBlockTableUnrolled8,
-        BitExtractMode::kButterflyTable,
-    };
-#ifdef FISK_HAS_BMI2
-    modes.push_back(BitExtractMode::kPext);
-#endif
-
-    std::vector<std::uint64_t> masks = edge_case_masks();
-    for (auto const m : random_masks()) {
-        masks.push_back(m);
-    }
-
-    std::vector<std::uint64_t> values = {
-        0x0000000000000000ULL,
-        0xFFFFFFFFFFFFFFFFULL,
-    };
-    for (auto const v : random_values()) {
-        values.push_back(v);
-    }
-
-    for (auto const mode : modes) {
-        for (auto const mask : masks) {
-            run_bit_extract_mode(mode, BitExtractMask(mask), [&](auto&& extractor) {
-                for (auto const value : values) {
-                    EXPECT_EQ(extractor(value), bit_extract_oracle(value, mask));
-                }
-            });
-        }
-    }
-}
-
-TEST(BitExtractSelector, SmokeTest)
-{
-    // bit_extract_selector() picks whichever candidate is fastest right here right now; there
-    // is no "correct" mode to assert, and it already self-checks candidate agreement internally
-    // (throws on mismatch). This is a smoke test only: it completes without throwing and returns a
-    // value within BitExtractMode's valid range, for a couple of masks.
-
-    std::vector<std::uint64_t> const masks = {
-        0x5555555555555555ULL, // alternating bits, maximal run count
-        random_masks().front(),
-    };
-
-    for (auto const mask : masks) {
-        auto const mode = bit_extract_selector(mask);
-        bool const is_known_mode =
-            mode == BitExtractMode::kPext ||
-            mode == BitExtractMode::kBlockTable ||
-            mode == BitExtractMode::kBlockTableUnrolled2 ||
-            mode == BitExtractMode::kBlockTableUnrolled4 ||
-            mode == BitExtractMode::kBlockTableUnrolled8 ||
-            mode == BitExtractMode::kButterflyTable;
-        EXPECT_TRUE(is_known_mode);
-    }
-}
 
 // =================================================================================================
 //     Dispatcher Tests
@@ -427,7 +204,7 @@ TEST(BitExtractSelector, SmokeTest)
 // so a single kernel type is enough here.
 using DispatcherTestKernel = BitExtractKernelButterfly<SimdScalar>;
 
-TEST(BitExtractDispatcher, RoundTrip)
+TEST(BitExtractSimd, DispatcherRoundTrip)
 {
     // Checks that dispatcher.run()'s array slot i actually corresponds to input mask i.
 
@@ -468,7 +245,7 @@ TEST(BitExtractDispatcher, RoundTrip)
     }
 }
 
-TEST(BitExtractDispatcher, InvalidMaskCount)
+TEST(BitExtractSimd, DispatcherInvalidMaskCount)
 {
     // N=0 and N>16 must be rejected by both constructors;
     // N=1 and N=16 (the inclusive boundary values) must succeed.

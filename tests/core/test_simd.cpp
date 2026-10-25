@@ -9,11 +9,11 @@
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/random.hpp"
 #include "fisk/core/simd.hpp"
-#include "fisk/core/simd_scalar.hpp"
-#include "fisk/core/simd_sse2.hpp"
 #include "fisk/core/simd_avx2.hpp"
 #include "fisk/core/simd_avx512.hpp"
 #include "fisk/core/simd_neon.hpp"
+#include "fisk/core/simd_scalar.hpp"
+#include "fisk/core/simd_sse2.hpp"
 #include "fisk/core/types.hpp"
 #include "testing.hpp"
 
@@ -27,27 +27,37 @@ static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdScalar>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdScalar>>);
 
 #if defined(FISK_HAS_SSE2)
+
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdSSE2>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdSSE2>>);
+
 #endif
 
 #if defined(FISK_HAS_AVX2)
+
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX2>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX2>>);
+
 #endif
 
 #if defined(FISK_HAS_AVX512)
+
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX512>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
+
 #endif
 
 #if defined(FISK_HAS_NEON)
+
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdNEON>>);
 static_assert(BitExtractKernel<BitExtractKernelBlock<SimdNEON>>);
+
 #endif
 
 #if defined(FISK_HAS_BMI2)
+
 static_assert(BitExtractKernel<BitExtractKernelPEXT>);
+
 #endif
 
 // =================================================================================================
@@ -386,19 +396,20 @@ static void check_simd_arch()
 //     Tests
 // =================================================================================================
 
-TEST(SimdArch, Scalar)
+TEST(CoreSimd, Scalar)
 {
     check_simd_arch<SimdScalar>();
 }
 
 #if defined(FISK_HAS_SSE2)
-TEST(SimdArch, SSE2)
+
+TEST(CoreSimd, SSE2)
 {
     check_simd_arch<SimdSSE2>();
 }
 
 // The operations that SimdSSE2 has in place of the shifts per lane.
-TEST(SimdArch, SSE2LaneHelpers)
+TEST(CoreSimd, SSE2LaneHelpers)
 {
     using Simd = SimdSSE2;
     auto const lanes = random_lanes<Simd>(42);
@@ -421,7 +432,7 @@ TEST(SimdArch, SSE2LaneHelpers)
 }
 
 // SimdSSE2 picks one of each of these per build, so that the test above only covers those.
-TEST(SimdArch, SSE2ByteHelpers)
+TEST(CoreSimd, SSE2ByteHelpers)
 {
     using Simd = SimdSSE2;
     auto const check_swap = [](auto const& swap, Lanes<Simd> const& in) {
@@ -467,25 +478,32 @@ TEST(SimdArch, SSE2ByteHelpers)
         #endif
     }
 }
+
 #endif
 
 #if defined(FISK_HAS_AVX2)
-TEST(SimdArch, AVX2)
+
+TEST(CoreSimd, AVX2)
 {
     check_simd_arch<SimdAVX2>();
 }
+
 #endif
 
 #if defined(FISK_HAS_AVX512)
-TEST(SimdArch, AVX512)
+
+TEST(CoreSimd, AVX512)
 {
     check_simd_arch<SimdAVX512>();
 }
+
 #endif
 
 #if defined(FISK_HAS_NEON)
-TEST(SimdArch, NEON)
+
+TEST(CoreSimd, NEON)
 {
     check_simd_arch<SimdNEON>();
 }
+
 #endif
