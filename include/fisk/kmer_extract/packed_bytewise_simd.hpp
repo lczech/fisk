@@ -2,11 +2,9 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
-#include <utility>
 
 #include "fisk/core/cast.hpp"
 #include "fisk/core/intrinsics.hpp"
@@ -14,16 +12,16 @@
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/simd.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/kmer_extract/kmer_extract.hpp"
-#include "fisk/kmer_extract/packed.hpp"
+#include "fisk/kmer_extract/internal.hpp"
 
 namespace fisk {
 
 // =================================================================================================
-//     K-mer Extraction from a PackedSequence, SIMD
+//     K-mer Extraction from a PackedSequence, Bytewise, SIMD
 // =================================================================================================
 
-// Extractors for PackedSequence values, generic over the SIMD arch, see core/simd.hpp.
+// Extractors for PackedSequence values, generic over the SIMD arch, see core/simd.hpp, and
+// packed_bytewise_scalar.hpp for an overview of the extraction from a PackedSequence.
 // for_each_kmer_packed_unchecked_bytewise_simd() accepts k in [1, 32] and calls `func(pos, kmers,
 // valid_count)` with consecutive k-mers in a KmerVector of the arch: `pos` is the start position of
 // the k-mer in lane 0, and lane `j` holds the one starting at `pos + j`, for `j < valid_count`.
@@ -61,7 +59,7 @@ template <SimdArch Simd>
 inline constexpr std::size_t packed_bytewise_simd_step_vectors_v
     = 4 * packed_bytewise_simd_step_bytes_v<Simd> / Simd::lanes;
 
-// The words of the starting bytes of an iteration, see load_packed_word_() (packed.hpp): lane `j`
+// The words of the starting bytes of an iteration, see load_packed_word_() (internal.hpp): lane `j`
 // has the word that starts `j / packed_bytewise_simd_lanes_per_byte_v` bytes after `p`.
 template <SimdArch Simd, Layout L>
 FISK_ALWAYS_INLINE
@@ -146,7 +144,7 @@ inline typename Simd::simd_vector packed_bytewise_simd_shift_left_(
 // Emit the vectors of the iteration that starts at position `pos` as `emit(pos, vec, validity)`,
 // where `kmers(i)` computes them from the shift counts at index `i`, see
 // make_packed_bytewise_simd_counts_(), and `validity_at(pos)` gives the validity of the k-mer in
-// lane 0, see run_packed_bytewise_blocks_() (packed.hpp). With shifts per lane, `kmers(i)` is
+// lane 0, see run_packed_bytewise_blocks_() (internal.hpp). With shifts per lane, `kmers(i)` is
 // vector `i` of the iteration. Otherwise, it has position `i` of two starting bytes, and is
 // interleaved with the next position to get consecutive k-mers.
 template <SimdArch Simd, typename Kmers, typename ValidityAt, typename Emit>
@@ -181,7 +179,7 @@ inline void emit_packed_bytewise_simd_step_(
 // each vector of the k-mers from `pos` on to `emit` with the validity of the k-mers from `pos` on.
 // With validity bits, the vector goes on with its valid lanes: all of them in a block of valid
 // nucleotides, and otherwise the low bits of the valid starts, see run_packed_bytewise_blocks_()
-// (packed.hpp). With PackedValidity::kNucleotides, the vector goes on with the validity as it is
+// (internal.hpp). With PackedValidity::kNucleotides, the vector goes on with the validity as it is
 // instead, AllValid or the validity window from `pos` on, for the caller to test its lanes against.
 // Without validity bits, it goes on with its count of k-mers, which is below all lanes only in the
 // step after the k-mers within the sequence. There, the count comes from the length, and the
@@ -216,7 +214,7 @@ inline auto packed_bytewise_simd_emit_(Seq const& seq, std::size_t k, Emit& emit
 
             // The benchmarks sum whole vectors, also this one, and need its lanes past the count to
             // be zero, so that the sum matches that of the other extraction functions. Only built
-            // for them, as the do_not_optimize barriers, see packed.hpp.
+            // for them, as the do_not_optimize barriers, see internal.hpp.
             #if defined(FISK_BENCHMARK_SINK_MODE)
             alignas(64) std::uint64_t values[Simd::lanes];
             Simd::store_aligned(vec, values);
@@ -269,7 +267,7 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
     constexpr std::size_t step_bytes = packed_bytewise_simd_step_bytes_v<Simd>;
 
     // The 2k bits of a k-mer in the codes. The codes are read up into their padding, see
-    // run_packed_bytewise_blocks_() (packed.hpp).
+    // run_packed_bytewise_blocks_() (internal.hpp).
     constexpr Layout L = Seq::layout;
     std::uint64_t const mask = width_mask_(k);
     unsigned const k32 = static_cast<unsigned>(k);
@@ -304,7 +302,7 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
     };
 
     // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks_()
-    // (packed.hpp).
+    // (internal.hpp).
     run_packed_bytewise_blocks_<step_bytes, Form>(seq, k, step_);
 }
 

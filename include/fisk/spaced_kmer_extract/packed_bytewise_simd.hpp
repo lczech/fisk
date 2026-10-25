@@ -4,27 +4,31 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 #include <utility>
 
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
+#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/kmer_extract/packed_simd.hpp"
-#include "fisk/kmer_spaced/kmer_spaced.hpp"
-#include "fisk/kmer_spaced/simd.hpp"
+#include "fisk/kmer_extract/internal.hpp"
+#include "fisk/kmer_extract/packed_bytewise_simd.hpp"
+#include "fisk/spaced_kmer_extract/ascii_rolling_simd.hpp"
+#include "fisk/spaced_kmer_extract/internal.hpp"
 
 namespace fisk {
 
 // =================================================================================================
-//     Spaced K-mer Extraction from a PackedSequence, SIMD
+//     Spaced K-mer Extraction from a PackedSequence, Bytewise, SIMD
 // =================================================================================================
 
 // The SIMD counterpart of for_each_spaced_kmer_packed_unchecked_bytewise_scalar()
-// (kmer_spaced/packed.hpp), for the bit extraction kernels of a SIMD arch (bit_extract/simd.hpp),
-// such as BitExtractKernelButterfly<SimdAVX2>, created via make_spaced_kmer_kernel(). The vectors
-// of the k-mer extraction from packed sequences (kmer_extract/packed_simd.hpp) hold the windows of
-// consecutive spans, and each kernel extracts its spaced k-mers from all of them at once. As in
+// (packed_bytewise_scalar.hpp), for the bit extraction kernels of a SIMD arch
+// (bit_extract/simd.hpp), such as BitExtractKernelButterfly<SimdAVX2>, created via
+// make_spaced_kmer_kernel(). The vectors of the k-mer extraction from packed sequences
+// (kmer_extract/packed_bytewise_simd.hpp) hold the windows of consecutive spans, and each kernel
+// extracts its spaced k-mers from all of them at once. As in
 // for_each_spaced_kmer_packed_unchecked_bytewise_scalar(), the windows still hold the neighboring
 // bases above the span, which the bit extraction does not take.
 //
@@ -39,7 +43,7 @@ namespace fisk {
 // PackedSequenceWithValidity, and calls back with the valid lanes of each vector instead of a
 // count, as `callback(pos, mask_idx, spaced_kmers, valid_lanes)`, or, for a single kernel, also as
 // `callback(pos, spaced_kmers, valid_lanes)`, as for_each_spaced_kmer_ascii_checked_rolling_simd()
-// (kmer_spaced/simd.hpp): lane `j` is valid if all positions that mask `mask_idx` keeps are valid
+// (ascii_rolling_simd.hpp): lane `j` is valid if all positions that mask `mask_idx` keeps are valid
 // nucleotides in the span at `pos + j`. The vectors cover all positions in their order, and those
 // after the last spaced k-mer, up to the end of the last step of the loop, have no valid lanes.
 
@@ -74,7 +78,7 @@ inline void emit_spaced_kmers_packed_unchecked_bytewise_simd_(
 }
 
 // As emit_spaced_kmers_packed_unchecked_bytewise_simd_(), with the valid lanes of each kernel, from
-// the `validity` of the windows, see run_packed_bytewise_blocks_() (kmer_extract/packed.hpp):
+// the `validity` of the windows, see run_packed_bytewise_blocks_() (kmer_extract/internal.hpp):
 // AllValid, or the validity window at `pos`, as PackedValidity::kNucleotides, against which each
 // lane tests the positions that the mask keeps, its validity_mask, see SpacedKmerMask.
 template <

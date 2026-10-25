@@ -10,14 +10,14 @@
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/kmer_extract/kmer_extract.hpp"
-#include "fisk/kmer_extract/packed.hpp"
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/kmer_extract/internal.hpp"
+#include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 
 namespace fisk {
 
 // =================================================================================================
-//     K-mer Extraction from ASCII, Unchecked, Chunked
+//     K-mer Extraction from ASCII, Chunked, Scalar
 // =================================================================================================
 
 /**
@@ -123,7 +123,7 @@ inline void for_each_kmer_ascii_unchecked_chunked_scalar_fixed_k_(
  * @param seq        Input sequence.
  * @param k          K-mer size, in [1, 32].
  * @param encoder    Word encoder selecting the Encoding and Layout, e.g. WordEncoderButterfly
- *                   or WordEncoderPext (seq_pack/word_encoder.hpp).
+ *                   or WordEncoderPext (sequence_pack/word_encoder.hpp).
  * @param chunk_size Number of bases processed per chunk; must be > 0.
  * @param scratch    Reusable temporary packed storage for this call.
  * @param func       Callback function to be called for each k-mer.

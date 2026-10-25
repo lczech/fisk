@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "fisk/kmer_extract/packed.hpp"
+#include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
 #include "kmer_extract_packed_checked/bench.hpp"
 
 using namespace fisk;

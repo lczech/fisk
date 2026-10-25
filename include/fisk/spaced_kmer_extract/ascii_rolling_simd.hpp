@@ -12,11 +12,13 @@
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
-#include "fisk/kmer_spaced/kmer_spaced.hpp"
 #include "fisk/core/cast.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
+#include "fisk/core/kmer_spaced.hpp"
+#include "fisk/core/types.hpp"
+#include "fisk/spaced_kmer_extract/internal.hpp"
 
 namespace fisk {
 
@@ -117,50 +119,7 @@ inline void for_each_lane_ct_(F&& f)
 }
 
 // =================================================================================================
-//     SIMD Spaced k-mer Masks
-// =================================================================================================
-
-/**
- * @brief Create a bit extraction kernel of a spaced k-mer mask, such as
- * BitExtractKernelButterfly<SimdAVX2>, for the SIMD spaced k-mer extraction functions below.
- */
-template <typename Kernel, Layout L>
-    requires BitExtractKernel<Kernel>
-inline SpacedKmerMask<L, Kernel> make_spaced_kmer_kernel(
-    SpacedKmerMask<L, BitExtractMask> const& mask
-) {
-    return convert_spaced_kmer_mask_<Kernel>(mask, [](std::uint64_t bits) {
-        return Kernel(bits);
-    });
-}
-
-/**
- * @brief Create a bit extraction kernel of a spaced k-mer mask given as a string, see
- * make_spaced_kmer_mask().
- */
-template <typename Kernel, Layout L = Layout::kMSB>
-    requires BitExtractKernel<Kernel>
-inline SpacedKmerMask<L, Kernel> make_spaced_kmer_kernel(std::string const& mask)
-{
-    return make_spaced_kmer_kernel<Kernel>(make_spaced_kmer_mask<L>(mask));
-}
-
-/**
- * @brief Create the bit extraction kernels of a set of spaced k-mer masks, for instance to be used
- * with BitExtractKernelDispatcher.
- */
-template <typename Kernel, Layout L>
-    requires BitExtractKernel<Kernel>
-inline std::vector<SpacedKmerMask<L, Kernel>> make_spaced_kmer_kernels(
-    std::vector<SpacedKmerMask<L, BitExtractMask>> const& masks
-) {
-    return convert_spaced_kmer_masks_<Kernel>(masks, [](std::uint64_t bits) {
-        return Kernel(bits);
-    });
-}
-
-// =================================================================================================
-//     SIMD Spaced k-mer Extraction
+//     Spaced K-mer Extraction from ASCII, Rolling, SIMD
 // =================================================================================================
 
 /**

@@ -11,7 +11,7 @@
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/random.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "fisk/core/simd_scalar.hpp"
 #include "fisk/core/simd_sse2.hpp"
 #include "fisk/core/simd_avx2.hpp"

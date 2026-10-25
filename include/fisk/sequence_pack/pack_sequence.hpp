@@ -9,7 +9,7 @@
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/simd_scalar.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/seq_pack/word_encoder.hpp"
+#include "fisk/sequence_pack/word_encoder.hpp"
 
 namespace fisk {
 

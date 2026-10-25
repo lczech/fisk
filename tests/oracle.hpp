@@ -23,7 +23,7 @@
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "corpus.hpp"
 #include "testing.hpp"
 

@@ -13,7 +13,7 @@
 //
 // This macro being defined at all -- regardless of which of the three values it holds -- is also
 // what a couple of headers under include/ check to enable benchmark-only correctness barriers
-// (see e.g. kmer_extract/packed.hpp) that would otherwise cost regular library users a small,
+// (see e.g. kmer_extract/internal.hpp) that would otherwise cost regular library users a small,
 // unnecessary register-pressure tax. CMakeLists.txt defines it for every benchmark TU from the
 // start of preprocessing (not relying on include order), and never defines it for fisk::fisk
 // itself or its consumers.

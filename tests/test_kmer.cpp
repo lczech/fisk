@@ -15,7 +15,7 @@
 #include "fisk/core/kmer_hash.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/simd_scalar.hpp"
-#include "fisk/kmer_extract/kmer_extract.hpp"
+#include "fisk/kmer_extract/ascii_rolling_scalar.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "simd_lanes.hpp"
@@ -510,7 +510,7 @@ TEST(Kmer, EncodeMatchesOracle)
 }
 
 // The template argument names the result type exactly. Only contiguous k-mers can be built from a
-// string alone; a spaced k-mer also needs its mask, see kmer_spaced/kmer_spaced.hpp.
+// string alone; a spaced k-mer also needs its mask, see spaced_kmer_extract/mask.hpp.
 template <typename K>
 concept EncodableFromString = requires(std::string_view seq) { kmer_encode<K>(seq); };
 

@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <string>
 
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "seq_pack/bench.hpp"
 
 using namespace fisk;

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "fisk/kmer_spaced/simd.hpp"
+#include "fisk/spaced_kmer_extract/ascii_rolling_simd.hpp"
 #include "kmer_spaced_multi/bench.hpp"
 
 using namespace fisk;

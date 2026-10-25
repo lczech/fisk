@@ -6,9 +6,9 @@
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/random.hpp"
-#include "fisk/kmer_spaced/kmer_spaced.hpp"
-#include "fisk/kmer_spaced/packed.hpp"
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/spaced_kmer_extract/mask.hpp"
+#include "fisk/spaced_kmer_extract/packed_bytewise_scalar.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"

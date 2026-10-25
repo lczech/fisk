@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "fisk/kmer_extract/kmer_extract.hpp"
-#include "fisk/kmer_spaced/kmer_spaced.hpp"
+#include "fisk/kmer_extract/ascii_rolling_scalar.hpp"
+#include "fisk/spaced_kmer_extract/mask.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/char_encoder.hpp"
 

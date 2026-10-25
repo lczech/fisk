@@ -7,8 +7,10 @@
 
 #include "fisk/core/random.hpp"
 #include "fisk/core/char_encoder.hpp"
-#include "fisk/kmer_extract/kmer_extract.hpp"
-#include "fisk/kmer_extract/simd.hpp"
+#include "fisk/kmer_extract/ascii_rolling_scalar.hpp"
+#include "fisk/kmer_extract/ascii_reextract_scalar.hpp"
+#include "fisk/kmer_extract/ascii_rolling_avx2.hpp"
+#include "fisk/kmer_extract/ascii_rolling_swar.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"

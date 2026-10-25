@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-#include "fisk/kmer_extract/ascii_assume_valid.hpp"
+#include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
 #include "kmer_extract/bench.hpp"
 
 using namespace fisk;

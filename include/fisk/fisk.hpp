@@ -2,7 +2,8 @@
 
 // Umbrella header that includes the entire fisk library.
 // Most users will want to include only the specific headers they need instead;
-// see the theme subdirectories (bit_extract/, kmer_extract/, kmer_spaced/, core/).
+// see the theme subdirectories (bit_extract/, kmer_extract/, spaced_kmer_extract/, sequence_pack/,
+// core/).
 
 // Core
 #include "fisk/core/platform.hpp"
@@ -10,6 +11,7 @@
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_wide.hpp"
+#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/kmer_hash.hpp"
 #include "fisk/core/cpu_runtime.hpp"
 #include "fisk/core/random.hpp"
@@ -28,18 +30,22 @@
 #include "fisk/bit_extract/simd.hpp"
 
 // Sequence packing
-#include "fisk/seq_pack/seq_pack.hpp"
-#include "fisk/seq_pack/word_encoder.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
+#include "fisk/sequence_pack/word_encoder.hpp"
 
 // K-mer extraction
-#include "fisk/kmer_extract/kmer_extract.hpp"
-#include "fisk/kmer_extract/simd.hpp"
-#include "fisk/kmer_extract/packed.hpp"
-#include "fisk/kmer_extract/packed_simd.hpp"
-#include "fisk/kmer_extract/ascii_assume_valid.hpp"
+#include "fisk/kmer_extract/ascii_rolling_scalar.hpp"
+#include "fisk/kmer_extract/ascii_rolling_avx2.hpp"
+#include "fisk/kmer_extract/ascii_rolling_swar.hpp"
+#include "fisk/kmer_extract/ascii_reextract_scalar.hpp"
+#include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
+#include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
+#include "fisk/kmer_extract/packed_bytewise_simd.hpp"
+#include "fisk/kmer_extract/packed_rolling_scalar.hpp"
 
-// Spaced k-mers
-#include "fisk/kmer_spaced/kmer_spaced.hpp"
-#include "fisk/kmer_spaced/simd.hpp"
-#include "fisk/kmer_spaced/packed.hpp"
-#include "fisk/kmer_spaced/packed_simd.hpp"
+// Spaced k-mer extraction
+#include "fisk/spaced_kmer_extract/mask.hpp"
+#include "fisk/spaced_kmer_extract/ascii_rolling_scalar.hpp"
+#include "fisk/spaced_kmer_extract/ascii_rolling_simd.hpp"
+#include "fisk/spaced_kmer_extract/packed_bytewise_scalar.hpp"
+#include "fisk/spaced_kmer_extract/packed_bytewise_simd.hpp"

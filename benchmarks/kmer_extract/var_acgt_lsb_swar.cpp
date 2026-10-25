@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-#include "fisk/kmer_extract/simd.hpp"
+#include "fisk/kmer_extract/ascii_rolling_swar.hpp"
 #include "kmer_extract/bench.hpp"
 
 using namespace fisk;

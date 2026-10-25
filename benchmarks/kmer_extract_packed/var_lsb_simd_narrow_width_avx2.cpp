@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "fisk/kmer_extract/packed_simd.hpp"
+#include "fisk/kmer_extract/packed_bytewise_simd.hpp"
 #include "kmer_extract_packed/bench.hpp"
 
 #if defined(FISK_HAS_AVX2)

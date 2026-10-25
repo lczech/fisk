@@ -6,7 +6,9 @@
 #include <string>
 #include <vector>
 
-#include "fisk/kmer_spaced/simd.hpp"
+#include "fisk/spaced_kmer_extract/ascii_rolling_simd.hpp"
+#include "fisk/spaced_kmer_extract/mask.hpp"
+#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/simd_scalar.hpp"
 #include "fisk/core/simd_sse2.hpp"
 #include "fisk/core/simd_avx2.hpp"

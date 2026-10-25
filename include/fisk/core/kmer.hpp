@@ -182,7 +182,7 @@ template <KmerType K>
  *
  * The result type is named as the template argument and defaults to KmerAcgtMsb, as in
  * `kmer_encode(seq)` or `kmer_encode<KmerActgLsb>(seq)`. Spaced k-mers have a counterpart that
- * also takes the mask, see kmer_spaced/kmer_spaced.hpp.
+ * also takes the mask, see core/kmer_spaced.hpp.
  *
  * Unlike the operations around it this throws rather than asserting, on an empty sequence, one
  * longer than 32 bases, or any character that is not a nucleotide. Loud failure is the right

@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "fisk/core/char_encoder.hpp"
-#include "fisk/kmer_extract/kmer_extract.hpp"
+#include "fisk/kmer_extract/ascii_reextract_scalar.hpp"
 #include "kmer_extract/bench.hpp"
 
 using namespace fisk;

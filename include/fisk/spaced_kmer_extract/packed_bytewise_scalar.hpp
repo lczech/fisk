@@ -8,23 +8,24 @@
 
 #include "fisk/core/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
+#include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/kmer_extract/packed.hpp"
-#include "fisk/kmer_spaced/kmer_spaced.hpp"
+#include "fisk/kmer_extract/internal.hpp"
+#include "fisk/spaced_kmer_extract/internal.hpp"
 
 namespace fisk {
 
 // =================================================================================================
-//     Spaced K-mer Extraction from a PackedSequence
+//     Spaced K-mer Extraction from a PackedSequence, Bytewise, Scalar
 // =================================================================================================
 
-// Unlike for_each_spaced_kmer_ascii_checked_rolling_scalar() (kmer_spaced.hpp), which takes ASCII
-// input and checks character validity, the functions here read directly from a PackedSequence
-// (seq_pack.hpp), and assume that it holds only valid bases. Their checked counterparts take a
-// PackedSequenceWithValidity, and emit only the spaced k-mers whose kept positions are valid by its
-// validity bits, as for ASCII input: an invalid nucleotide at a position that the mask skips does
-// not make the spaced k-mer invalid. The masks need to have the Layout of the sequence, and the
-// spaced k-mers are emitted with its Encoding and Layout.
+// Unlike for_each_spaced_kmer_ascii_checked_rolling_scalar() (ascii_rolling_scalar.hpp), which
+// takes ASCII input and checks character validity, the functions here read directly from a
+// PackedSequence (sequence_pack/pack_sequence.hpp), and assume that it holds only valid bases.
+// Their checked counterparts take a PackedSequenceWithValidity, and emit only the spaced k-mers
+// whose kept positions are valid by its validity bits, as for ASCII input: an invalid nucleotide at
+// a position that the mask skips does not make the spaced k-mer invalid. The masks need to have the
+// Layout of the sequence, and the spaced k-mers are emitted with its Encoding and Layout.
 //
 // Each byte of the sequence holds four bases, and a span starts at each of them. Each span is taken
 // from the word of the 8 bytes loaded at that byte, plus a ninth byte for spans of 30 to 32, as a
@@ -57,9 +58,10 @@ inline void emit_spaced_kmers_packed_unchecked_bytewise_scalar_(
 }
 
 // As emit_spaced_kmers_packed_unchecked_bytewise_scalar_(), but only for the masks whose spaced
-// k-mer is valid by the `validity` of the span, see run_packed_bytewise_blocks_() (packed.hpp):
-// either AllValid, or the validity window at `pos`, as PackedValidity::kNucleotides, which is
-// tested per mask against the positions that the mask keeps, its validity_mask, see SpacedKmerMask.
+// k-mer is valid by the `validity` of the span, see run_packed_bytewise_blocks_()
+// (kmer_extract/internal.hpp): either AllValid, or the validity window at `pos`, as
+// PackedValidity::kNucleotides, which is tested per mask against the positions that the mask keeps,
+// its validity_mask, see SpacedKmerMask.
 template <
     bool SingleMask, Encoding E, Layout L,
     typename MaskOrMasks, typename Validity, typename BitExtract, typename Callback
@@ -114,9 +116,9 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_narrow_width_(
         );
     };
 
-    // One step of run_packed_bytewise_blocks_() (packed.hpp): the spans that start in byte `b`, of
-    // which those that are valid by `validity_at` are emitted. Unchecked, that is a test of the
-    // whole span, for all masks at once, and checked, a test per mask.
+    // One step of run_packed_bytewise_blocks_() (kmer_extract/internal.hpp): the spans that start
+    // in byte `b`, of which those that are valid by `validity_at` are emitted. Unchecked, that is a
+    // test of the whole span, for all masks at once, and checked, a test per mask.
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         auto const emit_if_valid_ = [&](
             std::size_t pos, std::uint64_t window

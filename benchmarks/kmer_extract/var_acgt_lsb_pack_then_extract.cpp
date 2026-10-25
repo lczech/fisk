@@ -2,8 +2,8 @@
 #include <string>
 #include <vector>
 
-#include "fisk/kmer_extract/packed.hpp"
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "kmer_extract/bench.hpp"
 
 using namespace fisk;

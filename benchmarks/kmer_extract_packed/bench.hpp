@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "fisk/core/simd_sse2.hpp"
 #include "fisk/core/simd_avx2.hpp"
 #include "fisk/core/simd_avx512.hpp"

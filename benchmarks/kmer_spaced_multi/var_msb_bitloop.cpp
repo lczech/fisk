@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "fisk/core/char_encoder.hpp"
-#include "fisk/kmer_spaced/kmer_spaced.hpp"
+#include "fisk/spaced_kmer_extract/ascii_rolling_scalar.hpp"
 #include "kmer_spaced_multi/bench.hpp"
 
 using namespace fisk;

@@ -6,9 +6,10 @@
 #include <string>
 #include <vector>
 
-#include "fisk/kmer_spaced/packed.hpp"
-#include "fisk/kmer_spaced/packed_simd.hpp"
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/spaced_kmer_extract/packed_bytewise_scalar.hpp"
+#include "fisk/spaced_kmer_extract/packed_bytewise_simd.hpp"
+#include "fisk/spaced_kmer_extract/mask.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "fisk/core/simd_scalar.hpp"
 #include "fisk/core/simd_sse2.hpp"
 #include "fisk/core/simd_avx2.hpp"

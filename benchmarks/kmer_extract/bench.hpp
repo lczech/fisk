@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "sink.hpp"
 
 using PackedAcgtMsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>;

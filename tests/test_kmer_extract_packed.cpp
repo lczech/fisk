@@ -5,8 +5,9 @@
 
 #include "fisk/core/random.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/kmer_extract/packed.hpp"
-#include "fisk/seq_pack/seq_pack.hpp"
+#include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
+#include "fisk/kmer_extract/packed_rolling_scalar.hpp"
+#include "fisk/sequence_pack/pack_sequence.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
