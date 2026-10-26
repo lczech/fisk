@@ -27,21 +27,22 @@
 #include <filesystem>
 
 #include "arg_parser.hpp"
-#include "kmer_extract/bench.hpp"
-#include "kmer_extract_packed/bench.hpp"
+#include "kmer_extract_ascii_checked/bench.hpp"
+#include "kmer_extract_ascii_unchecked/bench.hpp"
+#include "kmer_extract_packed_unchecked/bench.hpp"
 #include "kmer_extract_packed_checked/bench.hpp"
-#include "kmer_spaced_single/bench.hpp"
-#include "kmer_spaced_multi/bench.hpp"
-#include "kmer_spaced_packed_single/bench.hpp"
-#include "kmer_spaced_packed_multi/bench.hpp"
-#include "kmer_spaced_packed_checked_single/bench.hpp"
-#include "kmer_spaced_packed_checked_multi/bench.hpp"
+#include "spaced_kmer_extract_ascii_checked_single/bench.hpp"
+#include "spaced_kmer_extract_ascii_checked_multi/bench.hpp"
+#include "spaced_kmer_extract_packed_unchecked_single/bench.hpp"
+#include "spaced_kmer_extract_packed_unchecked_multi/bench.hpp"
+#include "spaced_kmer_extract_packed_checked_single/bench.hpp"
+#include "spaced_kmer_extract_packed_checked_multi/bench.hpp"
 #include "kmer_clark/bench.hpp"
 #include "bit_extract_blocks/bench.hpp"
 #include "bit_extract_weights/bench.hpp"
 #include "char_encoder/bench.hpp"
-#include "seq_pack/bench.hpp"
-#include "seq_pack_validity/bench.hpp"
+#include "sequence_pack_unchecked/bench.hpp"
+#include "sequence_pack_checked/bench.hpp"
 #include "utils.hpp"
 #include "seq_data.hpp"
 #include "fisk/core/cpu_runtime.hpp"
@@ -235,115 +236,116 @@ int main(int argc, char **argv)
 
     // Bit Extract Weights
     {
-        auto os_bit_extract_weights = get_ofstream(out_dir, "bit_extract_weights.csv" );
-        bench_bit_extract_weights( os_bit_extract_weights );
+        auto os = get_ofstream(out_dir, "bit_extract_weights.csv" );
+        bench_bit_extract_weights( os );
     }
 
     // Bit Extract Blocks
     {
-        auto os_bit_extract_blocks = get_ofstream(out_dir, "bit_extract_blocks.csv" );
-        bench_bit_extract_blocks( os_bit_extract_blocks );
+        auto os = get_ofstream(out_dir, "bit_extract_blocks.csv" );
+        bench_bit_extract_blocks( os );
     }
 
-    // Seq Encoding
+    // Per-character encoding
     {
-        auto os_char_encoder = get_ofstream(out_dir, "char_encoder.csv" );
-        bench_char_encoder( sequences, os_char_encoder );
+        auto os = get_ofstream(out_dir, "char_encoder.csv" );
+        bench_char_encoder( sequences, os );
     }
 
-    // Seq Packing (whole-sequence ASCII to 2-bit)
+    // Sequence packing (whole-sequence ASCII to 2-bit)
     {
-        auto os_seq_pack = get_ofstream(out_dir, "seq_pack.csv" );
-        bench_seq_pack( sequences, os_seq_pack );
+        auto os = get_ofstream(out_dir, "sequence_pack_unchecked.csv" );
+        bench_sequence_pack_unchecked( sequences, os );
     }
 
-    // Seq Packing with validity (as above, also recording which characters are valid)
+    // Sequence packing with validity (as above, also recording which characters are valid)
     {
-        auto os_seq_pack_validity = get_ofstream(out_dir, "seq_pack_validity.csv" );
-        bench_seq_pack_validity( sequences, os_seq_pack_validity );
+        auto os = get_ofstream(out_dir, "sequence_pack_checked.csv" );
+        bench_sequence_pack_checked( sequences, os );
     }
 
-    // Kmer extract
-    // Test either the given size of k, or the full range if no k provided.
+    // K-mer extraction: test either the given size of k, or the full range if no k provided.
+
+    // K-mers from ASCII, checked
     {
-        auto os_kmer_extract = get_ofstream(out_dir, "kmer_extract.csv" );
+        auto os = get_ofstream(out_dir, "kmer_extract_ascii_checked.csv" );
         if( k == 0 ) {
-            bench_kmer_extract( sequences, os_kmer_extract );
+            bench_kmer_extract_ascii_checked( sequences, os );
         } else {
-            bench_kmer_extract( sequences, k, k, os_kmer_extract );
+            bench_kmer_extract_ascii_checked( sequences, k, k, os );
         }
     }
 
-    // Kmer extract, directly from a PackedSequence
+    // K-mers from ASCII, unchecked
     {
-        auto os_kmer_extract_packed = get_ofstream(out_dir, "kmer_extract_packed.csv" );
+        auto os = get_ofstream(out_dir, "kmer_extract_ascii_unchecked.csv" );
         if( k == 0 ) {
-            bench_kmer_extract_packed( sequences, os_kmer_extract_packed );
+            bench_kmer_extract_ascii_unchecked( sequences, os );
         } else {
-            bench_kmer_extract_packed( sequences, k, k, os_kmer_extract_packed );
+            bench_kmer_extract_ascii_unchecked( sequences, k, k, os );
         }
     }
 
-    // Kmer extract, directly from a PackedSequenceWithValidity, emitting the valid k-mers only
+    // K-mers from a PackedSequence
     {
-        auto os_kmer_extract_packed_checked = get_ofstream(
-            out_dir, "kmer_extract_packed_checked.csv"
-        );
+        auto os = get_ofstream(out_dir, "kmer_extract_packed_unchecked.csv" );
         if( k == 0 ) {
-            bench_kmer_extract_packed_checked( sequences, os_kmer_extract_packed_checked );
+            bench_kmer_extract_packed_unchecked( sequences, os );
         } else {
-            bench_kmer_extract_packed_checked( sequences, k, k, os_kmer_extract_packed_checked );
+            bench_kmer_extract_packed_unchecked( sequences, k, k, os );
         }
     }
 
-    // Spaced kmers, single mask
+    // K-mers from a PackedSequenceWithValidity, emitting the valid k-mers only
     {
-        auto os_kmer_spaced_single = get_ofstream(out_dir, "kmer_spaced_single.csv" );
-        bench_kmer_spaced_single( sequences, single_masks, os_kmer_spaced_single );
+        auto os = get_ofstream(out_dir, "kmer_extract_packed_checked.csv" );
+        if( k == 0 ) {
+            bench_kmer_extract_packed_checked( sequences, os );
+        } else {
+            bench_kmer_extract_packed_checked( sequences, k, k, os );
+        }
     }
 
-    // Spaced kmers, multi masks
+    // Spaced k-mers from ASCII, single mask
     {
-        auto os_kmer_spaced_multi = get_ofstream(out_dir, "kmer_spaced_multi.csv" );
-        bench_kmer_spaced_multi( sequences, multi_masks, os_kmer_spaced_multi );
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_ascii_checked_single.csv" );
+        bench_spaced_kmer_extract_ascii_checked_single( sequences, single_masks, os );
     }
 
-    // Spaced kmers from a PackedSequence, single mask
+    // Spaced k-mers from ASCII, multi masks
     {
-        auto os_kmer_spaced_packed_single = get_ofstream(out_dir, "kmer_spaced_packed_single.csv" );
-        bench_kmer_spaced_packed_single( sequences, single_masks, os_kmer_spaced_packed_single );
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_ascii_checked_multi.csv" );
+        bench_spaced_kmer_extract_ascii_checked_multi( sequences, multi_masks, os );
     }
 
-    // Spaced kmers from a PackedSequence, multi masks
+    // Spaced k-mers from a PackedSequence, single mask
     {
-        auto os_kmer_spaced_packed_multi = get_ofstream(out_dir, "kmer_spaced_packed_multi.csv" );
-        bench_kmer_spaced_packed_multi( sequences, multi_masks, os_kmer_spaced_packed_multi );
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_packed_unchecked_single.csv" );
+        bench_spaced_kmer_extract_packed_unchecked_single( sequences, single_masks, os );
     }
 
-    // Spaced kmers from a PackedSequenceWithValidity, single mask
+    // Spaced k-mers from a PackedSequence, multi masks
     {
-        auto os_kmer_spaced_packed_checked_single = get_ofstream(
-            out_dir, "kmer_spaced_packed_checked_single.csv"
-        );
-        bench_kmer_spaced_packed_checked_single(
-            sequences, single_masks, os_kmer_spaced_packed_checked_single
-        );
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_packed_unchecked_multi.csv" );
+        bench_spaced_kmer_extract_packed_unchecked_multi( sequences, multi_masks, os );
     }
 
-    // Spaced kmers from a PackedSequenceWithValidity, multi masks
+    // Spaced k-mers from a PackedSequenceWithValidity, single mask
     {
-        auto os_kmer_spaced_packed_checked_multi = get_ofstream(
-            out_dir, "kmer_spaced_packed_checked_multi.csv"
-        );
-        bench_kmer_spaced_packed_checked_multi(
-            sequences, multi_masks, os_kmer_spaced_packed_checked_multi
-        );
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_packed_checked_single.csv" );
+        bench_spaced_kmer_extract_packed_checked_single( sequences, single_masks, os );
+    }
+
+    // Spaced k-mers from a PackedSequenceWithValidity, multi masks
+    {
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_packed_checked_multi.csv" );
+        bench_spaced_kmer_extract_packed_checked_multi( sequences, multi_masks, os );
     }
 
     // Clark
     {
-        auto os_kmer_clark = get_ofstream(out_dir, "kmer_clark.csv" );
-        bench_kmer_clark( sequences, os_kmer_clark );
+        auto os = get_ofstream(out_dir, "kmer_clark.csv" );
+        bench_kmer_clark( sequences, os );
     }
 
     return 0;

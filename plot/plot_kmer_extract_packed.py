@@ -23,8 +23,7 @@ FALLBACK_PALETTE = plt.get_cmap("tab20").colors
 # ISA's public dispatcher). Hidden by default, same as plot_kmer_extract_packed_compare.py's
 # --show-direct.
 DIRECT_SIMD_VARIANTS = {
-    v for v in PACKED_KMER_VARIANT_ORDER
-    if v not in PACKED_KMER_VARIANT_ORDER_REDUCED and v != "rolling"
+    v for v in PACKED_KMER_VARIANT_ORDER if "_narrow_width_" in v or "_full_width_" in v
 }
 
 
@@ -81,11 +80,15 @@ def _plot_panel(ax, df, layout_value, plot_order, colors, linestyle_map):
 
 def main():
     parser = argparse.ArgumentParser(description="Plot packed k-mer extract benchmark results")
-    parser.add_argument("csv", help="CSV file produced by bench_kmer_extract_packed")
+    parser.add_argument(
+        "csv",
+        help="CSV file produced by bench_kmer_extract_packed_unchecked or _checked",
+    )
     parser.add_argument("--title", default=None,
                         help="Plot title (default: platform name from the CSV's directory)")
     parser.add_argument("--out", default=None,
-                        help="Output image file (e.g. kmer_extract_packed.png). If omitted, show interactively.")
+                        help="Output image file (e.g. kmer_extract_packed_unchecked.png). If "
+                             "omitted, show interactively.")
     parser.add_argument(
         "--show-direct",
         action="store_true",
@@ -135,7 +138,7 @@ def main():
     if args.show_direct:
         allowed |= DIRECT_SIMD_VARIANTS
     if args.show_rolling:
-        allowed.add("rolling")
+        allowed.add("rolling_scalar")
     present = [b for b in df["benchmark"].drop_duplicates().tolist() if b in allowed]
     if not present:
         in_csv = sorted(df["benchmark"].unique())

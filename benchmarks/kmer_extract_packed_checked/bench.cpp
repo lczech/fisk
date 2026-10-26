@@ -50,7 +50,7 @@ void bench_kmer_extract_packed_checked(
     // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
     // benchmarked (rounded up to a power of two) so that no call here ever wraps it. That matters
     // more here than in most suites: the SIMD variants write whole registers at a time (2/4/8
-    // k-mers per call) while aligned/rolling write one, and a wrap's residual contents depend on
+    // k-mers per call) while the scalar loops write one, and a wrap's residual contents depend on
     // that stride -- a register-width write and a scalar write that touched the same k-mers in a
     // wrapped buffer can legitimately leave different values behind in the slots that were
     // overwritten more than once, which would make finalize() disagree between them despite both
@@ -94,67 +94,73 @@ void bench_kmer_extract_packed_checked(
         run_(packed_msb, "msb", k,
             #if defined(FISK_HAS_SSE2)
             bench(
-                "simd_sse2_scalars",
+                "bytewise_simd_sse2_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_sse2_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_sse2_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
-                "simd_avx2_scalars",
+                "bytewise_simd_avx2_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_avx2_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx2_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
             bench(
-                "simd_avx512_scalars",
+                "bytewise_simd_avx512_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_avx512_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx512_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
-                "simd_neon_scalars",
+                "bytewise_simd_neon_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_neon_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_neon_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
-                "aligned",
+                "bytewise_simd_scalar_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_aligned(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_scalar_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "rolling",
+                "bytewise_scalar",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_rolling(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_scalar_msb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "rolling_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_rolling_scalar_msb(seq, k, sink_buffer);
                 }
             )
         );
         #if defined(FISK_HAS_SSE2)
         run_(packed_msb, "msb", k,
             bench(
-                "simd_narrow_width_sse2",
+                "bytewise_simd_narrow_width_sse2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_narrow_width_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_narrow_width_sse2_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_full_width_sse2",
+                "bytewise_simd_full_width_sse2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_full_width_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_sse2_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_sse2",
+                "bytewise_simd_sse2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_sse2_msb(seq, k, sink_buffer);
                 }
             )
         );
@@ -162,21 +168,21 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_AVX2)
         run_(packed_msb, "msb", k,
             bench(
-                "simd_narrow_width_avx2",
+                "bytewise_simd_narrow_width_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_narrow_width_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_narrow_width_avx2_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_full_width_avx2",
+                "bytewise_simd_full_width_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_full_width_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_avx2_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_avx2",
+                "bytewise_simd_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx2_msb(seq, k, sink_buffer);
                 }
             )
         );
@@ -184,21 +190,23 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_AVX512)
         run_(packed_msb, "msb", k,
             bench(
-                "simd_narrow_width_avx512",
+                "bytewise_simd_narrow_width_avx512",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_narrow_width_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_narrow_width_avx512_msb(
+                        seq, k, sink_buffer
+                    );
                 }
             ),
             bench(
-                "simd_full_width_avx512",
+                "bytewise_simd_full_width_avx512",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_full_width_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_avx512_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_avx512",
+                "bytewise_simd_avx512",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx512_msb(seq, k, sink_buffer);
                 }
             )
         );
@@ -206,25 +214,47 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_NEON)
         run_(packed_msb, "msb", k,
             bench(
-                "simd_narrow_width_neon",
+                "bytewise_simd_narrow_width_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_narrow_width_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_narrow_width_neon_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_full_width_neon",
+                "bytewise_simd_full_width_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_full_width_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_neon_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_neon",
+                "bytewise_simd_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_neon_msb(seq, k, sink_buffer);
                 }
             )
         );
         #endif // FISK_HAS_NEON
+        run_(packed_msb, "msb", k,
+            bench(
+                "bytewise_simd_narrow_width_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_narrow_width_scalar_msb(
+                        seq, k, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "bytewise_simd_full_width_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_full_width_scalar_msb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "bytewise_simd_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_scalar_msb(seq, k, sink_buffer);
+                }
+            )
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -237,61 +267,67 @@ void bench_kmer_extract_packed_checked(
         run_(packed_msb, "msb", k,
             #if defined(FISK_HAS_SSE2)
             bench(
-                "simd_sse2_scalars",
+                "bytewise_simd_sse2_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_sse2_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_sse2_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
-                "simd_avx2_scalars",
+                "bytewise_simd_avx2_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_avx2_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx2_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
             bench(
-                "simd_avx512_scalars",
+                "bytewise_simd_avx512_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_avx512_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx512_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
-                "simd_neon_scalars",
+                "bytewise_simd_neon_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_neon_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_neon_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
-                "aligned",
+                "bytewise_simd_scalar_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_aligned(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_scalar_scalars_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "rolling",
+                "bytewise_scalar",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_rolling(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_scalar_msb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "rolling_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_rolling_scalar_msb(seq, k, sink_buffer);
                 }
             )
         );
         #if defined(FISK_HAS_SSE2)
         run_(packed_msb, "msb", k,
             bench(
-                "simd_full_width_sse2",
+                "bytewise_simd_full_width_sse2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_full_width_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_sse2_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_sse2",
+                "bytewise_simd_sse2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_sse2_msb(seq, k, sink_buffer);
                 }
             )
         );
@@ -299,15 +335,15 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_AVX2)
         run_(packed_msb, "msb", k,
             bench(
-                "simd_full_width_avx2",
+                "bytewise_simd_full_width_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_full_width_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_avx2_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_avx2",
+                "bytewise_simd_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx2_msb(seq, k, sink_buffer);
                 }
             )
         );
@@ -315,15 +351,15 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_AVX512)
         run_(packed_msb, "msb", k,
             bench(
-                "simd_full_width_avx512",
+                "bytewise_simd_full_width_avx512",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_full_width_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_avx512_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_avx512",
+                "bytewise_simd_avx512",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx512_msb(seq, k, sink_buffer);
                 }
             )
         );
@@ -331,19 +367,33 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_NEON)
         run_(packed_msb, "msb", k,
             bench(
-                "simd_full_width_neon",
+                "bytewise_simd_full_width_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_full_width_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_neon_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_neon",
+                "bytewise_simd_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_msb_simd_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_neon_msb(seq, k, sink_buffer);
                 }
             )
         );
         #endif // FISK_HAS_NEON
+        run_(packed_msb, "msb", k,
+            bench(
+                "bytewise_simd_full_width_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_full_width_scalar_msb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "bytewise_simd_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_scalar_msb(seq, k, sink_buffer);
+                }
+            )
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -356,67 +406,73 @@ void bench_kmer_extract_packed_checked(
         run_(packed_lsb, "lsb", k,
             #if defined(FISK_HAS_SSE2)
             bench(
-                "simd_sse2_scalars",
+                "bytewise_simd_sse2_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_sse2_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_sse2_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
-                "simd_avx2_scalars",
+                "bytewise_simd_avx2_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_avx2_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx2_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
             bench(
-                "simd_avx512_scalars",
+                "bytewise_simd_avx512_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_avx512_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx512_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
-                "simd_neon_scalars",
+                "bytewise_simd_neon_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_neon_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_neon_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
-                "aligned",
+                "bytewise_simd_scalar_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_aligned(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_scalar_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "rolling",
+                "bytewise_scalar",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_rolling(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_scalar_lsb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "rolling_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_rolling_scalar_lsb(seq, k, sink_buffer);
                 }
             )
         );
         #if defined(FISK_HAS_SSE2)
         run_(packed_lsb, "lsb", k,
             bench(
-                "simd_narrow_width_sse2",
+                "bytewise_simd_narrow_width_sse2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_narrow_width_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_narrow_width_sse2_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_full_width_sse2",
+                "bytewise_simd_full_width_sse2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_full_width_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_sse2_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_sse2",
+                "bytewise_simd_sse2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_sse2_lsb(seq, k, sink_buffer);
                 }
             )
         );
@@ -424,21 +480,21 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_AVX2)
         run_(packed_lsb, "lsb", k,
             bench(
-                "simd_narrow_width_avx2",
+                "bytewise_simd_narrow_width_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_narrow_width_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_narrow_width_avx2_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_full_width_avx2",
+                "bytewise_simd_full_width_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_full_width_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_avx2_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_avx2",
+                "bytewise_simd_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx2_lsb(seq, k, sink_buffer);
                 }
             )
         );
@@ -446,21 +502,23 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_AVX512)
         run_(packed_lsb, "lsb", k,
             bench(
-                "simd_narrow_width_avx512",
+                "bytewise_simd_narrow_width_avx512",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_narrow_width_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_narrow_width_avx512_lsb(
+                        seq, k, sink_buffer
+                    );
                 }
             ),
             bench(
-                "simd_full_width_avx512",
+                "bytewise_simd_full_width_avx512",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_full_width_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_avx512_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_avx512",
+                "bytewise_simd_avx512",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx512_lsb(seq, k, sink_buffer);
                 }
             )
         );
@@ -468,25 +526,47 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_NEON)
         run_(packed_lsb, "lsb", k,
             bench(
-                "simd_narrow_width_neon",
+                "bytewise_simd_narrow_width_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_narrow_width_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_narrow_width_neon_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_full_width_neon",
+                "bytewise_simd_full_width_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_full_width_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_neon_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_neon",
+                "bytewise_simd_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_neon_lsb(seq, k, sink_buffer);
                 }
             )
         );
         #endif // FISK_HAS_NEON
+        run_(packed_lsb, "lsb", k,
+            bench(
+                "bytewise_simd_narrow_width_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_narrow_width_scalar_lsb(
+                        seq, k, sink_buffer
+                    );
+                }
+            ),
+            bench(
+                "bytewise_simd_full_width_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_full_width_scalar_lsb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "bytewise_simd_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_scalar_lsb(seq, k, sink_buffer);
+                }
+            )
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -499,61 +579,67 @@ void bench_kmer_extract_packed_checked(
         run_(packed_lsb, "lsb", k,
             #if defined(FISK_HAS_SSE2)
             bench(
-                "simd_sse2_scalars",
+                "bytewise_simd_sse2_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_sse2_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_sse2_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_SSE2
             #if defined(FISK_HAS_AVX2)
             bench(
-                "simd_avx2_scalars",
+                "bytewise_simd_avx2_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_avx2_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx2_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX2
             #if defined(FISK_HAS_AVX512)
             bench(
-                "simd_avx512_scalars",
+                "bytewise_simd_avx512_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_avx512_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx512_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_AVX512
             #if defined(FISK_HAS_NEON)
             bench(
-                "simd_neon_scalars",
+                "bytewise_simd_neon_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_neon_scalars(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_neon_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
-                "aligned",
+                "bytewise_simd_scalar_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_aligned(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_scalar_scalars_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "rolling",
+                "bytewise_scalar",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_rolling(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_scalar_lsb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "rolling_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_rolling_scalar_lsb(seq, k, sink_buffer);
                 }
             )
         );
         #if defined(FISK_HAS_SSE2)
         run_(packed_lsb, "lsb", k,
             bench(
-                "simd_full_width_sse2",
+                "bytewise_simd_full_width_sse2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_full_width_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_sse2_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_sse2",
+                "bytewise_simd_sse2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_sse2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_sse2_lsb(seq, k, sink_buffer);
                 }
             )
         );
@@ -561,15 +647,15 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_AVX2)
         run_(packed_lsb, "lsb", k,
             bench(
-                "simd_full_width_avx2",
+                "bytewise_simd_full_width_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_full_width_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_avx2_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_avx2",
+                "bytewise_simd_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_avx2(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx2_lsb(seq, k, sink_buffer);
                 }
             )
         );
@@ -577,15 +663,15 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_AVX512)
         run_(packed_lsb, "lsb", k,
             bench(
-                "simd_full_width_avx512",
+                "bytewise_simd_full_width_avx512",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_full_width_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_avx512_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_avx512",
+                "bytewise_simd_avx512",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_avx512(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_avx512_lsb(seq, k, sink_buffer);
                 }
             )
         );
@@ -593,19 +679,33 @@ void bench_kmer_extract_packed_checked(
         #if defined(FISK_HAS_NEON)
         run_(packed_lsb, "lsb", k,
             bench(
-                "simd_full_width_neon",
+                "bytewise_simd_full_width_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_full_width_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_full_width_neon_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
-                "simd_neon",
+                "bytewise_simd_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_lsb_simd_neon(seq, k, sink_buffer);
+                    return run_var_checked_bytewise_simd_neon_lsb(seq, k, sink_buffer);
                 }
             )
         );
         #endif // FISK_HAS_NEON
+        run_(packed_lsb, "lsb", k,
+            bench(
+                "bytewise_simd_full_width_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_full_width_scalar_lsb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "bytewise_simd_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_scalar_lsb(seq, k, sink_buffer);
+                }
+            )
+        );
     }
 
     if (stdout_is_terminal()) {

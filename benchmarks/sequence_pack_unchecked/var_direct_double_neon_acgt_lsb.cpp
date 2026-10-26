@@ -1,0 +1,21 @@
+#include <cstdint>
+#include <string>
+
+#include "fisk/sequence_pack/pack_sequence.hpp"
+#include "sequence_pack_unchecked/bench.hpp"
+
+#if defined(FISK_HAS_NEON)
+
+using namespace fisk;
+
+std::uint64_t run_var_unchecked_direct_double_neon_acgt_lsb(
+    std::string const& seq,
+    PackedSequence<Encoding::kACGT, Layout::kLSB>& out
+) {
+    pack_sequence_unchecked(
+        seq, WordEncoderDirectDouble<Encoding::kACGT, Layout::kLSB, SimdNEON>{}, out
+    );
+    return 0;
+}
+
+#endif // FISK_HAS_NEON

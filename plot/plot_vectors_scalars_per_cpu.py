@@ -4,30 +4,35 @@ SIMD extraction: the vectors that a technique hands out vs. its single k-mers, t
 vectors one at a time, side by side, one panel per CPU/compiler.
 
 Reads one or more CSV files of one suite (one per CPU/compiler directory), such as
-kmer_spaced_single.csv or kmer_extract_packed_checked.csv, keeps the SIMD rows that come in both
-forms, averages over cases (masks, mask sets, k, layouts), and draws a grid of grouped bar
-charts: x-axis = technique, two bars per technique = its two forms. The single k-mers are the rows
-with the "_scalars" suffix; the vectors are those with the "_vectors" suffix, or, where a suite
-names them without a suffix (such as "simd_avx2" in kmer_extract_packed_checked), the same name
-without "_scalars". Techniques with only one of the two forms are dropped.
+spaced_kmer_extract_ascii_checked_single.csv or kmer_extract_packed_checked.csv, keeps the SIMD
+rows that come in both forms, averages over cases (masks, mask sets, k, layouts), and draws a grid
+of grouped bar charts: x-axis = technique, two bars per technique = its two forms. The single
+k-mers are the rows with the "_scalars" suffix; the vectors are those with the "_vectors" suffix,
+or, where a suite names them without a suffix (such as "bytewise_simd_avx2" in
+kmer_extract_packed_checked), the same name without "_scalars". Techniques with only one of the two
+forms are dropped.
 
 The panel label is taken from the last path component of the directory containing each CSV, as in
-plot_bars_per_cpu.py, e.g. "results/AMD EPYC 9684X, Clang 17/kmer_spaced_multi.csv" ->
+plot_bars_per_cpu.py, e.g.
+"results/AMD EPYC 9684X, Clang 17/spaced_kmer_extract_ascii_checked_multi.csv" ->
 "AMD EPYC 9684X, Clang 17".
 
 Usage examples:
   python plot/plot_vectors_scalars_per_cpu.py \
-      --glob "results/*/kmer_spaced_multi.csv" \
-      --out results/Summaries/kmer_spaced_multi_vectors_scalars_per_cpu.png
+      --glob "results/*/spaced_kmer_extract_ascii_checked_multi.csv" \
+      --out \
+        results/Summaries/spaced_kmer_extract_ascii_checked_multi_vectors_scalars_per_cpu.png
 
   python plot/plot_vectors_scalars_per_cpu.py \
-      --file "results/AMD Ryzen 7 Pro 4750U, GCC 14/kmer_spaced_single.csv" --unit ns
+      --file "results/AMD Ryzen 7 Pro 4750U, GCC 14/spaced_kmer_extract_ascii_checked_single.csv" \
+      --unit ns
 
 If --out is omitted, shows interactively.
 """
 
 import argparse
 import glob
+import re
 import sys
 
 import pandas as pd
@@ -122,7 +127,10 @@ def main():
     )
     ap.add_argument(
         "--glob", action="append", default=[],
-        help='Glob pattern for input CSVs (repeatable), e.g. "results/*/kmer_spaced_multi.csv".',
+        help=(
+            'Glob pattern for input CSVs (repeatable), e.g. '
+            '"results/*/spaced_kmer_extract_ascii_checked_multi.csv".'
+        ),
     )
     ap.add_argument(
         "--out", default=None,
@@ -157,7 +165,7 @@ def main():
         usable, load_technique_form_pivot, FORM_LABELS, FORM_COLORS,
         "SIMD extraction, vectors vs. single k-mers",
         out, args.unit, args.scale, args.y_min, args.y_max, args.title,
-        xtick_label=lambda t: t.removeprefix("simd_"),
+        xtick_label=lambda t: re.sub(r"^(rolling|bytewise)_simd_", "", t),
     )
 
 

@@ -4,12 +4,12 @@ Checked vs. unchecked: the cost of the validity, per technique, side by side, on
 CPU/compiler.
 
 Reads a pair of tables from each CPU/compiler directory: the unchecked suite, and its checked
-counterpart with the same techniques, such as kmer_extract_packed.csv and
-kmer_extract_packed_checked.csv, or seq_pack.csv and seq_pack_validity.csv. It keeps the techniques
-of TECHNIQUES that both tables have, averages each over the cases that both tables have (masks,
-k, layouts), and draws a grid of grouped bar charts: x-axis = technique, two bars per technique =
-unchecked and checked. The spaced suites are restricted to MSB, see normalize_spaced_layout().
-Directories without both tables are left out.
+counterpart with the same techniques, such as kmer_extract_packed_unchecked.csv and
+kmer_extract_packed_checked.csv, or sequence_pack_unchecked.csv and sequence_pack_checked.csv. It
+keeps the techniques of TECHNIQUES that both tables have, averages each over the cases that both
+tables have (masks, k, layouts), and draws a grid of grouped bar charts: x-axis = technique, two
+bars per technique = unchecked and checked. The spaced suites are restricted to MSB, see
+normalize_spaced_layout(). Directories without both tables are left out.
 
 The `_vectors` techniques of the checked suites sum all lanes, valid or not, so for now their
 checked bars do not include the cost of using the valid lanes.
@@ -20,7 +20,7 @@ The panel label is the last path component of each directory, as in plot_bars_pe
 Usage example:
   python plot/plot_checked_vs_unchecked_per_cpu.py \
       --dir "results/AMD EPYC 9684X, Clang 17" --dir "results/AMD Ryzen 7 Pro 4750U, GCC 14" \
-      --unchecked kmer_extract_packed.csv --checked kmer_extract_packed_checked.csv \
+      --unchecked kmer_extract_packed_unchecked.csv --checked kmer_extract_packed_checked.csv \
       --out results/Summaries/kmer_extract_packed_checked_vs_unchecked_per_cpu.png
 
 If --out is omitted, shows interactively.
@@ -54,16 +54,23 @@ SIMD_ARCHS = ["sse2", "avx2", "avx512", "neon"]
 
 # The techniques to compare, in plot order, across all pairs of suites; each pair has some of them.
 # Spaced k-mers from packed sequences: the scalar loops, then the SIMD kernels, in both forms.
-# Contiguous k-mers from packed sequences: the aligned loop, then the SIMD dispatchers, whose
-# vectors have no suffix. Sequence packing: fisk's own encoders, without the external references.
+# Contiguous k-mers from packed sequences: the bytewise scalar loop, then the SIMD dispatchers,
+# whose vectors have no suffix. Sequence packing: fisk's own encoders, without the external
+# references.
 TECHNIQUES = (
-    ["pext", "butterfly_table", "simd_pext_vectors", "simd_pext_scalars"]
+    [
+        "bytewise_scalar_pext", "bytewise_scalar_butterfly_table",
+        "bytewise_simd_pext_vectors", "bytewise_simd_pext_scalars",
+    ]
     + [
-        f"simd_butterfly_table_{arch}_{form}"
+        f"bytewise_simd_butterfly_table_{arch}_{form}"
         for arch in SIMD_ARCHS for form in ["vectors", "scalars"]
     ]
-    + ["aligned"]
-    + [name for arch in SIMD_ARCHS for name in [f"simd_{arch}", f"simd_{arch}_scalars"]]
+    + ["bytewise_scalar"]
+    + [
+        name for arch in SIMD_ARCHS
+        for name in [f"bytewise_simd_{arch}", f"bytewise_simd_{arch}_scalars"]
+    ]
     + ["direct_scalar"]
     + [name for arch in SIMD_ARCHS for name in [f"direct_{arch}", f"direct_double_{arch}"]]
 )
@@ -119,7 +126,7 @@ def main():
     )
     ap.add_argument(
         "--title", default=None,
-        help="Figure title override (default: derived from the unchecked suite name).",
+        help="Figure title override (default: the name of both suites, without the check).",
     )
     add_unit_scale_args(ap)
     args = ap.parse_args()
@@ -146,13 +153,17 @@ def main():
         warn(f"Nothing to plot: no directory has both {args.unchecked} and {args.checked}")
         return
 
+    # The title names both suites, as the unchecked one without its check.
+    name = os.path.splitext(os.path.basename(args.unchecked))[0].replace("_unchecked", "")
+    title = args.title or f"{name}: checked vs. unchecked"
+
     out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
     plot_axis_grid(
         list(checked_of),
         lambda path, unit: load_pair_pivot(path, checked_of[path], unit),
         FORM_LABELS, FORM_COLORS,
         "checked vs. unchecked",
-        out, args.unit, args.scale, args.y_min, args.y_max, args.title,
+        out, args.unit, args.scale, args.y_min, args.y_max, title,
     )
 
 

@@ -28,7 +28,7 @@ CPUS=(
   # "Intel Core 7 240H, Clang 21"
   # "Intel Core 7 240H, GCC 15"
   # Standing in for the Apple entry until M1 Pro measurements exist -- swap for
-  # "Apple M1 Pro, Clang 17" (currently has no kmer_extract_packed.csv) once available.
+  # "Apple M1 Pro, Clang 17" (currently has no kmer_extract_packed_unchecked.csv) once available.
   "Apple M1, Clang 21"
 )
 
@@ -87,24 +87,25 @@ run_job() {
   "$@" &
 }
 
-# Build the arguments --file A --file B for a given CSV name,
-# which is searched in the directories given above. Missing files are skipped so
-# a benchmark collected on only some CPUs can still be plotted. Without any file, it
-# returns 1, and the caller skips the plots of that CSV.
+# Build the arguments --file A --file B for the given CSV names, one or more, which are searched
+# in the directories given above. Missing files are skipped so a benchmark collected on only some
+# CPUs can still be plotted. Without any file, it returns 1, and the caller skips the plots of
+# those CSVs.
 build_file_args() {
-  local csv_name="$1"
-
   args=()
+  local csv_name
   for cpu in "${CPUS[@]}"; do
-    local f="${ROOT}/${cpu}/${csv_name}"
-    if [[ -f "$f" ]]; then
-      args+=( --file "$f" )
-    else
-      warn "${csv_name} missing for ${cpu}, leaving it out of its plots"
-    fi
+    for csv_name in "$@"; do
+      local f="${ROOT}/${cpu}/${csv_name}"
+      if [[ -f "$f" ]]; then
+        args+=( --file "$f" )
+      else
+        warn "${csv_name} missing for ${cpu}, leaving it out of its plots"
+      fi
+    done
   done
   if ((${#args[@]} == 0)); then
-    warn "${csv_name} missing for all CPUs, skipping its plots"
+    warn "$* missing for all CPUs, skipping its plots"
     return 1
   fi
 }
@@ -113,19 +114,21 @@ build_file_args() {
 # Combined call (all CPUs together)
 # ------------------------------------------------------------
 
-# Benchmarks for which we want the summary plot across CPUs.
-CSV_FILES=(
-  "bit_extract_weights.csv"
-  "bit_extract_blocks.csv"
-  # "char_encoder.csv"
-  "kmer_extract.csv"
-  "kmer_spaced_multi.csv"
-  "kmer_spaced_single.csv"
-  "kmer_spaced_packed_multi.csv"
-  "kmer_spaced_packed_single.csv"
-  "kmer_spaced_packed_checked_multi.csv"
-  "kmer_spaced_packed_checked_single.csv"
-  # "kmer_clark.csv"
+# Benchmarks for which we want the summary plot across CPUs, as "<name> <csv>...": the plot is
+# named <name>, and shows the rows of all of its CSVs, such as the checked and the unchecked
+# extraction from ASCII.
+SUMMARIES=(
+  "bit_extract_weights bit_extract_weights.csv"
+  "bit_extract_blocks bit_extract_blocks.csv"
+  # "char_encoder char_encoder.csv"
+  "kmer_extract_ascii kmer_extract_ascii_checked.csv kmer_extract_ascii_unchecked.csv"
+  "spaced_kmer_extract_ascii_checked_multi spaced_kmer_extract_ascii_checked_multi.csv"
+  "spaced_kmer_extract_ascii_checked_single spaced_kmer_extract_ascii_checked_single.csv"
+  "spaced_kmer_extract_packed_unchecked_multi spaced_kmer_extract_packed_unchecked_multi.csv"
+  "spaced_kmer_extract_packed_unchecked_single spaced_kmer_extract_packed_unchecked_single.csv"
+  "spaced_kmer_extract_packed_checked_multi spaced_kmer_extract_packed_checked_multi.csv"
+  "spaced_kmer_extract_packed_checked_single spaced_kmer_extract_packed_checked_single.csv"
+  # "kmer_clark kmer_clark.csv"
 )
 
 # Which output formats do we want to produce?
@@ -136,14 +139,16 @@ FORMATS=(
 )
 
 echo "Plotting summaries"
-for csv in "${CSV_FILES[@]}"; do
-  build_file_args "$csv" || continue
+for entry in "${SUMMARIES[@]}"; do
+  read -r name csvs <<< "$entry"
+  # shellcheck disable=SC2086 # csvs is a list of names
+  build_file_args $csvs || continue
 
-  # Some kmer_extract techniques are run for several encodings and layouts; compare all of them
-  # like-for-like at ACGT/MSB here (see the per-combination axis plot below). Older result files
-  # lack these case fields, and are ACGT/MSB.
+  # Some techniques of the extraction from ASCII are run for several encodings and layouts;
+  # compare all of them like-for-like at ACGT/MSB here (see the per-combination axis plot below).
+  # Older result files lack these case fields, and are ACGT/MSB.
   case_args=()
-  if [[ "$csv" == "kmer_extract.csv" ]]; then
+  if [[ "$name" == "kmer_extract_ascii" ]]; then
     case_args=(
       --case-default "encoding=acgt" --case-default "layout=msb"
       --case-filter "encoding=acgt" --case-filter "layout=msb"
@@ -159,48 +164,48 @@ for csv in "${CSV_FILES[@]}"; do
       run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
         ${case_args[@]+"${case_args[@]}"} \
         --unit "$UNIT" --scale "$SCALE" \
-        --out "${OUT}/${csv%.csv}_per_cpu.${EXT}"
+        --out "${OUT}/${name}_per_cpu.${EXT}"
 
       # Extended, with all available, for internal checking
       run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
         ${case_args[@]+"${case_args[@]}"} \
         --extended \
         --unit "$UNIT" --scale "$SCALE" \
-        --out "${OUT}/${csv%.csv}_per_cpu_ext.${EXT}"
+        --out "${OUT}/${name}_per_cpu_ext.${EXT}"
 
       # Reduced set, mostly for the main manuscript
       # run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
       #   ${case_args[@]+"${case_args[@]}"} \
       #   --reduced \
       #   --unit "$UNIT" --scale "$SCALE" \
-      #   --out "${OUT}/${csv%.csv}_per_cpu_red.${EXT}"
+      #   --out "${OUT}/${name}_per_cpu_red.${EXT}"
 
     done
   done
-  wait # every plot for this csv is on disk before converting svg -> pdf below
+  wait # every plot of this entry is on disk before converting svg -> pdf below
 
   # Convert to pdf if needed
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
 
-    svg="${OUT}/${csv%.csv}_per_cpu_${UNIT}_${SCALE}.svg"
+    svg="${OUT}/${name}_per_cpu_${UNIT}_${SCALE}.svg"
     inkscape "$svg" --export-filename="${svg%.svg}.pdf"
 
-    svg="${OUT}/${csv%.csv}_per_cpu_ext_${UNIT}_${SCALE}.svg"
+    svg="${OUT}/${name}_per_cpu_ext_${UNIT}_${SCALE}.svg"
     inkscape "$svg" --export-filename="${svg%.svg}.pdf"
 
-    # svg="${OUT}/${csv%.csv}_per_cpu_red_${UNIT}_${SCALE}.svg"
+    # svg="${OUT}/${name}_per_cpu_red_${UNIT}_${SCALE}.svg"
     # inkscape "$svg" --export-filename="${svg%.svg}.pdf"
   done
 done
 
 # Simple example for reference of what we are doing
 # ./plot/plot_bars_per_cpu.py \
-#     --file "results/AMD_Epyc_7763/kmer_extract.csv" \
-#     --file "results/AMD_Ryzen_4750U/kmer_extract.csv" \
-#     --file "results/Apple_M1/kmer_extract.csv" \
-#     --file "results/Intel_Xeon_8568Y/kmer_extract.csv"
+#     --file "results/AMD_Epyc_7763/kmer_extract_ascii_checked.csv" \
+#     --file "results/AMD_Ryzen_4750U/kmer_extract_ascii_checked.csv" \
+#     --file "results/Apple_M1/kmer_extract_ascii_checked.csv" \
+#     --file "results/Intel_Xeon_8568Y/kmer_extract_ascii_checked.csv"
 
 # ------------------------------------------------------------
 # Sequence packing: separate encoding/layout views
@@ -208,7 +213,7 @@ done
 
 # Without and with validity. The file names start with the suite, followed by the view.
 echo "Plotting sequence-packing comparisons"
-for suite in "seq_pack" "seq_pack_validity"; do
+for suite in "sequence_pack_unchecked" "sequence_pack_checked"; do
   build_file_args "${suite}.csv" || continue
 
   for EXT in "${FORMATS[@]}"; do
@@ -216,7 +221,7 @@ for suite in "seq_pack" "seq_pack_validity"; do
       UNIT="${combo%%:*}"
       SCALE="${combo##*:}"
 
-      run_job python ./plot/plot_seq_pack.py "${args[@]}" \
+      run_job python ./plot/plot_sequence_pack.py "${args[@]}" \
         --summary --unit "$UNIT" --scale "$SCALE" --format "$EXT" \
         --out-dir "$OUT"
     done
@@ -237,14 +242,15 @@ done
 # SIMD extraction: vectors vs. single k-mers, one panel per CPU
 # ------------------------------------------------------------
 
-# Not in the generic CSV_FILES loop above: a different plot script, which compares the vectors that
+# Not in the generic SUMMARIES loop above: a different plot script, which compares the vectors that
 # the SIMD extraction hands out with their single k-mers (`_vectors`/`_scalars`) side by side,
 # instead of the platforms per benchmark. Suites without result files yet are skipped.
 echo "Plotting vectors vs. scalars comparison"
 for csv in \
-  "kmer_spaced_single.csv" "kmer_spaced_multi.csv" \
-  "kmer_spaced_packed_single.csv" "kmer_spaced_packed_multi.csv" \
-  "kmer_spaced_packed_checked_single.csv" "kmer_spaced_packed_checked_multi.csv" \
+  "spaced_kmer_extract_ascii_checked_single.csv" "spaced_kmer_extract_ascii_checked_multi.csv" \
+  "spaced_kmer_extract_packed_unchecked_single.csv" \
+  "spaced_kmer_extract_packed_unchecked_multi.csv" \
+  "spaced_kmer_extract_packed_checked_single.csv" "spaced_kmer_extract_packed_checked_multi.csv" \
   "kmer_extract_packed_checked.csv"
 do
   build_file_args "$csv" || continue
@@ -278,13 +284,14 @@ done
 # ------------------------------------------------------------
 
 # The unchecked suites that have a checked counterpart with the same techniques, as
-# "<name> <unchecked csv> <checked csv>", where <name> is the name of both without the check. The
-# plot script leaves out the CPUs without both tables, and skips a pair that no CPU has.
+# "<name> <unchecked csv>", where <name> is the name of both without the check, and the checked csv
+# is the unchecked one with "_checked" for "_unchecked". The plot script leaves out the CPUs without
+# both tables, and skips a pair that no CPU has.
 CHECKED_PAIRS=(
-  "kmer_spaced_packed_single kmer_spaced_packed_single.csv kmer_spaced_packed_checked_single.csv"
-  "kmer_spaced_packed_multi kmer_spaced_packed_multi.csv kmer_spaced_packed_checked_multi.csv"
-  "kmer_extract_packed kmer_extract_packed.csv kmer_extract_packed_checked.csv"
-  "seq_pack seq_pack.csv seq_pack_validity.csv"
+  "spaced_kmer_extract_packed_single spaced_kmer_extract_packed_unchecked_single.csv"
+  "spaced_kmer_extract_packed_multi spaced_kmer_extract_packed_unchecked_multi.csv"
+  "kmer_extract_packed kmer_extract_packed_unchecked.csv"
+  "sequence_pack sequence_pack_unchecked.csv"
 )
 
 dir_args=()
@@ -294,7 +301,8 @@ done
 
 echo "Plotting checked vs. unchecked comparison"
 for pair in "${CHECKED_PAIRS[@]}"; do
-  read -r name unchecked checked <<< "$pair"
+  read -r name unchecked <<< "$pair"
+  checked="${unchecked/_unchecked/_checked}"
 
   for EXT in "${FORMATS[@]}"; do
     for combo in "${COMBOS[@]}"; do
@@ -325,19 +333,19 @@ done
 # Kmer extract: per encoding and layout, one panel per CPU
 # ------------------------------------------------------------
 
-# Complements the kmer_extract summary above, which is restricted to ACGT/MSB: compares the
+# Complements the kmer_extract_ascii summary above, which is restricted to ACGT/MSB: compares the
 # (encoding, layout) combinations of each technique that is run with more than one of them.
-echo "Plotting kmer_extract axis comparison"
-if build_file_args "kmer_extract.csv"; then
+echo "Plotting kmer_extract_ascii axis comparison"
+if build_file_args "kmer_extract_ascii_checked.csv" "kmer_extract_ascii_unchecked.csv"; then
 
   for EXT in "${FORMATS[@]}"; do
     for combo in "${COMBOS[@]}"; do
       UNIT="${combo%%:*}"
       SCALE="${combo##*:}"
 
-      run_job python ./plot/plot_kmer_extract_axis_per_cpu.py "${args[@]}" \
+      run_job python ./plot/plot_kmer_extract_ascii_axis_per_cpu.py "${args[@]}" \
         --unit "$UNIT" --scale "$SCALE" \
-        --out "${OUT}/kmer_extract_axis_per_cpu.${EXT}"
+        --out "${OUT}/kmer_extract_ascii_axis_per_cpu.${EXT}"
     done
   done
   wait # every plot is on disk before converting svg -> pdf below
@@ -347,7 +355,7 @@ if build_file_args "kmer_extract.csv"; then
     SCALE="${combo##*:}"
 
     # Not produced if no result file has more than one encoding/layout combination yet.
-    svg="${OUT}/kmer_extract_axis_per_cpu_${UNIT}_${SCALE}.svg"
+    svg="${OUT}/kmer_extract_ascii_axis_per_cpu_${UNIT}_${SCALE}.svg"
     if [[ -f "$svg" ]]; then
       inkscape "$svg" --export-filename="${svg%.svg}.pdf"
     fi
@@ -358,7 +366,7 @@ fi
 # Kmer extract packed: detailed cross-platform comparison
 # ------------------------------------------------------------
 
-# Not in the generic CSV_FILES loop above: that loop applies the same (default-variant-set,
+# Not in the generic SUMMARIES loop above: that loop applies the same (default-variant-set,
 # unbounded y-axis) call to every CSV uniformly, but this suite needs its own y-axis limits and
 # its regular (non-extended) call needs the reduced dispatcher-only variant set -- same reasoning
 # as the "Manuscript figures" calls further below, which are for the same reason not in that loop
@@ -371,7 +379,7 @@ YLIM_PACKED_REDUCED_NS="0.75"
 YLIM_PACKED_EXTENDED_NS="1.2"
 
 # Without and with validity, with the same limits, so that the two stay comparable.
-for suite in "kmer_extract_packed" "kmer_extract_packed_checked"; do
+for suite in "kmer_extract_packed_unchecked" "kmer_extract_packed_checked"; do
   build_file_args "${suite}.csv" || continue
 
   for combo in "${COMBOS[@]}"; do
@@ -444,8 +452,10 @@ done
 Y_LIM_OPS="1.8"
 Y_LIM_NS="6.0"
 
-if build_file_args "kmer_spaced_single.csv" && args_single=("${args[@]}") \
-  && build_file_args "kmer_spaced_multi.csv" && args_multi=("${args[@]}"); then
+if build_file_args "spaced_kmer_extract_ascii_checked_single.csv" \
+  && args_single=("${args[@]}") \
+  && build_file_args "spaced_kmer_extract_ascii_checked_multi.csv" \
+  && args_multi=("${args[@]}"); then
 
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"

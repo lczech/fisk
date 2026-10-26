@@ -160,10 +160,11 @@ if (FISK_ENABLE_AVX2 AND COMPILER_SUPPORTS_AVX2)
     target_compile_definitions(fisk INTERFACE FISK_HAS_AVX2=1)
 endif()
 
-# AVX512BW is required alongside AVX512F: seq_pack's Msb byte-reversal uses _mm512_shuffle_epi8,
-# which needs BW. It's present on essentially all mainstream AVX512 hardware since Skylake-X/Ice
-# Lake -- only the earliest, now-obsolete Xeon Phi "Knights Landing" parts are F-only -- so this is
-# folded into the single FISK_ENABLE_AVX512 option rather than a separate opt-in tier.
+# AVX512BW is required alongside AVX512F: the byte shuffles of SimdAVX512 (core/simd_avx512.hpp),
+# such as the MSB byte reversal of the packing, use _mm512_shuffle_epi8, which needs BW. It's
+# present on essentially all mainstream AVX512 hardware since Skylake-X/Ice Lake -- only the
+# earliest, now-obsolete Xeon Phi "Knights Landing" parts are F-only -- so this is folded into the
+# single FISK_ENABLE_AVX512 option rather than a separate opt-in tier.
 if (FISK_ENABLE_AVX512 AND COMPILER_SUPPORTS_AVX512 AND COMPILER_SUPPORTS_AVX512BW)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk INTERFACE "/arch:AVX512")
@@ -205,7 +206,7 @@ if(FISK_BUILD_BENCHMARKS)
     # Select the benchmark sink per-call measurement strategy (Sum/Barrier/Write; see that file)
     # for every benchmark variant. It is never defined for the fisk::fisk library target: a couple
     # of headers under include/ check for it being defined at all (not its value) to enable
-    # otherwise-benchmark-only correctness barriers, see e.g. kmer_extract/packed.hpp.
+    # otherwise-benchmark-only correctness barriers, see e.g. kmer_extract/internal.hpp.
     set(FISK_BENCHMARK_SINK_MODE "FISK_BENCHMARK_SINK_SUM" CACHE STRING
         "Benchmark sink measurement mode:
         FISK_BENCHMARK_SINK_SUM, FISK_BENCHMARK_SINK_BARRIER, or FISK_BENCHMARK_SINK_WRITE"

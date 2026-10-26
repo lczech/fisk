@@ -29,9 +29,9 @@ VARIANT_COLORS = PACKED_KMER_VARIANT_COLORS
 # default user-facing comparison. Pass --show-direct to include the helper rows as well.
 DIRECT_SIMD_VARIANTS = {
     v for v in VARIANT_ORDER
-    if v.startswith("simd_") and ("_narrow_width_" in v or "_full_width_" in v)
+    if v.startswith("bytewise_simd_") and ("_narrow_width_" in v or "_full_width_" in v)
 }
-ROLLING_VARIANTS = {"rolling", "narrow_width_rolling", "full_width_rolling"}
+ROLLING_VARIANTS = {"rolling_scalar"}
 
 # (layout, k) combos to produce one heatmap + one bar chart for each.
 COMBOS = [("msb", 29), ("msb", 32), ("lsb", 29), ("lsb", 32)]
@@ -39,8 +39,9 @@ COMBOS = [("msb", 29), ("msb", 32), ("lsb", 29), ("lsb", 32)]
 
 def load_all(csv_paths: List[str]) -> pd.DataFrame:
     """
-    Load each given kmer_extract_packed.csv, tag each row with its platform (the parent directory
-    name, e.g. "AMD EPYC 9684X, Clang 17"), and concatenate into one long-format DataFrame. Takes
+    Load each given kmer_extract_packed_unchecked.csv, tag each row with its platform (the parent
+    directory name, e.g. "AMD EPYC 9684X, Clang 17"), and concatenate into one long-format
+    DataFrame. Takes
     an explicit file list (built by the caller, e.g. from plot_all_cpus.sh's curated CPUS array via
     --file, same as plot_bars_per_cpu.py) rather than globbing a results directory itself, so the
     set of platforms shown here always matches the rest of the cross-CPU plots -- not a second,
@@ -212,13 +213,14 @@ def main():
         "--file",
         action="append",
         default=[],
-        help="kmer_extract_packed.csv path. Can be given multiple times.",
+        help="kmer_extract_packed_unchecked.csv path. Can be given multiple times.",
     )
     parser.add_argument(
         "--glob",
         action="append",
         default=[],
-        help="Glob pattern(s) for kmer_extract_packed.csv files. Can be given multiple times.",
+        help="Glob pattern(s) for kmer_extract_packed_unchecked.csv files. Can be given multiple "
+             "times.",
     )
     parser.add_argument("--out-dir", required=True, help="Output directory")
     parser.add_argument(

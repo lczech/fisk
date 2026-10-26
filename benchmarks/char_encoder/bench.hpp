@@ -22,25 +22,25 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
 // accumulation can still auto-vectorize the way plain `h += encoder(c)` did before -- see the
 // matching comment in bit_extract_weights/bench.hpp for why a Sink built elsewhere and passed in
 // by reference would defeat that.
-std::uint64_t run_var_acgt_ifs(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
-std::uint64_t run_var_acgt_switch(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
-std::uint64_t run_var_acgt_table(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
-std::uint64_t run_var_acgt_ascii_validate(
+std::uint64_t run_var_ifs_acgt(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
+std::uint64_t run_var_switch_acgt(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
+std::uint64_t run_var_table_acgt(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
+std::uint64_t run_var_ascii_checked_acgt(
     std::string const& seq,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_acgt_ascii_assume_valid(
+std::uint64_t run_var_ascii_unchecked_acgt(
     std::string const& seq,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_actg_ifs(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
-std::uint64_t run_var_actg_switch(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
-std::uint64_t run_var_actg_table(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
-std::uint64_t run_var_actg_ascii_validate(
+std::uint64_t run_var_ifs_actg(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
+std::uint64_t run_var_switch_actg(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
+std::uint64_t run_var_table_actg(std::string const& seq, std::vector<std::uint64_t>& sink_buffer);
+std::uint64_t run_var_ascii_checked_actg(
     std::string const& seq,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_actg_ascii_assume_valid(
+std::uint64_t run_var_ascii_unchecked_actg(
     std::string const& seq,
     std::vector<std::uint64_t>& sink_buffer
 );

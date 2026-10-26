@@ -70,15 +70,21 @@ taskset -c 2 ./bin/fisk_benchmarks
 ```
 -->
 
-This will produce performance measurements for all implemented benchmarks on the given hardware, measuring time per operation, such as per extracted k-mer:
+This will produce performance measurements for all implemented benchmarks on the given hardware, measuring time per operation, such as per extracted k-mer, with one CSV file per benchmark suite. The suites of the k-mer extraction and the sequence packing are named after the functions they test (see [K-mer extraction functions](#k-mer-extraction-functions) below), and their variants complete that name: for instance, the variant `rolling_scalar_ifs` of the suite `kmer_extract_ascii_checked` is `for_each_kmer_ascii_checked_rolling_scalar()` with the `CharEncoderIfs` encoder. The Encoding and Layout are in the `case` column of the tables.
 
- - `bit_extract_weights.csv`: Performance of bit extracting, for different weights of the mask.
- - `bit_extract_blocks.csv`: Performance of bit extracting, for masks with different numbers of blocks of consecutive 1s.
- - `char_encoder.csv`: Per-character encoding, from ASCII to 2-bit codes.
- - `kmer_extract.csv`: Regular k-mer extraction, traversing along an input sequence.
- - `kmer_spaced_single.csv`: Spaced k-mer extraction, using a single mask.
- - `kmer_spaced_multi.csv`: Spaced k-mer extraction, for multiple masks at once.
- - `kmer_clark.csv`: Small test to examine bottlenecks in the CLARK-S implementation.
+| | ASCII, checked | ASCII, unchecked | packed, unchecked | packed, checked |
+|---|---|---|---|---|
+| k-mers | `kmer_extract_ascii_checked` | `kmer_extract_ascii_unchecked` | `kmer_extract_packed_unchecked` | `kmer_extract_packed_checked` |
+| spaced k-mers, one mask | `spaced_kmer_extract_ascii_checked_single` | (not yet) | `spaced_kmer_extract_packed_unchecked_single` | `spaced_kmer_extract_packed_checked_single` |
+| spaced k-mers, several masks | `spaced_kmer_extract_ascii_checked_multi` | (not yet) | `spaced_kmer_extract_packed_unchecked_multi` | `spaced_kmer_extract_packed_checked_multi` |
+| sequence packing | | | `sequence_pack_unchecked` | `sequence_pack_checked` |
+
+Furthermore:
+
+ - `bit_extract_weights`: Performance of bit extracting, for different weights of the mask.
+ - `bit_extract_blocks`: Performance of bit extracting, for masks with different numbers of blocks of consecutive 1s.
+ - `char_encoder`: Per-character encoding, from ASCII to 2-bit codes.
+ - `kmer_clark`: Small test to examine bottlenecks in the CLARK-S implementation.
 
 We provide these results for all hardware architectures tested in `results`. We also added
 the results of our [DuoHash benchmark](https://github.com/lczech/DuoHash) there, called `DuoHash.csv`.
@@ -145,7 +151,7 @@ These combinations exist, as `<algorithm>_<technique>`:
 
 Each `<input>_<algorithm>_<technique>` has its own header in `kmer_extract/` or `spaced_kmer_extract/`, with its checked and unchecked functions, e.g. `kmer_extract/packed_bytewise_scalar.hpp`. The internals that several of them share are in an `internal.hpp` in each directory.
 
-The `benchmarks/` directory contains the driver code for the benchmark program: `main.cpp`, `arg_parser.hpp`, `microbench.hpp`, `utils.hpp`, `seq_data.hpp`, `kmer_clark.hpp`, and one `bench_*.hpp` per benchmark shown in the manuscript. These might be useful to see how each algorithm is intended to be called and used.
+The `benchmarks/` directory contains the driver code for the benchmark program: `main.cpp`, `arg_parser.hpp`, `microbench.hpp`, `sink.hpp`, `utils.hpp`, `seq_data.hpp`, and one directory per suite, with its `bench.cpp` and one `var_*.cpp` per variant. These might be useful to see how each algorithm is intended to be called and used.
 
 Functions that process k-mers are mostly templated here, in order to allow us to benchmark different implemenations of, e.g., the nucleotide to two-bit encoding and the bit extraction. Thus, to use these function in your code, you might want to replace those template parameters with hard-coded versions for simplicity - no need to use any of the sub-par alterative implementations if you can just use the fastest one.
 

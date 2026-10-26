@@ -30,7 +30,7 @@ Usage examples:
   python plot_bars_per_cpu.py --glob "artifacts/*/pext.csv" --suite PEXT
 
   # Restrict to rows whose "case" column (e.g. "layout=msb;k=17") matches given fields:
-  python plot_bars_per_cpu.py --glob "results/*/kmer_extract_packed.csv" \
+  python plot_bars_per_cpu.py --glob "results/*/kmer_extract_packed_unchecked.csv" \
       --case-filter "layout=msb" --case-filter "k<=29" --reduced \
       --out kmer_extract_packed_msb_narrow_width.png
 
@@ -65,18 +65,25 @@ TITLE_FROM_FILENAME = {
     "bit_extract_weights.csv": "Bit extract with different mask weights",
     "bit_extract_blocks.csv":  "Bit extract with different block sizes in the mask",
     "char_encoder.csv":        "Character encoding to two-bit codes",
-    "kmer_extract.csv":        "Extraction from sequence to two-bit coded k-mers",
-    "kmer_extract_packed.csv": "Extraction from a packed two-bit sequence to k-mers",
-    "kmer_spaced_multi.csv":   "Extraction from sequence to spaced k-mers with multiple masks",
-    "kmer_spaced_single.csv":  "Extraction from sequence to spaced k-mers with a single mask",
-    "kmer_spaced_packed_multi.csv":
+    # The checked and unchecked extraction from ASCII are plotted together, see plot_all_cpus.sh.
+    "kmer_extract_ascii_checked.csv":
+        "Extraction from sequence to two-bit coded k-mers",
+    "kmer_extract_ascii_unchecked.csv":
+        "Extraction from sequence to two-bit coded k-mers",
+    "kmer_extract_packed_unchecked.csv":
+        "Extraction from a packed two-bit sequence to k-mers",
+    "spaced_kmer_extract_ascii_checked_multi.csv":
+        "Extraction from sequence to spaced k-mers with multiple masks",
+    "spaced_kmer_extract_ascii_checked_single.csv":
+        "Extraction from sequence to spaced k-mers with a single mask",
+    "spaced_kmer_extract_packed_unchecked_multi.csv":
         "Extraction from a packed two-bit sequence to spaced k-mers with multiple masks",
-    "kmer_spaced_packed_single.csv":
+    "spaced_kmer_extract_packed_unchecked_single.csv":
         "Extraction from a packed two-bit sequence to spaced k-mers with a single mask",
-    "kmer_spaced_packed_checked_multi.csv":
+    "spaced_kmer_extract_packed_checked_multi.csv":
         "Extraction from a packed two-bit sequence with validity to valid spaced k-mers with "
         "multiple masks",
-    "kmer_spaced_packed_checked_single.csv":
+    "spaced_kmer_extract_packed_checked_single.csv":
         "Extraction from a packed two-bit sequence with validity to valid spaced k-mers with a "
         "single mask",
     "kmer_clark.csv":          "K-mer Clark test",

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
 import os
+import re
 import sys
 from pathlib import Path
 import matplotlib as mpl
@@ -115,14 +116,14 @@ def parse_case_fields(df: pd.DataFrame, column: str = "case") -> pd.DataFrame:
 
 def normalize_spaced_layout(df: pd.DataFrame) -> pd.DataFrame:
     """
-    The spaced k-mer benchmarks are named by Layout, as "msb_<technique>" and "lsb_<technique>".
-    Keep the MSB ones under their plain technique name, as used in older result files, and drop
-    the LSB ones, which only serve to check that both layouts perform the same.
+    The spaced k-mer benchmarks run in both Layouts, with the Layout in front of the mask in their
+    case, as "layout=msb;mask=0". Keep the MSB rows, with the case of the mask only, and drop the
+    LSB ones, which only serve to check that both layouts perform the same.
     """
-    spaced = df["suite"].str.startswith("kmer_spaced")
-    df = df[~(spaced & df["benchmark"].str.startswith("lsb_"))].copy()
-    spaced = df["suite"].str.startswith("kmer_spaced")
-    df.loc[spaced, "benchmark"] = df.loc[spaced, "benchmark"].str.removeprefix("msb_")
+    spaced = df["suite"].str.startswith("spaced_kmer_extract")
+    df = df[~(spaced & df["case"].str.startswith("layout=lsb;"))].copy()
+    spaced = df["suite"].str.startswith("spaced_kmer_extract")
+    df.loc[spaced, "case"] = df.loc[spaced, "case"].str.removeprefix("layout=msb;")
     return df
 
 
@@ -136,14 +137,31 @@ BENCHMARKS_KEEP_EXTENDED = [
     # Bit extract implementations
     "naive",
     "pext",
+    "rolling_scalar_pext",
+    "bytewise_scalar_pext",
+    "pext_scalar",
     "bitloop",
+    "rolling_scalar_bitloop",
+    "bytewise_scalar_bitloop",
     # "split32",
     "byte_table",
+    "rolling_scalar_byte_table",
+    "bytewise_scalar_byte_table",
     "block_table",
+    "rolling_scalar_block_table",
+    "bytewise_scalar_block_table",
     "block_table_unrolled2",
+    "rolling_scalar_block_table_unrolled2",
+    "bytewise_scalar_block_table_unrolled2",
     "block_table_unrolled4",
+    "rolling_scalar_block_table_unrolled4",
+    "bytewise_scalar_block_table_unrolled4",
     "block_table_unrolled8",
+    "rolling_scalar_block_table_unrolled8",
+    "bytewise_scalar_block_table_unrolled8",
     "butterfly_table",
+    "rolling_scalar_butterfly_table",
+    "bytewise_scalar_butterfly_table",
     # "instlatx",
     # "zp7",
 
@@ -156,40 +174,61 @@ BENCHMARKS_KEEP_EXTENDED = [
     "compute_spaced_kmer_hash_simd_bt_scalar",
 
     # Extract / seq enc
-    "ascii_re",
-    "ascii_shift",
-    "ifs_re",
-    "ifs_shift",
-    "switch_re",
-    "switch_shift",
-    "table_re",
-    "table_shift",
-    "chunked_assume_valid",
-    "pack_then_extract",
+    "reextract_scalar_ascii",
+    "rolling_scalar_ascii",
+    "reextract_scalar_ifs",
+    "rolling_scalar_ifs",
+    "reextract_scalar_switch",
+    "rolling_scalar_switch",
+    "reextract_scalar_table",
+    "rolling_scalar_table",
+    "pack_then_bytewise_scalar",
 
     # Kmer spaced, from text and from packed sequences
-    "simd_butterfly_table_sse2_vectors",
-    "simd_butterfly_table_sse2_scalars",
-    "simd_block_table_sse2_vectors",
-    "simd_block_table_sse2_scalars",
-    "simd_butterfly_table_avx2_vectors",
-    "simd_butterfly_table_avx2_scalars",
-    "simd_block_table_avx2_vectors",
-    "simd_block_table_avx2_scalars",
-    "simd_butterfly_table_avx512_vectors",
-    "simd_butterfly_table_avx512_scalars",
-    "simd_block_table_avx512_vectors",
-    "simd_block_table_avx512_scalars",
-    "simd_butterfly_table_neon_vectors",
-    "simd_butterfly_table_neon_scalars",
-    "simd_block_table_neon_vectors",
-    "simd_block_table_neon_scalars",
-    "simd_pext_vectors",
-    "simd_pext_scalars",
-    "simd_butterfly_table_scalar_vectors",
-    "simd_butterfly_table_scalar_scalars",
-    "simd_block_table_scalar_vectors",
-    "simd_block_table_scalar_scalars",
+    "rolling_simd_butterfly_table_sse2_vectors",
+    "bytewise_simd_butterfly_table_sse2_vectors",
+    "rolling_simd_butterfly_table_sse2_scalars",
+    "bytewise_simd_butterfly_table_sse2_scalars",
+    "rolling_simd_block_table_sse2_vectors",
+    "bytewise_simd_block_table_sse2_vectors",
+    "rolling_simd_block_table_sse2_scalars",
+    "bytewise_simd_block_table_sse2_scalars",
+    "rolling_simd_butterfly_table_avx2_vectors",
+    "bytewise_simd_butterfly_table_avx2_vectors",
+    "rolling_simd_butterfly_table_avx2_scalars",
+    "bytewise_simd_butterfly_table_avx2_scalars",
+    "rolling_simd_block_table_avx2_vectors",
+    "bytewise_simd_block_table_avx2_vectors",
+    "rolling_simd_block_table_avx2_scalars",
+    "bytewise_simd_block_table_avx2_scalars",
+    "rolling_simd_butterfly_table_avx512_vectors",
+    "bytewise_simd_butterfly_table_avx512_vectors",
+    "rolling_simd_butterfly_table_avx512_scalars",
+    "bytewise_simd_butterfly_table_avx512_scalars",
+    "rolling_simd_block_table_avx512_vectors",
+    "bytewise_simd_block_table_avx512_vectors",
+    "rolling_simd_block_table_avx512_scalars",
+    "bytewise_simd_block_table_avx512_scalars",
+    "rolling_simd_butterfly_table_neon_vectors",
+    "bytewise_simd_butterfly_table_neon_vectors",
+    "rolling_simd_butterfly_table_neon_scalars",
+    "bytewise_simd_butterfly_table_neon_scalars",
+    "rolling_simd_block_table_neon_vectors",
+    "bytewise_simd_block_table_neon_vectors",
+    "rolling_simd_block_table_neon_scalars",
+    "bytewise_simd_block_table_neon_scalars",
+    "rolling_simd_pext_vectors",
+    "bytewise_simd_pext_vectors",
+    "rolling_simd_pext_scalars",
+    "bytewise_simd_pext_scalars",
+    "rolling_simd_butterfly_table_scalar_vectors",
+    "bytewise_simd_butterfly_table_scalar_vectors",
+    "rolling_simd_butterfly_table_scalar_scalars",
+    "bytewise_simd_butterfly_table_scalar_scalars",
+    "rolling_simd_block_table_scalar_vectors",
+    "bytewise_simd_block_table_scalar_vectors",
+    "rolling_simd_block_table_scalar_scalars",
+    "bytewise_simd_block_table_scalar_scalars",
 ]
 
 # The second list is the condensed list of "good" algorithms and approaches,
@@ -198,14 +237,31 @@ BENCHMARKS_KEEP = [
     # Bit extract implementations
     "naive",
     "pext",
+    "rolling_scalar_pext",
+    "bytewise_scalar_pext",
+    "pext_scalar",
     # "bitloop",
+    # "rolling_scalar_bitloop",
+    # "bytewise_scalar_bitloop",
     # "split32",
     # "byte_table",
+    # "rolling_scalar_byte_table",
+    # "bytewise_scalar_byte_table",
     "block_table",
+    "rolling_scalar_block_table",
+    "bytewise_scalar_block_table",
     "block_table_unrolled2",
+    "rolling_scalar_block_table_unrolled2",
+    "bytewise_scalar_block_table_unrolled2",
     "block_table_unrolled4",
+    "rolling_scalar_block_table_unrolled4",
+    "bytewise_scalar_block_table_unrolled4",
     "block_table_unrolled8",
+    "rolling_scalar_block_table_unrolled8",
+    "bytewise_scalar_block_table_unrolled8",
     "butterfly_table",
+    "rolling_scalar_butterfly_table",
+    "bytewise_scalar_butterfly_table",
     # "instlatx",
     # "zp7",
 
@@ -218,40 +274,61 @@ BENCHMARKS_KEEP = [
     # "compute_spaced_kmer_hash_simd_bt_scalar",
 
     # Extract / seq enc
-    "ascii_re",
-    "ascii_shift",
-    "ifs_re",
-    "ifs_shift",
-    "switch_re",
-    "switch_shift",
-    "table_re",
-    "table_shift",
-    "chunked_assume_valid",
-    "pack_then_extract",
+    "reextract_scalar_ascii",
+    "rolling_scalar_ascii",
+    "reextract_scalar_ifs",
+    "rolling_scalar_ifs",
+    "reextract_scalar_switch",
+    "rolling_scalar_switch",
+    "reextract_scalar_table",
+    "rolling_scalar_table",
+    "pack_then_bytewise_scalar",
 
     # Kmer spaced, from text and from packed sequences
-    "simd_butterfly_table_sse2_vectors",
-    "simd_butterfly_table_sse2_scalars",
-    "simd_block_table_sse2_vectors",
-    "simd_block_table_sse2_scalars",
-    "simd_butterfly_table_avx2_vectors",
-    "simd_butterfly_table_avx2_scalars",
-    "simd_block_table_avx2_vectors",
-    "simd_block_table_avx2_scalars",
-    "simd_butterfly_table_avx512_vectors",
-    "simd_butterfly_table_avx512_scalars",
-    "simd_block_table_avx512_vectors",
-    "simd_block_table_avx512_scalars",
-    "simd_butterfly_table_neon_vectors",
-    "simd_butterfly_table_neon_scalars",
-    "simd_block_table_neon_vectors",
-    "simd_block_table_neon_scalars",
-    # "simd_pext_vectors",
-    # "simd_pext_scalars",
-    # "simd_butterfly_table_scalar_vectors",
-    # "simd_butterfly_table_scalar_scalars",
-    # "simd_block_table_scalar_vectors",
-    # "simd_block_table_scalar_scalars",
+    "rolling_simd_butterfly_table_sse2_vectors",
+    "bytewise_simd_butterfly_table_sse2_vectors",
+    "rolling_simd_butterfly_table_sse2_scalars",
+    "bytewise_simd_butterfly_table_sse2_scalars",
+    "rolling_simd_block_table_sse2_vectors",
+    "bytewise_simd_block_table_sse2_vectors",
+    "rolling_simd_block_table_sse2_scalars",
+    "bytewise_simd_block_table_sse2_scalars",
+    "rolling_simd_butterfly_table_avx2_vectors",
+    "bytewise_simd_butterfly_table_avx2_vectors",
+    "rolling_simd_butterfly_table_avx2_scalars",
+    "bytewise_simd_butterfly_table_avx2_scalars",
+    "rolling_simd_block_table_avx2_vectors",
+    "bytewise_simd_block_table_avx2_vectors",
+    "rolling_simd_block_table_avx2_scalars",
+    "bytewise_simd_block_table_avx2_scalars",
+    "rolling_simd_butterfly_table_avx512_vectors",
+    "bytewise_simd_butterfly_table_avx512_vectors",
+    "rolling_simd_butterfly_table_avx512_scalars",
+    "bytewise_simd_butterfly_table_avx512_scalars",
+    "rolling_simd_block_table_avx512_vectors",
+    "bytewise_simd_block_table_avx512_vectors",
+    "rolling_simd_block_table_avx512_scalars",
+    "bytewise_simd_block_table_avx512_scalars",
+    "rolling_simd_butterfly_table_neon_vectors",
+    "bytewise_simd_butterfly_table_neon_vectors",
+    "rolling_simd_butterfly_table_neon_scalars",
+    "bytewise_simd_butterfly_table_neon_scalars",
+    "rolling_simd_block_table_neon_vectors",
+    "bytewise_simd_block_table_neon_vectors",
+    "rolling_simd_block_table_neon_scalars",
+    "bytewise_simd_block_table_neon_scalars",
+    # "rolling_simd_pext_vectors",
+    # "bytewise_simd_pext_vectors",
+    # "rolling_simd_pext_scalars",
+    # "bytewise_simd_pext_scalars",
+    # "rolling_simd_butterfly_table_scalar_vectors",
+    # "bytewise_simd_butterfly_table_scalar_vectors",
+    # "rolling_simd_butterfly_table_scalar_scalars",
+    # "bytewise_simd_butterfly_table_scalar_scalars",
+    # "rolling_simd_block_table_scalar_vectors",
+    # "bytewise_simd_block_table_scalar_vectors",
+    # "rolling_simd_block_table_scalar_scalars",
+    # "bytewise_simd_block_table_scalar_scalars",
 
     # DuoHash
     "naive",
@@ -274,14 +351,31 @@ BENCHMARKS_KEEP_REDUCED = [
     # Bit extract implementations
     "naive",
     "pext",
+    "rolling_scalar_pext",
+    "bytewise_scalar_pext",
+    "pext_scalar",
     # "bitloop",
+    # "rolling_scalar_bitloop",
+    # "bytewise_scalar_bitloop",
     # "split32",
     # "byte_table",
+    # "rolling_scalar_byte_table",
+    # "bytewise_scalar_byte_table",
     # "block_table",
+    # "rolling_scalar_block_table",
+    # "bytewise_scalar_block_table",
     # "block_table_unrolled2",
+    # "rolling_scalar_block_table_unrolled2",
+    # "bytewise_scalar_block_table_unrolled2",
     # "block_table_unrolled4",
+    # "rolling_scalar_block_table_unrolled4",
+    # "bytewise_scalar_block_table_unrolled4",
     # "block_table_unrolled8",
+    # "rolling_scalar_block_table_unrolled8",
+    # "bytewise_scalar_block_table_unrolled8",
     "butterfly_table",
+    "rolling_scalar_butterfly_table",
+    "bytewise_scalar_butterfly_table",
     # "instlatx",
     # "zp7",
 
@@ -294,300 +388,410 @@ BENCHMARKS_KEEP_REDUCED = [
     "compute_spaced_kmer_hash_simd_bt_scalar",
 
     # Extract / seq enc
-    "ascii_re",
-    "ascii_shift",
-    "ifs_re",
-    "ifs_shift",
-    "switch_re",
-    "switch_shift",
-    "table_re",
-    "table_shift",
-    "chunked_assume_valid",
-    # "pack_then_extract",
+    "reextract_scalar_ascii",
+    "rolling_scalar_ascii",
+    "reextract_scalar_ifs",
+    "rolling_scalar_ifs",
+    "reextract_scalar_switch",
+    "rolling_scalar_switch",
+    "reextract_scalar_table",
+    "rolling_scalar_table",
+    # "pack_then_bytewise_scalar",
 
     # Kmer spaced. Both forms: the vectors, and their single spaced k-mers, as the scalar
     # techniques hand them out.
-    "simd_butterfly_table_sse2_vectors",
-    "simd_butterfly_table_sse2_scalars",
-    "simd_butterfly_table_avx2_vectors",
-    "simd_butterfly_table_avx2_scalars",
-    "simd_butterfly_table_avx512_vectors",
-    "simd_butterfly_table_avx512_scalars",
-    "simd_butterfly_table_neon_vectors",
-    "simd_butterfly_table_neon_scalars",
+    "rolling_simd_butterfly_table_sse2_vectors",
+    "bytewise_simd_butterfly_table_sse2_vectors",
+    "rolling_simd_butterfly_table_sse2_scalars",
+    "bytewise_simd_butterfly_table_sse2_scalars",
+    "rolling_simd_butterfly_table_avx2_vectors",
+    "bytewise_simd_butterfly_table_avx2_vectors",
+    "rolling_simd_butterfly_table_avx2_scalars",
+    "bytewise_simd_butterfly_table_avx2_scalars",
+    "rolling_simd_butterfly_table_avx512_vectors",
+    "bytewise_simd_butterfly_table_avx512_vectors",
+    "rolling_simd_butterfly_table_avx512_scalars",
+    "bytewise_simd_butterfly_table_avx512_scalars",
+    "rolling_simd_butterfly_table_neon_vectors",
+    "bytewise_simd_butterfly_table_neon_vectors",
+    "rolling_simd_butterfly_table_neon_scalars",
+    "bytewise_simd_butterfly_table_neon_scalars",
 ]
 
 BENCHMARK_RENAMES = {
     # Bit extract implementations
-    "naive"                 : "Naive",
-    "pext"                  : "PEXT",
-    "bitloop"               : "Bitloop",
-    "split32"               : "Split32",
-    "byte_table"            : "Byte Table",
-    "block_table"           : "Block Table",
-    "block_table_unrolled2" : "Block Table (2x unrolled)",
-    "block_table_unrolled4" : "Block Table (4x unrolled)",
-    "block_table_unrolled8" : "Block Table (8x unrolled)",
-    "butterfly_table"       : "Butterfly Table",
-    "instlatx"              : "InstLatX",
-    "zp7"                   : "ZP7",
+    "naive"                                 : "Naive",
+    "pext"                                  : "PEXT",
+    "pext_scalar"                           : "PEXT scalar",
+    "bitloop"                               : "Bitloop",
+    "split32"                               : "Split32",
+    "byte_table"                            : "Byte Table",
+    "block_table"                           : "Block Table",
+    "block_table_unrolled2"                 : "Block Table (2x unrolled)",
+    "block_table_unrolled4"                 : "Block Table (4x unrolled)",
+    "block_table_unrolled8"                 : "Block Table (8x unrolled)",
+    "butterfly_table"                       : "Butterfly Table",
+    "instlatx"                              : "InstLatX",
+    "zp7"                                   : "ZP7",
 
     # Extract / seq enc
-    "ascii_re"             : "ASCII re",
-    "ascii_shift"          : "ASCII shift",
-    "ifs_re"               : "'if' re",
-    "ifs_shift"            : "'if' shift",
-    "switch_re"            : "'switch' re",
-    "switch_shift"         : "'switch' shift",
-    "table_re"             : "Lookup table re",
-    "table_shift"          : "Lookup table shift",
-    "chunked_assume_valid" : "Chunked packing (assume valid)",
-    "pack_then_extract"    : "Pack, then extract (assume valid)",
+    "reextract_scalar_ascii"    : "Reextract scalar, ASCII",
+    "rolling_scalar_ascii"      : "Rolling scalar, ASCII",
+    "reextract_scalar_ifs"      : "Reextract scalar, 'if'",
+    "rolling_scalar_ifs"        : "Rolling scalar, 'if'",
+    "reextract_scalar_switch"   : "Reextract scalar, 'switch'",
+    "rolling_scalar_switch"     : "Rolling scalar, 'switch'",
+    "reextract_scalar_table"    : "Reextract scalar, Lookup table",
+    "rolling_scalar_table"      : "Rolling scalar, Lookup table",
+    "pack_then_bytewise_scalar" : "Pack, then bytewise scalar",
 
-    # Kmer spaced, from text and from packed sequences
-    "simd_butterfly_table_sse2_vectors"   : "SIMD Butterfly Table SSE2 (vectors)",
-    "simd_butterfly_table_sse2_scalars"   : "SIMD Butterfly Table SSE2 (scalars)",
-    "simd_block_table_sse2_vectors"       : "SIMD Block Table SSE2 (vectors)",
-    "simd_block_table_sse2_scalars"       : "SIMD Block Table SSE2 (scalars)",
-    "simd_butterfly_table_avx2_vectors"   : "SIMD Butterfly Table AVX2 (vectors)",
-    "simd_butterfly_table_avx2_scalars"   : "SIMD Butterfly Table AVX2 (scalars)",
-    "simd_block_table_avx2_vectors"       : "SIMD Block Table AVX2 (vectors)",
-    "simd_block_table_avx2_scalars"       : "SIMD Block Table AVX2 (scalars)",
-    "simd_butterfly_table_avx512_vectors" : "SIMD Butterfly Table AVX512 (vectors)",
-    "simd_butterfly_table_avx512_scalars" : "SIMD Butterfly Table AVX512 (scalars)",
-    "simd_block_table_avx512_vectors"     : "SIMD Block Table AVX512 (vectors)",
-    "simd_block_table_avx512_scalars"     : "SIMD Block Table AVX512 (scalars)",
-    "simd_butterfly_table_neon_vectors"   : "SIMD Butterfly Table Neon (vectors)",
-    "simd_butterfly_table_neon_scalars"   : "SIMD Butterfly Table Neon (scalars)",
-    "simd_block_table_neon_vectors"       : "SIMD Block Table Neon (vectors)",
-    "simd_block_table_neon_scalars"       : "SIMD Block Table Neon (scalars)",
-    "simd_pext_vectors"                   : "SIMD PEXT (vectors)",
-    "simd_pext_scalars"                   : "SIMD PEXT (scalars)",
-    "simd_butterfly_table_scalar_vectors" : "SIMD Butterfly Table scalar (vectors)",
-    "simd_butterfly_table_scalar_scalars" : "SIMD Butterfly Table scalar (scalars)",
-    "simd_block_table_scalar_vectors"     : "SIMD Block Table scalar (vectors)",
-    "simd_block_table_scalar_scalars"     : "SIMD Block Table scalar (scalars)",
+    # Kmer spaced, from text and from packed sequences: see _register_spaced_labels() below.
 
     # Kmer extract packed
-    "aligned"                  : "Scalar",
-    "rolling"                  : "Rolling",
-    "simd_narrow_width_sse2"   : "SIMD Narrow-Width SSE2",
-    "simd_full_width_sse2"     : "SIMD Full-Width SSE2",
-    "simd_sse2"                : "SIMD SSE2",
-    "simd_sse2_scalars"        : "SIMD SSE2 (scalars)",
-    "simd_narrow_width_avx2"   : "SIMD Narrow-Width AVX2",
-    "simd_full_width_avx2"     : "SIMD Full-Width AVX2",
-    "simd_avx2"                : "SIMD AVX2",
-    "simd_avx2_scalars"        : "SIMD AVX2 (scalars)",
-    "simd_narrow_width_avx512" : "SIMD Narrow-Width AVX512",
-    "simd_full_width_avx512"   : "SIMD Full-Width AVX512",
-    "simd_avx512"              : "SIMD AVX512",
-    "simd_avx512_scalars"      : "SIMD AVX512 (scalars)",
-    "simd_narrow_width_neon"   : "SIMD Narrow-Width Neon",
-    "simd_full_width_neon"     : "SIMD Full-Width Neon",
-    "simd_neon"                : "SIMD Neon",
-    "simd_neon_scalars"        : "SIMD Neon (scalars)",
+    "bytewise_scalar"                   : "Bytewise scalar",
+    "rolling_scalar"                    : "Rolling scalar",
+    "bytewise_simd_narrow_width_sse2"   : "Bytewise SIMD Narrow-Width SSE2",
+    "bytewise_simd_full_width_sse2"     : "Bytewise SIMD Full-Width SSE2",
+    "bytewise_simd_sse2"                : "Bytewise SIMD SSE2",
+    "bytewise_simd_sse2_scalars"        : "Bytewise SIMD SSE2 (scalars)",
+    "bytewise_simd_narrow_width_avx2"   : "Bytewise SIMD Narrow-Width AVX2",
+    "bytewise_simd_full_width_avx2"     : "Bytewise SIMD Full-Width AVX2",
+    "rolling_avx2"                      : "Rolling AVX2",
+    "bytewise_simd_avx2"                : "Bytewise SIMD AVX2",
+    "bytewise_simd_avx2_scalars"        : "Bytewise SIMD AVX2 (scalars)",
+    "bytewise_simd_narrow_width_avx512" : "Bytewise SIMD Narrow-Width AVX512",
+    "bytewise_simd_full_width_avx512"   : "Bytewise SIMD Full-Width AVX512",
+    "bytewise_simd_avx512"              : "Bytewise SIMD AVX512",
+    "bytewise_simd_avx512_scalars"      : "Bytewise SIMD AVX512 (scalars)",
+    "bytewise_simd_narrow_width_neon"   : "Bytewise SIMD Narrow-Width Neon",
+    "bytewise_simd_full_width_neon"     : "Bytewise SIMD Full-Width Neon",
+    "bytewise_simd_neon"                : "Bytewise SIMD Neon",
+    "bytewise_simd_neon_scalars"        : "Bytewise SIMD Neon (scalars)",
+    "bytewise_simd_narrow_width_scalar" : "Bytewise SIMD Narrow-Width scalar",
+    "bytewise_simd_full_width_scalar"   : "Bytewise SIMD Full-Width scalar",
+    "bytewise_simd_scalar"              : "Bytewise SIMD scalar",
+    "bytewise_simd_scalar_scalars"      : "Bytewise SIMD scalar (scalars)",
 }
+
+
+def _register_spaced_labels():
+    """Labels of the spaced k-mer variants: the algorithm and technique of their loop, then the
+    bit extraction of the mask, as labeled for the bit extraction suites."""
+    kernels = {"butterfly_table": "Butterfly Table", "block_table": "Block Table"}
+    for algorithm, words in [("rolling", "Rolling"), ("bytewise", "Bytewise")]:
+        for extractor in ["pext", "bitloop", "byte_table", "block_table", "block_table_unrolled2",
+                          "block_table_unrolled4", "block_table_unrolled8", "butterfly_table"]:
+            BENCHMARK_RENAMES[f"{algorithm}_scalar_{extractor}"] = (
+                f"{words} scalar, {BENCHMARK_RENAMES[extractor]}"
+            )
+        for form in ["vectors", "scalars"]:
+            BENCHMARK_RENAMES[f"{algorithm}_simd_pext_{form}"] = f"{words} SIMD, PEXT ({form})"
+            for kernel, kernel_label in kernels.items():
+                for arch in ["sse2", "avx2", "avx512", "neon", "scalar"]:
+                    arch_label = {"neon": "Neon", "scalar": "scalar"}.get(arch, arch.upper())
+                    BENCHMARK_RENAMES[f"{algorithm}_simd_{kernel}_{arch}_{form}"] = (
+                        f"{words} SIMD, {kernel_label} {arch_label} ({form})"
+                    )
+
+
+_register_spaced_labels()
 
 # "Reduced" names for the main manuscript, to keep it simple.
 BENCHMARK_RENAMES_REDUCED = {
     # Kmer extract
-    "chunked_assume_valid" : "Assume valid",
 
     # Kmer spaced
-    "naive"                 : "Naive",
-    "pext"                  : "PEXT",
-    "butterfly_table"       : "Butterfly Table",
+    "naive"                           : "Naive",
+    "pext"                            : "PEXT",
+    "rolling_scalar_pext"             : "PEXT",
+    "bytewise_scalar_pext"            : "PEXT",
+    "pext_scalar"                     : "PEXT",
+    "butterfly_table"                 : "Butterfly Table",
+    "rolling_scalar_butterfly_table"  : "Butterfly Table",
+    "bytewise_scalar_butterfly_table" : "Butterfly Table",
 
-    "simd_butterfly_table_sse2_vectors"   : "SIMD SSE2 (vectors)",
-    "simd_butterfly_table_sse2_scalars"   : "SIMD SSE2 (scalars)",
-    "simd_butterfly_table_avx2_vectors"   : "SIMD AVX2 (vectors)",
-    "simd_butterfly_table_avx2_scalars"   : "SIMD AVX2 (scalars)",
-    "simd_butterfly_table_avx512_vectors" : "SIMD AVX512 (vectors)",
-    "simd_butterfly_table_avx512_scalars" : "SIMD AVX512 (scalars)",
-    "simd_butterfly_table_neon_vectors"   : "SIMD Neon (vectors)",
-    "simd_butterfly_table_neon_scalars"   : "SIMD Neon (scalars)",
+    "rolling_simd_butterfly_table_sse2_vectors"    : "SIMD SSE2 (vectors)",
+    "bytewise_simd_butterfly_table_sse2_vectors"   : "SIMD SSE2 (vectors)",
+    "rolling_simd_butterfly_table_sse2_scalars"    : "SIMD SSE2 (scalars)",
+    "bytewise_simd_butterfly_table_sse2_scalars"   : "SIMD SSE2 (scalars)",
+    "rolling_simd_butterfly_table_avx2_vectors"    : "SIMD AVX2 (vectors)",
+    "bytewise_simd_butterfly_table_avx2_vectors"   : "SIMD AVX2 (vectors)",
+    "rolling_simd_butterfly_table_avx2_scalars"    : "SIMD AVX2 (scalars)",
+    "bytewise_simd_butterfly_table_avx2_scalars"   : "SIMD AVX2 (scalars)",
+    "rolling_simd_butterfly_table_avx512_vectors"  : "SIMD AVX512 (vectors)",
+    "bytewise_simd_butterfly_table_avx512_vectors" : "SIMD AVX512 (vectors)",
+    "rolling_simd_butterfly_table_avx512_scalars"  : "SIMD AVX512 (scalars)",
+    "bytewise_simd_butterfly_table_avx512_scalars" : "SIMD AVX512 (scalars)",
+    "rolling_simd_butterfly_table_neon_vectors"    : "SIMD Neon (vectors)",
+    "bytewise_simd_butterfly_table_neon_vectors"   : "SIMD Neon (vectors)",
+    "rolling_simd_butterfly_table_neon_scalars"    : "SIMD Neon (scalars)",
+    "bytewise_simd_butterfly_table_neon_scalars"   : "SIMD Neon (scalars)",
 
     # Kmer extract packed
-    "aligned"     : "Scalar",
-    "simd_sse2"   : "SIMD SSE2",
-    "simd_avx2"   : "SIMD AVX2",
-    "simd_avx512" : "SIMD AVX512",
-    "simd_neon"   : "SIMD Neon",
+    "bytewise_scalar"      : "Scalar",
+    "bytewise_simd_sse2"   : "SIMD SSE2",
+    "rolling_avx2"         : "SIMD AVX2",
+    "bytewise_simd_avx2"   : "SIMD AVX2",
+    "bytewise_simd_avx512" : "SIMD AVX512",
+    "bytewise_simd_neon"   : "SIMD Neon",
 }
 
 # Stable colors for each implementation / benchmark
 BENCHMARK_COLORS = {
     # Bit extract implementations
-    "naive"                 : "#23628f",
-    "pext"                  : "#5F5F5F",
-    "bitloop"               : "#47a1e2",
-    "split32"               : "#ff7f0e",
-    "byte_table"            : "#904ce9",
-    "block_table"           : "#a1d99b",
-    "block_table_unrolled2" : "#74c476",
-    "block_table_unrolled4" : "#31a354",
-    "block_table_unrolled8" : "#006d2c",
-    "butterfly_table"       : "#BB2F98",
-    "instlatx"              : "#000000",
-    "zp7"                   : "#000000",
+    "naive"                                 : "#23628f",
+    "pext"                                  : "#5F5F5F",
+    "rolling_scalar_pext"                   : "#5F5F5F",
+    "bytewise_scalar_pext"                  : "#5F5F5F",
+    "pext_scalar"                           : "#5F5F5F",
+    "bitloop"                               : "#47a1e2",
+    "rolling_scalar_bitloop"                : "#47a1e2",
+    "bytewise_scalar_bitloop"               : "#47a1e2",
+    "split32"                               : "#ff7f0e",
+    "byte_table"                            : "#904ce9",
+    "rolling_scalar_byte_table"             : "#904ce9",
+    "bytewise_scalar_byte_table"            : "#904ce9",
+    "block_table"                           : "#a1d99b",
+    "rolling_scalar_block_table"            : "#a1d99b",
+    "bytewise_scalar_block_table"           : "#a1d99b",
+    "block_table_unrolled2"                 : "#74c476",
+    "rolling_scalar_block_table_unrolled2"  : "#74c476",
+    "bytewise_scalar_block_table_unrolled2" : "#74c476",
+    "block_table_unrolled4"                 : "#31a354",
+    "rolling_scalar_block_table_unrolled4"  : "#31a354",
+    "bytewise_scalar_block_table_unrolled4" : "#31a354",
+    "block_table_unrolled8"                 : "#006d2c",
+    "rolling_scalar_block_table_unrolled8"  : "#006d2c",
+    "bytewise_scalar_block_table_unrolled8" : "#006d2c",
+    "butterfly_table"                       : "#BB2F98",
+    "rolling_scalar_butterfly_table"        : "#BB2F98",
+    "bytewise_scalar_butterfly_table"       : "#BB2F98",
+    "instlatx"                              : "#000000",
+    "zp7"                                   : "#000000",
 
-    "ascii_re"             : "#3C5BBE",
-    "ascii_shift"          : "#3C5BBE",
-    "ascii_validate"       : "#3C5BBE",
-    "ascii_assume_valid"   : "#3C5BBE",
-    "ifs_re"               : "#E9C256",
-    "ifs_shift"            : "#E9C256",
-    "switch_re"            : "#C53939",
-    "switch_shift"         : "#C53939",
-    "table_re"             : "#6AC459",
-    "table_shift"          : "#6AC459",
-    "chunked_assume_valid" : "#000000",
-    "pack_then_extract"    : "#7F7F7F",
+    "reextract_scalar_ascii"    : "#3C5BBE",
+    "rolling_scalar_ascii"      : "#3C5BBE",
+    "ascii_checked"             : "#3C5BBE",
+    "ascii_unchecked"           : "#3C5BBE",
+    "reextract_scalar_ifs"      : "#E9C256",
+    "rolling_scalar_ifs"        : "#E9C256",
+    "reextract_scalar_switch"   : "#C53939",
+    "rolling_scalar_switch"     : "#C53939",
+    "reextract_scalar_table"    : "#6AC459",
+    "rolling_scalar_table"      : "#6AC459",
+    "pack_then_bytewise_scalar" : "#7F7F7F",
 
 
     # Kmer spaced, from text and from packed sequences. scalars use a lighter tint of the vectors
     # color.
-    "simd_butterfly_table_sse2_vectors"   : "#BB2F98",
-    "simd_butterfly_table_sse2_scalars"   : "#E6A8D4",
-    "simd_block_table_sse2_vectors"       : "#006d2c",
-    "simd_block_table_sse2_scalars"       : "#74c476",
-    "simd_butterfly_table_avx2_vectors"   : "#BB2F98",
-    "simd_butterfly_table_avx2_scalars"   : "#E6A8D4",
-    "simd_block_table_avx2_vectors"       : "#006d2c",
-    "simd_block_table_avx2_scalars"       : "#74c476",
-    "simd_butterfly_table_avx512_vectors" : "#BB2F98",
-    "simd_butterfly_table_avx512_scalars" : "#E6A8D4",
-    "simd_block_table_avx512_vectors"     : "#006d2c",
-    "simd_block_table_avx512_scalars"     : "#74c476",
-    "simd_butterfly_table_neon_vectors"   : "#BB2F98",
-    "simd_butterfly_table_neon_scalars"   : "#E6A8D4",
-    "simd_block_table_neon_vectors"       : "#006d2c",
-    "simd_block_table_neon_scalars"       : "#74c476",
-    "simd_pext_vectors"                   : "#5F5F5F",
-    "simd_pext_scalars"                   : "#A8A8A8",
-    "simd_butterfly_table_scalar_vectors" : "#BB2F98",
-    "simd_butterfly_table_scalar_scalars" : "#E6A8D4",
-    "simd_block_table_scalar_vectors"     : "#006d2c",
-    "simd_block_table_scalar_scalars"     : "#74c476",
+    "rolling_simd_butterfly_table_sse2_vectors"    : "#BB2F98",
+    "bytewise_simd_butterfly_table_sse2_vectors"   : "#BB2F98",
+    "rolling_simd_butterfly_table_sse2_scalars"    : "#E6A8D4",
+    "bytewise_simd_butterfly_table_sse2_scalars"   : "#E6A8D4",
+    "rolling_simd_block_table_sse2_vectors"        : "#006d2c",
+    "bytewise_simd_block_table_sse2_vectors"       : "#006d2c",
+    "rolling_simd_block_table_sse2_scalars"        : "#74c476",
+    "bytewise_simd_block_table_sse2_scalars"       : "#74c476",
+    "rolling_simd_butterfly_table_avx2_vectors"    : "#BB2F98",
+    "bytewise_simd_butterfly_table_avx2_vectors"   : "#BB2F98",
+    "rolling_simd_butterfly_table_avx2_scalars"    : "#E6A8D4",
+    "bytewise_simd_butterfly_table_avx2_scalars"   : "#E6A8D4",
+    "rolling_simd_block_table_avx2_vectors"        : "#006d2c",
+    "bytewise_simd_block_table_avx2_vectors"       : "#006d2c",
+    "rolling_simd_block_table_avx2_scalars"        : "#74c476",
+    "bytewise_simd_block_table_avx2_scalars"       : "#74c476",
+    "rolling_simd_butterfly_table_avx512_vectors"  : "#BB2F98",
+    "bytewise_simd_butterfly_table_avx512_vectors" : "#BB2F98",
+    "rolling_simd_butterfly_table_avx512_scalars"  : "#E6A8D4",
+    "bytewise_simd_butterfly_table_avx512_scalars" : "#E6A8D4",
+    "rolling_simd_block_table_avx512_vectors"      : "#006d2c",
+    "bytewise_simd_block_table_avx512_vectors"     : "#006d2c",
+    "rolling_simd_block_table_avx512_scalars"      : "#74c476",
+    "bytewise_simd_block_table_avx512_scalars"     : "#74c476",
+    "rolling_simd_butterfly_table_neon_vectors"    : "#BB2F98",
+    "bytewise_simd_butterfly_table_neon_vectors"   : "#BB2F98",
+    "rolling_simd_butterfly_table_neon_scalars"    : "#E6A8D4",
+    "bytewise_simd_butterfly_table_neon_scalars"   : "#E6A8D4",
+    "rolling_simd_block_table_neon_vectors"        : "#006d2c",
+    "bytewise_simd_block_table_neon_vectors"       : "#006d2c",
+    "rolling_simd_block_table_neon_scalars"        : "#74c476",
+    "bytewise_simd_block_table_neon_scalars"       : "#74c476",
+    "rolling_simd_pext_vectors"                    : "#5F5F5F",
+    "bytewise_simd_pext_vectors"                   : "#5F5F5F",
+    "rolling_simd_pext_scalars"                    : "#A8A8A8",
+    "bytewise_simd_pext_scalars"                   : "#A8A8A8",
+    "rolling_simd_butterfly_table_scalar_vectors"  : "#BB2F98",
+    "bytewise_simd_butterfly_table_scalar_vectors" : "#BB2F98",
+    "rolling_simd_butterfly_table_scalar_scalars"  : "#E6A8D4",
+    "bytewise_simd_butterfly_table_scalar_scalars" : "#E6A8D4",
+    "rolling_simd_block_table_scalar_vectors"      : "#006d2c",
+    "bytewise_simd_block_table_scalar_vectors"     : "#006d2c",
+    "rolling_simd_block_table_scalar_scalars"      : "#74c476",
+    "bytewise_simd_block_table_scalar_scalars"     : "#74c476",
 }
 
 BENCHMARK_LINESTYLES = {
     # Extract / seq enc
-    "ascii_re"             : "dashed",
-    "ascii_shift"          : "solid",
-    "ascii_validate"       : "dashed",
-    "ascii_assume_valid"   : "solid",
-    "ifs_re"               : "dashed",
-    "ifs_shift"            : "solid",
-    "switch_re"            : "dashed",
-    "switch_shift"         : "solid",
-    "table_re"             : "dashed",
-    "table_shift"          : "solid",
-    "chunked_assume_valid" : "solid",
-    "pack_then_extract"    : "dashed",
+    "reextract_scalar_ascii"    : "dashed",
+    "rolling_scalar_ascii"      : "solid",
+    "ascii_checked"             : "dashed",
+    "ascii_unchecked"           : "solid",
+    "reextract_scalar_ifs"      : "dashed",
+    "rolling_scalar_ifs"        : "solid",
+    "reextract_scalar_switch"   : "dashed",
+    "rolling_scalar_switch"     : "solid",
+    "reextract_scalar_table"    : "dashed",
+    "rolling_scalar_table"      : "solid",
+    "pack_then_bytewise_scalar" : "dashed",
 }
 
 # Stable line order for plot consistency
 BENCHMARK_ORDER = [
 
     # Extract / seq enc
-    "ifs_re",
-    "ifs_shift",
-    "switch_re",
-    "switch_shift",
-    "ascii_re",
-    "ascii_shift",
-    "table_re",
-    "table_shift",
-    "pack_then_extract",
-    "chunked_assume_valid",
+    "reextract_scalar_ifs",
+    "rolling_scalar_ifs",
+    "reextract_scalar_switch",
+    "rolling_scalar_switch",
+    "reextract_scalar_ascii",
+    "rolling_scalar_ascii",
+    "reextract_scalar_table",
+    "rolling_scalar_table",
+    "pack_then_bytewise_scalar",
     "ifs",
     "switch",
-    "ascii_validate",
-    "ascii_assume_valid",
+    "ascii_checked",
+    "ascii_unchecked",
     "table",
 
     # Kmer spaced, also used for bit extract order
     "naive",
     "pext",
+    "rolling_scalar_pext",
+    "bytewise_scalar_pext",
+    "pext_scalar",
     "bitloop",
+    "rolling_scalar_bitloop",
+    "bytewise_scalar_bitloop",
     # "split32",
     "byte_table",
+    "rolling_scalar_byte_table",
+    "bytewise_scalar_byte_table",
     "butterfly_table",
+    "rolling_scalar_butterfly_table",
+    "bytewise_scalar_butterfly_table",
     "block_table",
+    "rolling_scalar_block_table",
+    "bytewise_scalar_block_table",
     "block_table_unrolled1",
     "block_table_unrolled2",
+    "rolling_scalar_block_table_unrolled2",
+    "bytewise_scalar_block_table_unrolled2",
     "block_table_unrolled4",
+    "rolling_scalar_block_table_unrolled4",
+    "bytewise_scalar_block_table_unrolled4",
     "block_table_unrolled8",
+    "rolling_scalar_block_table_unrolled8",
+    "bytewise_scalar_block_table_unrolled8",
     # "instlatx",
     # "zp7",
 
     # Kmer spaced, from text and from packed sequences
-    "simd_pext_vectors",
-    "simd_pext_scalars",
-    "simd_butterfly_table_scalar_vectors",
-    "simd_butterfly_table_scalar_scalars",
-    "simd_block_table_scalar_vectors",
-    "simd_block_table_scalar_scalars",
-    "simd_butterfly_table_sse2_vectors",
-    "simd_butterfly_table_sse2_scalars",
-    "simd_block_table_sse2_vectors",
-    "simd_block_table_sse2_scalars",
-    "simd_butterfly_table_avx2_vectors",
-    "simd_butterfly_table_avx2_scalars",
-    "simd_block_table_avx2_vectors",
-    "simd_block_table_avx2_scalars",
-    "simd_butterfly_table_avx512_vectors",
-    "simd_butterfly_table_avx512_scalars",
-    "simd_block_table_avx512_vectors",
-    "simd_block_table_avx512_scalars",
-    "simd_butterfly_table_neon_vectors",
-    "simd_butterfly_table_neon_scalars",
-    "simd_block_table_neon_vectors",
-    "simd_block_table_neon_scalars",
+    "rolling_simd_pext_vectors",
+    "bytewise_simd_pext_vectors",
+    "rolling_simd_pext_scalars",
+    "bytewise_simd_pext_scalars",
+    "rolling_simd_butterfly_table_scalar_vectors",
+    "bytewise_simd_butterfly_table_scalar_vectors",
+    "rolling_simd_butterfly_table_scalar_scalars",
+    "bytewise_simd_butterfly_table_scalar_scalars",
+    "rolling_simd_block_table_scalar_vectors",
+    "bytewise_simd_block_table_scalar_vectors",
+    "rolling_simd_block_table_scalar_scalars",
+    "bytewise_simd_block_table_scalar_scalars",
+    "rolling_simd_butterfly_table_sse2_vectors",
+    "bytewise_simd_butterfly_table_sse2_vectors",
+    "rolling_simd_butterfly_table_sse2_scalars",
+    "bytewise_simd_butterfly_table_sse2_scalars",
+    "rolling_simd_block_table_sse2_vectors",
+    "bytewise_simd_block_table_sse2_vectors",
+    "rolling_simd_block_table_sse2_scalars",
+    "bytewise_simd_block_table_sse2_scalars",
+    "rolling_simd_butterfly_table_avx2_vectors",
+    "bytewise_simd_butterfly_table_avx2_vectors",
+    "rolling_simd_butterfly_table_avx2_scalars",
+    "bytewise_simd_butterfly_table_avx2_scalars",
+    "rolling_simd_block_table_avx2_vectors",
+    "bytewise_simd_block_table_avx2_vectors",
+    "rolling_simd_block_table_avx2_scalars",
+    "bytewise_simd_block_table_avx2_scalars",
+    "rolling_simd_butterfly_table_avx512_vectors",
+    "bytewise_simd_butterfly_table_avx512_vectors",
+    "rolling_simd_butterfly_table_avx512_scalars",
+    "bytewise_simd_butterfly_table_avx512_scalars",
+    "rolling_simd_block_table_avx512_vectors",
+    "bytewise_simd_block_table_avx512_vectors",
+    "rolling_simd_block_table_avx512_scalars",
+    "bytewise_simd_block_table_avx512_scalars",
+    "rolling_simd_butterfly_table_neon_vectors",
+    "bytewise_simd_butterfly_table_neon_vectors",
+    "rolling_simd_butterfly_table_neon_scalars",
+    "bytewise_simd_butterfly_table_neon_scalars",
+    "rolling_simd_block_table_neon_vectors",
+    "bytewise_simd_block_table_neon_vectors",
+    "rolling_simd_block_table_neon_scalars",
+    "bytewise_simd_block_table_neon_scalars",
 ]
 
-# Stable order and colors for the kmer_extract_packed benchmark family (packed.hpp), kept as its
+# Stable order and colors for the kmer_extract_packed_* benchmark family (packed_*.hpp), kept as its
 # own dict rather than folded into BENCHMARK_COLORS/BENCHMARK_ORDER above since it's a distinct
 # naming scheme. Direct narrow-width/full-width rows are retained for code-generation comparisons;
 # dispatchers are the user-facing entry points.
 PACKED_KMER_VARIANT_ORDER = [
-    "aligned",
-    "simd_narrow_width_sse2",
-    "simd_full_width_sse2",
-    "simd_sse2",
-    "simd_narrow_width_avx2",
-    "simd_full_width_avx2",
-    "simd_avx2",
-    "simd_narrow_width_avx512",
-    "simd_full_width_avx512",
-    "simd_avx512",
-    "simd_narrow_width_neon",
-    "simd_full_width_neon",
-    "simd_neon",
-    "rolling",
+    "bytewise_scalar",
+    "bytewise_simd_narrow_width_sse2",
+    "bytewise_simd_full_width_sse2",
+    "bytewise_simd_sse2",
+    "bytewise_simd_narrow_width_avx2",
+    "bytewise_simd_full_width_avx2",
+    "rolling_avx2",
+    "bytewise_simd_avx2",
+    "bytewise_simd_narrow_width_avx512",
+    "bytewise_simd_full_width_avx512",
+    "bytewise_simd_avx512",
+    "bytewise_simd_narrow_width_neon",
+    "bytewise_simd_full_width_neon",
+    "bytewise_simd_neon",
+    "bytewise_simd_narrow_width_scalar",
+    "bytewise_simd_full_width_scalar",
+    "bytewise_simd_scalar",
+    "rolling_scalar",
 ]
 
 PACKED_KMER_VARIANT_COLORS = {
-    "aligned" : "#107D84",
-    "rolling" : "#636363",  # grey
+    "bytewise_scalar" : "#107D84",
+    "rolling_scalar" : "#636363",  # grey
     # SSE2: purple shades, ordered narrow-width -> full-width -> dispatcher.
-    "simd_narrow_width_sse2" : "#c5b0d5",
-    "simd_full_width_sse2" : "#9467bd",
-    "simd_sse2" : "#5C338A",
+    "bytewise_simd_narrow_width_sse2" : "#c5b0d5",
+    "bytewise_simd_full_width_sse2" : "#9467bd",
+    "bytewise_simd_sse2" : "#5C338A",
     # AVX2: green shades, ordered narrow-width -> full-width -> dispatcher.
-    "simd_narrow_width_avx2" : "#78c679",
-    "simd_full_width_avx2" : "#2ca02c",
-    "simd_avx2" : "#207542",
+    "bytewise_simd_narrow_width_avx2" : "#78c679",
+    "bytewise_simd_full_width_avx2" : "#2ca02c",
+    "rolling_avx2" : "#207542",
+    "bytewise_simd_avx2" : "#207542",
     # AVX-512: red shades, ordered narrow-width -> full-width -> dispatcher.
-    "simd_narrow_width_avx512" : "#fb6a4a",
-    "simd_full_width_avx512" : "#d62728",
-    "simd_avx512" : "#a23236",
+    "bytewise_simd_narrow_width_avx512" : "#fb6a4a",
+    "bytewise_simd_full_width_avx512" : "#d62728",
+    "bytewise_simd_avx512" : "#a23236",
     # NEON: blue shades, ordered narrow-width -> full-width -> dispatcher.
-    "simd_narrow_width_neon" : "#9ecae1",
-    "simd_full_width_neon" : "#6baed6",
-    "simd_neon" : "#23609d",
+    "bytewise_simd_narrow_width_neon" : "#9ecae1",
+    "bytewise_simd_full_width_neon" : "#6baed6",
+    "bytewise_simd_neon" : "#23609d",
+    # SimdScalar: brown shades, ordered narrow-width -> full-width -> dispatcher.
+    "bytewise_simd_narrow_width_scalar" : "#dfc27d",
+    "bytewise_simd_full_width_scalar" : "#bf812d",
+    "bytewise_simd_scalar" : "#8c510a",
 }
 
 # Headline subset of PACKED_KMER_VARIANT_ORDER: the scalar baseline plus each ISA's public
@@ -597,11 +801,12 @@ PACKED_KMER_VARIANT_COLORS = {
 # dispatcher row: it *is* whichever of the two applies at that k. Used as the default
 # (non---extended) comparison view.
 PACKED_KMER_VARIANT_ORDER_REDUCED = [
-    "aligned",
-    "simd_sse2",
-    "simd_avx2",
-    "simd_avx512",
-    "simd_neon",
+    "bytewise_scalar",
+    "bytewise_simd_sse2",
+    "rolling_avx2",
+    "bytewise_simd_avx2",
+    "bytewise_simd_avx512",
+    "bytewise_simd_neon",
 ]
 
 # Fold the packed k-mer variant names into the generic BENCHMARKS_KEEP*/BENCHMARK_ORDER lists too,
@@ -622,7 +827,7 @@ BENCHMARKS_KEEP_REDUCED += PACKED_KMER_VARIANT_ORDER_REDUCED
 # Benchmark name prefixes of the external reference implementations, see benchmarks/external.
 EXTERNAL_PREFIXES = ("fastdna_", "cute_")
 
-SEQ_PACK_ORDER = [
+SEQUENCE_PACK_ORDER = [
     "fastdna_lut",
     "fastdna_pext_ordered",
     "fastdna_pext_unordered",
@@ -630,7 +835,7 @@ SEQ_PACK_ORDER = [
     "fastdna_pext_unordered_unroll4",
     "cute_mul",
     "cute_movemask",
-    "pext",
+    "pext_scalar",
     "butterfly_scalar", "butterfly_sse2", "butterfly_avx2", "butterfly_avx512", "butterfly_neon",
     "fold_scalar", "fold_sse2", "fold_avx2", "fold_avx512", "fold_neon",
     "direct_scalar", "direct_sse2", "direct_double_sse2",
@@ -638,7 +843,7 @@ SEQ_PACK_ORDER = [
 ]
 
 # Explicit focused selection, easy to trim after collecting measurements.
-SEQ_PACK_FOCUSED = [
+SEQUENCE_PACK_FOCUSED = [
     "fastdna_lut",
     "fastdna_pext_ordered",
     "fastdna_pext_unordered",
@@ -663,7 +868,7 @@ BENCHMARK_RENAMES.update({
     "butterfly": "Butterfly scalar (legacy)",
 })
 
-SEQ_PACK_COLORS = {
+SEQUENCE_PACK_COLORS = {
     "fastdna_lut": "#D9A066",
     "fastdna_pext_ordered": "#A65D23",
     "fastdna_pext_unordered": "#FFBB78",
@@ -671,12 +876,12 @@ SEQ_PACK_COLORS = {
     "fastdna_pext_unordered_unroll4": "#B55B0B",
     "cute_mul": "#9E9AC8",
     "cute_movemask": "#6A51A3",
-    "pext": BENCHMARK_COLORS["pext"],
+    "pext_scalar": BENCHMARK_COLORS["pext"],
     "butterfly": "#BB2F98",
 }
 
 
-def _register_seq_pack_labels():
+def _register_sequence_pack_labels():
     """Keep architecture labels consistent without exporting temporary loop variables."""
     for family, label, color in [
         ("butterfly", "Butterfly", "#BB2F98"),
@@ -687,15 +892,15 @@ def _register_seq_pack_labels():
             name = f"{family}_{arch}"
             arch_label = "scalar" if arch == "scalar" else arch.upper()
             BENCHMARK_RENAMES[name] = f"{label} {arch_label}"
-            SEQ_PACK_COLORS[name] = color
+            SEQUENCE_PACK_COLORS[name] = color
     for arch in ["sse2", "avx2"]:
         name = f"direct_double_{arch}"
         BENCHMARK_RENAMES[name] = f"DirectDouble {arch.upper()}"
-        SEQ_PACK_COLORS[name] = "#08519C"
+        SEQUENCE_PACK_COLORS[name] = "#08519C"
 
 
-_register_seq_pack_labels()
-BENCHMARK_COLORS.update(SEQ_PACK_COLORS)
+_register_sequence_pack_labels()
+BENCHMARK_COLORS.update(SEQUENCE_PACK_COLORS)
 
 
 # -----------------------------------------------------------------------------
@@ -707,21 +912,29 @@ BENCHMARK_COLORS.update(SEQ_PACK_COLORS)
 # not listed here (e.g. an old CSV from a removed suite, or a script that combines multiple
 # suites) fall back to the generic "ops" noun in unit_noun_for_suite() below.
 SUITE_UNIT_NOUN = {
-    "kmer_extract"        : "k-mers",
-    "kmer_extract_packed" : "k-mers",
-    "kmer_extract_packed_checked" : "k-mers",
-    "kmer_clark"          : "k-mers",
-    "kmer_spaced_single"  : "k-mers",
-    "kmer_spaced_multi"   : "k-mers",
-    "kmer_spaced_packed_single" : "k-mers",
-    "kmer_spaced_packed_multi"  : "k-mers",
-    "kmer_spaced_packed_checked_single" : "k-mers",
-    "kmer_spaced_packed_checked_multi"  : "k-mers",
-    "char_encoder"        : "bases",
-    "seq_pack"            : "bases",
-    "seq_pack_validity"   : "bases",
-    "bit_extract_weights" : "ops",
-    "bit_extract_blocks"  : "ops",
+    "kmer_extract_ascii_checked"                  : "k-mers",
+    "kmer_extract_ascii_unchecked"                : "k-mers",
+    "kmer_extract_packed_unchecked"               : "k-mers",
+    "kmer_extract_packed_checked"                 : "k-mers",
+    "kmer_clark"                                  : "k-mers",
+    "spaced_kmer_extract_ascii_checked_single"    : "k-mers",
+    "spaced_kmer_extract_ascii_checked_multi"     : "k-mers",
+    "spaced_kmer_extract_packed_unchecked_single" : "k-mers",
+    "spaced_kmer_extract_packed_unchecked_multi"  : "k-mers",
+    "spaced_kmer_extract_packed_checked_single"   : "k-mers",
+    "spaced_kmer_extract_packed_checked_multi"    : "k-mers",
+    "char_encoder"                                : "bases",
+    "sequence_pack_unchecked"                     : "bases",
+    "sequence_pack_checked"                       : "bases",
+    "bit_extract_weights"                         : "ops",
+    "bit_extract_blocks"                          : "ops",
+}
+
+# The singular of each noun, for the time per unit: "Time per k-mer [ns]".
+UNIT_NOUN_SINGULAR = {
+    "k-mers" : "k-mer",
+    "bases"  : "base",
+    "ops"    : "operation",
 }
 
 # Fixed divisor for throughput display: always giga-<unit>/s, even for the couple of suites whose
@@ -735,7 +948,11 @@ def unit_noun_for_suite(suite: str | None) -> str:
     to the generic "ops" for anything not in SUITE_UNIT_NOUN (unknown/missing suite)."""
     if suite is None:
         return "ops"
-    return SUITE_UNIT_NOUN.get(suite, "ops")
+    if suite in SUITE_UNIT_NOUN:
+        return SUITE_UNIT_NOUN[suite]
+    # The name of a pair of suites without the check, see single_suite().
+    nouns = {n for s, n in SUITE_UNIT_NOUN.items() if without_check(s) == suite}
+    return nouns.pop() if len(nouns) == 1 else "ops"
 
 
 def ns_per_op_to_throughput(ns_per_op):
@@ -755,19 +972,29 @@ def convert_for_display(ns_per_op, unit: str):
 
 def single_suite(df, suite: str | None = None) -> str | None:
     """Return the suite of a plot, for its labels: `suite` if given, else the only suite in the
-    rows of `df`, else None, as for plots of a single result file without --suite."""
+    rows of `df`, else None, as for plots of a single result file without --suite. The checked and
+    unchecked suite of a pair, read together, count as one, under the name of both without the
+    check, such as "kmer_extract_ascii"."""
     if suite is not None:
         return suite
-    suites = df["suite"].dropna().unique()
-    return str(suites[0]) if len(suites) == 1 else None
+    suites = {str(s) for s in df["suite"].dropna().unique()}
+    if len(suites) == 1:
+        return suites.pop()
+    shared = {without_check(s) for s in suites}
+    return shared.pop() if len(shared) == 1 else None
+
+
+def without_check(suite: str) -> str:
+    """The name of a suite without its check, which its checked and unchecked form share."""
+    return re.sub(r"_(un)?checked(?=_|$)", "", suite)
 
 
 def ylabel_for_unit(unit: str, suite: str | None = None) -> str:
-    """Y-axis label for the selected --unit: "Time per operation [ns]" for "ns", or a suite-aware
-    "Throughput [G <noun>/s]" for "ops"."""
-    if unit == "ns":
-        return "Time per operation [ns]"
+    """Y-axis label for the selected --unit, both with the noun of the suite: "Time per <noun> [ns]"
+    for "ns", such as "Time per k-mer [ns]", or "Throughput [G <noun>/s]" for "ops"."""
     noun = unit_noun_for_suite(suite)
+    if unit == "ns":
+        return f"Time per {UNIT_NOUN_SINGULAR.get(noun, noun)} [ns]"
     return f"Throughput [{THROUGHPUT_PREFIX} {noun}/s]"
 
 
@@ -866,15 +1093,17 @@ def plot_axis_grid(
     outpath, unit, scale, y_min, y_max, title=None, xtick_label=lambda t: t,
 ):
     """
-    Grid of grouped bar charts, one panel per CPU/compiler (one CSV each): techniques on the
-    x-axis, one bar per "axis" value within each technique, e.g. the vectors and single k-mers of a
-    SIMD extraction, or several (encoding, layout) combinations.
+    Grid of grouped bar charts, one panel per CPU/compiler (one CSV each, or a list of the CSVs of
+    one directory, which are read together): techniques on the x-axis, one bar per "axis" value
+    within each technique, e.g. the vectors and single k-mers of a SIMD extraction, or several
+    (encoding, layout) combinations.
 
-    `load_pivot(csv_path, unit)` returns (suite, pivot), with pivot index = technique, columns =
-    axis values in display order, values in the display unit. `axis_labels`/`axis_colors` map each
-    axis value to its legend label and bar color; `xtick_label` maps a technique to its tick label.
+    `load_pivot(csv_path, unit)` returns (suite, pivot), for one entry of `csv_paths`, with pivot
+    index = technique, columns = axis values in display order, values in the display unit.
+    `axis_labels`/`axis_colors` map each axis value to its legend label and bar color;
+    `xtick_label` maps a technique to its tick label.
     """
-    entries = [(p, platform_from_csv_path(p)) for p in csv_paths]
+    entries = [(p, platform_from_csv_path(p if isinstance(p, str) else p[0])) for p in csv_paths]
     entries.sort(key=lambda e: platform_compiler_sort_key(e[1]))
 
     loaded = []
@@ -890,7 +1119,8 @@ def plot_axis_grid(
     # One shared y-range across all panels, so they are directly comparable.
     all_values = np.concatenate([pivot.values.ravel() for _, _, pivot in loaded])
     axis_y_min, axis_y_max = compute_axis_limits(all_values, scale)
-    # Extra top headroom for the rotated value labels above each bar, as in plot_kmer_spaced.py.
+    # Extra top headroom for the rotated value labels above each bar, as in
+    # plot_spaced_kmer_extract.py.
     axis_y_max *= 1.3 if scale == "log" else 1.1
     if y_min is not None:
         axis_y_min = y_min
@@ -920,7 +1150,8 @@ def plot_axis_grid(
                 x + offsets[j], np.nan_to_num(vals, nan=0.0), width=bar_width,
                 label=axis_labels[axis_name], color=axis_colors[axis_name],
             )
-            # Multiplicative headroom on "log", additive on "linear", as in plot_kmer_spaced.py.
+            # Multiplicative headroom on "log", additive on "linear", as in
+            # plot_spaced_kmer_extract.py.
             for bar, val in zip(bars, vals):
                 if pd.notna(val):
                     label_y = (
