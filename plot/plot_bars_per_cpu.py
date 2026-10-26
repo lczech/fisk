@@ -31,7 +31,7 @@ Usage examples:
 
   # Restrict to rows whose "case" column (e.g. "layout=msb;k=17") matches given fields:
   python plot_bars_per_cpu.py --glob "results/*/kmer_extract_packed_unchecked.csv" \
-      --case-filter "layout=msb" --case-filter "k<=29" --reduced \
+      --case-filter "layout=msb" --case-filter "k<=29" --mode main \
       --out kmer_extract_packed_msb_narrow_width.png
 
 If --out is omitted, shows interactively.
@@ -272,20 +272,11 @@ def main(argv=None) -> None:
         help="Value for a 'case' field in rows that lack it, e.g. 'layout=msb', applied before "
              "--case-filter. Can be given multiple times.",
     )
-    ap.add_argument(
-        "--extended",
-        action="store_true",
-        help="Use BENCHMARKS_KEEP_EXTENDED instead of BENCHMARKS_KEEP",
-    )
-    ap.add_argument(
-        "--reduced",
-        action="store_true",
-        help="Use BENCHMARKS_KEEP_REDUCED instead of BENCHMARKS_KEEP",
-    )
+    add_mode_arg(ap)
     ap.add_argument(
         "--untight",
         action="store_true",
-        help="Use BENCHMARKS_KEEP_REDUCED instead of BENCHMARKS_KEEP",
+        help="Use fixed figure margins instead of a tight layout.",
     )
     ap.add_argument(
         "--no-legend",
@@ -319,10 +310,7 @@ def main(argv=None) -> None:
     #      Load the data
     # --------------------------------------
 
-    benchmarks_keep = BENCHMARKS_KEEP_EXTENDED if args.extended else BENCHMARKS_KEEP
-    benchmarks_keep = BENCHMARKS_KEEP_REDUCED if args.reduced else benchmarks_keep
-    benchmarks_keep = args.benchmark or benchmarks_keep
-    plot_benchmarks = set(benchmarks_keep)
+    plot_benchmarks = set(args.benchmark) if args.benchmark else benchmarks_for_mode(args.mode)
 
     files: list[str] = list(args.file)
     for pattern in args.glob:
@@ -558,9 +546,7 @@ def main(argv=None) -> None:
     ax.set_title(title)
     ax.set_ylabel(ylabel_for_unit(args.unit, suite))
     ax.set_xticks(x)
-    labels = [BENCHMARK_RENAMES.get(b, b) for b in benchmarks]
-    if args.reduced:
-        labels = [BENCHMARK_RENAMES_REDUCED.get(b, b) for b in benchmarks]
+    labels = [label_for_mode(b, args.mode) for b in benchmarks]
 
     ax.set_xticklabels(labels, rotation=45, ha="right")
 
@@ -612,11 +598,6 @@ def main(argv=None) -> None:
                 # min_val = impl[1]
                 # min_idx = impl[2]
                 # print(name, min_idx, labels[min_idx], min_val)
-
-        # Append suffix if extended mode is used
-        # if args.extended and out is not None:
-        #     root, ext = os.path.splitext(out)
-        #     out = f"{root}_ext{ext}"
 
         parent = str(Path(out).parent)
         if parent not in ("", "."):

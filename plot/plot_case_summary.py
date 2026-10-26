@@ -203,16 +203,6 @@ def main():
         help="Suite name to select (if omitted, use all suites together)",
     )
     ap.add_argument(
-        "--extended",
-        action="store_true",
-        help="Use extended benchmark set (BENCHMARKS_KEEP_EXTENDED) and append _ext to output filename",
-    )
-    ap.add_argument(
-        "--reduced",
-        action="store_true",
-        help="Use BENCHMARKS_KEEP_REDUCED instead of BENCHMARKS_KEEP",
-    )
-    ap.add_argument(
         "--out",
         default=None,
         help="Output image path (if omitted, show interactively)",
@@ -222,6 +212,7 @@ def main():
         default=None,
         help="Plot title override (default: suite name or generic)",
     )
+    add_mode_arg(ap)
     add_unit_scale_args(ap)
     args = ap.parse_args()
 
@@ -231,17 +222,8 @@ def main():
     suite = args.suite
     title = args.title or (suite if suite else cpu)
 
-    outpath = args.out
-    if args.extended and outpath is not None:
-        root, ext = os.path.splitext(outpath)
-        outpath = f"{root}_ext{ext}"
-    if args.reduced and outpath is not None:
-        root, ext = os.path.splitext(outpath)
-        outpath = f"{root}_red{ext}"
-    outpath = apply_unit_scale_suffix(outpath, args.unit, args.scale)
-
-    benchmarks_keep = BENCHMARKS_KEEP_EXTENDED if args.extended else BENCHMARKS_KEEP
-    benchmarks_keep = BENCHMARKS_KEEP_REDUCED if args.reduced else benchmarks_keep
+    outpath = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    benchmarks_keep = benchmarks_for_mode(args.mode)
 
     make_impl_summary_plot(
         df=df,

@@ -77,23 +77,24 @@ def _technique_forms(benchmarks):
     return result
 
 
-def load_csv(csv_path):
-    """Load one CSV, with the spaced suites restricted to MSB, see normalize_spaced_layout()."""
-    return normalize_spaced_layout(pd.read_csv(csv_path))
+def load_csv(csv_path, mode):
+    """Load one CSV, with the spaced suites restricted to MSB, see normalize_spaced_layout(), and
+    the variants of `mode`."""
+    return filter_mode(normalize_spaced_layout(pd.read_csv(csv_path)), mode)
 
 
-def has_form_rows(csv_path):
+def has_form_rows(csv_path, mode):
     """Whether a CSV has any technique in both forms; older result files do not."""
-    return bool(_technique_forms(load_csv(csv_path)["benchmark"]))
+    return bool(_technique_forms(load_csv(csv_path, mode)["benchmark"]))
 
 
-def load_technique_form_pivot(csv_path, unit):
+def load_technique_form_pivot(csv_path, unit, mode):
     """
     Load one CSV and return (suite, pivot), with pivot index = technique, columns = FORMS, values
     in the display unit. The mean over cases is taken in ns/op space, and only then converted, see
     convert_for_display().
     """
-    df = load_csv(csv_path)
+    df = load_csv(csv_path, mode)
     forms = _technique_forms(df["benchmark"])
     df = df[df["benchmark"].isin(forms.keys())].copy()
     if df.empty:
@@ -140,6 +141,7 @@ def main():
         "--title", default=None,
         help="Figure title override (default: derived from the suite name).",
     )
+    add_mode_arg(ap)
     add_unit_scale_args(ap)
     args = ap.parse_args()
 
@@ -151,7 +153,7 @@ def main():
 
     usable = []
     for path in files:
-        if has_form_rows(path):
+        if has_form_rows(path, args.mode):
             usable.append(path)
         else:
             warn(f"Skipping {path}: no techniques with both vectors and scalars")
@@ -162,7 +164,8 @@ def main():
 
     out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
     plot_axis_grid(
-        usable, load_technique_form_pivot, FORM_LABELS, FORM_COLORS,
+        usable, lambda path, unit: load_technique_form_pivot(path, unit, args.mode),
+        FORM_LABELS, FORM_COLORS,
         "SIMD extraction, vectors vs. single k-mers",
         out, args.unit, args.scale, args.y_min, args.y_max, args.title,
         xtick_label=lambda t: re.sub(r"^(rolling|bytewise)_simd_", "", t),

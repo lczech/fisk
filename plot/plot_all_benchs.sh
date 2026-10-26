@@ -85,24 +85,40 @@ run_plot() {
   "$@" &
 }
 
+# Run one plot in each of the given modes (comma-separated, see PLOT_MODES in plot_common.py), as
+# <out>_<mode>.<EXT>, with --mode and --out appended to the given command. Skipped, as run_plot(),
+# if the csv is missing.
+plot_modes() {
+  local csv="$1" modes="$2" out="$3"; shift 3
+  local mode
+  for mode in ${modes//,/ }; do
+    run_plot "$csv" "$@" --mode "$mode" --out "${out}_${mode}.${EXT}"
+  done
+}
+
 for EXT in png svg ; do
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
+    US=( --unit "$UNIT" --scale "$SCALE" )
+
 
     # Bit Extract Implementations
 
-    CSV="${DIR}/bit_extract_weights.csv"
-    run_plot "$CSV" python ./plot/plot_bit_extract_weights.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/bit_extract_weights.${EXT}"
+    for SUITE in bit_extract_weights bit_extract_blocks; do
+      CSV="${DIR}/${SUITE}.csv"
+      plot_modes "$CSV" supp,full "${DIR}/${SUITE}" \
+        python "./plot/plot_${SUITE}.py" "$CSV" "${US[@]}"
+    done
 
-    CSV="${DIR}/bit_extract_blocks.csv"
-    run_plot "$CSV" python ./plot/plot_bit_extract_blocks.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/bit_extract_blocks.${EXT}"
+
+    # Per-character encoding and CLARK, with a summary over their cases
+
+    for SUITE in char_encoder kmer_clark; do
+      CSV="${DIR}/${SUITE}.csv"
+      plot_modes "$CSV" full "${DIR}/${SUITE}_bars" \
+        python ./plot/plot_case_summary.py "$CSV" "${US[@]}"
+    done
 
 
     # Sequence Packing, without and with validity
@@ -110,241 +126,67 @@ for EXT in png svg ; do
     for SUITE in sequence_pack_unchecked sequence_pack_checked; do
       CSV="${DIR}/${SUITE}.csv"
       run_plot "$CSV" python ./plot/plot_sequence_pack.py \
-        "$CSV" --unit "$UNIT" --scale "$SCALE" --format "$EXT" \
+        "$CSV" "${US[@]}" --format "$EXT" --mode full \
         --out-dir "$DIR"
+      plot_modes "$CSV" full "${DIR}/${SUITE}_bars" \
+        python ./plot/plot_case_summary.py "$CSV" "${US[@]}"
     done
 
 
     # Kmer Extract, from ASCII: the checked and the unchecked suite in one plot
 
     CSV="${DIR}/kmer_extract_ascii_checked.csv"
-    run_plot "$CSV" python ./plot/plot_kmer_extract_ascii.py \
-      "$CSV" "${DIR}/kmer_extract_ascii_unchecked.csv" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/kmer_extract_ascii.${EXT}"
+    plot_modes "$CSV" supp,full "${DIR}/kmer_extract_ascii" \
+      python ./plot/plot_kmer_extract.py "$CSV" "${DIR}/kmer_extract_ascii_unchecked.csv" "${US[@]}"
+    for SUITE in kmer_extract_ascii_checked kmer_extract_ascii_unchecked; do
+      CSV="${DIR}/${SUITE}.csv"
+      plot_modes "$CSV" full "${DIR}/${SUITE}_bars" \
+        python ./plot/plot_case_summary.py "$CSV" "${US[@]}"
+    done
 
-    # python ./plot/plot_case_summary.py \
-    #   "${DIR}/kmer_extract_ascii_checked.csv" \
-    #   --out "${DIR}/kmer_extract_ascii_checked_bars.${EXT}"
 
-    CSV="${DIR}/kmer_extract_packed_unchecked.csv"
+    # Kmer Extract, from packed sequences, without and with validity
+
     # --y-max is unit-scale-dependent (throughput inverts by a different ratio per series, so a
     # ceiling tuned for ns/op can't just be reused for ops/s) -- 0.7 for ns/op, matching the
-    # existing tuned value; 16 for ops, matching YLIM_PACKED_REDUCED in plot_all_cpus.sh (checked
-    # against the real cross-CPU max throughput for this suite).
-    # The checked suite uses the same limit, so that the two stay comparable.
+    # existing tuned value; 16 for ops, matching YLIM_PACKED_MAIN in plot_all_cpus.sh (checked
+    # against the real cross-CPU max throughput for this suite). The checked suite uses the same
+    # limit, so that the two stay comparable. The full plots also show the slower rolling loop,
+    # and are scaled to their data.
     PACKED_Y_MAX="16"
     [[ "$UNIT" == "ns" ]] && PACKED_Y_MAX="0.7"
-    run_plot "$CSV" python ./plot/plot_kmer_extract_packed.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --y-max "$PACKED_Y_MAX" \
-      --out "${DIR}/kmer_extract_packed_unchecked.${EXT}"
+    for SUITE in kmer_extract_packed_unchecked kmer_extract_packed_checked; do
+      CSV="${DIR}/${SUITE}.csv"
+      plot_modes "$CSV" main "${DIR}/${SUITE}" \
+        python ./plot/plot_kmer_extract.py "$CSV" --layout-panels "${US[@]}" \
+        --y-max "$PACKED_Y_MAX"
+      plot_modes "$CSV" full "${DIR}/${SUITE}" \
+        python ./plot/plot_kmer_extract.py "$CSV" --layout-panels "${US[@]}"
 
-    CSV="${DIR}/kmer_extract_packed_checked.csv"
-    run_plot "$CSV" python ./plot/plot_kmer_extract_packed.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --y-max "$PACKED_Y_MAX" \
-      --out "${DIR}/kmer_extract_packed_checked.${EXT}"
-
-    # The vectors and single k-mers of the checked SIMD extraction. The cross-CPU plots of both
-    # suites are in plot_all_cpus.sh.
-    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
-      --file "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/kmer_extract_packed_checked_vectors_scalars.${EXT}"
+      # The vectors and single k-mers of the SIMD extraction. The cross-CPU plots are in
+      # plot_all_cpus.sh.
+      plot_modes "$CSV" full "${DIR}/${SUITE}_vectors_scalars" \
+        python ./plot/plot_vectors_scalars_per_cpu.py --file "$CSV" "${US[@]}"
+      plot_modes "$CSV" full "${DIR}/${SUITE}_bars" \
+        python ./plot/plot_case_summary.py "$CSV" "${US[@]}"
+    done
 
 
-    # Kmer Spaced Single
+    # Kmer Spaced, from ASCII and from packed sequences, with a single mask and with several
 
-    CSV="${DIR}/spaced_kmer_extract_ascii_checked_single.csv"
-
-    run_plot "$CSV" python ./plot/plot_spaced_kmer_extract.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_single.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
-      --file "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_single_vectors_scalars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_single_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --extended \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_single_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --reduced \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_single_bars.${EXT}"
-
-
-    # Kmer Spaced Multi
-
-    CSV="${DIR}/spaced_kmer_extract_ascii_checked_multi.csv"
-
-    run_plot "$CSV" python ./plot/plot_spaced_kmer_extract.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_multi.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
-      --file "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_multi_vectors_scalars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_multi_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --extended \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_multi_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --reduced \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_ascii_checked_multi_bars.${EXT}"
-
-
-    # Kmer Spaced Packed Single
-
-    CSV="${DIR}/spaced_kmer_extract_packed_unchecked_single.csv"
-
-    run_plot "$CSV" python ./plot/plot_spaced_kmer_extract.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_single.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
-      --file "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_single_vectors_scalars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_single_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --extended \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_single_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --reduced \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_single_bars.${EXT}"
-
-
-    # Kmer Spaced Packed Multi
-
-    CSV="${DIR}/spaced_kmer_extract_packed_unchecked_multi.csv"
-
-    run_plot "$CSV" python ./plot/plot_spaced_kmer_extract.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_multi.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
-      --file "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_multi_vectors_scalars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_multi_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --extended \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_multi_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --reduced \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_unchecked_multi_bars.${EXT}"
-
-    # Kmer Spaced Packed Checked Single
-
-    CSV="${DIR}/spaced_kmer_extract_packed_checked_single.csv"
-
-    run_plot "$CSV" python ./plot/plot_spaced_kmer_extract.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_single.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
-      --file "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_single_vectors_scalars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_single_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --extended \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_single_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --reduced \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_single_bars.${EXT}"
-
-
-    # Kmer Spaced Packed Checked Multi
-
-    CSV="${DIR}/spaced_kmer_extract_packed_checked_multi.csv"
-
-    run_plot "$CSV" python ./plot/plot_spaced_kmer_extract.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_multi.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_vectors_scalars_per_cpu.py \
-      --file "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_multi_vectors_scalars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_multi_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --extended \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_multi_bars.${EXT}"
-
-    run_plot "$CSV" python ./plot/plot_case_summary.py \
-      "$CSV" \
-      --reduced \
-      --unit "$UNIT" --scale "$SCALE" \
-      --out "${DIR}/spaced_kmer_extract_packed_checked_multi_bars.${EXT}"
+    for SUITE in \
+      spaced_kmer_extract_ascii_checked_single spaced_kmer_extract_ascii_checked_multi \
+      spaced_kmer_extract_packed_unchecked_single spaced_kmer_extract_packed_unchecked_multi \
+      spaced_kmer_extract_packed_checked_single spaced_kmer_extract_packed_checked_multi
+    do
+      CSV="${DIR}/${SUITE}.csv"
+      plot_modes "$CSV" supp,full "${DIR}/${SUITE}" \
+        python ./plot/plot_spaced_kmer_extract.py "$CSV" "${US[@]}"
+      plot_modes "$CSV" full "${DIR}/${SUITE}_vectors_scalars" \
+        python ./plot/plot_vectors_scalars_per_cpu.py --file "$CSV" "${US[@]}"
+      plot_modes "$CSV" main,supp,full "${DIR}/${SUITE}_bars" \
+        python ./plot/plot_case_summary.py "$CSV" "${US[@]}"
+    done
 
 
     # Checked vs. Unchecked
@@ -361,10 +203,9 @@ for EXT in png svg ; do
     do
       read -r name unchecked <<< "$pair"
       checked="${unchecked/_unchecked/_checked}"
-      run_plot "${DIR}/${unchecked}" python ./plot/plot_checked_vs_unchecked_per_cpu.py \
-        --dir "$DIR" --unchecked "$unchecked" --checked "$checked" \
-        --unit "$UNIT" --scale "$SCALE" \
-        --out "${DIR}/${name}_checked_vs_unchecked.${EXT}"
+      plot_modes "${DIR}/${unchecked}" supp,full "${DIR}/${name}_checked_vs_unchecked" \
+        python ./plot/plot_checked_vs_unchecked_per_cpu.py \
+        --dir "$DIR" --unchecked "$unchecked" --checked "$checked" "${US[@]}"
     done
 
   done

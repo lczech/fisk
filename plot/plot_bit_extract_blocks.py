@@ -25,6 +25,7 @@ def main():
                         help="Plot title")
     parser.add_argument("--out", default=None,
                         help="Output image file (e.g. pext.png). If omitted, show interactively.")
+    add_mode_arg(parser)
     add_unit_scale_args(parser)
     args = parser.parse_args()
 
@@ -36,8 +37,8 @@ def main():
     cpu = platform_from_csv_path(args.csv)
     suite = df["suite"].iloc[0] if not df.empty else None
 
-    # Subset to the benchmarks we want to plot
-    df = df[df["benchmark"].isin(BENCHMARKS_KEEP_EXTENDED)]
+    # Subset to the benchmarks of the mode
+    df = filter_mode(df, args.mode)
 
     # Expect columns:
     #   suite, case, benchmark, ns_per_op

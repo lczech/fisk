@@ -120,20 +120,31 @@ def normalize_spaced_layout(df: pd.DataFrame) -> pd.DataFrame:
     case, as "layout=msb;mask=0". Keep the MSB rows, with the case of the mask only, and drop the
     LSB ones, which only serve to check that both layouts perform the same.
     """
-    spaced = df["suite"].str.startswith("spaced_kmer_extract")
-    df = df[~(spaced & df["case"].str.startswith("layout=lsb;"))].copy()
-    spaced = df["suite"].str.startswith("spaced_kmer_extract")
-    df.loc[spaced, "case"] = df.loc[spaced, "case"].str.removeprefix("layout=msb;")
+    # As strings: pandas reads a case such as "n/a" (kmer_clark) as a missing value.
+    spaced = df["suite"].astype(str).str.startswith("spaced_kmer_extract")
+    df = df[~(spaced & df["case"].astype(str).str.startswith("layout=lsb;"))].copy()
+    spaced = df["suite"].astype(str).str.startswith("spaced_kmer_extract")
+    if spaced.any():
+        df.loc[spaced, "case"] = df.loc[spaced, "case"].str.removeprefix("layout=msb;")
     return df
 
 
-# Select which benchmarks to plot at all.
-# This list is across all types of benchmarks we run;
-# not all are thus present in all tables.
+# -------------------------------------------------------------------------------------------------
+#     Plot Modes
+# -------------------------------------------------------------------------------------------------
 
-# The first list is the extended on for the early supplement benchmarks,
-# where we want to show some more algorithms for comparison.
-BENCHMARKS_KEEP_EXTENDED = [
+# Each plot comes in up to three modes, from the hand-picked variants of the manuscript to all of
+# them. The lists are across all suites, so not all of their variants are in every table.
+#  - "main": the few recommended algorithms and approaches, for the main manuscript, with the short
+#    labels of BENCHMARK_RENAMES_MAIN;
+#  - "supp": the variants for the supplement, with more algorithms for comparison and more detail;
+#  - "full": every variant of the tables, unfiltered, to see what there is.
+# The plot scripts take --mode, see add_mode_arg(), and the plot-all scripts name their outputs
+# after it, as <name>_<mode>.
+PLOT_MODES = ["main", "supp", "full"]
+
+# The variants of the supplement.
+BENCHMARKS_SUPP = [
     # Bit extract implementations
     "naive",
     "pext",
@@ -183,6 +194,10 @@ BENCHMARKS_KEEP_EXTENDED = [
     "reextract_scalar_table",
     "rolling_scalar_table",
     "pack_then_bytewise_scalar",
+    "rolling_avx2",
+    "rolling_swar",
+    "chunked_scalar_threadlocal",
+    "chunked_scalar_scratch",
 
     # Kmer spaced, from text and from packed sequences
     "rolling_simd_butterfly_table_sse2_vectors",
@@ -229,112 +244,8 @@ BENCHMARKS_KEEP_EXTENDED = [
     "bytewise_simd_block_table_scalar_vectors",
     "rolling_simd_block_table_scalar_scalars",
     "bytewise_simd_block_table_scalar_scalars",
-]
 
-# The second list is the condensed list of "good" algorithms and approaches,
-# used for the supplement, where we want to show some more detail
-BENCHMARKS_KEEP = [
-    # Bit extract implementations
-    "naive",
-    "pext",
-    "rolling_scalar_pext",
-    "bytewise_scalar_pext",
-    "pext_scalar",
-    # "bitloop",
-    # "rolling_scalar_bitloop",
-    # "bytewise_scalar_bitloop",
-    # "split32",
-    # "byte_table",
-    # "rolling_scalar_byte_table",
-    # "bytewise_scalar_byte_table",
-    "block_table",
-    "rolling_scalar_block_table",
-    "bytewise_scalar_block_table",
-    "block_table_unrolled2",
-    "rolling_scalar_block_table_unrolled2",
-    "bytewise_scalar_block_table_unrolled2",
-    "block_table_unrolled4",
-    "rolling_scalar_block_table_unrolled4",
-    "bytewise_scalar_block_table_unrolled4",
-    "block_table_unrolled8",
-    "rolling_scalar_block_table_unrolled8",
-    "bytewise_scalar_block_table_unrolled8",
-    "butterfly_table",
-    "rolling_scalar_butterfly_table",
-    "bytewise_scalar_butterfly_table",
-    # "instlatx",
-    # "zp7",
-
-    # simd implementations
-    "compute_spaced_kmer_hash_simd_nt_sse2",
-    "compute_spaced_kmer_hash_simd_bt_sse2",
-    "compute_spaced_kmer_hash_simd_nt_avx2",
-    "compute_spaced_kmer_hash_simd_bt_avx2",
-    # "compute_spaced_kmer_hash_simd_nt_scalar",
-    # "compute_spaced_kmer_hash_simd_bt_scalar",
-
-    # Extract / seq enc
-    "reextract_scalar_ascii",
-    "rolling_scalar_ascii",
-    "reextract_scalar_ifs",
-    "rolling_scalar_ifs",
-    "reextract_scalar_switch",
-    "rolling_scalar_switch",
-    "reextract_scalar_table",
-    "rolling_scalar_table",
-    "pack_then_bytewise_scalar",
-
-    # Kmer spaced, from text and from packed sequences
-    "rolling_simd_butterfly_table_sse2_vectors",
-    "bytewise_simd_butterfly_table_sse2_vectors",
-    "rolling_simd_butterfly_table_sse2_scalars",
-    "bytewise_simd_butterfly_table_sse2_scalars",
-    "rolling_simd_block_table_sse2_vectors",
-    "bytewise_simd_block_table_sse2_vectors",
-    "rolling_simd_block_table_sse2_scalars",
-    "bytewise_simd_block_table_sse2_scalars",
-    "rolling_simd_butterfly_table_avx2_vectors",
-    "bytewise_simd_butterfly_table_avx2_vectors",
-    "rolling_simd_butterfly_table_avx2_scalars",
-    "bytewise_simd_butterfly_table_avx2_scalars",
-    "rolling_simd_block_table_avx2_vectors",
-    "bytewise_simd_block_table_avx2_vectors",
-    "rolling_simd_block_table_avx2_scalars",
-    "bytewise_simd_block_table_avx2_scalars",
-    "rolling_simd_butterfly_table_avx512_vectors",
-    "bytewise_simd_butterfly_table_avx512_vectors",
-    "rolling_simd_butterfly_table_avx512_scalars",
-    "bytewise_simd_butterfly_table_avx512_scalars",
-    "rolling_simd_block_table_avx512_vectors",
-    "bytewise_simd_block_table_avx512_vectors",
-    "rolling_simd_block_table_avx512_scalars",
-    "bytewise_simd_block_table_avx512_scalars",
-    "rolling_simd_butterfly_table_neon_vectors",
-    "bytewise_simd_butterfly_table_neon_vectors",
-    "rolling_simd_butterfly_table_neon_scalars",
-    "bytewise_simd_butterfly_table_neon_scalars",
-    "rolling_simd_block_table_neon_vectors",
-    "bytewise_simd_block_table_neon_vectors",
-    "rolling_simd_block_table_neon_scalars",
-    "bytewise_simd_block_table_neon_scalars",
-    # "rolling_simd_pext_vectors",
-    # "bytewise_simd_pext_vectors",
-    # "rolling_simd_pext_scalars",
-    # "bytewise_simd_pext_scalars",
-    # "rolling_simd_butterfly_table_scalar_vectors",
-    # "bytewise_simd_butterfly_table_scalar_vectors",
-    # "rolling_simd_butterfly_table_scalar_scalars",
-    # "bytewise_simd_butterfly_table_scalar_scalars",
-    # "rolling_simd_block_table_scalar_vectors",
-    # "bytewise_simd_block_table_scalar_vectors",
-    # "rolling_simd_block_table_scalar_scalars",
-    # "bytewise_simd_block_table_scalar_scalars",
-
-    # DuoHash
-    "naive",
-    "FSH",
-    "ISSH",
-    "naive",
+    # DuoHash, with its naive as above
     "FSH",
     "ISSH",
     "FSH_multi",
@@ -342,12 +253,11 @@ BENCHMARKS_KEEP = [
     "MISSH_col",
     "MISSH_col_parallel",
     "MISSH_row",
+
 ]
 
-
-# The third list is the small list of "recommended" algorithms and approaches,
-# for the main manuscript.
-BENCHMARKS_KEEP_REDUCED = [
+# The variants of the main manuscript, a subset of those of the supplement.
+BENCHMARKS_MAIN = [
     # Bit extract implementations
     "naive",
     "pext",
@@ -397,6 +307,7 @@ BENCHMARKS_KEEP_REDUCED = [
     "reextract_scalar_table",
     "rolling_scalar_table",
     # "pack_then_bytewise_scalar",
+    "rolling_avx2",
 
     # Kmer spaced. Both forms: the vectors, and their single spaced k-mers, as the scalar
     # techniques hand them out.
@@ -496,8 +407,8 @@ def _register_spaced_labels():
 
 _register_spaced_labels()
 
-# "Reduced" names for the main manuscript, to keep it simple.
-BENCHMARK_RENAMES_REDUCED = {
+# The short labels of the main mode, to keep the plots of the main manuscript simple.
+BENCHMARK_RENAMES_MAIN = {
     # Kmer extract
 
     # Kmer spaced
@@ -530,7 +441,7 @@ BENCHMARK_RENAMES_REDUCED = {
     # Kmer extract packed
     "bytewise_scalar"      : "Scalar",
     "bytewise_simd_sse2"   : "SIMD SSE2",
-    "rolling_avx2"         : "SIMD AVX2",
+    "rolling_avx2"         : "Rolling AVX2",
     "bytewise_simd_avx2"   : "SIMD AVX2",
     "bytewise_simd_avx512" : "SIMD AVX512",
     "bytewise_simd_neon"   : "SIMD Neon",
@@ -580,6 +491,10 @@ BENCHMARK_COLORS = {
     "reextract_scalar_table"    : "#6AC459",
     "rolling_scalar_table"      : "#6AC459",
     "pack_then_bytewise_scalar" : "#7F7F7F",
+    "rolling_avx2"              : "#207542",
+    "rolling_swar"              : "#9467BD",
+    "chunked_scalar_threadlocal": "#000000",
+    "chunked_scalar_scratch"    : "#000000",
 
 
     # Kmer spaced, from text and from packed sequences. scalars use a lighter tint of the vectors
@@ -643,6 +558,8 @@ BENCHMARK_LINESTYLES = {
     "reextract_scalar_table"    : "dashed",
     "rolling_scalar_table"      : "solid",
     "pack_then_bytewise_scalar" : "dashed",
+    "chunked_scalar_threadlocal": "solid",
+    "chunked_scalar_scratch"    : "dashed",
 }
 
 # Stable line order for plot consistency
@@ -658,6 +575,10 @@ BENCHMARK_ORDER = [
     "reextract_scalar_table",
     "rolling_scalar_table",
     "pack_then_bytewise_scalar",
+    "rolling_avx2",
+    "rolling_swar",
+    "chunked_scalar_threadlocal",
+    "chunked_scalar_scratch",
     "ifs",
     "switch",
     "ascii_checked",
@@ -754,7 +675,6 @@ PACKED_KMER_VARIANT_ORDER = [
     "bytewise_simd_sse2",
     "bytewise_simd_narrow_width_avx2",
     "bytewise_simd_full_width_avx2",
-    "rolling_avx2",
     "bytewise_simd_avx2",
     "bytewise_simd_narrow_width_avx512",
     "bytewise_simd_full_width_avx512",
@@ -778,7 +698,6 @@ PACKED_KMER_VARIANT_COLORS = {
     # AVX2: green shades, ordered narrow-width -> full-width -> dispatcher.
     "bytewise_simd_narrow_width_avx2" : "#78c679",
     "bytewise_simd_full_width_avx2" : "#2ca02c",
-    "rolling_avx2" : "#207542",
     "bytewise_simd_avx2" : "#207542",
     # AVX-512: red shades, ordered narrow-width -> full-width -> dispatcher.
     "bytewise_simd_narrow_width_avx512" : "#fb6a4a",
@@ -798,26 +717,57 @@ PACKED_KMER_VARIANT_COLORS = {
 # dispatcher only -- no narrow-width/full-width/rolling implementation detail. Each dispatcher
 # already picks narrow-width or full-width internally depending on k, so a chart already split by
 # k-tier (e.g. one figure per narrow-width/full-width range) loses nothing by showing only the
-# dispatcher row: it *is* whichever of the two applies at that k. Used as the default
-# (non---extended) comparison view.
-PACKED_KMER_VARIANT_ORDER_REDUCED = [
+# dispatcher row: it *is* whichever of the two applies at that k. Used as the main view.
+PACKED_KMER_VARIANT_ORDER_MAIN = [
     "bytewise_scalar",
     "bytewise_simd_sse2",
-    "rolling_avx2",
     "bytewise_simd_avx2",
     "bytewise_simd_avx512",
     "bytewise_simd_neon",
 ]
 
-# Fold the packed k-mer variant names into the generic BENCHMARKS_KEEP*/BENCHMARK_ORDER lists too,
-# so plot_bars_per_cpu.py's cross-CPU summary shows them instead of filtering every row out (those
-# lists predate this benchmark family and never got extended for it). Appended rather than merged
-# in above since BENCHMARK_ORDER/BENCHMARKS_KEEP are defined earlier in this file, before
-# PACKED_KMER_VARIANT_ORDER exists.
+# Fold the packed k-mer variant names into the generic lists of the modes and BENCHMARK_ORDER too,
+# so plot_bars_per_cpu.py's cross-CPU summary shows them instead of filtering every row out.
+# Appended rather than merged in above since BENCHMARK_ORDER and the lists of the modes are defined
+# earlier in this file, before PACKED_KMER_VARIANT_ORDER exists.
 BENCHMARK_ORDER += PACKED_KMER_VARIANT_ORDER
-BENCHMARKS_KEEP += PACKED_KMER_VARIANT_ORDER
-BENCHMARKS_KEEP_EXTENDED += PACKED_KMER_VARIANT_ORDER
-BENCHMARKS_KEEP_REDUCED += PACKED_KMER_VARIANT_ORDER_REDUCED
+BENCHMARKS_SUPP += PACKED_KMER_VARIANT_ORDER
+BENCHMARKS_MAIN += PACKED_KMER_VARIANT_ORDER_MAIN
+
+
+def add_mode_arg(parser: argparse.ArgumentParser) -> None:
+    """Add the --mode flag of every plotting script, see PLOT_MODES."""
+    parser.add_argument(
+        "--mode", choices=PLOT_MODES, default="full",
+        help="Which variants to plot: the hand-picked ones of the main manuscript or of the "
+             "supplement, or all of them (default: full).",
+    )
+
+
+def benchmarks_for_mode(mode: str, main=None, supp=None) -> set[str] | None:
+    """The variants to plot in `mode`, or None for all of them (full). A script with a selection of
+    its own passes it as `main` or `supp`; without one, those of BENCHMARKS_MAIN and
+    BENCHMARKS_SUPP apply."""
+    if mode == "full":
+        return None
+    if mode == "main":
+        return set(BENCHMARKS_MAIN if main is None else main)
+    if mode == "supp":
+        return set(BENCHMARKS_SUPP if supp is None else supp)
+    raise ValueError(f"Unknown mode {mode!r}, expected one of {PLOT_MODES}")
+
+
+def filter_mode(df: pd.DataFrame, mode: str, main=None, supp=None) -> pd.DataFrame:
+    """The rows of `df` with the variants of `mode`, see benchmarks_for_mode()."""
+    keep = benchmarks_for_mode(mode, main, supp)
+    return df if keep is None else df[df["benchmark"].isin(keep)]
+
+
+def label_for_mode(name: str, mode: str) -> str:
+    """The label of a variant: the short one of BENCHMARK_RENAMES_MAIN in the main mode, if any."""
+    if mode == "main" and name in BENCHMARK_RENAMES_MAIN:
+        return BENCHMARK_RENAMES_MAIN[name]
+    return BENCHMARK_RENAMES.get(name, name)
 
 
 # -------------------------------------------------------------------------------------------------
@@ -835,11 +785,12 @@ SEQUENCE_PACK_ORDER = [
     "fastdna_pext_unordered_unroll4",
     "cute_mul",
     "cute_movemask",
-    "pext_scalar",
+    "pext_scalar", "pext_sse2", "pext_avx2", "pext_avx512",
     "butterfly_scalar", "butterfly_sse2", "butterfly_avx2", "butterfly_avx512", "butterfly_neon",
     "fold_scalar", "fold_sse2", "fold_avx2", "fold_avx512", "fold_neon",
     "direct_scalar", "direct_sse2", "direct_double_sse2",
-    "direct_avx2", "direct_double_avx2", "direct_avx512", "direct_neon",
+    "direct_avx2", "direct_double_avx2", "direct_avx512", "direct_double_avx512",
+    "direct_neon", "direct_double_neon",
 ]
 
 # Explicit focused selection, easy to trim after collecting measurements.
@@ -854,7 +805,8 @@ SEQUENCE_PACK_FOCUSED = [
     "direct_scalar",
     "direct_sse2", "direct_double_sse2",
     "direct_avx2", "direct_double_avx2",
-    "direct_avx512", "direct_neon",
+    "direct_avx512", "direct_double_avx512",
+    "direct_neon", "direct_double_neon",
 ]
 
 BENCHMARK_RENAMES.update({
@@ -877,6 +829,9 @@ SEQUENCE_PACK_COLORS = {
     "cute_mul": "#9E9AC8",
     "cute_movemask": "#6A51A3",
     "pext_scalar": BENCHMARK_COLORS["pext"],
+    "pext_sse2": BENCHMARK_COLORS["pext"],
+    "pext_avx2": BENCHMARK_COLORS["pext"],
+    "pext_avx512": BENCHMARK_COLORS["pext"],
     "butterfly": "#BB2F98",
 }
 
@@ -893,7 +848,7 @@ def _register_sequence_pack_labels():
             arch_label = "scalar" if arch == "scalar" else arch.upper()
             BENCHMARK_RENAMES[name] = f"{label} {arch_label}"
             SEQUENCE_PACK_COLORS[name] = color
-    for arch in ["sse2", "avx2"]:
+    for arch in ["sse2", "avx2", "avx512", "neon"]:
         name = f"direct_double_{arch}"
         BENCHMARK_RENAMES[name] = f"DirectDouble {arch.upper()}"
         SEQUENCE_PACK_COLORS[name] = "#08519C"
@@ -1130,8 +1085,18 @@ def plot_axis_grid(
     n = len(loaded)
     ncols = 1 if n == 1 else 2
     nrows = (n + ncols - 1) // ncols
+    # At least 8 x 6 inches per panel; more for many bars, and for long, rotated technique labels,
+    # such as those of all variants of the spaced suites.
+    n_techniques = max(len(pivot.index) for _, _, pivot in loaded)
+    n_bars = max(pivot.size for _, _, pivot in loaded)
+    label_len = max(
+        (len(xtick_label(t)) for _, _, pivot in loaded for t in pivot.index), default=0
+    )
+    panel_width = max(8, 0.35 * n_techniques + 0.12 * n_bars)
+    panel_height = max(6, 3 + 0.1 * label_len)
     fig, axes = plt.subplots(
-        nrows, ncols, figsize=(max(8 * ncols, 12), 6 * nrows), squeeze=False, layout="constrained"
+        nrows, ncols, figsize=(max(panel_width * ncols, 12), panel_height * nrows), squeeze=False,
+        layout="constrained",
     )
 
     for idx, (label, _, pivot) in enumerate(loaded):

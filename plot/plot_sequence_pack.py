@@ -29,10 +29,12 @@ from plot_common import (
     SEQUENCE_PACK_COLORS,
     SEQUENCE_PACK_FOCUSED,
     SEQUENCE_PACK_ORDER,
+    add_mode_arg,
     add_unit_scale_args,
     apply_unit_scale_suffix,
     compute_axis_limits,
     convert_for_display,
+    filter_mode,
     infer_compiler,
     infer_platform,
     parse_case_fields,
@@ -132,7 +134,7 @@ def plot_views(files, suite, views, limits, args):
         order = benchmark_order(rows)
         y_min, y_max = limits[view]
         stem = f"{suite}_{view}_{encoding}_{layout}"
-        suffix = "_per_cpu" if args.summary else ""
+        suffix = ("_per_cpu" if args.summary else "") + f"_{args.mode}"
         out = str(out_dir / f"{stem}{suffix}.{args.format}")
         heading = "All sequence-packing implementations" if view == "overview" else "External references vs fisk"
         title = f"{heading} ({suite}): {encoding.upper()} / {layout.upper()}"
@@ -170,6 +172,7 @@ def main(argv=None):
     parser.add_argument("--summary", action="store_true", help="Group bars by CPU/compiler across inputs")
     parser.add_argument("--out-dir", required=True, help="Directory for the six view files")
     parser.add_argument("--format", choices=["png", "svg", "pdf"], default="png")
+    add_mode_arg(parser)
     add_unit_scale_args(parser)
     args = parser.parse_args(argv)
     files = ([args.csv] if args.csv else []) + args.file
@@ -185,6 +188,10 @@ def main(argv=None):
         parser.error("Inputs use different benchmark sink modes")
     if df["suite"].nunique() > 1:
         parser.error("Inputs are tables of different suites")
+    # The packing has no hand-picked variants of its own: the main and supplement modes are its
+    # encoders in their curated order, and the external references of the focused views.
+    selection = SEQUENCE_PACK_ORDER + SEQUENCE_PACK_FOCUSED
+    df = filter_mode(df, args.mode, main=selection, supp=selection)
     views = select_views(df)
     plot_views(files, df["suite"].iloc[0], views, shared_limits(views, args), args)
 

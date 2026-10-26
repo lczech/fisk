@@ -76,27 +76,27 @@ TECHNIQUES = (
 )
 
 
-def load_table(csv_path):
+def load_table(csv_path, mode):
     """
     Load one CSV, with the spaced suites restricted to MSB, see normalize_spaced_layout(), and
-    return (suite, rows of TECHNIQUES).
+    return (suite, rows of the techniques of `mode`). TECHNIQUES are those of the supplement.
     """
     df = normalize_spaced_layout(pd.read_csv(csv_path))
     suites = df["suite"].unique()
     if len(suites) != 1:
         raise ValueError(f"Expected exactly one suite in {csv_path}, found {list(suites)}")
-    return suites[0], df[df["benchmark"].isin(TECHNIQUES)]
+    return suites[0], filter_mode(df, mode, supp=TECHNIQUES)
 
 
-def load_pair_pivot(unchecked_path, checked_path, unit):
+def load_pair_pivot(unchecked_path, checked_path, unit, mode):
     """
     Load a pair of CSVs and return (suite of the unchecked one, pivot), with pivot index =
     technique, columns = FORMS, values in the display unit. Only the (technique, case) rows that
     both tables have are kept; the mean over them is taken in ns/op space, and only then converted,
     see convert_for_display().
     """
-    suite, unchecked = load_table(unchecked_path)
-    _, checked = load_table(checked_path)
+    suite, unchecked = load_table(unchecked_path, mode)
+    _, checked = load_table(checked_path, mode)
     df = pd.concat(
         [unchecked.assign(form="unchecked"), checked.assign(form="checked")], ignore_index=True
     )
@@ -105,7 +105,8 @@ def load_pair_pivot(unchecked_path, checked_path, unit):
 
     pivot = df.pivot_table(index="benchmark", columns="form", values="ns_per_op", aggfunc="mean")
     pivot = convert_for_display(pivot, unit)
-    ordered = [t for t in TECHNIQUES if t in pivot.index]
+    ordered = [t for t in TECHNIQUES + BENCHMARK_ORDER if t in pivot.index]
+    ordered = list(dict.fromkeys(ordered)) + sorted(t for t in pivot.index if t not in ordered)
     pivot = pivot.reindex(index=ordered, columns=[f for f in FORMS if f in pivot.columns])
     return suite, pivot
 
@@ -128,6 +129,7 @@ def main():
         "--title", default=None,
         help="Figure title override (default: the name of both suites, without the check).",
     )
+    add_mode_arg(ap)
     add_unit_scale_args(ap)
     args = ap.parse_args()
     if not args.dir:
@@ -143,7 +145,7 @@ def main():
         if missing:
             warn(f"Skipping {d}: missing {', '.join(os.path.basename(p) for p in missing)}")
             continue
-        _, pivot = load_pair_pivot(unchecked_path, checked_path, "ns")
+        _, pivot = load_pair_pivot(unchecked_path, checked_path, "ns", args.mode)
         if pivot.empty or len(pivot.columns) < len(FORMS):
             warn(f"Skipping {d}: no techniques and cases in both tables")
             continue
@@ -160,7 +162,7 @@ def main():
     out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
     plot_axis_grid(
         list(checked_of),
-        lambda path, unit: load_pair_pivot(path, checked_of[path], unit),
+        lambda path, unit: load_pair_pivot(path, checked_of[path], unit, args.mode),
         FORM_LABELS, FORM_COLORS,
         "checked vs. unchecked",
         out, args.unit, args.scale, args.y_min, args.y_max, title,

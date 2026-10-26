@@ -16,6 +16,7 @@ def make_grouped_bar_plot_impl_first(
     df, suite, title, outpath,
     unit: str = "ops", scale: str = "log",
     y_min: float | None = None, y_max: float | None = None,
+    mode: str = "full",
 ):
     # Filter for this suite (if given)
     if suite is not None:
@@ -25,11 +26,11 @@ def make_grouped_bar_plot_impl_first(
     if df.empty:
         raise ValueError(f"No data found for suite: {suite}")
 
-    # Keep only selected benchmarks
-    df = df[df["benchmark"].isin(BENCHMARKS_KEEP)]
+    # Keep only the benchmarks of the mode
+    df = filter_mode(df, mode)
 
     if df.empty:
-        raise ValueError("No data left after filtering with BENCHMARKS_KEEP")
+        raise ValueError(f"No data left after filtering for mode {mode}")
 
     # Pivot so index = implementation (benchmark), columns = case
     # Each row will be one implementation; columns are the cases
@@ -165,6 +166,7 @@ def main():
         default=None,
         help="Plot title override (default: suite name or generic)",
     )
+    add_mode_arg(ap)
     add_unit_scale_args(ap)
     args = ap.parse_args()
 
@@ -179,7 +181,7 @@ def main():
     # See plot_vectors_scalars_per_cpu.py for the vectors and single k-mers side by side.
     make_grouped_bar_plot_impl_first(
         df, suite, base_title, out,
-        unit=args.unit, scale=args.scale, y_min=args.y_min, y_max=args.y_max,
+        unit=args.unit, scale=args.scale, y_min=args.y_min, y_max=args.y_max, mode=args.mode,
     )
 
 
