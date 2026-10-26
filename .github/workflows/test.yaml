@@ -108,7 +108,7 @@ jobs:
           # -------------------------------
 
           # AddressSanitizer and UndefinedBehaviorSanitizer, with the newest GCC and Clang, and on
-          # macOS for the NEON code paths. See the Configure CMake step for their flags.
+          # macOS for the Neon code paths. See the Configure CMake step for their flags.
           - { os: ubuntu-26.04, compiler: gcc-15, sanitize: true }
           - { os: ubuntu-26.04, compiler: llvm-20, sanitize: true }
           - { os: macos-26, compiler: apple-clang, sanitize: true }

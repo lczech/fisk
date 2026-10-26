@@ -112,7 +112,7 @@ option(FISK_ENABLE_SSSE3  "Force-enable fisk's SSSE3-accelerated code paths; onl
 option(FISK_ENABLE_SSE41  "Force-enable fisk's SSE4.1-accelerated code paths; only safe if the deployment target actually has SSE4.1" OFF)
 option(FISK_ENABLE_AVX2   "Force-enable fisk's AVX2-accelerated code paths; only safe if the deployment target actually has AVX2" OFF)
 option(FISK_ENABLE_AVX512 "Force-enable fisk's AVX512-accelerated code paths; only safe if the deployment target actually has AVX512" OFF)
-option(FISK_ENABLE_NEON   "Force-enable fisk's NEON-accelerated code paths (ARM64); only safe if the deployment target actually has NEON" OFF)
+option(FISK_ENABLE_NEON   "Force-enable fisk's Neon-accelerated code paths (ARM64); only safe if the deployment target actually has Neon" OFF)
 
 if (FISK_ENABLE_BMI2 AND COMPILER_SUPPORTS_BMI2)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
@@ -174,7 +174,7 @@ if (FISK_ENABLE_AVX512 AND COMPILER_SUPPORTS_AVX512 AND COMPILER_SUPPORTS_AVX512
     target_compile_definitions(fisk INTERFACE FISK_HAS_AVX512=1)
 endif()
 
-# NEON is not an optional x86 extension selectable via a compile flag the way the others are —
+# Neon is not an optional x86 extension selectable via a compile flag the way the others are —
 # it is a different base architecture. There is nothing to check_cxx_compiler_flag() here; we
 # just define the macro when actually building for ARM64, guarded so this never fires on x86.
 if (FISK_ENABLE_NEON AND (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64"))

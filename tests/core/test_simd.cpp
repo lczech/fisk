@@ -291,7 +291,7 @@ static void check_simd_lookup_low_nibbles(Lanes<Simd> const& in)
         std::uint8_t const byte   = static_cast<std::uint8_t>(in[i / 8] >> (8 * (i % 8)));
         std::uint8_t const actual = static_cast<std::uint8_t>(out[i / 8] >> (8 * (i % 8)));
 
-        // Bytes of 128 and above give zero on the x86 archs, and are looked up as well on NEON.
+        // Bytes of 128 and above give zero on the x86 archs, and are looked up as well on Neon.
         if (byte < 128 || actual != 0) {
             EXPECT_EQ(actual, table[byte & 0x0F]);
         }

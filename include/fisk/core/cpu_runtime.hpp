@@ -551,7 +551,7 @@ inline void info_print_intrinsics(std::ostream& os)
     print_one_feature("SSE4.1", compiled_sse41(),  cpu_sse41());
     print_one_feature("AVX2",   compiled_avx2(),   cpu_avx2());
     print_one_feature("AVX512", compiled_avx512(), cpu_avx512());
-    print_one_feature("NEON",   compiled_neon(),   cpu_neon());
+    print_one_feature("Neon",   compiled_neon(),   cpu_neon());
 }
 
 } // namespace fisk

@@ -269,7 +269,7 @@ inline void do_not_optimize(std::uint64_t v)
 
 // Overloads of the above for SIMD register types, one per register class -- unlike the scalar
 // GPR case, there is no single inline-asm constraint letter that works for all of them (legacy
-// SSE/AVX xmm/ymm registers, AVX-512 zmm registers, and ARM NEON registers are each their own
+// SSE/AVX xmm/ymm registers, AVX-512 zmm registers, and Arm Neon registers are each their own
 // constraint class), so this is an overload set rather than a template. Guarded by the same
 // FISK_HAS_* macros as the types themselves, so each overload only exists where its type does.
 #if defined(FISK_HAS_SSE2)
@@ -318,7 +318,7 @@ inline void do_not_optimize(std::uint64_t v)
     inline void do_not_optimize(uint64x2_t v)
     {
         #if defined(__GNUC__) || defined(__clang__)
-            // "w" is the AArch64 constraint for the SIMD&FP register file NEON vectors live in.
+            // "w" is the AArch64 constraint for the SIMD&FP register file Neon vectors live in.
             asm volatile("" : : "w"(v));
         #else
             volatile uint64x2_t sink = v;

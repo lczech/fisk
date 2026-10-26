@@ -11,13 +11,13 @@
 namespace fisk {
 
 // =================================================================================================
-//     NEON
+//     Neon
 // =================================================================================================
 
 #if defined(FISK_HAS_NEON)
 
 /**
- * @brief ARM NEON SIMD arch, with two lanes.
+ * @brief Arm Neon SIMD arch, with two lanes.
  */
 struct SimdNEON
 {
@@ -155,7 +155,7 @@ struct SimdNEON
         return vreinterpretq_u64_u8(vrev64q_u8(vreinterpretq_u8_u64(v)));
     }
 
-    // For each byte, look up its low four bits in the table. The table lookup of NEON indexes by
+    // For each byte, look up its low four bits in the table. The table lookup of Neon indexes by
     // the whole byte, so that the other bits are masked out first.
     static simd_vector lookup_low_nibbles(
         simd_vector v, std::array<std::uint8_t, 16> const& table
