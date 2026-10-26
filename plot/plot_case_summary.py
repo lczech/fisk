@@ -24,10 +24,6 @@ def _apply_order(grouped: pd.DataFrame, order: Optional[List[str]]) -> pd.DataFr
     return grouped.set_index("benchmark").reindex(idx).reset_index()
 
 
-def _label_for_benchmark(name: str, rename_map: Dict[str, str]) -> str:
-    return rename_map.get(name, name)
-
-
 def _colors_for_benchmarks(benchmarks: List[str], color_map: Dict[str, str]) -> List[str]:
     # Deterministic: use provided colors; for the rest, use Matplotlib's default cycle in order.
     cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
@@ -162,7 +158,7 @@ def make_impl_summary_plot(
     ax.set_ylabel(ylabel_for_unit(unit, label_suite))
     ax.set_xticks(x)
     # ax.set_xticklabels(impls, rotation=45, ha="right")
-    labels = [_label_for_benchmark(name, BENCHMARK_RENAMES) for name in impls]
+    labels = [benchmark_label(name) for name in impls]
     ax.set_xticklabels(labels, rotation=45, ha="right")
 
     # y-limit chosen to cover all values in this plot consistently; see compute_axis_limits().

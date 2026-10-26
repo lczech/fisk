@@ -67,10 +67,6 @@ def _colors_for_benchmarks(names: List[str], color_map: Dict[str, str]) -> Dict[
     return colors
 
 
-def _label_for_benchmark(name: str, rename_map: Dict[str, str]) -> str:
-    return rename_map.get(name, name)
-
-
 def _plot_single_panel(df, plot_order, cpu, suite, args):
     """One panel of the rows of one encoding and layout, with the legend inside."""
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -84,7 +80,7 @@ def _plot_single_panel(df, plot_order, cpu, suite, args):
         plot_kwargs = {
             "marker": ".",
             "linewidth": 2,
-            "label": _label_for_benchmark(name, BENCHMARK_RENAMES),
+            "label": benchmark_label(name),
         }
 
         if color is not None:
@@ -160,7 +156,7 @@ def _plot_layout_panels(df, plot_order, cpu, suite, args):
         Line2D([], [], color=colors[name], linestyle=BENCHMARK_LINESTYLES.get(name), linewidth=2)
         for name in plot_order
     ]
-    labels = [_label_for_benchmark(name, BENCHMARK_RENAMES) for name in plot_order]
+    labels = [benchmark_label(name) for name in plot_order]
     fig.legend(handles, labels, loc="lower center", ncol=min(len(labels), 5), handlelength=2.75)
 
     fig.tight_layout()

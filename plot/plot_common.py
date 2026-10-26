@@ -329,83 +329,106 @@ BENCHMARKS_MAIN = [
     "bytewise_simd_butterfly_table_neon_scalars",
 ]
 
+# The labels of the variants whose name is not made of the parts of VARIANT_PARTS, such as
+# benchmark-local and external code; more of them in the Sequence Packing section. All others are
+# labeled by variant_label(), see benchmark_label().
 BENCHMARK_RENAMES = {
-    # Bit extract implementations
-    "naive"                                 : "Naive",
-    "pext"                                  : "PEXT",
-    "pext_scalar"                           : "PEXT scalar",
-    "bitloop"                               : "Bitloop",
-    "split32"                               : "Split32",
-    "byte_table"                            : "Byte Table",
-    "block_table"                           : "Block Table",
-    "block_table_unrolled2"                 : "Block Table (2x unrolled)",
-    "block_table_unrolled4"                 : "Block Table (4x unrolled)",
-    "block_table_unrolled8"                 : "Block Table (8x unrolled)",
-    "butterfly_table"                       : "Butterfly Table",
-    "instlatx"                              : "InstLatX",
-    "zp7"                                   : "ZP7",
-
-    # Extract / seq enc
-    "reextract_scalar_ascii"    : "Reextract scalar, ASCII",
-    "rolling_scalar_ascii"      : "Rolling scalar, ASCII",
-    "reextract_scalar_ifs"      : "Reextract scalar, 'if'",
-    "rolling_scalar_ifs"        : "Rolling scalar, 'if'",
-    "reextract_scalar_switch"   : "Reextract scalar, 'switch'",
-    "rolling_scalar_switch"     : "Rolling scalar, 'switch'",
-    "reextract_scalar_table"    : "Reextract scalar, Lookup table",
-    "rolling_scalar_table"      : "Rolling scalar, Lookup table",
+    "naive"                     : "Naive",
+    "missh"                     : "MISSH",
+    "clark_original"            : "CLARK-S original",
+    "clark_improved"            : "CLARK-S improved",
     "pack_then_bytewise_scalar" : "Pack, then bytewise scalar",
+}
 
-    # Kmer spaced, from text and from packed sequences: see _register_spaced_labels() below.
-
-    # Kmer extract packed
-    "bytewise_scalar"                   : "Bytewise scalar",
-    "rolling_scalar"                    : "Rolling scalar",
-    "bytewise_simd_narrow_width_sse2"   : "Bytewise SIMD Narrow-Width SSE2",
-    "bytewise_simd_full_width_sse2"     : "Bytewise SIMD Full-Width SSE2",
-    "bytewise_simd_sse2"                : "Bytewise SIMD SSE2",
-    "bytewise_simd_sse2_scalars"        : "Bytewise SIMD SSE2 (scalars)",
-    "bytewise_simd_narrow_width_avx2"   : "Bytewise SIMD Narrow-Width AVX2",
-    "bytewise_simd_full_width_avx2"     : "Bytewise SIMD Full-Width AVX2",
-    "rolling_avx2"                      : "Rolling AVX2",
-    "bytewise_simd_avx2"                : "Bytewise SIMD AVX2",
-    "bytewise_simd_avx2_scalars"        : "Bytewise SIMD AVX2 (scalars)",
-    "bytewise_simd_narrow_width_avx512" : "Bytewise SIMD Narrow-Width AVX512",
-    "bytewise_simd_full_width_avx512"   : "Bytewise SIMD Full-Width AVX512",
-    "bytewise_simd_avx512"              : "Bytewise SIMD AVX512",
-    "bytewise_simd_avx512_scalars"      : "Bytewise SIMD AVX512 (scalars)",
-    "bytewise_simd_narrow_width_neon"   : "Bytewise SIMD Narrow-Width Neon",
-    "bytewise_simd_full_width_neon"     : "Bytewise SIMD Full-Width Neon",
-    "bytewise_simd_neon"                : "Bytewise SIMD Neon",
-    "bytewise_simd_neon_scalars"        : "Bytewise SIMD Neon (scalars)",
-    "bytewise_simd_narrow_width_scalar" : "Bytewise SIMD Narrow-Width scalar",
-    "bytewise_simd_full_width_scalar"   : "Bytewise SIMD Full-Width scalar",
-    "bytewise_simd_scalar"              : "Bytewise SIMD scalar",
-    "bytewise_simd_scalar_scalars"      : "Bytewise SIMD scalar (scalars)",
+# The words of the parts of the variant names, per slot of the naming scheme, in the order of the
+# slots in a name: algorithm, technique, encoder or extractor, internal helper, arch, and the form
+# of the callback or other detail. A name uses any of the slots, each at most once.
+VARIANT_PARTS = {
+    "algorithm": {
+        "rolling"   : "Rolling",
+        "reextract" : "Reextract",
+        "bytewise"  : "Bytewise",
+        "chunked"   : "Chunked",
+    },
+    "technique": {
+        "scalar" : "scalar",
+        "simd"   : "SIMD",
+        "swar"   : "SWAR",
+    },
+    "encoder": {
+        # Character encoders
+        "ascii"           : "ASCII",
+        "ascii_checked"   : "ASCII checked",
+        "ascii_unchecked" : "ASCII unchecked",
+        "ifs"             : "'if'",
+        "switch"          : "'switch'",
+        "table"           : "Lookup table",
+        # Word encoders
+        "butterfly"     : "Butterfly",
+        "direct"        : "Direct",
+        "direct_double" : "DirectDouble",
+        "fold"          : "Fold",
+        # Bit extraction
+        "pext"                  : "PEXT",
+        "bitloop"               : "Bitloop",
+        "split32"               : "Split32",
+        "byte_table"            : "Byte Table",
+        "block_table"           : "Block Table",
+        "block_table_unrolled1" : "Block Table (1x unrolled)",
+        "block_table_unrolled2" : "Block Table (2x unrolled)",
+        "block_table_unrolled4" : "Block Table (4x unrolled)",
+        "block_table_unrolled8" : "Block Table (8x unrolled)",
+        "butterfly_table"       : "Butterfly Table",
+        "instlatx"              : "InstLatX",
+        "zp7"                   : "ZP7",
+    },
+    "helper": {
+        "narrow_width" : "Narrow-Width",
+        "full_width"   : "Full-Width",
+    },
+    "arch": {
+        "scalar" : "scalar",
+        "sse2"   : "SSE2",
+        "avx2"   : "AVX2",
+        "avx512" : "AVX512",
+        "neon"   : "Neon",
+    },
+    "form": {
+        "vectors"     : "vectors",
+        "scalars"     : "scalars",
+        "scratch"     : "scratch buffer",
+        "threadlocal" : "thread-local buffer",
+    },
 }
 
 
-def _register_spaced_labels():
-    """Labels of the spaced k-mer variants: the algorithm and technique of their loop, then the
-    bit extraction of the mask, as labeled for the bit extraction suites."""
-    kernels = {"butterfly_table": "Butterfly Table", "block_table": "Block Table"}
-    for algorithm, words in [("rolling", "Rolling"), ("bytewise", "Bytewise")]:
-        for extractor in ["pext", "bitloop", "byte_table", "block_table", "block_table_unrolled2",
-                          "block_table_unrolled4", "block_table_unrolled8", "butterfly_table"]:
-            BENCHMARK_RENAMES[f"{algorithm}_scalar_{extractor}"] = (
-                f"{words} scalar, {BENCHMARK_RENAMES[extractor]}"
-            )
-        for form in ["vectors", "scalars"]:
-            BENCHMARK_RENAMES[f"{algorithm}_simd_pext_{form}"] = f"{words} SIMD, PEXT ({form})"
-            for kernel, kernel_label in kernels.items():
-                for arch in ["sse2", "avx2", "avx512", "neon", "scalar"]:
-                    arch_label = {"neon": "Neon", "scalar": "scalar"}.get(arch, arch.upper())
-                    BENCHMARK_RENAMES[f"{algorithm}_simd_{kernel}_{arch}_{form}"] = (
-                        f"{words} SIMD, {kernel_label} {arch_label} ({form})"
-                    )
+def variant_label(name: str) -> str | None:
+    """
+    The label of a variant from the parts of its name, see VARIANT_PARTS, or None if the name is not
+    made of them. The algorithm and technique come first, then, after a comma, the encoder or
+    extractor, the helper and the arch, and the form in parentheses, such as "Rolling scalar, 'if'",
+    "Bytewise SIMD Narrow-Width SSE2" or "Bytewise SIMD, Butterfly Table AVX2 (vectors)". Without an
+    algorithm, the name is that of an encoder or extractor, such as "Direct SSE2".
+    """
+    words = {}
+    rest = name
+    for slot, parts in VARIANT_PARTS.items():
+        # The longest part that the rest starts with, as parts can be prefixes of others.
+        matches = [p for p in parts if rest == p or rest.startswith(p + "_")]
+        if matches:
+            part = max(matches, key=len)
+            words[slot] = parts[part]
+            rest = rest[len(part) + 1:]
+    if rest or not words:
+        return None
 
-
-_register_spaced_labels()
+    head = " ".join(words[s] for s in ["algorithm", "technique"] if s in words)
+    tail = " ".join(words[s] for s in ["encoder", "helper", "arch"] if s in words)
+    sep = ", " if "algorithm" in words and "encoder" in words else " "
+    label = sep.join(w for w in [head, tail] if w)
+    if "form" in words:
+        label += f" ({words['form']})"
+    return label
 
 # The short labels of the main mode, to keep the plots of the main manuscript simple.
 BENCHMARK_RENAMES_MAIN = {
@@ -703,7 +726,7 @@ PACKED_KMER_VARIANT_COLORS = {
     "bytewise_simd_narrow_width_avx512" : "#fb6a4a",
     "bytewise_simd_full_width_avx512" : "#d62728",
     "bytewise_simd_avx512" : "#a23236",
-    # NEON: blue shades, ordered narrow-width -> full-width -> dispatcher.
+    # Neon: blue shades, ordered narrow-width -> full-width -> dispatcher.
     "bytewise_simd_narrow_width_neon" : "#9ecae1",
     "bytewise_simd_full_width_neon" : "#6baed6",
     "bytewise_simd_neon" : "#23609d",
@@ -767,7 +790,14 @@ def label_for_mode(name: str, mode: str) -> str:
     """The label of a variant: the short one of BENCHMARK_RENAMES_MAIN in the main mode, if any."""
     if mode == "main" and name in BENCHMARK_RENAMES_MAIN:
         return BENCHMARK_RENAMES_MAIN[name]
-    return BENCHMARK_RENAMES.get(name, name)
+    return benchmark_label(name)
+
+
+def benchmark_label(name: str) -> str:
+    """The label of a variant: that of BENCHMARK_RENAMES, else variant_label(), else its name."""
+    if name in BENCHMARK_RENAMES:
+        return BENCHMARK_RENAMES[name]
+    return variant_label(name) or name
 
 
 # -------------------------------------------------------------------------------------------------
@@ -836,25 +866,16 @@ SEQUENCE_PACK_COLORS = {
 }
 
 
-def _register_sequence_pack_labels():
-    """Keep architecture labels consistent without exporting temporary loop variables."""
-    for family, label, color in [
-        ("butterfly", "Butterfly", "#BB2F98"),
-        ("fold", "Fold", "#74C476"),
-        ("direct", "Direct", "#3182BD"),
-    ]:
+def _register_sequence_pack_colors():
+    """One color per word encoder, for all of its archs."""
+    for family, color in [("butterfly", "#BB2F98"), ("fold", "#74C476"), ("direct", "#3182BD")]:
         for arch in ["scalar", "sse2", "avx2", "avx512", "neon"]:
-            name = f"{family}_{arch}"
-            arch_label = "scalar" if arch == "scalar" else arch.upper()
-            BENCHMARK_RENAMES[name] = f"{label} {arch_label}"
-            SEQUENCE_PACK_COLORS[name] = color
+            SEQUENCE_PACK_COLORS[f"{family}_{arch}"] = color
     for arch in ["sse2", "avx2", "avx512", "neon"]:
-        name = f"direct_double_{arch}"
-        BENCHMARK_RENAMES[name] = f"DirectDouble {arch.upper()}"
-        SEQUENCE_PACK_COLORS[name] = "#08519C"
+        SEQUENCE_PACK_COLORS[f"direct_double_{arch}"] = "#08519C"
 
 
-_register_sequence_pack_labels()
+_register_sequence_pack_colors()
 BENCHMARK_COLORS.update(SEQUENCE_PACK_COLORS)
 
 

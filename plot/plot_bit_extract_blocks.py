@@ -6,16 +6,12 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import os, sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 # Such a cheat to import stuff in python...
 # See https://stackoverflow.com/a/22956038
 sys.path.insert(0, '.')
 from plot_common import *
-
-
-def _label_for_benchmark(name: str, rename_map: Dict[str, str]) -> str:
-    return rename_map.get(name, name)
 
 
 def main():
@@ -71,7 +67,7 @@ def main():
             g["weight"],
             g["display_value"],
             marker=".",
-            label=_label_for_benchmark(name, BENCHMARK_RENAMES),
+            label=benchmark_label(name),
             color=color,
             linewidth=2,
         )
