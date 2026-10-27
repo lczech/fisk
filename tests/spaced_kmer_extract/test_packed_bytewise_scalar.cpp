@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -118,14 +119,17 @@ struct NoopSpacedCallback
     void operator()(std::size_t, std::size_t, K const&) const {}
 };
 
-// Checks `extract(masks, callback)` against `expected`, in all callback forms, and for a single
-// mask also `extract(mask, callback)`, with the mask itself.
+// Checks `extract(masks, callback)` against `expected`, in all callback forms, with the vector of
+// masks as a span of fixed size, via dispatch_static_span(), and for a single mask also
+// `extract(mask, callback)`, with the mask itself.
 template <Layout L, typename Masks, typename Extract>
 static void check_callback_forms(
     Masks const& masks, std::vector<SpacedEvent> const& expected, Extract&& extract
 ) {
     auto const runs = collect_spaced_callback_forms<L, false>([&](auto const& callback) {
-        extract(masks, callback);
+        dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+            extract(mask_span, callback);
+        });
     });
     for (auto const& got : runs) {
         check_spaced_events(got, expected);
@@ -146,8 +150,8 @@ static void check_callback_forms(
 //     Extraction
 // =================================================================================================
 
-// Checks every bit extractor, through the overload for a vector of masks, and, for a single mask,
-// also through the single-mask overload, in all callback forms, against the oracle.
+// Checks every bit extractor, through the overload for a set of masks, and, for a single mask, also
+// through the single-mask overload, in all callback forms, against the oracle.
 template <Encoding E, Layout L>
 static void check_extraction()
 {
@@ -230,10 +234,12 @@ static void check_checked_extraction()
             // Unchecked, all positions, whose number the oracle gives for a sequence without
             // invalid characters.
             std::size_t calls = 0;
-            for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-                packed, direct_masks, bit_extract_bitloop,
-                [&](std::size_t, std::size_t, auto const&) { ++calls; }
-            );
+            dispatch_static_span<kMaxDispatchedMasks>(direct_masks, [&](auto mask_span) {
+                for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
+                    packed, mask_span, bit_extract_bitloop,
+                    [&](std::size_t, std::size_t, auto const&) { ++calls; }
+                );
+            });
             std::size_t const span_k = mask_strings.front().size();
             std::size_t const positions = seq.size() >= span_k ? seq.size() - span_k + 1 : 0;
             EXPECT_EQ(calls, positions * mask_strings.size());
@@ -294,7 +300,7 @@ static_assert(!CanExtractPacked<
 static_assert(!CanExtractPacked<PackedSequence<Encoding::kACGT, Layout::kMSB>, BitExtractMask>);
 
 // Spans outside of [1, 32] and sets of masks with different spans are rejected, also for sequences
-// shorter than the span, and an empty set of masks emits nothing.
+// shorter than the span.
 template <Layout L>
 static void check_error_contract()
 {
@@ -311,7 +317,8 @@ static void check_error_contract()
             );
             EXPECT_THROW(
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-                    packed, std::vector{mask}, bit_extract_bitloop, NoopSpacedCallback{}
+                    packed, std::span<SpacedKmerMask<L, BitExtractMask> const, 1>(&mask, 1),
+                    bit_extract_bitloop, NoopSpacedCallback{}
                 ),
                 std::invalid_argument
             );
@@ -319,18 +326,13 @@ static void check_error_contract()
 
         auto const mixed = make_spaced_kmer_masks<L>({"101", "1001"});
         EXPECT_THROW(
-            for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-                packed, mixed, bit_extract_bitloop, NoopSpacedCallback{}
-            ),
+            dispatch_static_span<kMaxDispatchedMasks>(mixed, [&](auto mask_span) {
+                for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
+                    packed, mask_span, bit_extract_bitloop, NoopSpacedCallback{}
+                );
+            }),
             std::invalid_argument
         );
-
-        std::size_t calls = 0;
-        for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-            packed, std::vector<SpacedKmerMask<L, BitExtractMask>>{}, bit_extract_bitloop,
-            [&](std::size_t, std::size_t, auto const&) { ++calls; }
-        );
-        EXPECT_EQ(calls, std::size_t{0});
     }
 }
 

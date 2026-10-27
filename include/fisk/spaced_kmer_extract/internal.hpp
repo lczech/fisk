@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <span>
 #include <stdexcept>
-#include <vector>
 
 #include "fisk/util/intrinsics.hpp"
 
@@ -27,9 +27,14 @@ inline std::size_t check_spaced_kmer_span_(std::size_t span_k)
 
 /**
  * @brief Get the span of a non-empty set of masks, checking that it is the same for all of them.
+ *
+ * Takes the std::span by value, as this function, which may throw, is not always inlined: with a
+ * reference, the address of the caller's span would escape into the call, so that the extraction
+ * loops would have to reload the span from memory after every store that the compiler cannot see
+ * through, such as one in the callback.
  */
-template <typename Masks>
-inline std::size_t common_spaced_kmer_span_(Masks const& masks)
+template <typename Mask, std::size_t N>
+inline std::size_t common_spaced_kmer_span_(std::span<Mask, N> masks)
 {
     std::size_t const span_k = masks[0].span_k;
     for (auto const& mask : masks) {
@@ -53,14 +58,17 @@ inline void for_each_mask_(Mask const& mask, F&& f)
 }
 
 /**
- * @brief Helper function to iterate over a vector of masks, and apply a function.
+ * @brief Helper function to iterate over a set of masks of compile-time size, and apply a function.
+ *
+ * A plain loop with the compile-time trip count N, so that the compiler can unroll it fully where
+ * the function is cheap, such as with PEXT, and keep the loop where it is not.
  */
-template<typename Mask, typename Alloc, typename F>
+template<typename Mask, std::size_t N, typename F>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_mask_(std::vector<Mask, Alloc> const& masks, F&& f)
+inline void for_each_mask_(std::span<Mask, N> masks, F&& f)
 {
-    for (auto const& mask : masks) {
-        f(mask);
+    for (std::size_t i = 0; i < N; ++i) {
+        f(masks[i]);
     }
 }
 

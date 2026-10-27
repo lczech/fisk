@@ -35,9 +35,8 @@ void bench_spaced_kmer_extract_packed_unchecked_multi(
 // enters the timed region. Guarded to match the ISA availability of the kernel each one benchmarks
 // (see fisk/util/intrinsics.hpp). They are overloaded for both Layouts, defined in var_*_msb.cpp
 // and var_*_lsb.cpp, respectively. The SIMD ones take their spaced k-mers either as vectors
-// (`_vectors`), or one at a time (`_scalars`). The ones taking the kernels of a SIMD arch
-// hand them on as a span of fixed size, see dispatch_static_span(), and create their sink
-// inside of it.
+// (`_vectors`), or one at a time (`_scalars`). All of them hand their masks or kernels on as a
+// span of fixed size, see dispatch_static_span(), and create their sink inside of it.
 std::uint64_t run_var_bytewise_scalar_bitloop(
     PackedMsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractMask>> const& masks,

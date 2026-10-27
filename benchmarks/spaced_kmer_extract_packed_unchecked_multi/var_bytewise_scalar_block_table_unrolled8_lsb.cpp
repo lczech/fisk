@@ -12,16 +12,18 @@ std::uint64_t run_var_bytewise_scalar_block_table_unrolled8(
     std::vector<SpacedKmerMask<Layout::kLSB, BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    auto sink = make_sink(sink_buffer);
-    for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-        seq,
-        masks,
-        bit_extract_block_table_unrolled<8>,
-        [&](
-            std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer
-        ) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(kmer_value(spaced_kmer));
-        }
-    );
-    return sink.finalize();
+    return dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+        auto sink = make_sink(sink_buffer);
+        for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
+            seq,
+            mask_span,
+            bit_extract_block_table_unrolled<8>,
+            [&](
+                std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer
+            ) FISK_ALWAYS_INLINE_LAMBDA {
+                sink.consume(kmer_value(spaced_kmer));
+            }
+        );
+        return sink.finalize();
+    });
 }

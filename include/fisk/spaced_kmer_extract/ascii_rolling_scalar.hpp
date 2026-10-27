@@ -6,7 +6,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <vector>
+#include <span>
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/cast.hpp"
@@ -27,7 +27,7 @@ namespace fisk {
  * @brief Shared implementation behind both for_each_spaced_kmer_ascii_checked_rolling_scalar()
  * overloads below.
  *
- * `SingleMask` is set by each overload, mirroring the single mask vs std::vector<Mask> distinction
+ * `SingleMask` is set by each overload, mirroring the single mask vs std::span<Mask, N> distinction
  * that for_each_mask_() (internal.hpp) is overloaded on. `L` is the Layout of the masks, and
  * `span_k` their common span, as checked by the overloads.
  */
@@ -165,24 +165,24 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar(
  * @brief Iterate a sequence, extract all valid spaced k-mers from it,
  * and call a callback on each spaced k-mer, across a set of masks.
  *
- * Same as the single-mask overload above, but for a std::vector of masks, which all need to have
- * the same span. The callback must be callable as callback(pos, mask_idx, spaced_kmer); the
- * shorthand callback(pos, spaced_kmer) is only available for a single mask.
- * See invoke_spaced_kmer_callback().
+ * Same as the single-mask overload above, but for a set of masks, which all need to have the same
+ * span, as a std::span of compile-time size, possibly of const masks; see dispatch_static_span()
+ * for a std::vector of masks. The callback must be callable as
+ * callback(pos, mask_idx, spaced_kmer); the shorthand callback(pos, spaced_kmer) is only available
+ * for a single mask. See invoke_spaced_kmer_callback().
  */
-template<typename Mask, typename Alloc, typename Enc, typename BitExtract, typename Callback>
-    requires SpacedKmerMaskType<Mask> && CharEncoder<std::remove_cvref_t<Enc>>
+template<typename Mask, std::size_t N, typename Enc, typename BitExtract, typename Callback>
+    requires SpacedKmerMaskType<std::remove_const_t<Mask>> && (N != std::dynamic_extent)
+        && CharEncoder<std::remove_cvref_t<Enc>>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_checked_rolling_scalar(
     std::string_view seq,
-    std::vector<Mask, Alloc> const& masks,
+    std::span<Mask, N> masks,
     Enc&& enc,
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    if (masks.empty()) {
-        return;
-    }
+    static_assert(N > 0, "Need at least one mask.");
     for_each_spaced_kmer_ascii_checked_rolling_scalar_<false, Mask::layout>(
         seq, common_spaced_kmer_span_(masks), masks, std::forward<Enc>(enc),
         std::forward<BitExtract>(bit_ext), std::forward<Callback>(callback)

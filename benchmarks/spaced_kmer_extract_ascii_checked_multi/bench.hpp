@@ -30,9 +30,8 @@ void bench_spaced_kmer_extract_ascii_checked_multi(
 // prepared once per mask set in bench.cpp and threaded in here, so that setup cost never enters
 // the timed region. Guarded to match the ISA availability of the kernel each one benchmarks (see
 // fisk/util/intrinsics.hpp). The ones taking spaced k-mer masks are overloaded for both Layouts,
-// defined in var_*_msb.cpp and var_*_lsb.cpp, respectively. The ones taking the kernels of a SIMD
-// arch hand them on as a span of fixed size, see dispatch_static_span(), and create their sink
-// inside of it.
+// defined in var_*_msb.cpp and var_*_lsb.cpp, respectively. They hand their masks or kernels on
+// as a span of fixed size, see dispatch_static_span(), and create their sink inside of it.
 //
 // The SIMD ones take their spaced k-mers either as vectors (`_vectors`), or one at a time with
 // for_each_valid_lane() (`_scalars`). The `_vectors` ones sum the vectors whole, valid lanes or

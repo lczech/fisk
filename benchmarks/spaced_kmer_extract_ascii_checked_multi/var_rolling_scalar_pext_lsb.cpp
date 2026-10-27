@@ -16,16 +16,18 @@ std::uint64_t run_var_rolling_scalar_pext(
     std::vector<SpacedKmerMask<Layout::kLSB, BitExtractMask>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    auto sink = make_sink(sink_buffer);
-    for_each_spaced_kmer_ascii_checked_rolling_scalar(
-        std::string_view(seq), masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_pext,
-        [&](
-            std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer
-        ) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(kmer_value(spaced_kmer));
-        }
-    );
-    return sink.finalize();
+    return dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+        auto sink = make_sink(sink_buffer);
+        for_each_spaced_kmer_ascii_checked_rolling_scalar(
+            std::string_view(seq), mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_pext,
+            [&](
+                std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& spaced_kmer
+            ) FISK_ALWAYS_INLINE_LAMBDA {
+                sink.consume(kmer_value(spaced_kmer));
+            }
+        );
+        return sink.finalize();
+    });
 }
 
 #endif // FISK_HAS_BMI2

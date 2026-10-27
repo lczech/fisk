@@ -1,6 +1,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -28,8 +29,9 @@ using namespace fisk;
 //     Helpers
 // =================================================================================================
 
-// Checks one scalar bit extractor for every sequence in the corpus, through the overload for a
-// vector of masks, and, for a single mask, also through the single-mask overload.
+// Checks one scalar bit extractor for every sequence in the corpus, through the overload for a set
+// of masks, with the vector of masks as a span of fixed size, via dispatch_static_span(), and, for
+// a single mask, also through the single-mask overload.
 template <typename Enc, typename Mask, typename BitExtract>
 static void check_scalar_variant(
     std::vector<std::string> const& mask_strings,
@@ -42,9 +44,11 @@ static void check_scalar_variant(
         auto const expected = oracle_spaced_events<Enc::encoding, Mask::layout>(seq, mask_strings);
         auto const runs = collect_spaced_callback_forms<Mask::layout, false>(
             [&](auto const& callback) {
-                for_each_spaced_kmer_ascii_checked_rolling_scalar(
-                    seq, masks, enc, bit_extract, callback
-                );
+                dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+                    for_each_spaced_kmer_ascii_checked_rolling_scalar(
+                        seq, mask_span, enc, bit_extract, callback
+                    );
+                });
             }
         );
         for (auto const& got : runs) {
@@ -167,7 +171,8 @@ static void check_emitted_kmers()
     std::size_t emitted = 0;
     for (auto const& seq : sequence_corpus(span_k, 8)) {
         for_each_spaced_kmer_ascii_checked_rolling_scalar(
-            std::string_view(seq), masks, CharEncoderTable<Encoding::kACGT>{},
+            std::string_view(seq), std::span<SpacedKmerMask<L, BitExtractMask> const, 2>(masks),
+            CharEncoderTable<Encoding::kACGT>{},
             bit_extract_bitloop,
             [&](std::size_t pos, std::size_t mask_idx, auto const& kmer) {
                 using K = SpacedKmer<Encoding::kACGT, L>;
@@ -312,23 +317,27 @@ TEST(SpacedKmerExtractAsciiRollingScalar, MixedSpans)
 
     auto const masks = make_spaced_kmer_masks({"101", "10001"});
     EXPECT_THROW(
-        for_each_spaced_kmer_ascii_checked_rolling_scalar(
-            seq, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop, callback
-        ),
+        dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+            for_each_spaced_kmer_ascii_checked_rolling_scalar(
+                seq, mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop, callback
+            );
+        }),
         std::invalid_argument
     );
 }
 
-// An empty set of masks emits nothing, for any sequence.
+// An empty set of masks has no span of fixed size, so that its dispatch throws.
 TEST(SpacedKmerExtractAsciiRollingScalar, EmptyMasks)
 {
     std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>> const masks;
-    for (std::string const& seq : {std::string{}, std::string("ACGTACGTACGT")}) {
-        std::size_t count = 0;
-        for_each_spaced_kmer_ascii_checked_rolling_scalar(
-            seq, masks, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop,
-            [&](std::size_t, std::size_t, auto const&) { ++count; }
-        );
-        EXPECT_EQ(count, 0u);
-    }
+    std::string const seq = "ACGTACGTACGT";
+    EXPECT_THROW(
+        dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+            for_each_spaced_kmer_ascii_checked_rolling_scalar(
+                seq, mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop,
+                [](std::size_t, std::size_t, auto const&) {}
+            );
+        }),
+        std::invalid_argument
+    );
 }

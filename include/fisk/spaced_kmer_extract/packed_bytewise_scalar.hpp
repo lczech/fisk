@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
-#include <vector>
+#include <span>
 
 #include "fisk/util/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
@@ -344,25 +344,25 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
  * @brief Iterate a PackedSequence, extract all spaced k-mers from it, and call a callback on each
  * spaced k-mer, across a set of masks.
  *
- * Same as the single-mask overload above, but for a std::vector of masks, which all need to have
- * the same span. At each position, the spaced k-mers of all masks are emitted, in the order of the
- * masks. The callback must be callable as callback(pos, mask_idx, spaced_kmer); the shorthand
- * callback(pos, spaced_kmer) is only available for a single mask.
+ * Same as the single-mask overload above, but for a set of masks, which all need to have the same
+ * span, as a std::span of compile-time size, possibly of const masks; see dispatch_static_span()
+ * for a std::vector of masks. At each position, the spaced k-mers of all masks are emitted, in the
+ * order of the masks. The callback must be callable as callback(pos, mask_idx, spaced_kmer); the
+ * shorthand callback(pos, spaced_kmer) is only available for a single mask.
  */
 template <
-    PackedSequenceType Seq, typename Mask, typename Alloc, typename BitExtract, typename Callback
+    PackedSequenceType Seq, typename Mask, std::size_t N, typename BitExtract, typename Callback
 >
-    requires SpacedKmerMaskType<Mask> && (Mask::layout == Seq::layout)
+    requires SpacedKmerMaskType<std::remove_const_t<Mask>> && (Mask::layout == Seq::layout)
+        && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
     Seq const& seq,
-    std::vector<Mask, Alloc> const& masks,
+    std::span<Mask, N> masks,
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    if (masks.empty()) {
-        return;
-    }
+    static_assert(N > 0, "Need at least one mask.");
     for_each_spaced_kmer_packed_bytewise_scalar_<false>(
         without_validity_(seq), common_spaced_kmer_span_(masks), masks, bit_ext, callback
     );
@@ -397,25 +397,24 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_scalar(
  * @brief Iterate a PackedSequenceWithValidity, extract its valid spaced k-mers, and call a callback
  * on each, across a set of masks.
  *
- * Same as the single-mask overload above, but for a std::vector of masks, which all need to have
- * the same span, see the multi-mask overload of
+ * Same as the single-mask overload above, but for a set of masks, which all need to have the same
+ * span, as a std::span of compile-time size, see the multi-mask overload of
  * for_each_spaced_kmer_packed_unchecked_bytewise_scalar(). The validity of each spaced k-mer is
  * that of the positions that its own mask keeps.
  */
 template <
-    Encoding E, Layout L, typename Mask, typename Alloc, typename BitExtract, typename Callback
+    Encoding E, Layout L, typename Mask, std::size_t N, typename BitExtract, typename Callback
 >
-    requires SpacedKmerMaskType<Mask> && (Mask::layout == L)
+    requires SpacedKmerMaskType<std::remove_const_t<Mask>> && (Mask::layout == L)
+        && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_checked_bytewise_scalar(
     PackedSequenceWithValidity<E, L> const& seq,
-    std::vector<Mask, Alloc> const& masks,
+    std::span<Mask, N> masks,
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    if (masks.empty()) {
-        return;
-    }
+    static_assert(N > 0, "Need at least one mask.");
     for_each_spaced_kmer_packed_bytewise_scalar_<false>(
         seq, common_spaced_kmer_span_(masks), masks, bit_ext, callback
     );
