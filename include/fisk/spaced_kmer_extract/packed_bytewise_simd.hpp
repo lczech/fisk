@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -59,7 +60,7 @@ template <
 >
 FISK_ALWAYS_INLINE
 inline void emit_spaced_kmers_packed_unchecked_bytewise_simd_(
-    std::array<Kernel, N> const& kernels, std::size_t pos, Vector windows,
+    std::span<Kernel, N> kernels, std::size_t pos, Vector windows,
     std::size_t valid_count, Callback& callback
 ) {
     using Simd = typename Kernel::simd_arch;
@@ -87,7 +88,7 @@ template <
 >
 FISK_ALWAYS_INLINE
 inline void emit_spaced_kmers_packed_checked_bytewise_simd_(
-    std::array<SpacedKmerMask<L, Kernel>, N> const& kernels, std::size_t pos, Vector windows,
+    std::span<Kernel, N> kernels, std::size_t pos, Vector windows,
     Validity validity, Callback& callback
 ) {
     using Simd = typename Kernel::simd_arch;
@@ -125,31 +126,33 @@ inline void emit_spaced_kmers_packed_checked_bytewise_simd_(
 
 /**
  * @brief Iterate a PackedSequence, extract all spaced k-mers from it with SIMD bit extraction, and
- * call a callback on them, for an array of kernels.
+ * call a callback on them, for a set of kernels.
  *
  * As the sequence holds only valid bases, a spaced k-mer is emitted at every position, for every
  * kernel. It has the Encoding and Layout of the sequence. See above for the form of the callback.
  * A PackedSequenceWithValidity is taken as well, ignoring its validity bits.
  *
  * @tparam Kernel   Bit extraction kernel of a SIMD arch, see BitExtractKernel, tagged as spaced
- *                  k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel().
- *                  The spans of all kernels must be the same, and in [1, 32].
- * @tparam N        Number of kernels in the array.
+ *                  k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel(), and
+ *                  possibly const. The spans of all kernels must be the same, and in [1, 32].
+ * @tparam N        Number of kernels, fixed at compile time; see dispatch_static_span() for a
+ *                  std::vector of kernels.
  * @tparam Callback Callback function, called with vectors of spaced k-mers, see above.
  */
-template <
-    PackedSequenceType Seq, Layout L, typename Kernel, std::size_t N, typename Callback
->
-    requires BitExtractKernel<Kernel> && (L == Seq::layout)
+template <PackedSequenceType Seq, typename Kernel, std::size_t N, typename Callback>
+    requires SpacedKmerMaskType<std::remove_const_t<Kernel>>
+        && BitExtractKernel<typename Kernel::bit_extract_type>
+        && (Kernel::layout == Seq::layout) && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
     Seq const& seq,
-    std::array<SpacedKmerMask<L, Kernel>, N> const& kernels,
+    std::span<Kernel, N> kernels,
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one kernel.");
     using Simd = typename Kernel::simd_arch;
     constexpr Encoding E = Seq::encoding;
+    constexpr Layout L = Kernel::layout;
 
     std::size_t const span_k = common_spaced_kmer_span_(kernels);
     for ([[maybe_unused]] auto const& kernel : kernels) {
@@ -193,15 +196,17 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
     SpacedKmerMask<L, Kernel> const& kernel,
     Callback&& callback
 ) {
+    // A copy of the kernel of the caller, so that the loop can keep its values in registers: with
+    // a reference, it would have to reload them after each store, which might change them.
     std::array<SpacedKmerMask<L, Kernel>, 1> const kernels{{kernel}};
     for_each_spaced_kmer_packed_unchecked_bytewise_simd(
-        seq, kernels, std::forward<Callback>(callback)
+        seq, std::span{kernels}, std::forward<Callback>(callback)
     );
 }
 
 /**
  * @brief Iterate a PackedSequenceWithValidity, extract its spaced k-mers with SIMD bit extraction,
- * and call a callback on them with their valid lanes, for an array of kernels.
+ * and call a callback on them with their valid lanes, for a set of kernels.
  *
  * As for_each_spaced_kmer_packed_unchecked_bytewise_simd(), with the valid lanes of each vector
  * instead of its count, see above: a spaced k-mer is valid if the positions that its mask keeps are
@@ -210,17 +215,20 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
  * once, and the blocks whose nucleotides are all valid run without a test per lane.
  *
  * @tparam Kernel   Bit extraction kernel of a SIMD arch, see BitExtractKernel, tagged as spaced
- *                  k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel().
- *                  The spans of all kernels must be the same, and in [1, 32].
- * @tparam N        Number of kernels in the array.
+ *                  k-mer mask with the Layout of the sequence, see make_spaced_kmer_kernel(), and
+ *                  possibly const. The spans of all kernels must be the same, and in [1, 32].
+ * @tparam N        Number of kernels, fixed at compile time; see dispatch_static_span() for a
+ *                  std::vector of kernels.
  * @tparam Callback Callback function, called with vectors of spaced k-mers, see above.
  */
 template <Encoding E, Layout L, typename Kernel, std::size_t N, typename Callback>
-    requires BitExtractKernel<Kernel>
+    requires SpacedKmerMaskType<std::remove_const_t<Kernel>>
+        && BitExtractKernel<typename Kernel::bit_extract_type>
+        && (Kernel::layout == L) && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
     PackedSequenceWithValidity<E, L> const& seq,
-    std::array<SpacedKmerMask<L, Kernel>, N> const& kernels,
+    std::span<Kernel, N> kernels,
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one kernel.");
@@ -264,9 +272,11 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
     SpacedKmerMask<L, Kernel> const& kernel,
     Callback&& callback
 ) {
+    // A copy of the kernel of the caller, so that the loop can keep its values in registers: with
+    // a reference, it would have to reload them after each store, which might change them.
     std::array<SpacedKmerMask<L, Kernel>, 1> const kernels{{kernel}};
     for_each_spaced_kmer_packed_checked_bytewise_simd(
-        seq, kernels, std::forward<Callback>(callback)
+        seq, std::span{kernels}, std::forward<Callback>(callback)
     );
 }
 

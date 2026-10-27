@@ -11,14 +11,13 @@ using namespace fisk;
 
 std::uint64_t run_var_bytewise_simd_pext_scalars(
     CheckedMsb const& seq,
-    BitExtractKernelDispatcher<SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT>> const& kernel,
+    std::vector<SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT>> const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    std::uint64_t result = 0;
-    kernel.run([&](auto const& kernels_arr) {
+    return dispatch_static_span<kMaxDispatchedMasks>(kernels, [&](auto kernel_span) {
         auto sink = make_sink(sink_buffer);
         for_each_spaced_kmer_packed_checked_bytewise_simd(
-            seq, kernels_arr,
+            seq, kernel_span,
             [&](
                 std::size_t pos, std::size_t /*mask_idx*/, auto spaced_kmers,
                 auto valid_lanes
@@ -31,9 +30,8 @@ std::uint64_t run_var_bytewise_simd_pext_scalars(
                 );
             }
         );
-        result = sink.finalize();
+        return sink.finalize();
     });
-    return result;
 }
 
 #endif // FISK_HAS_BMI2

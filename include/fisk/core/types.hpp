@@ -662,6 +662,9 @@ struct SpacedKmerMask : M
 {
     static constexpr Layout layout = L;
 
+    // The representation of the bit extraction that this mask is, such as BitExtractMask.
+    using bit_extract_type = M;
+
     // Declared so that this is not an aggregate, as setting the members by hand is not safe.
     SpacedKmerMask() = default;
 

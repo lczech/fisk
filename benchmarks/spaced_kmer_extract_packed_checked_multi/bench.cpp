@@ -50,48 +50,37 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
     auto const bit_ext_butterfly_tables = make_spaced_kmer_butterfly_tables(bit_ext_masks);
 
     // simd kernels
-    BitExtractKernelDispatcher const simd_bf_scalar_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdScalar>>(bit_ext_masks)
-    );
-    BitExtractKernelDispatcher const simd_bt_scalar_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdScalar>>(bit_ext_masks)
-    );
+    auto const simd_bf_scalar_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdScalar>>(bit_ext_masks);
+    auto const simd_bt_scalar_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdScalar>>(bit_ext_masks);
     #if defined(FISK_HAS_SSE2)
-    BitExtractKernelDispatcher const simd_bf_sse2_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdSSE2>>(bit_ext_masks)
-    );
-    BitExtractKernelDispatcher const simd_bt_sse2_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdSSE2>>(bit_ext_masks)
-    );
+    auto const simd_bf_sse2_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdSSE2>>(bit_ext_masks);
+    auto const simd_bt_sse2_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdSSE2>>(bit_ext_masks);
     #endif
     #if defined(FISK_HAS_AVX2)
-    BitExtractKernelDispatcher const simd_bf_avx2_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdAVX2>>(bit_ext_masks)
-    );
-    BitExtractKernelDispatcher const simd_bt_avx2_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdAVX2>>(bit_ext_masks)
-    );
+    auto const simd_bf_avx2_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdAVX2>>(bit_ext_masks);
+    auto const simd_bt_avx2_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdAVX2>>(bit_ext_masks);
     #endif
     #if defined(FISK_HAS_AVX512)
-    BitExtractKernelDispatcher const simd_bf_avx512_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdAVX512>>(bit_ext_masks)
-    );
-    BitExtractKernelDispatcher const simd_bt_avx512_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdAVX512>>(bit_ext_masks)
-    );
+    auto const simd_bf_avx512_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdAVX512>>(bit_ext_masks);
+    auto const simd_bt_avx512_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdAVX512>>(bit_ext_masks);
     #endif
     #if defined(FISK_HAS_NEON)
-    BitExtractKernelDispatcher const simd_bf_neon_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdNEON>>(bit_ext_masks)
-    );
-    BitExtractKernelDispatcher const simd_bt_neon_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdNEON>>(bit_ext_masks)
-    );
+    auto const simd_bf_neon_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelButterfly<SimdNEON>>(bit_ext_masks);
+    auto const simd_bt_neon_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelBlock<SimdNEON>>(bit_ext_masks);
     #endif
     #if defined(FISK_HAS_BMI2)
-    BitExtractKernelDispatcher const simd_pext_kernel(
-        make_spaced_kmer_kernels<BitExtractKernelPEXT>(bit_ext_masks)
-    );
+    auto const simd_pext_kernels =
+        make_spaced_kmer_kernels<BitExtractKernelPEXT>(bit_ext_masks);
     #endif
 
     // Each run_() is a suite.run() of its own, as Microbench::run() cross-validates the sinks of
@@ -166,7 +155,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_sse2_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_sse2_scalars(
-                    seq, simd_bf_sse2_kernel, sink_buffer
+                    seq, simd_bf_sse2_kernels, sink_buffer
                 );
             }
         ),
@@ -174,7 +163,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_sse2_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_sse2_scalars(
-                    seq, simd_bt_sse2_kernel, sink_buffer
+                    seq, simd_bt_sse2_kernels, sink_buffer
                 );
             }
         ),
@@ -184,7 +173,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_avx2_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_avx2_scalars(
-                    seq, simd_bf_avx2_kernel, sink_buffer
+                    seq, simd_bf_avx2_kernels, sink_buffer
                 );
             }
         ),
@@ -192,7 +181,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_avx2_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_avx2_scalars(
-                    seq, simd_bt_avx2_kernel, sink_buffer
+                    seq, simd_bt_avx2_kernels, sink_buffer
                 );
             }
         ),
@@ -202,7 +191,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_avx512_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_avx512_scalars(
-                    seq, simd_bf_avx512_kernel, sink_buffer
+                    seq, simd_bf_avx512_kernels, sink_buffer
                 );
             }
         ),
@@ -210,7 +199,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_avx512_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_avx512_scalars(
-                    seq, simd_bt_avx512_kernel, sink_buffer
+                    seq, simd_bt_avx512_kernels, sink_buffer
                 );
             }
         ),
@@ -220,7 +209,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_neon_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_neon_scalars(
-                    seq, simd_bf_neon_kernel, sink_buffer
+                    seq, simd_bf_neon_kernels, sink_buffer
                 );
             }
         ),
@@ -228,7 +217,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_neon_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_neon_scalars(
-                    seq, simd_bt_neon_kernel, sink_buffer
+                    seq, simd_bt_neon_kernels, sink_buffer
                 );
             }
         ),
@@ -237,7 +226,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
         bench(
             "bytewise_simd_pext_scalars",
             [&](Packed const& seq) {
-                return run_var_bytewise_simd_pext_scalars(seq, simd_pext_kernel, sink_buffer);
+                return run_var_bytewise_simd_pext_scalars(seq, simd_pext_kernels, sink_buffer);
             }
         ),
         #endif
@@ -245,7 +234,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_scalar_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_scalar_scalars(
-                    seq, simd_bf_scalar_kernel, sink_buffer
+                    seq, simd_bf_scalar_kernels, sink_buffer
                 );
             }
         ),
@@ -253,7 +242,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_scalar_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_scalar_scalars(
-                    seq, simd_bt_scalar_kernel, sink_buffer
+                    seq, simd_bt_scalar_kernels, sink_buffer
                 );
             }
         )
@@ -264,7 +253,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_sse2_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_sse2_vectors(
-                    seq, simd_bf_sse2_kernel, sink_buffer
+                    seq, simd_bf_sse2_kernels, sink_buffer
                 );
             }
         ),
@@ -272,7 +261,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_sse2_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_sse2_vectors(
-                    seq, simd_bt_sse2_kernel, sink_buffer
+                    seq, simd_bt_sse2_kernels, sink_buffer
                 );
             }
         )
@@ -284,7 +273,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_avx2_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_avx2_vectors(
-                    seq, simd_bf_avx2_kernel, sink_buffer
+                    seq, simd_bf_avx2_kernels, sink_buffer
                 );
             }
         ),
@@ -292,7 +281,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_avx2_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_avx2_vectors(
-                    seq, simd_bt_avx2_kernel, sink_buffer
+                    seq, simd_bt_avx2_kernels, sink_buffer
                 );
             }
         )
@@ -304,7 +293,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_avx512_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_avx512_vectors(
-                    seq, simd_bf_avx512_kernel, sink_buffer
+                    seq, simd_bf_avx512_kernels, sink_buffer
                 );
             }
         ),
@@ -312,7 +301,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_avx512_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_avx512_vectors(
-                    seq, simd_bt_avx512_kernel, sink_buffer
+                    seq, simd_bt_avx512_kernels, sink_buffer
                 );
             }
         )
@@ -324,7 +313,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_neon_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_neon_vectors(
-                    seq, simd_bf_neon_kernel, sink_buffer
+                    seq, simd_bf_neon_kernels, sink_buffer
                 );
             }
         ),
@@ -332,7 +321,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_neon_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_neon_vectors(
-                    seq, simd_bt_neon_kernel, sink_buffer
+                    seq, simd_bt_neon_kernels, sink_buffer
                 );
             }
         )
@@ -343,7 +332,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
         bench(
             "bytewise_simd_pext_vectors",
             [&](Packed const& seq) {
-                return run_var_bytewise_simd_pext_vectors(seq, simd_pext_kernel, sink_buffer);
+                return run_var_bytewise_simd_pext_vectors(seq, simd_pext_kernels, sink_buffer);
             }
         ),
         #endif
@@ -351,7 +340,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_butterfly_table_scalar_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_table_scalar_vectors(
-                    seq, simd_bf_scalar_kernel, sink_buffer
+                    seq, simd_bf_scalar_kernels, sink_buffer
                 );
             }
         ),
@@ -359,7 +348,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             "bytewise_simd_block_table_scalar_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_table_scalar_vectors(
-                    seq, simd_bt_scalar_kernel, sink_buffer
+                    seq, simd_bt_scalar_kernels, sink_buffer
                 );
             }
         )

@@ -12,16 +12,15 @@ using namespace fisk;
 
 std::uint64_t run_var_rolling_simd_butterfly_table_neon_vectors(
     std::string const& seq,
-    BitExtractKernelDispatcher<
+    std::vector<
         SpacedKmerMask<Layout::kLSB, BitExtractKernelButterfly<SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    std::uint64_t result = 0;
-    kernel.run([&](auto const& kernels_arr) {
+    return dispatch_static_span<kMaxDispatchedMasks>(kernels, [&](auto kernel_span) {
         auto sink = make_sink(sink_buffer);
         for_each_spaced_kmer_ascii_checked_rolling_simd(
-            std::string_view(seq), kernels_arr, CharEncoderTable<Encoding::kACGT>{},
+            std::string_view(seq), kernel_span, CharEncoderTable<Encoding::kACGT>{},
             [&](
                 std::size_t /*pos*/, std::size_t /*mask_idx*/, auto spaced_kmers, auto valid_lanes
             ) FISK_ALWAYS_INLINE_LAMBDA {
@@ -29,9 +28,8 @@ std::uint64_t run_var_rolling_simd_butterfly_table_neon_vectors(
                 do_not_optimize(valid_lanes.bits);
             }
         );
-        result = sink.finalize();
+        return sink.finalize();
     });
-    return result;
 }
 
 #endif // FISK_HAS_NEON

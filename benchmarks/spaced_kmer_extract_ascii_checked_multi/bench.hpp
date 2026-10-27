@@ -30,8 +30,9 @@ void bench_spaced_kmer_extract_ascii_checked_multi(
 // prepared once per mask set in bench.cpp and threaded in here, so that setup cost never enters
 // the timed region. Guarded to match the ISA availability of the kernel each one benchmarks (see
 // fisk/util/intrinsics.hpp). The ones taking spaced k-mer masks are overloaded for both Layouts,
-// defined in var_*_msb.cpp and var_*_lsb.cpp, respectively. The ones taking a dispatcher create
-// their sink inside of its run(), see BitExtractKernelDispatcher::run().
+// defined in var_*_msb.cpp and var_*_lsb.cpp, respectively. The ones taking the kernels of a SIMD
+// arch hand them on as a span of fixed size, see dispatch_static_span(), and create their sink
+// inside of it.
 //
 // The SIMD ones take their spaced k-mers either as vectors (`_vectors`), or one at a time with
 // for_each_valid_lane() (`_scalars`). The `_vectors` ones sum the vectors whole, valid lanes or
@@ -136,116 +137,116 @@ std::uint64_t run_var_rolling_scalar_butterfly_table(
 
 std::uint64_t run_var_rolling_simd_butterfly_table_scalar_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_scalar_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_scalar_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_scalar_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_scalar_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdScalar>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_scalar_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdScalar>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_scalar_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdScalar>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_scalar_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdScalar>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_rolling_simd_butterfly_table_sse2_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_sse2_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_sse2_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_sse2_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_sse2_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdSSE2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_sse2_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdSSE2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_sse2_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdSSE2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_sse2_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdSSE2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
@@ -253,58 +254,58 @@ std::uint64_t run_var_rolling_simd_block_table_sse2_scalars(
 #if defined(FISK_HAS_AVX2)
 std::uint64_t run_var_rolling_simd_butterfly_table_avx2_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_avx2_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_avx2_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_avx2_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_avx2_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdAVX2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_avx2_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdAVX2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_avx2_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdAVX2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_avx2_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdAVX2>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
@@ -312,58 +313,58 @@ std::uint64_t run_var_rolling_simd_block_table_avx2_scalars(
 #if defined(FISK_HAS_AVX512)
 std::uint64_t run_var_rolling_simd_butterfly_table_avx512_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_avx512_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_avx512_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_avx512_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_avx512_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdAVX512>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_avx512_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdAVX512>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_avx512_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdAVX512>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_avx512_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdAVX512>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
@@ -371,58 +372,58 @@ std::uint64_t run_var_rolling_simd_block_table_avx512_scalars(
 #if defined(FISK_HAS_NEON)
 std::uint64_t run_var_rolling_simd_butterfly_table_neon_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_neon_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_neon_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_butterfly_table_neon_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_neon_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_neon_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_neon_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_block_table_neon_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdNEON>>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
@@ -430,30 +431,30 @@ std::uint64_t run_var_rolling_simd_block_table_neon_scalars(
 #if defined(FISK_HAS_BMI2)
 std::uint64_t run_var_rolling_simd_pext_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelPEXT>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_pext_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelPEXT>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_pext_vectors(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelPEXT>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_pext_scalars(
     std::string const& seq,
-    fisk::BitExtractKernelDispatcher<
+    std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelPEXT>
-    > const& kernel,
+    > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif

@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -124,7 +125,7 @@ inline void for_each_lane_ct_(F&& f)
 
 /**
  * @brief Iterate a sequence, extract all spaced k-mers from it with SIMD bit extraction, and call a
- * callback on vectors of them, for an array of kernels.
+ * callback on vectors of them, for a set of kernels.
  *
  * The callback is called as `callback(pos, mask_idx, spaced_kmers, valid_lanes)`, or, for a single
  * kernel, also as `callback(pos, spaced_kmers, valid_lanes)`: lane `j` of the SpacedKmerVector
@@ -137,18 +138,20 @@ inline void for_each_lane_ct_(F&& f)
  * callback.
  *
  * @tparam Kernel    Bit extraction kernel of a SIMD arch, see BitExtractKernel, tagged as spaced
- *                   k-mer mask, see make_spaced_kmer_kernel(). Its Layout is the Layout of the
- *                   emitted spaced k-mers. The spans of all kernels must be the same, and in [1, 32].
- * @tparam NMasks    Number of kernels in the array.
+ *                   k-mer mask, see make_spaced_kmer_kernel(), and possibly const. Its Layout is
+ *                   the Layout of the emitted spaced k-mers. The spans of all kernels must be the
+ *                   same, and in [1, 32].
+ * @tparam NMasks    Number of kernels, fixed at compile time; see dispatch_static_span() for a
+ *                   std::vector of kernels.
  * @tparam Enc       Encoder functor, returns 0..3 for valid bases, >=4 for invalid.
  * @tparam Callback  Callback function, called with vectors of spaced k-mers, see above.
  */
 template<typename Kernel, std::size_t NMasks, typename Enc, typename Callback>
-    requires SpacedKmerMaskType<Kernel>
+    requires SpacedKmerMaskType<std::remove_const_t<Kernel>> && (NMasks != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     std::string_view seq,
-    std::array<Kernel, NMasks> const& kernels,
+    std::span<Kernel, NMasks> kernels,
     Enc&& enc,
     Callback&& callback
 ) {
@@ -238,9 +241,11 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     Enc&& enc,
     Callback&& callback
 ) {
+    // A copy of the kernel of the caller, so that the loop can keep its values in registers: with
+    // a reference, it would have to reload them after each store, which might change them.
     std::array<Kernel, 1> const kernels{{kernel}};
     for_each_spaced_kmer_ascii_checked_rolling_simd(
-        seq, kernels, std::forward<Enc>(enc), std::forward<Callback>(callback)
+        seq, std::span{kernels}, std::forward<Enc>(enc), std::forward<Callback>(callback)
     );
 }
 

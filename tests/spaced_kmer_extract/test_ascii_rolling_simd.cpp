@@ -1,6 +1,7 @@
 #include <array>
 #include <cstddef>
 #include <stdexcept>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -91,7 +92,7 @@ static void check_simd_set(std::array<std::string, N> const& mask_array, Enc con
         auto const expected = oracle_spaced_events<E, L>(seq, masks);
         std::size_t const positions = spaced_kmer_positions(seq, span_k);
         auto const extract_array = [&](auto const& callback) {
-            for_each_spaced_kmer_ascii_checked_rolling_simd(seq, kernels, enc, callback);
+            for_each_spaced_kmer_ascii_checked_rolling_simd(seq, std::span{kernels}, enc, callback);
         };
         check_spaced_events(
             collect_valid_lanes_events<Simd, E, L>(N, positions, extract_array), expected
@@ -136,19 +137,17 @@ static void check_simd_kernel()
 }
 
 template <typename Kernel, Layout L>
-static void check_simd_dispatcher_in_layout(std::vector<std::string> const& masks)
+static void check_simd_dispatch_in_layout(std::vector<std::string> const& masks)
 {
-    BitExtractKernelDispatcher<SpacedKmerMask<L, Kernel>> const dispatcher(
-        make_spaced_kmer_kernels<Kernel>(make_spaced_kmer_masks<L>(masks))
-    );
+    auto const kernels = make_spaced_kmer_kernels<Kernel>(make_spaced_kmer_masks<L>(masks));
     std::size_t const span_k = masks.front().size();
 
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
         auto const expected = oracle_spaced_events<Encoding::kACGT, L>(seq, masks);
         auto const extract = [&](auto const& callback) {
-            dispatcher.run([&](auto const& kernels) {
+            dispatch_static_span<kMaxDispatchedMasks>(kernels, [&](auto kernel_span) {
                 for_each_spaced_kmer_ascii_checked_rolling_simd(
-                    seq, kernels, CharEncoderTable<Encoding::kACGT>{}, callback
+                    seq, kernel_span, CharEncoderTable<Encoding::kACGT>{}, callback
                 );
             });
         };
@@ -162,10 +161,10 @@ static void check_simd_dispatcher_in_layout(std::vector<std::string> const& mask
 }
 
 template <typename Kernel>
-static void check_simd_dispatcher(std::vector<std::string> const& masks)
+static void check_simd_dispatch(std::vector<std::string> const& masks)
 {
-    check_simd_dispatcher_in_layout<Kernel, Layout::kMSB>(masks);
-    check_simd_dispatcher_in_layout<Kernel, Layout::kLSB>(masks);
+    check_simd_dispatch_in_layout<Kernel, Layout::kMSB>(masks);
+    check_simd_dispatch_in_layout<Kernel, Layout::kLSB>(masks);
 }
 
 // =================================================================================================
@@ -272,28 +271,28 @@ TEST(SpacedKmerExtractAsciiRollingSimd, MixedSpans)
     }};
     EXPECT_THROW(
         for_each_spaced_kmer_ascii_checked_rolling_simd(
-            seq, kernels, CharEncoderTable<Encoding::kACGT>{},
+            seq, std::span{kernels}, CharEncoderTable<Encoding::kACGT>{},
             [](std::size_t, std::size_t, auto, auto) {}
         ),
         std::invalid_argument
     );
 }
 
-TEST(SpacedKmerExtractAsciiRollingSimd, DispatcherMaskCounts)
+TEST(SpacedKmerExtractAsciiRollingSimd, DispatchMaskCounts)
 {
     for (std::size_t span_k = 1; span_k <= 32; ++span_k) {
-        check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>({mask_for_span(span_k)});
+        check_simd_dispatch<BitExtractKernelButterfly<SimdScalar>>({mask_for_span(span_k)});
     }
-    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<1>()));
-    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<2>()));
-    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<3>()));
-    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<9>()));
-    check_simd_dispatcher<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<16>()));
+    check_simd_dispatch<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<1>()));
+    check_simd_dispatch<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<2>()));
+    check_simd_dispatch<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<3>()));
+    check_simd_dispatch<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<9>()));
+    check_simd_dispatch<BitExtractKernelButterfly<SimdScalar>>(to_vector(generated_masks<16>()));
 
     #if defined(FISK_HAS_AVX512)
     // Many masks on eight lanes.
-    check_simd_dispatcher<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<9>()));
-    check_simd_dispatcher<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<16>()));
+    check_simd_dispatch<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<9>()));
+    check_simd_dispatch<BitExtractKernelButterfly<SimdAVX512>>(to_vector(generated_masks<16>()));
     #endif
 }
 

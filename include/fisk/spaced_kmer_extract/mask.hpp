@@ -213,8 +213,8 @@ inline SpacedKmerMask<L, Kernel> make_spaced_kmer_kernel(std::string const& mask
 }
 
 /**
- * @brief Create the bit extraction kernels of a set of spaced k-mer masks, for instance to be used
- * with BitExtractKernelDispatcher.
+ * @brief Create the bit extraction kernels of a set of spaced k-mer masks, for instance to be
+ * handed on to the SIMD extraction as a span of fixed size via dispatch_static_span().
  */
 template <typename Kernel, Layout L>
     requires BitExtractKernel<Kernel>

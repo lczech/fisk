@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <stdexcept>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -163,7 +164,7 @@ static void check_kernel(
     using Simd = typename Kernel::simd_arch;
     auto const kernels = make_kernels<Kernel, L>(mask_strings);
     auto const extract_array = [&](auto const& callback) {
-        for_each_spaced_kmer_packed_unchecked_bytewise_simd(packed, kernels, callback);
+        for_each_spaced_kmer_packed_unchecked_bytewise_simd(packed, std::span{kernels}, callback);
     };
     check_spaced_events(collect_vector_events<Simd, E, L>(N, extract_array), expected);
 
@@ -197,7 +198,7 @@ static void check_checked_kernel(
         );
     };
     auto const extract_array = [&](auto const& callback) {
-        for_each_spaced_kmer_packed_checked_bytewise_simd(packed, kernels, callback);
+        for_each_spaced_kmer_packed_checked_bytewise_simd(packed, std::span{kernels}, callback);
     };
     check_spaced_events(collect.template operator()<false>(N, extract_array), expected);
 
@@ -405,13 +406,13 @@ static void check_error_contract()
         };
         EXPECT_THROW(
             for_each_spaced_kmer_packed_unchecked_bytewise_simd(
-                packed, mixed, NoopSpacedVectorCallback{}
+                packed, std::span{mixed}, NoopSpacedVectorCallback{}
             ),
             std::invalid_argument
         );
         EXPECT_THROW(
             for_each_spaced_kmer_packed_checked_bytewise_simd(
-                checked, mixed, NoopSpacedValidLanesCallback{}
+                checked, std::span{mixed}, NoopSpacedValidLanesCallback{}
             ),
             std::invalid_argument
         );
