@@ -535,3 +535,213 @@ inline void check_checked_throws(Extract const& extract)
         extract(fisk::pack_sequence_checked(seq, fisk::WordEncoderButterfly<E, L>{}), k);
     });
 }
+
+// =================================================================================================
+//     Chunked Extraction from ASCII
+// =================================================================================================
+
+// The chunked loops pack the input chunk by chunk, see kmer_extract/ascii_chunked.hpp. They are
+// checked through a callable `extract`, called as
+// `extract.template operator()<ChunkSize>(seq, k, encoder, scratch, callback)`, where `scratch`
+// points to the scratch to use, or is null for the overload with the thread-local buffer, and
+// `callback` takes single k-mers, in both forms; the loops that call back with vectors hand on
+// their lanes with for_each_valid_lane(). The oracle decodes directly from the ASCII input, since
+// these checks are also meant to exercise the packing step.
+
+// Sequence lengths 0..300, each with random per-position content -- deliberately covering many
+// exact multiples, one-more, and one-less relationships against every chunk size in
+// for_each_chunk_size() below, rather than hand-picking a handful of specific (length, chunk
+// size) pairs.
+inline std::vector<std::string> const& chunked_test_sequences()
+{
+    static std::vector<std::string> const seqs = [] {
+        std::vector<std::string> out;
+        fisk::Splitmix64 rng(90125);
+        for (std::size_t len = 0; len <= 300; ++len) {
+            out.push_back(random_sequence(rng, len));
+        }
+        return out;
+    }();
+    return seqs;
+}
+
+// Smaller sweeps for ACTG: these exist to isolate the Encoding axis on its own, not to re-cover
+// every (length, k, chunk size) combination the ACGT ones already do.
+inline std::vector<std::string> const& chunked_actg_test_sequences()
+{
+    static std::vector<std::string> const seqs = [] {
+        std::vector<std::string> out;
+        for (std::size_t const len : std::vector<std::size_t>{0, 1, 31, 63, 64, 200}) {
+            out.push_back(chunked_test_sequences()[len]);
+        }
+        return out;
+    }();
+    return seqs;
+}
+
+// Sequences with invalid characters: hand-picked characters at the start, end, and around the
+// word and chunk boundaries of the packing step, plus random bytes from the full range. The
+// unchecked loops silently encode each as some nucleotide, which must only change the k-mers
+// overlapping it, not their count or positions, nor any other k-mer; the checked loops skip the
+// k-mers overlapping it, also across the ends of the chunks.
+inline std::vector<std::string> const& chunked_invalid_sequences()
+{
+    static std::vector<std::string> const seqs = [] {
+        std::vector<std::string> out;
+        fisk::Splitmix64 rng(90126);
+        std::size_t marker_idx = 0;
+        for (std::size_t const len : std::vector<std::size_t>{1, 8, 33, 100}) {
+            for (std::size_t const pos : {std::size_t{0}, len / 2, len - 1}) {
+                std::string seq = random_sequence(rng, len);
+                seq[pos] = kHandPickedInvalid[marker_idx++ % kHandPickedInvalid.size()];
+                out.push_back(std::move(seq));
+            }
+        }
+        for (auto& seq : invalid_injected_sequences(30, 150, 0.05, 90127)) {
+            out.push_back(std::move(seq));
+        }
+        return out;
+    }();
+    return seqs;
+}
+
+// Calls `f.template operator()<ChunkSize>()` for chunk sizes spanning: smaller than most k
+// (each chunk then emits fewer k-mers than it looks ahead by), around the blocks of 32 positions
+// of the packed loops, and much larger than the longest test sequence (degenerating to a single
+// chunk). Few of them, as the chunked loops are inlined into each chunk size, which makes them
+// expensive to compile.
+template <typename F>
+inline void for_each_chunk_size(F&& f)
+{
+    [&]<std::size_t... Sizes>(std::index_sequence<Sizes...>) {
+        (f.template operator()<Sizes>(), ...);
+    }(std::index_sequence<1, 7, 31, 32, 33, 1000>{});
+}
+
+// The callbacks of the checks below, in both forms, as named types rather than lambdas: the
+// lambdas of a check would have a type of their own for each chunk size, which would compile the
+// packed loops once per chunk size.
+template <fisk::Encoding E, fisk::Layout L>
+struct ChunkedKmerCollector
+{
+    std::vector<std::size_t>* positions;
+    std::vector<std::uint64_t>* values;
+
+    void operator()(std::size_t pos, fisk::Kmer<E, L> kmer) const
+    {
+        positions->push_back(pos);
+        values->push_back(fisk::kmer_value(kmer));
+    }
+};
+
+template <fisk::Encoding E, fisk::Layout L>
+struct ChunkedKmerValueCollector
+{
+    std::vector<std::uint64_t>* values;
+
+    void operator()(fisk::Kmer<E, L> kmer) const
+    {
+        values->push_back(fisk::kmer_value(kmer));
+    }
+};
+
+// Checks `extract` with the word encoder of the given conventions, for every sequence in `seqs`,
+// every valid k, and every chunk size, with a scratch and with the thread-local buffer, in both
+// callback forms. Unchecked, against every window: exact positions, and exact values for every
+// window that consists of nucleotides only. Checked, against the windows that consist of
+// nucleotides only.
+template <fisk::Encoding E, fisk::Layout L, bool Checked, typename Extract>
+inline void check_ascii_chunked(std::vector<std::string> const& seqs, Extract const& extract)
+{
+    using Scratch = std::conditional_t<
+        Checked, fisk::PackedSequenceWithValidity<E, L>, fisk::PackedSequence<E, L>
+    >;
+    fisk::WordEncoderButterfly<E, L> const encoder;
+    Scratch scratch;
+    std::vector<std::size_t> positions;
+    std::vector<std::uint64_t> values;
+    for (auto const& seq : seqs) {
+        for (std::size_t k = 1; k <= 32; ++k) {
+            auto const expected = Checked
+                ? oracle_kmers_skipping_invalid<E, L>(seq, k)
+                : oracle_kmers_all_windows<E, L>(seq, k);
+            for_each_chunk_size([&]<std::size_t ChunkSize>() {
+                for (Scratch* const s : {static_cast<Scratch*>(nullptr), &scratch}) {
+                    positions.clear();
+                    values.clear();
+                    extract.template operator()<ChunkSize>(
+                        seq, k, encoder, s, ChunkedKmerCollector<E, L>{&positions, &values}
+                    );
+                    check_emitted_kmers(expected, k, values, &positions);
+
+                    values.clear();
+                    extract.template operator()<ChunkSize>(
+                        seq, k, encoder, s, ChunkedKmerValueCollector<E, L>{&values}
+                    );
+                    check_emitted_kmers(expected, k, values, nullptr);
+                }
+            });
+        }
+    }
+}
+
+// The checks of a chunked loop: the sweep above under all four conventions, on random and on
+// invalid sequences, and an invalid k throws, with and without a scratch.
+template <bool Checked, typename Extract>
+inline void check_ascii_chunked_all(Extract const& extract)
+{
+    using fisk::Encoding;
+    using fisk::Layout;
+    check_ascii_chunked<Encoding::kACGT, Layout::kMSB, Checked>(chunked_test_sequences(), extract);
+    check_ascii_chunked<Encoding::kACGT, Layout::kLSB, Checked>(chunked_test_sequences(), extract);
+    check_ascii_chunked<Encoding::kACTG, Layout::kMSB, Checked>(
+        chunked_actg_test_sequences(), extract
+    );
+    check_ascii_chunked<Encoding::kACTG, Layout::kLSB, Checked>(
+        chunked_actg_test_sequences(), extract
+    );
+    check_ascii_chunked<Encoding::kACGT, Layout::kMSB, Checked>(
+        chunked_invalid_sequences(), extract
+    );
+    check_ascii_chunked<Encoding::kACGT, Layout::kLSB, Checked>(
+        chunked_invalid_sequences(), extract
+    );
+    check_ascii_chunked<Encoding::kACTG, Layout::kMSB, Checked>(
+        chunked_invalid_sequences(), extract
+    );
+    check_ascii_chunked<Encoding::kACTG, Layout::kLSB, Checked>(
+        chunked_invalid_sequences(), extract
+    );
+
+    using Scratch = std::conditional_t<
+        Checked,
+        fisk::PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>,
+        fisk::PackedSequence<Encoding::kACGT, Layout::kMSB>
+    >;
+    fisk::WordEncoderButterfly<Encoding::kACGT, Layout::kMSB> const encoder;
+    Scratch scratch;
+    for (Scratch* const s : {static_cast<Scratch*>(nullptr), &scratch}) {
+        check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
+            std::vector<std::uint64_t> ignored;
+            extract.template operator()<7>(
+                seq, k, encoder, s,
+                ChunkedKmerValueCollector<Encoding::kACGT, Layout::kMSB>{&ignored}
+            );
+        });
+    }
+}
+
+// The checked chunked loops as an `extract` for the checks of the extraction from ASCII above,
+// called as `extract.template operator()<E, L>(seq, k, callback)`, with a small chunk size, so that
+// the sequences of those checks span several chunks, and with the word encoder of E and L.
+template <typename Extract>
+inline auto ascii_chunked_as_ascii_extractor(Extract const& extract)
+{
+    return [extract]<fisk::Encoding E, fisk::Layout L>(
+        std::string const& seq, std::size_t k, auto const& callback
+    ) {
+        fisk::PackedSequenceWithValidity<E, L> scratch;
+        fisk::WordEncoderButterfly<E, L> const encoder;
+        extract.template operator()<7>(seq, k, encoder, &scratch, callback);
+    };
+}
