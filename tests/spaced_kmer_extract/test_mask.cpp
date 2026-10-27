@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -133,4 +134,28 @@ TEST(SpacedKmerExtractMask, ValidityMask)
 {
     check_validity_mask<Layout::kMSB>();
     check_validity_mask<Layout::kLSB>();
+}
+
+TEST(SpacedKmerExtractMask, DispatchMaskSets)
+{
+    // A vector of up to kMaxDispatchedMasks masks is dispatched as a span of its size, and one
+    // more mask throws.
+    static_assert(kMaxDispatchedMasks == FISK_MAX_DISPATCHED_MASKS);
+    std::vector<std::string> strings(kMaxDispatchedMasks, "1101");
+    auto masks = make_spaced_kmer_masks(strings);
+    auto const weight = dispatch_static_span<kMaxDispatchedMasks>(masks, [](auto span) {
+        EXPECT_EQ(decltype(span)::extent, kMaxDispatchedMasks);
+        std::size_t total = 0;
+        for (auto const& mask : span) {
+            total += spaced_kmer_weight(mask);
+        }
+        return total;
+    });
+    EXPECT_EQ(weight, 3 * kMaxDispatchedMasks);
+
+    strings.push_back("1101");
+    masks = make_spaced_kmer_masks(strings);
+    EXPECT_THROW(
+        dispatch_static_span<kMaxDispatchedMasks>(masks, [](auto) {}), std::invalid_argument
+    );
 }

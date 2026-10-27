@@ -42,6 +42,12 @@ target_include_directories(fisk INTERFACE
 )
 target_compile_features(fisk INTERFACE cxx_std_20)
 
+# The largest number of spaced k-mer masks that a std::vector of masks is dispatched for, see
+# spaced_kmer_extract/mask.hpp. Defined for the target, so that all code using it sees one value.
+set(FISK_MAX_DISPATCHED_MASKS 16 CACHE STRING
+    "Largest number of spaced k-mer masks that a std::vector of masks is dispatched for")
+target_compile_definitions(fisk INTERFACE FISK_MAX_DISPATCHED_MASKS=${FISK_MAX_DISPATCHED_MASKS})
+
 # ==================================================================================================
 #     Detect Instruction Sets
 # ==================================================================================================

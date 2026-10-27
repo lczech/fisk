@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -8,6 +9,7 @@
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/types.hpp"
+#include "fisk/util/static_span.hpp"
 
 namespace fisk {
 
@@ -18,6 +20,20 @@ namespace fisk {
 // The spaced k-mer masks in the representations of the bit extraction algorithms, for the
 // spaced k-mer extraction. The masks as strings and bits, and the spaced k-mers that they select,
 // are in core/kmer_spaced.hpp.
+
+// -------------------------------------------------------------------------------------------------
+//     Mask Sets
+// -------------------------------------------------------------------------------------------------
+
+// The largest number of masks that a std::vector of masks is dispatched for, as a std::span of
+// that compile-time size, see dispatch_static_span() (util/static_span.hpp). Each size up to this
+// one instantiates the function called on the span once. The CMake cache variable of the same name
+// sets it for all code that uses the fisk target alike.
+#ifndef FISK_MAX_DISPATCHED_MASKS
+#define FISK_MAX_DISPATCHED_MASKS 16
+#endif
+
+inline constexpr std::size_t kMaxDispatchedMasks = FISK_MAX_DISPATCHED_MASKS;
 
 // -------------------------------------------------------------------------------------------------
 //     Helper Functions

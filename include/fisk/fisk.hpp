@@ -10,6 +10,7 @@
 #include "fisk/util/intrinsics.hpp"
 #include "fisk/util/cpu_runtime.hpp"
 #include "fisk/util/random.hpp"
+#include "fisk/util/static_span.hpp"
 
 // SIMD archs
 #include "fisk/simd/simd.hpp"
