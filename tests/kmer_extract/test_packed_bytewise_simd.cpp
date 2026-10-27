@@ -331,11 +331,11 @@ static constexpr auto checked = [](
     auto const& packed, std::size_t k, std::vector<ExpectedKmer> const& expected
 ) {
     using Seq = std::remove_cvref_t<decltype(packed)>;
-    constexpr Encoding E = Seq::encoding;
-    constexpr Layout L = Seq::layout;
     std::size_t const num_kmers = packed.length() >= k ? packed.length() - k + 1 : 0;
 
     auto const check_simd = [&]<typename Simd>() {
+        constexpr Encoding E = Seq::encoding;
+        constexpr Layout L = Seq::layout;
         check_valid_lanes_callback<Simd>(expected, k, num_kmers, [&](auto const& callback) {
             for_each_kmer_packed_checked_bytewise_simd<Simd>(packed, k, callback);
         });

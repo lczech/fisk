@@ -24,8 +24,8 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
     std::ostream& csv_os,
     std::string const& suite_title,
     std::string const& case_label,
-    int rounds,
-    int repeats
+    std::size_t rounds,
+    std::size_t repeats
 ) {
     using Packed = PackedSequenceWithValidity<Encoding::kACGT, L>;
     // The Layout goes into the case, next to the mask, as for the other suites.
@@ -384,8 +384,8 @@ void bench_spaced_kmer_extract_packed_checked_multi(
         }
     }
 
-    int const rounds = 1;
-    int const repeats = 4;
+    std::size_t const rounds = 1;
+    std::size_t const repeats = 4;
 
     // User output
     std::string const suite_title = "spaced_kmer_extract_packed_checked_multi";

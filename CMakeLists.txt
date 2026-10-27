@@ -361,6 +361,9 @@ if(FISK_BUILD_TESTS)
             # See the matching /wd4714 and /wd4324 on fisk_benchmarks above for why.
             /wd4714
             /wd4324
+            # C4127: conditional expression is constant. Fires on the EXPECT_*() macros when they
+            # check a template parameter, which is intended in the tests.
+            /wd4127
         )
     endif()
 

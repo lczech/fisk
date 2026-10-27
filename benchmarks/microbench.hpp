@@ -161,14 +161,14 @@ public:
     //     configuration (fluent)
     // ------------------------------------------------------
 
-    Microbench& rounds(int r) {
-        if (r <= 0) throw std::runtime_error("rounds must be > 0");
+    Microbench& rounds(std::size_t r) {
+        if (r == 0) throw std::runtime_error("rounds must be > 0");
         rounds_ = r;
         return *this;
     }
 
-    Microbench& repeats(int r) {
-        if (r <= 0) throw std::runtime_error("repeats must be > 0");
+    Microbench& repeats(std::size_t r) {
+        if (r == 0) throw std::runtime_error("repeats must be > 0");
         repeats_ = r;
         return *this;
     }
@@ -231,7 +231,7 @@ public:
         }
 
         auto best = run_once(inputs, bs...);
-        for (int k = 1; k < repeats_; ++k) {
+        for (std::size_t k = 1; k < repeats_; ++k) {
             auto cur = run_once(inputs, bs...);
             if (cur.size() != best.size()) {
                 throw std::runtime_error("Microbench::run: benchmark count changed across repeats");
@@ -256,7 +256,7 @@ public:
         MakeInputs make_inputs,
         Benches const&... bs
     ) const {
-        if (repeats_ <= 0) {
+        if (repeats_ == 0) {
             throw std::runtime_error("Microbench::run: repeats must be > 0");
         }
 
@@ -265,7 +265,7 @@ public:
         auto best    = run_once(inputs0, bs...);
 
         // Further repeats: new inputs each time; keep best ns/op.
-        for (int k = 1; k < repeats_; ++k) {
+        for (std::size_t k = 1; k < repeats_; ++k) {
             auto inputs = make_inputs();
             auto cur    = run_once(inputs, bs...);
 
@@ -324,7 +324,7 @@ private:
         // Every round runs on the same inputs, so without the memory barrier, the compiler could
         // compute an inlined kernel once and reuse its results for the other rounds.
         auto t0 = std::chrono::steady_clock::now();
-        for (int r = 0; r < rounds_; ++r) {
+        for (std::size_t r = 0; r < rounds_; ++r) {
             clobber_memory(inputs.data());
             for (auto const& in : inputs) {
                 acc += static_cast<std::uint64_t>(b.fn(in));
@@ -375,8 +375,8 @@ private:
     // ------------------------------------------------------
 
     std::string title_;
-    int rounds_  = 10;
-    int repeats_ = 1;
+    std::size_t rounds_  = 10;
+    std::size_t repeats_ = 1;
 
     // Either a constant factor per element, or a custom function:
     double units_per_element_ = 1.0;
