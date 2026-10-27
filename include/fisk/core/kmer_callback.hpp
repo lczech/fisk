@@ -301,6 +301,19 @@ inline void invoke_kmer_vector_lane_callback_(Func& func, std::size_t pos, std::
     }
 }
 
+// Copy the lanes of a vector of k-mers or spaced k-mers into `words`. Clang 16 (but not Apple
+// Clang) crashes in its SLP vectorizer on some loops that sum the lanes of these vectors, for
+// several vectors per iteration; there, an empty asm keeps the lanes in memory, which avoids that.
+template <KmerVectorType V>
+FISK_ALWAYS_INLINE
+inline void copy_kmer_vector_lanes_(V const& kmers, std::uint64_t (&words)[V::lanes])
+{
+    std::memcpy(words, &kmers.value, sizeof(words));
+    #if defined(__clang__) && !defined(__apple_build_version__) && __clang_major__ == 16
+    __asm__ volatile("" : "+m"(words));
+    #endif
+}
+
 /**
  * @brief Call `func` with each of the first `valid_count` k-mers of a vector of k-mers or spaced
  * k-mers, in lane order, as handed out by for_each_kmer_packed_unchecked_bytewise_simd() or
@@ -316,7 +329,7 @@ inline void for_each_valid_lane(std::size_t pos, V kmers, std::size_t valid_coun
 {
     assert(valid_count <= V::lanes);
     std::uint64_t words[V::lanes];
-    std::memcpy(words, &kmers.value, sizeof(words));
+    copy_kmer_vector_lanes_(kmers, words);
     for (std::size_t j = 0; j < valid_count; ++j) {
         invoke_kmer_vector_lane_callback_<V>(func, pos + j, words[j]);
     }
@@ -337,7 +350,7 @@ inline void for_each_valid_lane(
     std::size_t pos, V kmers, SimdVectorValidLanes<typename V::simd> valid_lanes, Func&& func
 ) {
     std::uint64_t words[V::lanes];
-    std::memcpy(words, &kmers.value, sizeof(words));
+    copy_kmer_vector_lanes_(kmers, words);
     std::uint64_t const bits = valid_lanes.bits;
 
     // A loop with a fixed count over all lanes, which tests the bit of each, rather than a loop
