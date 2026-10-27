@@ -14,6 +14,7 @@
 #include "fisk/simd/avx2.hpp"
 #include "fisk/simd/avx512.hpp"
 #include "fisk/simd/neon.hpp"
+#include "chunked.hpp"
 #include "sink.hpp"
 
 /**
@@ -450,3 +451,170 @@ std::uint64_t run_var_rolling_simd_pext_scalars(
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
+
+// The chunked variants, see spaced_kmer_extract/ascii_chunked_scalar.hpp, each with a scratch
+// of its own. The `_scalars` SIMD variants take the spaced k-mers out of the vectors with
+// for_each_valid_lane(), so that their sums match the others. The `_vectors` ones sum the vectors
+// whole, each arch in a suite.run() of its own, see bench.cpp.
+#if defined(FISK_HAS_BMI2)
+std::uint64_t run_var_chunked_scalar_pext(
+    std::string const& seq,
+    PextMask<fisk::Layout::kMSB> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_scalar_pext(
+    std::string const& seq,
+    PextMask<fisk::Layout::kLSB> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+std::uint64_t run_var_chunked_scalar_butterfly(
+    std::string const& seq,
+    ButterflyMask<fisk::Layout::kMSB> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_scalar_butterfly(
+    std::string const& seq,
+    ButterflyMask<fisk::Layout::kLSB> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#if defined(FISK_HAS_SSE2)
+std::uint64_t run_var_chunked_simd_butterfly_sse2_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdSSE2> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_sse2_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdSSE2> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+#if defined(FISK_HAS_AVX2)
+std::uint64_t run_var_chunked_simd_butterfly_avx2_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdAVX2> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_avx2_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdAVX2> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+#if defined(FISK_HAS_AVX512)
+std::uint64_t run_var_chunked_simd_butterfly_avx512_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdAVX512> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_avx512_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdAVX512> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+#if defined(FISK_HAS_NEON)
+std::uint64_t run_var_chunked_simd_butterfly_neon_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdNEON> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_neon_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdNEON> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+std::uint64_t run_var_chunked_simd_butterfly_scalar_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdScalar> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_scalar_scalars(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdScalar> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#if defined(FISK_HAS_SSE2)
+std::uint64_t run_var_chunked_simd_butterfly_sse2_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdSSE2> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_sse2_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdSSE2> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+#if defined(FISK_HAS_AVX2)
+std::uint64_t run_var_chunked_simd_butterfly_avx2_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdAVX2> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_avx2_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdAVX2> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+#if defined(FISK_HAS_AVX512)
+std::uint64_t run_var_chunked_simd_butterfly_avx512_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdAVX512> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_avx512_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdAVX512> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+#if defined(FISK_HAS_NEON)
+std::uint64_t run_var_chunked_simd_butterfly_neon_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdNEON> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_neon_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdNEON> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+#endif
+std::uint64_t run_var_chunked_simd_butterfly_scalar_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kMSB, fisk::SimdScalar> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kMSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);
+std::uint64_t run_var_chunked_simd_butterfly_scalar_vectors(
+    std::string const& seq,
+    ButterflyKernel<fisk::Layout::kLSB, fisk::SimdScalar> const& mask,
+    ChunkedCheckedScratch<fisk::Layout::kLSB>& scratch,
+    std::vector<std::uint64_t>& sink_buffer
+);

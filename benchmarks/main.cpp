@@ -33,6 +33,8 @@
 #include "kmer_extract_packed_checked/bench.hpp"
 #include "spaced_kmer_extract_ascii_checked_single/bench.hpp"
 #include "spaced_kmer_extract_ascii_checked_multi/bench.hpp"
+#include "spaced_kmer_extract_ascii_unchecked_single/bench.hpp"
+#include "spaced_kmer_extract_ascii_unchecked_multi/bench.hpp"
 #include "spaced_kmer_extract_packed_unchecked_single/bench.hpp"
 #include "spaced_kmer_extract_packed_unchecked_multi/bench.hpp"
 #include "spaced_kmer_extract_packed_checked_single/bench.hpp"
@@ -313,6 +315,18 @@ int main(int argc, char **argv)
     {
         auto os = get_ofstream(out_dir, "spaced_kmer_extract_ascii_checked_multi.csv" );
         bench_spaced_kmer_extract_ascii_checked_multi( sequences, multi_masks, os );
+    }
+
+    // Spaced k-mers from ASCII, unchecked, single mask
+    {
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_ascii_unchecked_single.csv" );
+        bench_spaced_kmer_extract_ascii_unchecked_single( sequences, single_masks, os );
+    }
+
+    // Spaced k-mers from ASCII, unchecked, multi masks
+    {
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_ascii_unchecked_multi.csv" );
+        bench_spaced_kmer_extract_ascii_unchecked_multi( sequences, multi_masks, os );
     }
 
     // Spaced k-mers from a PackedSequence, single mask

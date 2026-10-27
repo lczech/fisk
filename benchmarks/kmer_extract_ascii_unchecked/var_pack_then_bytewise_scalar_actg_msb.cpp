@@ -4,6 +4,7 @@
 
 #include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
+#include "chunked.hpp"
 #include "kmer_extract_ascii_unchecked/bench.hpp"
 
 using namespace fisk;
@@ -14,7 +15,7 @@ std::uint64_t run_var_pack_then_bytewise_scalar_actg_msb(
     PackedActgMsb& scratch,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    pack_sequence_unchecked(seq, WordEncoderButterfly<Encoding::kACTG, Layout::kMSB>{}, scratch);
+    pack_sequence_unchecked(seq, ChunkedWordEncoder<Encoding::kACTG, Layout::kMSB>{}, scratch);
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_unchecked_bytewise_scalar(
         scratch, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA { sink.consume(kmer_value(kmer)); }

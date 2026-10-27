@@ -45,9 +45,8 @@ void bench_kmer_extract_ascii_unchecked(
     for (auto const& seq : sequences) {
         max_seq_len = std::max(max_seq_len, seq.size());
     }
-    std::vector<std::uint64_t> sink_buffer(
-        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
-    );
+    // The chunked vector variants also write the lanes that pad their last vector, at most 8.
+    std::vector<std::uint64_t> sink_buffer(std::bit_ceil(max_seq_len + 8), 0);
 
     // Each scratch buffer stays dedicated to one variant, so retained capacity from one benchmark
     // cannot affect another variant's setup.
@@ -56,6 +55,58 @@ void bench_kmer_extract_ascii_unchecked(
     PackedActgMsb chunked_scratch_actg_msb;
     PackedActgLsb chunked_scratch_actg_lsb;
     PackedAcgtMsb pack_scratch_acgt_msb;
+    PackedAcgtMsb scratch_simd_scalar_scalars_acgt_msb;
+    #if defined(FISK_HAS_AVX2)
+    PackedAcgtMsb scratch_simd_avx2_scalars_acgt_msb;
+    #endif // FISK_HAS_AVX2
+    #if defined(FISK_HAS_AVX512)
+    PackedAcgtMsb scratch_simd_avx512_scalars_acgt_msb;
+    #endif // FISK_HAS_AVX512
+    #if defined(FISK_HAS_NEON)
+    PackedAcgtMsb scratch_simd_neon_scalars_acgt_msb;
+    #endif // FISK_HAS_NEON
+    #if defined(FISK_HAS_SSE2)
+    PackedAcgtMsb scratch_simd_sse2_scalars_acgt_msb;
+    #endif // FISK_HAS_SSE2
+    PackedAcgtMsb scratch_simd_scalar_acgt_msb;
+    #if defined(FISK_HAS_SSE2)
+    PackedAcgtMsb scratch_simd_sse2_acgt_msb;
+    #endif // FISK_HAS_SSE2
+    #if defined(FISK_HAS_AVX2)
+    PackedAcgtMsb scratch_simd_avx2_acgt_msb;
+    #endif // FISK_HAS_AVX2
+    #if defined(FISK_HAS_AVX512)
+    PackedAcgtMsb scratch_simd_avx512_acgt_msb;
+    #endif // FISK_HAS_AVX512
+    #if defined(FISK_HAS_NEON)
+    PackedAcgtMsb scratch_simd_neon_acgt_msb;
+    #endif // FISK_HAS_NEON
+    PackedAcgtLsb scratch_simd_scalar_scalars_acgt_lsb;
+    #if defined(FISK_HAS_AVX2)
+    PackedAcgtLsb scratch_simd_avx2_scalars_acgt_lsb;
+    #endif // FISK_HAS_AVX2
+    #if defined(FISK_HAS_AVX512)
+    PackedAcgtLsb scratch_simd_avx512_scalars_acgt_lsb;
+    #endif // FISK_HAS_AVX512
+    #if defined(FISK_HAS_NEON)
+    PackedAcgtLsb scratch_simd_neon_scalars_acgt_lsb;
+    #endif // FISK_HAS_NEON
+    #if defined(FISK_HAS_SSE2)
+    PackedAcgtLsb scratch_simd_sse2_scalars_acgt_lsb;
+    #endif // FISK_HAS_SSE2
+    PackedAcgtLsb scratch_simd_scalar_acgt_lsb;
+    #if defined(FISK_HAS_SSE2)
+    PackedAcgtLsb scratch_simd_sse2_acgt_lsb;
+    #endif // FISK_HAS_SSE2
+    #if defined(FISK_HAS_AVX2)
+    PackedAcgtLsb scratch_simd_avx2_acgt_lsb;
+    #endif // FISK_HAS_AVX2
+    #if defined(FISK_HAS_AVX512)
+    PackedAcgtLsb scratch_simd_avx512_acgt_lsb;
+    #endif // FISK_HAS_AVX512
+    #if defined(FISK_HAS_NEON)
+    PackedAcgtLsb scratch_simd_neon_acgt_lsb;
+    #endif // FISK_HAS_NEON
     PackedAcgtLsb pack_scratch_acgt_lsb;
     PackedActgMsb pack_scratch_actg_msb;
     PackedActgLsb pack_scratch_actg_lsb;
@@ -99,6 +150,102 @@ void bench_kmer_extract_ascii_unchecked(
                 }
             ),
             bench(
+                "chunked_simd_scalar_scalars",
+                [k, &scratch_simd_scalar_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_scalar_scalars_acgt_msb(
+                        seq, k, scratch_simd_scalar_scalars_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #if defined(FISK_HAS_SSE2)
+            bench(
+                "chunked_simd_sse2_scalars",
+                [k, &scratch_simd_sse2_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_sse2_scalars_acgt_msb(
+                        seq, k, scratch_simd_sse2_scalars_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "chunked_simd_avx2_scalars",
+                [k, &scratch_simd_avx2_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_avx2_scalars_acgt_msb(
+                        seq, k, scratch_simd_avx2_scalars_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "chunked_simd_avx512_scalars",
+                [k, &scratch_simd_avx512_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_avx512_scalars_acgt_msb(
+                        seq, k, scratch_simd_avx512_scalars_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
+            bench(
+                "chunked_simd_neon_scalars",
+                [k, &scratch_simd_neon_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_neon_scalars_acgt_msb(
+                        seq, k, scratch_simd_neon_scalars_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_NEON
+            bench(
+                "chunked_simd_scalar",
+                [k, &scratch_simd_scalar_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_scalar_acgt_msb(
+                        seq, k, scratch_simd_scalar_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #if defined(FISK_HAS_SSE2)
+            bench(
+                "chunked_simd_sse2",
+                [k, &scratch_simd_sse2_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_sse2_acgt_msb(
+                        seq, k, scratch_simd_sse2_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "chunked_simd_avx2",
+                [k, &scratch_simd_avx2_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_avx2_acgt_msb(
+                        seq, k, scratch_simd_avx2_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "chunked_simd_avx512",
+                [k, &scratch_simd_avx512_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_avx512_acgt_msb(
+                        seq, k, scratch_simd_avx512_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
+            bench(
+                "chunked_simd_neon",
+                [k, &scratch_simd_neon_acgt_msb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_neon_acgt_msb(
+                        seq, k, scratch_simd_neon_acgt_msb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_NEON
+            bench(
                 "pack_then_bytewise_scalar",
                 [k, &pack_scratch_acgt_msb, &sink_buffer](std::string const& seq){
                     return run_var_pack_then_bytewise_scalar_acgt_msb(
@@ -127,6 +274,102 @@ void bench_kmer_extract_ascii_unchecked(
                     );
                 }
             ),
+            bench(
+                "chunked_simd_scalar_scalars",
+                [k, &scratch_simd_scalar_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_scalar_scalars_acgt_lsb(
+                        seq, k, scratch_simd_scalar_scalars_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #if defined(FISK_HAS_SSE2)
+            bench(
+                "chunked_simd_sse2_scalars",
+                [k, &scratch_simd_sse2_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_sse2_scalars_acgt_lsb(
+                        seq, k, scratch_simd_sse2_scalars_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "chunked_simd_avx2_scalars",
+                [k, &scratch_simd_avx2_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_avx2_scalars_acgt_lsb(
+                        seq, k, scratch_simd_avx2_scalars_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "chunked_simd_avx512_scalars",
+                [k, &scratch_simd_avx512_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_avx512_scalars_acgt_lsb(
+                        seq, k, scratch_simd_avx512_scalars_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
+            bench(
+                "chunked_simd_neon_scalars",
+                [k, &scratch_simd_neon_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_neon_scalars_acgt_lsb(
+                        seq, k, scratch_simd_neon_scalars_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_NEON
+            bench(
+                "chunked_simd_scalar",
+                [k, &scratch_simd_scalar_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_scalar_acgt_lsb(
+                        seq, k, scratch_simd_scalar_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #if defined(FISK_HAS_SSE2)
+            bench(
+                "chunked_simd_sse2",
+                [k, &scratch_simd_sse2_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_sse2_acgt_lsb(
+                        seq, k, scratch_simd_sse2_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
+            bench(
+                "chunked_simd_avx2",
+                [k, &scratch_simd_avx2_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_avx2_acgt_lsb(
+                        seq, k, scratch_simd_avx2_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "chunked_simd_avx512",
+                [k, &scratch_simd_avx512_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_avx512_acgt_lsb(
+                        seq, k, scratch_simd_avx512_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
+            bench(
+                "chunked_simd_neon",
+                [k, &scratch_simd_neon_acgt_lsb, &sink_buffer](std::string const& seq){
+                    return run_var_chunked_simd_neon_acgt_lsb(
+                        seq, k, scratch_simd_neon_acgt_lsb, sink_buffer
+                    );
+                }
+            ),
+            #endif // FISK_HAS_NEON
             bench(
                 "pack_then_bytewise_scalar",
                 [k, &pack_scratch_acgt_lsb, &sink_buffer](std::string const& seq){

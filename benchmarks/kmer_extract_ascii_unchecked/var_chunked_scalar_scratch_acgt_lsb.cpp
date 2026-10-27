@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
+#include "chunked.hpp"
 #include "kmer_extract_ascii_unchecked/bench.hpp"
 
 using namespace fisk;
@@ -15,7 +16,7 @@ std::uint64_t run_var_chunked_scalar_scratch_acgt_lsb(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_ascii_unchecked_chunked_scalar(
-        seq, k, WordEncoderButterfly<Encoding::kACGT, Layout::kLSB>{}, scratch,
+        seq, k, ChunkedWordEncoder<Encoding::kACGT, Layout::kLSB>{}, scratch,
         [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA { sink.consume(kmer_value(kmer)); }
     );
     return sink.finalize();

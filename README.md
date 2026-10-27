@@ -75,8 +75,8 @@ This will produce performance measurements for all implemented benchmarks on the
 | | ASCII, checked | ASCII, unchecked | packed, unchecked | packed, checked |
 |---|---|---|---|---|
 | k-mers | `kmer_extract_ascii_checked` | `kmer_extract_ascii_unchecked` | `kmer_extract_packed_unchecked` | `kmer_extract_packed_checked` |
-| spaced k-mers, one mask | `spaced_kmer_extract_ascii_checked_single` | (not yet) | `spaced_kmer_extract_packed_unchecked_single` | `spaced_kmer_extract_packed_checked_single` |
-| spaced k-mers, several masks | `spaced_kmer_extract_ascii_checked_multi` | (not yet) | `spaced_kmer_extract_packed_unchecked_multi` | `spaced_kmer_extract_packed_checked_multi` |
+| spaced k-mers, one mask | `spaced_kmer_extract_ascii_checked_single` | `spaced_kmer_extract_ascii_unchecked_single` | `spaced_kmer_extract_packed_unchecked_single` | `spaced_kmer_extract_packed_checked_single` |
+| spaced k-mers, several masks | `spaced_kmer_extract_ascii_checked_multi` | `spaced_kmer_extract_ascii_unchecked_multi` | `spaced_kmer_extract_packed_unchecked_multi` | `spaced_kmer_extract_packed_checked_multi` |
 | sequence packing | | | `sequence_pack_unchecked` | `sequence_pack_checked` |
 
 Furthermore:
@@ -146,12 +146,12 @@ These combinations exist, as `<algorithm>_<technique>`:
 
 | | `for_each_kmer_…` | `for_each_spaced_kmer_…` |
 |---|---|---|
-| `…_ascii_checked_…` | `rolling_scalar`, `reextract_scalar`, `rolling_swar`, `rolling_avx2` | `rolling_scalar`, `rolling_simd` |
-| `…_ascii_unchecked_…` | `chunked_scalar` | |
+| `…_ascii_checked_…` | `rolling_scalar`, `reextract_scalar`, `rolling_swar`, `rolling_avx2`, `chunked_scalar`, `chunked_simd` | `rolling_scalar`, `rolling_simd`, `chunked_scalar`, `chunked_simd` |
+| `…_ascii_unchecked_…` | `chunked_scalar`, `chunked_simd` | `chunked_scalar`, `chunked_simd` |
 | `…_packed_checked_…` | `bytewise_scalar`, `rolling_scalar`, `bytewise_simd` | `bytewise_scalar`, `bytewise_simd` |
 | `…_packed_unchecked_…` | `bytewise_scalar`, `rolling_scalar`, `bytewise_simd` | `bytewise_scalar`, `bytewise_simd` |
 
-Each `<input>_<algorithm>_<technique>` has its own header in `kmer_extract/` or `spaced_kmer_extract/`, with its checked and unchecked functions, e.g. `kmer_extract/packed_bytewise_scalar.hpp`. The internals that several of them share are in an `internal.hpp` in each directory.
+Each `<input>_<algorithm>_<technique>` has its own header in `kmer_extract/` or `spaced_kmer_extract/`, with its checked and unchecked functions, e.g. `kmer_extract/packed_bytewise_scalar.hpp`. The internals that several of them share are in an `internal.hpp` in each directory, and the chunking that all `chunked` ones share in `kmer_extract/ascii_chunked.hpp`.
 
 The spaced k-mer functions take a set of masks as a `std::span` of compile-time size, so that their loops over the masks are unrolled; an array is handed on as `std::span{array}`. `dispatch_static_span()` (`util/static_span.hpp`) hands on a `std::vector` of masks, as made by `make_spaced_kmer_masks()`, as such a span of its size, which can be up to `kMaxDispatchedMasks` (16 by default, see the CMake option `FISK_MAX_DISPATCHED_MASKS` above):
 
