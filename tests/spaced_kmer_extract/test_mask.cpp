@@ -61,8 +61,8 @@ static void check_mask_factories()
 {
     std::vector<std::string> const strings = {"1011", "1*0011"};
     auto const masks = make_spaced_kmer_masks<L>(strings);
-    auto const butterfly_tables = make_spaced_kmer_butterfly_tables(masks);
-    auto const block_tables = make_spaced_kmer_block_tables(masks);
+    auto const butterfly_masks = make_spaced_kmer_butterfly_masks(masks);
+    auto const block_shift_masks = make_spaced_kmer_block_shift_masks(masks);
     auto const kernels = make_spaced_kmer_kernels<BitExtractKernelBlockShift<SimdScalar>>(masks);
     ASSERT_EQ(masks.size(), strings.size());
 
@@ -71,32 +71,32 @@ static void check_mask_factories()
         EXPECT_EQ(mask.mask, make_spaced_kmer_mask<L>(strings[i]).mask);
         EXPECT_EQ(mask.span_k, strings[i].size());
 
-        auto const butterfly_table = make_spaced_kmer_butterfly_table<L>(strings[i]);
-        auto const block_table = make_spaced_kmer_block_table<L>(strings[i]);
+        auto const butterfly_mask = make_spaced_kmer_butterfly_mask<L>(strings[i]);
+        auto const block_shift_mask = make_spaced_kmer_block_shift_mask<L>(strings[i]);
         auto const kernel
             = make_spaced_kmer_kernel<BitExtractKernelBlockShift<SimdScalar>, L>(strings[i])
         ;
-        static_assert(decltype(butterfly_table)::layout == L);
-        static_assert(decltype(block_table)::layout == L);
+        static_assert(decltype(butterfly_mask)::layout == L);
+        static_assert(decltype(block_shift_mask)::layout == L);
         static_assert(decltype(kernel)::layout == L);
-        static_assert(std::remove_cvref_t<decltype(butterfly_tables[i])>::layout == L);
-        static_assert(std::remove_cvref_t<decltype(block_tables[i])>::layout == L);
+        static_assert(std::remove_cvref_t<decltype(butterfly_masks[i])>::layout == L);
+        static_assert(std::remove_cvref_t<decltype(block_shift_masks[i])>::layout == L);
         static_assert(std::remove_cvref_t<decltype(kernels[i])>::layout == L);
-        EXPECT_EQ(butterfly_table.span_k, mask.span_k);
-        EXPECT_EQ(block_table.span_k, mask.span_k);
+        EXPECT_EQ(butterfly_mask.span_k, mask.span_k);
+        EXPECT_EQ(block_shift_mask.span_k, mask.span_k);
         EXPECT_EQ(kernel.span_k, mask.span_k);
-        EXPECT_EQ(butterfly_tables[i].span_k, mask.span_k);
-        EXPECT_EQ(block_tables[i].span_k, mask.span_k);
+        EXPECT_EQ(butterfly_masks[i].span_k, mask.span_k);
+        EXPECT_EQ(block_shift_masks[i].span_k, mask.span_k);
         EXPECT_EQ(kernels[i].span_k, mask.span_k);
 
         // The tables and kernels extract the same bits as the plain mask.
         for (std::uint64_t const x : {0x0ull, ~0x0ull, 0x0123456789ABCDEFull}) {
             auto const expected = bit_extract_bit_loop(x, mask);
-            EXPECT_EQ(bit_extract_butterfly(x, butterfly_table), expected);
-            EXPECT_EQ(bit_extract_block_shift(x, block_table), expected);
+            EXPECT_EQ(bit_extract_butterfly(x, butterfly_mask), expected);
+            EXPECT_EQ(bit_extract_block_shift(x, block_shift_mask), expected);
             EXPECT_EQ(kernel.bit_extract(x), expected);
-            EXPECT_EQ(bit_extract_butterfly(x, butterfly_tables[i]), expected);
-            EXPECT_EQ(bit_extract_block_shift(x, block_tables[i]), expected);
+            EXPECT_EQ(bit_extract_butterfly(x, butterfly_masks[i]), expected);
+            EXPECT_EQ(bit_extract_block_shift(x, block_shift_masks[i]), expected);
             EXPECT_EQ(kernels[i].bit_extract(x), expected);
         }
     }
@@ -122,7 +122,7 @@ static void check_validity_mask()
             }
         }
         EXPECT_EQ(mask.validity_mask, expected_validity);
-        EXPECT_EQ(make_spaced_kmer_butterfly_table(mask).validity_mask, expected_validity);
+        EXPECT_EQ(make_spaced_kmer_butterfly_mask(mask).validity_mask, expected_validity);
         EXPECT_EQ(
             make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(mask).validity_mask,
             expected_validity

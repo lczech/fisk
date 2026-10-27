@@ -143,15 +143,15 @@ inline std::uint64_t bit_extract_split32(std::uint64_t x, BitExtractMask mask) n
 }
 
 // =================================================================================================
-//     Bit extract via byte-wise lookup table (8-bit chunks)
+//     Bit extract via byte lookup (8-bit chunks)
 // =================================================================================================
 
 /**
- * @brief Lookup tables for bit extraction via the Byte Table implementation.
+ * @brief Lookup tables for bit extraction via byte lookup.
  *
  * This table is generic for all masks, and only needs to be computed once.
  */
-struct BitExtractByteTable
+struct BitExtractByteLookupTable
 {
     // Precomputes, for each 8-bit mask m and 8-bit value x, the packed result.
     // Also uses popcount(m) to know how much to shift the next chunk.
@@ -159,7 +159,7 @@ struct BitExtractByteTable
     std::array<std::array<std::uint8_t, 256>, 256> table{};
     std::array<std::uint8_t, 256> popcnt{};
 
-    BitExtractByteTable()
+    BitExtractByteLookupTable()
     {
         for (size_t m = 0; m < 256; ++m) {
             std::uint8_t c = 0;
@@ -193,7 +193,7 @@ struct BitExtractByteTable
 inline std::uint64_t bit_extract_byte_lookup(std::uint64_t x, BitExtractMask mask) noexcept
 {
     // Use the precomputed bytes to implement a fast pext.
-    static const BitExtractByteTable byte_table;
+    static const BitExtractByteLookupTable lookup_table;
 
     std::uint64_t out = 0;
     unsigned shift = 0;
@@ -201,9 +201,9 @@ inline std::uint64_t bit_extract_byte_lookup(std::uint64_t x, BitExtractMask mas
     for (int i = 0; i < 8; ++i) {
         std::uint8_t mm = static_cast<std::uint8_t>(mask.mask >> (8 * i));
         std::uint8_t xx = static_cast<std::uint8_t>(x >> (8 * i));
-        std::uint64_t part = static_cast<std::uint64_t>(byte_table.table[mm][xx]);
+        std::uint64_t part = static_cast<std::uint64_t>(lookup_table.table[mm][xx]);
         out |= (part << shift);
-        shift += byte_table.popcnt[mm];
+        shift += lookup_table.popcnt[mm];
     }
     return out;
 }
@@ -213,17 +213,18 @@ inline std::uint64_t bit_extract_byte_lookup(std::uint64_t x, BitExtractMask mas
 // =================================================================================================
 
 /**
- * @brief Lookup tables for bit extraction via the Block Shift implementation.
+ * @brief Mask for bit extraction via block shift: the mask with the tables of its blocks and
+ * shifts.
  *
  * These tables are specific for a given mask. If only few masks are used, as in our case here,
  * this is a reasonably fast implementation. With arbitrary masks in each bit extraction call,
  * such as in chess computing, this is not the right choice.
  */
-struct BitExtractBlockTable
+struct BitExtractBlockShiftMask
 {
-    // Declared so that this is not an aggregate: `BitExtractBlockTable{mask}` would otherwise
-    // compile, but leave the tables empty. Use make_bit_extract_block_table() instead.
-    BitExtractBlockTable() = default;
+    // Declared so that this is not an aggregate: `BitExtractBlockShiftMask{mask}` would otherwise
+    // compile, but leave the tables empty. Use make_bit_extract_block_shift_mask() instead.
+    BitExtractBlockShiftMask() = default;
 
     // The original underlying bit mask.
     std::uint64_t mask{};
@@ -242,11 +243,11 @@ struct BitExtractBlockTable
 };
 
 /**
- * @brief Compute the Block Shift lookup tables for a given mask.
+ * @brief Compute the block shift mask, with its tables, for a given mask.
  */
-inline BitExtractBlockTable make_bit_extract_block_table( std::uint64_t mask )
+inline BitExtractBlockShiftMask make_bit_extract_block_shift_mask( std::uint64_t mask )
 {
-    BitExtractBlockTable table{};
+    BitExtractBlockShiftMask table{};
     table.mask = mask;
 
     // Helper: build a contiguous run mask of length len at bit position start. Runs are never
@@ -302,11 +303,11 @@ inline BitExtractBlockTable make_bit_extract_block_table( std::uint64_t mask )
 /**
  * @brief Bit extract via block shift.
  *
- * This implementation uses a BitExtractBlockTable that is precomputed for the mask, and runs
+ * This implementation uses a BitExtractBlockShiftMask that is precomputed for the mask, and runs
  * as many iterations as there are blocks of consecutive 1s in the mask.
  */
 inline std::uint64_t bit_extract_block_shift(
-    std::uint64_t x, BitExtractBlockTable const& bt
+    std::uint64_t x, BitExtractBlockShiftMask const& bt
 ) noexcept {
     // Apply blockwise bit extraction using the preprocessing above.
     // Semantics match _pext_u64(x, mask) for the same mask.
@@ -327,7 +328,7 @@ inline std::uint64_t bit_extract_block_shift(
 template<std::size_t... Is>
 inline std::uint64_t bit_extract_block_shift_chunk_(
     std::uint64_t x,
-    BitExtractBlockTable const& bt,
+    BitExtractBlockShiftMask const& bt,
     std::size_t i,
     std::index_sequence<Is...>
 ) noexcept
@@ -344,7 +345,7 @@ inline std::uint64_t bit_extract_block_shift_chunk_(
 template<std::size_t UF = 1>
 inline std::uint64_t bit_extract_block_shift_unrolled(
     std::uint64_t x,
-    BitExtractBlockTable const& bt
+    BitExtractBlockShiftMask const& bt
 ) noexcept
 {
     static_assert(
@@ -371,20 +372,21 @@ inline std::uint64_t bit_extract_block_shift_unrolled(
 // =================================================================================================
 
 /**
- * @brief Table and values for the bit extraction via extraction butterfly permutation network.
+ * @brief Mask for bit extraction via the extraction butterfly permutation network: the mask with
+ * the sieves of its steps.
  *
  * The butterfly network works by shifting each position by increasing powers of two, such that
  * each bit has the chance to be moved to wherever it is needed in the final result.
- * The table here contains the sets of which bits need to be shifted in each step.
+ * The sieves are the sets of bits that need to be shifted in each step.
  *
  * See https://stackoverflow.com/a/16752267 and https://stackoverflow.com/a/28283007 for the
  * inspiration for this implementation.
  */
-struct BitExtractButterflyTable
+struct BitExtractButterflyMask
 {
-    // Declared so that this is not an aggregate, see BitExtractBlockTable.
-    // Use make_bit_extract_butterfly_table() instead.
-    BitExtractButterflyTable() = default;
+    // Declared so that this is not an aggregate, see BitExtractBlockShiftMask.
+    // Use make_bit_extract_butterfly_mask() instead.
+    BitExtractButterflyMask() = default;
 
     // The original mask, as well as subsets for each power of two.
     std::uint64_t mask = 0;
@@ -396,9 +398,9 @@ struct BitExtractButterflyTable
  *
  * Usable at compile time, for masks that are known then.
  */
-inline constexpr BitExtractButterflyTable make_bit_extract_butterfly_table( std::uint64_t mask )
+inline constexpr BitExtractButterflyMask make_bit_extract_butterfly_mask( std::uint64_t mask )
 {
-    BitExtractButterflyTable out{};
+    BitExtractButterflyMask out{};
     out.mask = mask;
     std::uint64_t m = mask;
     std::uint64_t mk = ~m << 1;
@@ -426,7 +428,7 @@ inline constexpr BitExtractButterflyTable make_bit_extract_butterfly_table( std:
  */
 inline std::uint64_t bit_extract_butterfly(
     std::uint64_t x,
-    BitExtractButterflyTable const& bf
+    BitExtractButterflyMask const& bf
 ) noexcept {
     x &= bf.mask;
     auto step = [&]( std::size_t s, std::uint64_t mv_i )

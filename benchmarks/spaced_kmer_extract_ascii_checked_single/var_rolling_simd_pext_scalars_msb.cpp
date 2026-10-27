@@ -12,7 +12,7 @@ using namespace fisk;
 
 std::uint64_t run_var_rolling_simd_pext_scalars(
     std::string const& seq,
-    SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT> const& kernel,
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelPext> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);

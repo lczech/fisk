@@ -75,8 +75,8 @@ static void check_all_scalar_variants(
     std::vector<std::string> const& mask_strings, Enc const& enc
 ) {
     auto const direct_masks = make_spaced_kmer_masks<L>(mask_strings);
-    auto const block_masks = make_spaced_kmer_block_tables(direct_masks);
-    auto const butterfly_masks = make_spaced_kmer_butterfly_tables(direct_masks);
+    auto const block_masks = make_spaced_kmer_block_shift_masks(direct_masks);
+    auto const butterfly_masks = make_spaced_kmer_butterfly_masks(direct_masks);
 
     check_scalar_variant(
         mask_strings, direct_masks, enc,
@@ -88,31 +88,31 @@ static void check_all_scalar_variants(
     );
     check_scalar_variant(
         mask_strings, block_masks, enc,
-        [](std::uint64_t x, BitExtractBlockTable const& mask) {
+        [](std::uint64_t x, BitExtractBlockShiftMask const& mask) {
             return bit_extract_block_shift(x, mask);
         }
     );
     check_scalar_variant(
         mask_strings, block_masks, enc,
-        [](std::uint64_t x, BitExtractBlockTable const& mask) {
+        [](std::uint64_t x, BitExtractBlockShiftMask const& mask) {
             return bit_extract_block_shift_unrolled<2>(x, mask);
         }
     );
     check_scalar_variant(
         mask_strings, block_masks, enc,
-        [](std::uint64_t x, BitExtractBlockTable const& mask) {
+        [](std::uint64_t x, BitExtractBlockShiftMask const& mask) {
             return bit_extract_block_shift_unrolled<4>(x, mask);
         }
     );
     check_scalar_variant(
         mask_strings, block_masks, enc,
-        [](std::uint64_t x, BitExtractBlockTable const& mask) {
+        [](std::uint64_t x, BitExtractBlockShiftMask const& mask) {
             return bit_extract_block_shift_unrolled<8>(x, mask);
         }
     );
     check_scalar_variant(
         mask_strings, butterfly_masks, enc,
-        [](std::uint64_t x, BitExtractButterflyTable const& mask) {
+        [](std::uint64_t x, BitExtractButterflyMask const& mask) {
             return bit_extract_butterfly(x, mask);
         }
     );

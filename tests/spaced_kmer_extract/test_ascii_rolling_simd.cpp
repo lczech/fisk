@@ -241,7 +241,7 @@ TEST(SpacedKmerExtractAsciiRollingSimd, BlockNeon)
 
 TEST(SpacedKmerExtractAsciiRollingSimd, Pext)
 {
-    check_simd_kernel<BitExtractKernelPEXT>();
+    check_simd_kernel<BitExtractKernelPext>();
 }
 
 #endif

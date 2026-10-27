@@ -11,7 +11,7 @@ using namespace fisk;
 
 std::uint64_t run_var_bytewise_simd_pext_scalars(
     CheckedLsb const& seq,
-    SpacedKmerMask<Layout::kLSB, BitExtractKernelPEXT> const& kernel,
+    SpacedKmerMask<Layout::kLSB, BitExtractKernelPext> const& kernel,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);

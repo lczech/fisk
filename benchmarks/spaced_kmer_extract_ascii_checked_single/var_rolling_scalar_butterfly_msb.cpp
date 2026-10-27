@@ -11,7 +11,7 @@ using namespace fisk;
 
 std::uint64_t run_var_rolling_scalar_butterfly(
     std::string const& seq,
-    SpacedKmerMask<Layout::kMSB, BitExtractButterflyTable> const& mask,
+    SpacedKmerMask<Layout::kMSB, BitExtractButterflyMask> const& mask,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);

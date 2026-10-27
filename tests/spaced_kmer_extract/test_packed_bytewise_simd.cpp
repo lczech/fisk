@@ -240,7 +240,7 @@ static void check_all_kernels(std::array<std::string, N> const& mask_strings)
         check_arch.template operator()<SimdNEON>();
         #endif
         #if defined(FISK_HAS_BMI2)
-        check_kernel<BitExtractKernelPEXT>(mask_strings, packed, expected);
+        check_kernel<BitExtractKernelPext>(mask_strings, packed, expected);
         #endif
     }
 }
@@ -272,7 +272,7 @@ static void check_all_checked_kernels(std::array<std::string, N> const& mask_str
         check_arch.template operator()<SimdNEON>();
         #endif
         #if defined(FISK_HAS_BMI2)
-        check_checked_kernel<BitExtractKernelPEXT>(mask_strings, packed, expected);
+        check_checked_kernel<BitExtractKernelPext>(mask_strings, packed, expected);
         #endif
     }
 }
@@ -349,7 +349,7 @@ static_assert(!CanExtractPackedSimd<
 
 static_assert(CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>,
-    SpacedKmerMask<Layout::kMSB, BitExtractKernelPEXT>
+    SpacedKmerMask<Layout::kMSB, BitExtractKernelPext>
 >);
 
 #endif

@@ -17,7 +17,7 @@ std::uint64_t run_var_butterfly(
     for (std::size_t r = 0; r < rounds; ++r) {
         clobber_memory(batch.values.data());
         for (std::size_t i = 0; i < batch.values.size(); ++i) {
-            sink.consume(bit_extract_butterfly(batch.values[i], batch.butterfly_tables[i]));
+            sink.consume(bit_extract_butterfly(batch.values[i], batch.butterfly_masks[i]));
         }
     }
     return sink.finalize();

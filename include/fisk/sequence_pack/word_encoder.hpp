@@ -343,8 +343,8 @@ struct WordEncoderPext
  * operator on a single word remains, for sequences shorter than a vector, and for the last bases
  * of a sequence that do not fill a whole word.
  *
- * The encoder is stateless: its butterfly table is a compile-time constant, so that the compiler
- * can keep it in registers. A table in the encoder object instead would have to be reloaded after
+ * The encoder is stateless: its butterfly mask is a compile-time constant, so that the compiler
+ * can keep it in registers. A mask in the encoder object instead would have to be reloaded after
  * each store of packed bytes, which might alias it. For the same reason, the call operators are
  * forced inline, as otherwise the constants would be rebuilt on each call.
  */
@@ -356,8 +356,8 @@ struct WordEncoderButterfly
     static constexpr std::size_t lanes = Simd::lanes;
     using simd_vector = typename Simd::simd_vector;
 
-    static constexpr BitExtractButterflyTable table =
-        make_bit_extract_butterfly_table(pack_mask_v<E>);
+    static constexpr BitExtractButterflyMask table =
+        make_bit_extract_butterfly_mask(pack_mask_v<E>);
 
     static simd_vector load_unaligned(void const* a) noexcept
     {

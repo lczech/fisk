@@ -9,7 +9,7 @@ using namespace fisk;
 
 std::uint64_t run_var_bytewise_scalar_block_shift_unrolled4(
     CheckedLsb const& seq,
-    std::vector<SpacedKmerMask<Layout::kLSB, BitExtractBlockTable>> const& masks,
+    std::vector<SpacedKmerMask<Layout::kLSB, BitExtractBlockShiftMask>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     return dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {

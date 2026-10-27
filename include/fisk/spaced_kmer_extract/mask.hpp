@@ -117,69 +117,75 @@ inline std::vector<SpacedKmerMask<L, BitExtractMask>> make_spaced_kmer_masks(
 }
 
 /**
- * @brief Create the butterfly table of a spaced k-mer mask, see make_bit_extract_butterfly_table().
+ * @brief Create the butterfly mask of a spaced k-mer mask, see make_bit_extract_butterfly_mask().
  */
 template <Layout L>
-inline SpacedKmerMask<L, BitExtractButterflyTable> make_spaced_kmer_butterfly_table(
+inline SpacedKmerMask<L, BitExtractButterflyMask> make_spaced_kmer_butterfly_mask(
     SpacedKmerMask<L, BitExtractMask> const& mask
 ) {
-    return convert_spaced_kmer_mask_<BitExtractButterflyTable>(
-        mask, make_bit_extract_butterfly_table
+    return convert_spaced_kmer_mask_<BitExtractButterflyMask>(
+        mask, make_bit_extract_butterfly_mask
     );
 }
 
 /**
- * @brief Create the butterfly table of a spaced k-mer mask given as a string, see
+ * @brief Create the butterfly mask of a spaced k-mer mask given as a string, see
  * make_spaced_kmer_mask().
  */
 template <Layout L = Layout::kMSB>
-inline SpacedKmerMask<L, BitExtractButterflyTable> make_spaced_kmer_butterfly_table(
+inline SpacedKmerMask<L, BitExtractButterflyMask> make_spaced_kmer_butterfly_mask(
     std::string const& mask
 ) {
-    return make_spaced_kmer_butterfly_table(make_spaced_kmer_mask<L>(mask));
+    return make_spaced_kmer_butterfly_mask(make_spaced_kmer_mask<L>(mask));
 }
 
 /**
- * @brief Create the butterfly tables of a set of spaced k-mer masks.
+ * @brief Create the butterfly masks of a set of spaced k-mer masks.
  */
 template <Layout L>
-inline std::vector<SpacedKmerMask<L, BitExtractButterflyTable>> make_spaced_kmer_butterfly_tables(
+inline std::vector<SpacedKmerMask<L, BitExtractButterflyMask>> make_spaced_kmer_butterfly_masks(
     std::vector<SpacedKmerMask<L, BitExtractMask>> const& masks
 ) {
-    return convert_spaced_kmer_masks_<BitExtractButterflyTable>(
-        masks, make_bit_extract_butterfly_table
+    return convert_spaced_kmer_masks_<BitExtractButterflyMask>(
+        masks, make_bit_extract_butterfly_mask
     );
 }
 
 /**
- * @brief Create the block table of a spaced k-mer mask, see make_bit_extract_block_table().
+ * @brief Create the block shift mask of a spaced k-mer mask, see
+ * make_bit_extract_block_shift_mask().
  */
 template <Layout L>
-inline SpacedKmerMask<L, BitExtractBlockTable> make_spaced_kmer_block_table(
+inline SpacedKmerMask<L, BitExtractBlockShiftMask> make_spaced_kmer_block_shift_mask(
     SpacedKmerMask<L, BitExtractMask> const& mask
 ) {
-    return convert_spaced_kmer_mask_<BitExtractBlockTable>(mask, make_bit_extract_block_table);
+    return convert_spaced_kmer_mask_<BitExtractBlockShiftMask>(
+        mask, make_bit_extract_block_shift_mask
+    );
 }
 
 /**
- * @brief Create the block table of a spaced k-mer mask given as a string, see
+ * @brief Create the block shift mask of a spaced k-mer mask given as a string, see
  * make_spaced_kmer_mask().
  */
 template <Layout L = Layout::kMSB>
-inline SpacedKmerMask<L, BitExtractBlockTable> make_spaced_kmer_block_table(
+inline SpacedKmerMask<L, BitExtractBlockShiftMask> make_spaced_kmer_block_shift_mask(
     std::string const& mask
 ) {
-    return make_spaced_kmer_block_table(make_spaced_kmer_mask<L>(mask));
+    return make_spaced_kmer_block_shift_mask(make_spaced_kmer_mask<L>(mask));
 }
 
 /**
- * @brief Create the block tables of a set of spaced k-mer masks.
+ * @brief Create the block shift masks of a set of spaced k-mer masks.
  */
 template <Layout L>
-inline std::vector<SpacedKmerMask<L, BitExtractBlockTable>> make_spaced_kmer_block_tables(
+inline std::vector<SpacedKmerMask<L, BitExtractBlockShiftMask>>
+make_spaced_kmer_block_shift_masks(
     std::vector<SpacedKmerMask<L, BitExtractMask>> const& masks
 ) {
-    return convert_spaced_kmer_masks_<BitExtractBlockTable>(masks, make_bit_extract_block_table);
+    return convert_spaced_kmer_masks_<BitExtractBlockShiftMask>(
+        masks, make_bit_extract_block_shift_mask
+    );
 }
 
 // -------------------------------------------------------------------------------------------------

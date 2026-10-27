@@ -126,10 +126,10 @@ TEST(CoreKmerSpaced, DecodeWithMask)
     auto const mask = make_spaced_kmer_mask("1*101");
     auto const kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(mask);
     EXPECT_EQ(spaced_kmer_encode("ACGTA", mask), kmer);
-    EXPECT_EQ(spaced_kmer_encode("ACGTA", make_spaced_kmer_block_table(mask)), kmer);
+    EXPECT_EQ(spaced_kmer_encode("ACGTA", make_spaced_kmer_block_shift_mask(mask)), kmer);
     EXPECT_EQ(spaced_kmer_encode("ACGTA", kernel), kmer);
     EXPECT_EQ(spaced_kmer_decode(kmer, mask), "A-G-A");
-    EXPECT_EQ(spaced_kmer_decode(kmer, make_spaced_kmer_butterfly_table(mask)), "A-G-A");
+    EXPECT_EQ(spaced_kmer_decode(kmer, make_spaced_kmer_butterfly_mask(mask)), "A-G-A");
     EXPECT_EQ(spaced_kmer_decode(kmer, kernel), "A-G-A");
     EXPECT_EQ(
         spaced_kmer_encode<Encoding::kACTG>("ACGTA", mask),
@@ -192,8 +192,8 @@ TEST(CoreKmerSpaced, Weight)
     EXPECT_EQ(spaced_kmer_weight(~std::uint64_t{0}), std::size_t{32});
 
     EXPECT_EQ(spaced_kmer_weight(make_spaced_kmer_mask("1011")), std::size_t{3});
-    EXPECT_EQ(spaced_kmer_weight(make_spaced_kmer_butterfly_table("1011")), std::size_t{3});
-    EXPECT_EQ(spaced_kmer_weight(make_spaced_kmer_block_table("1011")), std::size_t{3});
+    EXPECT_EQ(spaced_kmer_weight(make_spaced_kmer_butterfly_mask("1011")), std::size_t{3});
+    EXPECT_EQ(spaced_kmer_weight(make_spaced_kmer_block_shift_mask("1011")), std::size_t{3});
     EXPECT_EQ(
         spaced_kmer_weight(make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("1011")),
         std::size_t{3}
@@ -227,7 +227,7 @@ static void check_mask_formatting()
         std::string normalized = mask_string;
         std::replace(normalized.begin(), normalized.end(), '*', '0');
         EXPECT_EQ(spaced_kmer_mask_string(mask), normalized);
-        EXPECT_EQ(spaced_kmer_mask_string(make_spaced_kmer_butterfly_table(mask)), normalized);
+        EXPECT_EQ(spaced_kmer_mask_string(make_spaced_kmer_butterfly_mask(mask)), normalized);
         EXPECT_EQ(
             spaced_kmer_mask_string(
                 make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(mask)

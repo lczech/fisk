@@ -24,8 +24,8 @@ struct BitExtractWeightsBatch
     std::vector<fisk::BitExtractMask> masks;
 
     // For the preprocessed implementations, we also pre-compute their tables
-    std::vector<fisk::BitExtractBlockTable> block_tables;
-    std::vector<fisk::BitExtractButterflyTable> butterfly_tables;
+    std::vector<fisk::BitExtractBlockShiftMask> block_shift_masks;
+    std::vector<fisk::BitExtractButterflyMask> butterfly_masks;
 };
 
 /**

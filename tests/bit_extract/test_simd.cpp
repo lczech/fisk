@@ -191,7 +191,7 @@ TEST(BitExtractSimd, KernelBlockShiftNEON)
 
 TEST(BitExtractSimd, KernelPext)
 {
-    check_kernel<BitExtractKernelPEXT>();
+    check_kernel<BitExtractKernelPext>();
 }
 
 #endif

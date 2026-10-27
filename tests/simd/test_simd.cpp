@@ -56,7 +56,7 @@ static_assert(BitExtractKernel<BitExtractKernelBlockShift<SimdNEON>>);
 
 #if defined(FISK_HAS_BMI2)
 
-static_assert(BitExtractKernel<BitExtractKernelPEXT>);
+static_assert(BitExtractKernel<BitExtractKernelPext>);
 
 #endif
 

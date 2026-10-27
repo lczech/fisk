@@ -57,8 +57,8 @@ static std::vector<BitExtractWeightsBatch> make_inputs(
     BitExtractWeightsBatch batch;
     batch.values.reserve(n);
     batch.masks.reserve(n);
-    batch.block_tables.reserve(n);
-    batch.butterfly_tables.reserve(n);
+    batch.block_shift_masks.reserve(n);
+    batch.butterfly_masks.reserve(n);
 
     for (std::size_t i = 0; i < n; ++i) {
         std::uint64_t value = dist_u64(rng);
@@ -66,8 +66,8 @@ static std::vector<BitExtractWeightsBatch> make_inputs(
 
         batch.values.push_back(value);
         batch.masks.push_back(BitExtractMask(mask));
-        batch.block_tables.push_back(make_bit_extract_block_table(mask));
-        batch.butterfly_tables.push_back(make_bit_extract_butterfly_table(mask));
+        batch.block_shift_masks.push_back(make_bit_extract_block_shift_mask(mask));
+        batch.butterfly_masks.push_back(make_bit_extract_butterfly_mask(mask));
     }
 
     // One batch is one input to the benchmark: every implementation is handed the whole thing in

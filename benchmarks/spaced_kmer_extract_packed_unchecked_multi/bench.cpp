@@ -46,8 +46,8 @@ static void bench_spaced_kmer_extract_packed_unchecked_multi_layout_(
 
     // Prepare masks for all implementations as needed
     auto const bit_ext_masks = make_spaced_kmer_masks<L>(masks);
-    auto const bit_ext_block_masks = make_spaced_kmer_block_tables(bit_ext_masks);
-    auto const bit_ext_butterfly_tables = make_spaced_kmer_butterfly_tables(bit_ext_masks);
+    auto const bit_ext_block_masks = make_spaced_kmer_block_shift_masks(bit_ext_masks);
+    auto const bit_ext_butterfly_masks = make_spaced_kmer_butterfly_masks(bit_ext_masks);
 
     // simd kernels
     auto const simd_bf_scalar_kernels =
@@ -80,7 +80,7 @@ static void bench_spaced_kmer_extract_packed_unchecked_multi_layout_(
     #endif
     #if defined(FISK_HAS_BMI2)
     auto const simd_pext_kernels =
-        make_spaced_kmer_kernels<BitExtractKernelPEXT>(bit_ext_masks);
+        make_spaced_kmer_kernels<BitExtractKernelPext>(bit_ext_masks);
     #endif
 
     // Run the benchmark for all algorithms
@@ -140,7 +140,7 @@ static void bench_spaced_kmer_extract_packed_unchecked_multi_layout_(
             "bytewise_scalar_butterfly",
             [&](Packed const& seq) {
                 return run_var_bytewise_scalar_butterfly(
-                    seq, bit_ext_butterfly_tables, sink_buffer
+                    seq, bit_ext_butterfly_masks, sink_buffer
                 );
             }
         ),

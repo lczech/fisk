@@ -158,8 +158,8 @@ static void check_extraction()
     WordEncoderButterfly<E, L> const encoder;
     for (auto const& mask_strings : test_mask_sets()) {
         auto const direct_masks = make_spaced_kmer_masks<L>(mask_strings);
-        auto const block_masks = make_spaced_kmer_block_tables(direct_masks);
-        auto const butterfly_masks = make_spaced_kmer_butterfly_tables(direct_masks);
+        auto const block_masks = make_spaced_kmer_block_shift_masks(direct_masks);
+        auto const butterfly_masks = make_spaced_kmer_butterfly_masks(direct_masks);
 
         for (auto const& seq : test_sequences()) {
             auto const packed = pack_sequence_unchecked(seq, encoder);
@@ -181,13 +181,13 @@ static void check_extraction()
             check(direct_masks, [](std::uint64_t x, BitExtractMask const& mask) {
                 return bit_extract_byte_lookup(x, mask);
             });
-            check(block_masks, [](std::uint64_t x, BitExtractBlockTable const& mask) {
+            check(block_masks, [](std::uint64_t x, BitExtractBlockShiftMask const& mask) {
                 return bit_extract_block_shift(x, mask);
             });
-            check(block_masks, [](std::uint64_t x, BitExtractBlockTable const& mask) {
+            check(block_masks, [](std::uint64_t x, BitExtractBlockShiftMask const& mask) {
                 return bit_extract_block_shift_unrolled<8>(x, mask);
             });
-            check(butterfly_masks, [](std::uint64_t x, BitExtractButterflyTable const& mask) {
+            check(butterfly_masks, [](std::uint64_t x, BitExtractButterflyMask const& mask) {
                 return bit_extract_butterfly(x, mask);
             });
             #if defined(FISK_HAS_BMI2)
@@ -209,7 +209,7 @@ static void check_checked_extraction()
     WordEncoderButterfly<E, L> const encoder;
     for (auto const& mask_strings : test_mask_sets()) {
         auto const direct_masks = make_spaced_kmer_masks<L>(mask_strings);
-        auto const butterfly_masks = make_spaced_kmer_butterfly_tables(direct_masks);
+        auto const butterfly_masks = make_spaced_kmer_butterfly_masks(direct_masks);
 
         for (auto const& seq : checked_test_sequences()) {
             auto const packed = pack_sequence_checked(seq, encoder);
@@ -227,7 +227,7 @@ static void check_checked_extraction()
             check(direct_masks, [](std::uint64_t x, BitExtractMask const& mask) {
                 return bit_extract_bit_loop(x, mask);
             });
-            check(butterfly_masks, [](std::uint64_t x, BitExtractButterflyTable const& mask) {
+            check(butterfly_masks, [](std::uint64_t x, BitExtractButterflyMask const& mask) {
                 return bit_extract_butterfly(x, mask);
             });
 

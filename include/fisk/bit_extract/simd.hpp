@@ -62,16 +62,16 @@ concept BitExtractKernel = requires(
  * several extractions into a vector of more lanes does not raise its throughput. The kernel hence
  * takes the scalar arch, such that it can be used wherever the kernels of the SIMD archs are.
  */
-struct BitExtractKernelPEXT
+struct BitExtractKernelPext
 {
     using simd_arch = SimdScalar;
     using simd_vector = SimdScalar::simd_vector;
     static constexpr std::size_t lanes = SimdScalar::lanes;
     BitExtractMask mask{};
 
-    BitExtractKernelPEXT() = default;
+    BitExtractKernelPext() = default;
 
-    explicit BitExtractKernelPEXT(std::uint64_t const mask_value) noexcept
+    explicit BitExtractKernelPext(std::uint64_t const mask_value) noexcept
         : mask( BitExtractMask( mask_value ))
     {}
 
@@ -108,9 +108,9 @@ struct BitExtractKernelPEXT
 // =================================================================================================
 
 /**
- * @brief Kernel for bit extract using the butterfly table, for a SIMD arch.
+ * @brief Kernel for bit extract using the butterfly network, for a SIMD arch.
  *
- * The entries of the butterfly table of the mask are broadcast into SIMD vectors, such that the
+ * The entries of the butterfly mask are broadcast into SIMD vectors, such that the
  * bit extraction can be applied in parallel across lanes.
  */
 template <SimdArch Simd>
@@ -119,14 +119,14 @@ struct BitExtractKernelButterfly
     using simd_arch = Simd;
     using simd_vector = typename Simd::simd_vector;
     static constexpr std::size_t lanes = Simd::lanes;
-    BitExtractButterflyTable mask{};
+    BitExtractButterflyMask mask{};
     simd_vector mask_simd{};
     simd_vector sieves_simd[6]{};
 
     BitExtractKernelButterfly() = default;
 
     explicit BitExtractKernelButterfly(std::uint64_t const mask_value)
-        : mask(make_bit_extract_butterfly_table(mask_value))
+        : mask(make_bit_extract_butterfly_mask(mask_value))
     {
         mask_simd = Simd::broadcast(mask_value);
         for (std::size_t i = 0; i < 6; ++i) {
@@ -167,10 +167,10 @@ struct BitExtractKernelButterfly
      * @brief Same as bit_extract(), but without a kernel instance, broadcasting the given table on
      * each call instead.
      *
-     * Meant for a table that is a compile-time constant, see make_bit_extract_butterfly_table(),
+     * Meant for a table that is a compile-time constant, see make_bit_extract_butterfly_mask(),
      * whose broadcasts then become constants that the compiler can keep in registers.
      */
-    static simd_vector bit_extract(simd_vector x, BitExtractButterflyTable const& table) noexcept
+    static simd_vector bit_extract(simd_vector x, BitExtractButterflyMask const& table) noexcept
     {
         return bit_extract_(
             x, Simd::broadcast(table.mask),
@@ -236,14 +236,14 @@ struct BitExtractKernelBlockShift
     using shift_count = typename Simd::shift_count;
     static constexpr std::size_t lanes = Simd::lanes;
 
-    BitExtractBlockTable mask{};
+    BitExtractBlockShiftMask mask{};
     simd_vector blocks_simd[33]{};
     shift_count shifts_simd[33]{};
 
     BitExtractKernelBlockShift() = default;
 
     explicit BitExtractKernelBlockShift(std::uint64_t const mask_value)
-        : mask(make_bit_extract_block_table(mask_value))
+        : mask(make_bit_extract_block_shift_mask(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
         for (std::size_t i = 0; i < 33; ++i) {

@@ -110,9 +110,9 @@ inline BitExtractMode bit_extract_selector(
         data.push_back( rng.get_uint64() );
     }
 
-    // Bit extract mask and block table for the block algorithm
-    auto const block_table     = make_bit_extract_block_table(mask);
-    auto const butterfly_table = make_bit_extract_butterfly_table(mask);
+    // Bit extract masks for the block shift and butterfly algorithms
+    auto const block_shift_mask = make_bit_extract_block_shift_mask(mask);
+    auto const butterfly_mask   = make_bit_extract_butterfly_mask(mask);
 
     // --------------------------------------------------------
     //     Benchmark helper
@@ -182,35 +182,35 @@ inline BitExtractMode bit_extract_selector(
     benchmark_candidate_(
         BitExtractMode::kBlockShift,
         [&](std::uint64_t x) noexcept {
-            return bit_extract_block_shift_unrolled<1>(x, block_table);
+            return bit_extract_block_shift_unrolled<1>(x, block_shift_mask);
         }
     );
 
     benchmark_candidate_(
         BitExtractMode::kBlockShiftUnrolled2,
         [&](std::uint64_t x) noexcept {
-            return bit_extract_block_shift_unrolled<2>(x, block_table);
+            return bit_extract_block_shift_unrolled<2>(x, block_shift_mask);
         }
     );
 
     benchmark_candidate_(
         BitExtractMode::kBlockShiftUnrolled4,
         [&](std::uint64_t x) noexcept {
-            return bit_extract_block_shift_unrolled<4>(x, block_table);
+            return bit_extract_block_shift_unrolled<4>(x, block_shift_mask);
         }
     );
 
     benchmark_candidate_(
         BitExtractMode::kBlockShiftUnrolled8,
         [&](std::uint64_t x) noexcept {
-            return bit_extract_block_shift_unrolled<8>(x, block_table);
+            return bit_extract_block_shift_unrolled<8>(x, block_shift_mask);
         }
     );
 
     benchmark_candidate_(
         BitExtractMode::kButterfly,
         [&](std::uint64_t x) noexcept {
-            return bit_extract_butterfly(x, butterfly_table);
+            return bit_extract_butterfly(x, butterfly_mask);
         }
     );
 
@@ -266,35 +266,35 @@ inline void switch_bit_extract_mode( std::uint64_t const mask )
         }
         case BitExtractMode::kBlockShift:
         {
-            auto const bt = make_bit_extract_block_table(mask);
+            auto const bt = make_bit_extract_block_shift_mask(mask);
             (void) bt;
             // hot loop with bit_extract_block_shift_unrolled<1>(x, bt)
             break;
         }
         case BitExtractMode::kBlockShiftUnrolled2:
         {
-            auto const bt = make_bit_extract_block_table(mask);
+            auto const bt = make_bit_extract_block_shift_mask(mask);
             (void) bt;
             // hot loop with bit_extract_block_shift_unrolled<2>(x, bt)
             break;
         }
         case BitExtractMode::kBlockShiftUnrolled4:
         {
-            auto const bt = make_bit_extract_block_table(mask);
+            auto const bt = make_bit_extract_block_shift_mask(mask);
             (void) bt;
             // hot loop with bit_extract_block_shift_unrolled<4>(x, bt)
             break;
         }
         case BitExtractMode::kBlockShiftUnrolled8:
         {
-            auto const bt = make_bit_extract_block_table(mask);
+            auto const bt = make_bit_extract_block_shift_mask(mask);
             (void) bt;
             // hot loop with bit_extract_block_shift_unrolled<8>(x, bt)
             break;
         }
         case BitExtractMode::kButterfly:
         {
-            auto const bf = make_bit_extract_butterfly_table(mask);
+            auto const bf = make_bit_extract_butterfly_mask(mask);
             (void) bf;
             // hot loop with bit_extract_butterfly(x, bf)
             break;
@@ -326,7 +326,7 @@ inline void run_bit_extract_mode(
 
         case BitExtractMode::kBlockShift:
         {
-            auto const bt = make_bit_extract_block_table(mask.mask);
+            auto const bt = make_bit_extract_block_shift_mask(mask.mask);
             cb([&](std::uint64_t x) noexcept {
                 return bit_extract_block_shift_unrolled<1>(x, bt);
             });
@@ -335,7 +335,7 @@ inline void run_bit_extract_mode(
 
         case BitExtractMode::kBlockShiftUnrolled2:
         {
-            auto const bt = make_bit_extract_block_table(mask.mask);
+            auto const bt = make_bit_extract_block_shift_mask(mask.mask);
             cb([&](std::uint64_t x) noexcept {
                 return bit_extract_block_shift_unrolled<2>(x, bt);
             });
@@ -344,7 +344,7 @@ inline void run_bit_extract_mode(
 
         case BitExtractMode::kBlockShiftUnrolled4:
         {
-            auto const bt = make_bit_extract_block_table(mask.mask);
+            auto const bt = make_bit_extract_block_shift_mask(mask.mask);
             cb([&](std::uint64_t x) noexcept {
                 return bit_extract_block_shift_unrolled<4>(x, bt);
             });
@@ -353,7 +353,7 @@ inline void run_bit_extract_mode(
 
         case BitExtractMode::kBlockShiftUnrolled8:
         {
-            auto const bt = make_bit_extract_block_table(mask.mask);
+            auto const bt = make_bit_extract_block_shift_mask(mask.mask);
             cb([&](std::uint64_t x) noexcept {
                 return bit_extract_block_shift_unrolled<8>(x, bt);
             });
@@ -362,7 +362,7 @@ inline void run_bit_extract_mode(
 
         case BitExtractMode::kButterfly:
         {
-            auto const bf = make_bit_extract_butterfly_table(mask.mask);
+            auto const bf = make_bit_extract_butterfly_mask(mask.mask);
             cb([&](std::uint64_t x) noexcept {
                 return bit_extract_butterfly(x, bf);
             });

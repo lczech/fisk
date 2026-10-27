@@ -18,7 +18,7 @@ std::uint64_t run_var_block_shift_unrolled8(
         clobber_memory(batch.values.data());
         for (std::size_t i = 0; i < batch.values.size(); ++i) {
             sink.consume(
-                bit_extract_block_shift_unrolled<8>(batch.values[i], batch.block_tables[i])
+                bit_extract_block_shift_unrolled<8>(batch.values[i], batch.block_shift_masks[i])
             );
         }
     }

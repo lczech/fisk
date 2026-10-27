@@ -63,15 +63,15 @@ TEST(BitExtract, ByteLookup)
 }
 
 // The tables must not be constructible from a raw mask, as that would skip the preprocessing.
-static_assert(!std::is_aggregate_v<BitExtractBlockTable>);
-static_assert(!std::is_aggregate_v<BitExtractButterflyTable>);
-static_assert(!std::is_constructible_v<BitExtractBlockTable, std::uint64_t>);
-static_assert(!std::is_constructible_v<BitExtractButterflyTable, std::uint64_t>);
+static_assert(!std::is_aggregate_v<BitExtractBlockShiftMask>);
+static_assert(!std::is_aggregate_v<BitExtractButterflyMask>);
+static_assert(!std::is_constructible_v<BitExtractBlockShiftMask, std::uint64_t>);
+static_assert(!std::is_constructible_v<BitExtractButterflyMask, std::uint64_t>);
 
 TEST(BitExtract, BlockShift)
 {
     check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = make_bit_extract_block_table(mask);
+        auto const table = make_bit_extract_block_shift_mask(mask);
         return bit_extract_block_shift(x, table);
     });
 }
@@ -83,7 +83,7 @@ template <std::size_t UF>
 static void check_block_shift_unrolled()
 {
     check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = make_bit_extract_block_table(mask);
+        auto const table = make_bit_extract_block_shift_mask(mask);
         return bit_extract_block_shift_unrolled<UF>(x, table);
     });
 }
@@ -101,7 +101,7 @@ TEST(BitExtract, BlockShiftUnrolled)
 TEST(BitExtract, Butterfly)
 {
     check_against_oracle([](std::uint64_t x, std::uint64_t mask) {
-        auto const table = make_bit_extract_butterfly_table(mask);
+        auto const table = make_bit_extract_butterfly_mask(mask);
         return bit_extract_butterfly(x, table);
     });
 }

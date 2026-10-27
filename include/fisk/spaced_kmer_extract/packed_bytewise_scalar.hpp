@@ -318,7 +318,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
  *
  * @param seq       Input sequence.
  * @param mask      Spaced k-mer mask, in the representation that `bit_ext` expects, such as
- *                  BitExtractMask, BitExtractBlockTable, or BitExtractButterflyTable.
+ *                  BitExtractMask, BitExtractBlockShiftMask, or BitExtractButterflyMask.
  *                  Its span must be in [1, 32].
  * @param bit_ext   Bit extraction functor, called as bit_ext(word, mask). It must ignore all bits
  *                  of `word` outside of the mask, as PEXT and all fisk bit extraction functions do.
