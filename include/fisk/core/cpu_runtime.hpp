@@ -554,4 +554,13 @@ inline void info_print_intrinsics(std::ostream& os)
     print_one_feature("Neon",   compiled_neon(),   cpu_neon());
 }
 
+// Print the platform, CPU, compiler, and the instruction sets as compiled and as present on the CPU.
+inline void info_print_system(std::ostream& os)
+{
+    info_print_platform(os);
+    info_print_cpu(os);
+    info_print_compiler(os);
+    info_print_intrinsics(os);
+}
+
 } // namespace fisk

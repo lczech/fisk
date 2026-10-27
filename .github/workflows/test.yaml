@@ -185,12 +185,13 @@ jobs:
 
       # Under the emulator, the test binary runs directly, emulating a Sapphire Rapids CPU. The
       # AVX512 tests only exist if the AVX512 code paths were compiled in, so the run fails if they
-      # did not run.
+      # did not run. Otherwise, ctest runs verbose, so that the log shows the CPU and the
+      # instruction sets that the test binary prints first, as these depend on the runner.
       - name: Run tests
         run: |
           if [[ "${{ matrix.sde }}" == "true" ]]; then
             "${SDE_PATH}/sde64" -spr -- bin/fisk_tests 2>&1 | tee tests.log
             grep -q 'OK \] CoreSimd.AVX512$' tests.log
           else
-            ctest --test-dir build --output-on-failure
+            ctest --test-dir build --output-on-failure -V
           fi
