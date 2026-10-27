@@ -176,19 +176,19 @@ static void check_extraction()
             };
 
             check(direct_masks, [](std::uint64_t x, BitExtractMask const& mask) {
-                return bit_extract_bitloop(x, mask);
+                return bit_extract_bit_loop(x, mask);
             });
             check(direct_masks, [](std::uint64_t x, BitExtractMask const& mask) {
-                return bit_extract_byte_table(x, mask);
+                return bit_extract_byte_lookup(x, mask);
             });
             check(block_masks, [](std::uint64_t x, BitExtractBlockTable const& mask) {
-                return bit_extract_block_table(x, mask);
+                return bit_extract_block_shift(x, mask);
             });
             check(block_masks, [](std::uint64_t x, BitExtractBlockTable const& mask) {
-                return bit_extract_block_table_unrolled<8>(x, mask);
+                return bit_extract_block_shift_unrolled<8>(x, mask);
             });
             check(butterfly_masks, [](std::uint64_t x, BitExtractButterflyTable const& mask) {
-                return bit_extract_butterfly_table(x, mask);
+                return bit_extract_butterfly(x, mask);
             });
             #if defined(FISK_HAS_BMI2)
             check(direct_masks, [](std::uint64_t x, BitExtractMask const& mask) {
@@ -225,10 +225,10 @@ static void check_checked_extraction()
                 );
             };
             check(direct_masks, [](std::uint64_t x, BitExtractMask const& mask) {
-                return bit_extract_bitloop(x, mask);
+                return bit_extract_bit_loop(x, mask);
             });
             check(butterfly_masks, [](std::uint64_t x, BitExtractButterflyTable const& mask) {
-                return bit_extract_butterfly_table(x, mask);
+                return bit_extract_butterfly(x, mask);
             });
 
             // Unchecked, all positions, whose number the oracle gives for a sequence without
@@ -236,7 +236,7 @@ static void check_checked_extraction()
             std::size_t calls = 0;
             dispatch_static_span<kMaxDispatchedMasks>(direct_masks, [&](auto mask_span) {
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-                    packed, mask_span, bit_extract_bitloop,
+                    packed, mask_span, bit_extract_bit_loop,
                     [&](std::size_t, std::size_t, auto const&) { ++calls; }
                 );
             });
@@ -266,7 +266,7 @@ static void check_invalid_in_gaps()
 
         std::vector<std::size_t> positions;
         for_each_spaced_kmer_packed_checked_bytewise_scalar(
-            packed, mask, bit_extract_bitloop,
+            packed, mask, bit_extract_bit_loop,
             [&](std::size_t pos, auto const&) { positions.push_back(pos); }
         );
         EXPECT_EQ(positions, (std::vector<std::size_t>{0, span_k}));
@@ -281,7 +281,7 @@ static void check_invalid_in_gaps()
 template <typename Seq, typename Mask>
 concept CanExtractPacked = requires(Seq const& seq, Mask const& mask) {
     for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-        seq, mask, bit_extract_bitloop, NoopSpacedCallback{}
+        seq, mask, bit_extract_bit_loop, NoopSpacedCallback{}
     );
 };
 
@@ -311,14 +311,14 @@ static void check_error_contract()
             auto const mask = raw_spaced_kmer_mask<L>(span_k);
             EXPECT_THROW(
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-                    packed, mask, bit_extract_bitloop, NoopSpacedCallback{}
+                    packed, mask, bit_extract_bit_loop, NoopSpacedCallback{}
                 ),
                 std::invalid_argument
             );
             EXPECT_THROW(
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
                     packed, std::span<SpacedKmerMask<L, BitExtractMask> const, 1>(&mask, 1),
-                    bit_extract_bitloop, NoopSpacedCallback{}
+                    bit_extract_bit_loop, NoopSpacedCallback{}
                 ),
                 std::invalid_argument
             );
@@ -328,7 +328,7 @@ static void check_error_contract()
         EXPECT_THROW(
             dispatch_static_span<kMaxDispatchedMasks>(mixed, [&](auto mask_span) {
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
-                    packed, mask_span, bit_extract_bitloop, NoopSpacedCallback{}
+                    packed, mask_span, bit_extract_bit_loop, NoopSpacedCallback{}
                 );
             }),
             std::invalid_argument

@@ -132,53 +132,53 @@ TEST(BitExtractSimd, KernelButterflyNEON)
 
 // Each ISA tier is swept over UF = 1, 8 (the library default), and 32 (the low and high
 // extremes plus the default of the or_reduce_ compile-time balanced-tree reduction).
-TEST(BitExtractSimd, KernelBlockScalar)
+TEST(BitExtractSimd, KernelBlockShiftScalar)
 {
-    check_kernel<BitExtractKernelBlock<SimdScalar, 1>>();
-    check_kernel<BitExtractKernelBlock<SimdScalar, 8>>();
-    check_kernel<BitExtractKernelBlock<SimdScalar, 32>>();
+    check_kernel<BitExtractKernelBlockShift<SimdScalar, 1>>();
+    check_kernel<BitExtractKernelBlockShift<SimdScalar, 8>>();
+    check_kernel<BitExtractKernelBlockShift<SimdScalar, 32>>();
 }
 
 #ifdef FISK_HAS_SSE2
 
-TEST(BitExtractSimd, KernelBlockSSE2)
+TEST(BitExtractSimd, KernelBlockShiftSSE2)
 {
-    check_kernel<BitExtractKernelBlock<SimdSSE2, 1>>();
-    check_kernel<BitExtractKernelBlock<SimdSSE2, 8>>();
-    check_kernel<BitExtractKernelBlock<SimdSSE2, 32>>();
+    check_kernel<BitExtractKernelBlockShift<SimdSSE2, 1>>();
+    check_kernel<BitExtractKernelBlockShift<SimdSSE2, 8>>();
+    check_kernel<BitExtractKernelBlockShift<SimdSSE2, 32>>();
 }
 
 #endif
 
 #ifdef FISK_HAS_AVX2
 
-TEST(BitExtractSimd, KernelBlockAVX2)
+TEST(BitExtractSimd, KernelBlockShiftAVX2)
 {
-    check_kernel<BitExtractKernelBlock<SimdAVX2, 1>>();
-    check_kernel<BitExtractKernelBlock<SimdAVX2, 8>>();
-    check_kernel<BitExtractKernelBlock<SimdAVX2, 32>>();
+    check_kernel<BitExtractKernelBlockShift<SimdAVX2, 1>>();
+    check_kernel<BitExtractKernelBlockShift<SimdAVX2, 8>>();
+    check_kernel<BitExtractKernelBlockShift<SimdAVX2, 32>>();
 }
 
 #endif
 
 #ifdef FISK_HAS_AVX512
 
-TEST(BitExtractSimd, KernelBlockAVX512)
+TEST(BitExtractSimd, KernelBlockShiftAVX512)
 {
-    check_kernel<BitExtractKernelBlock<SimdAVX512, 1>>();
-    check_kernel<BitExtractKernelBlock<SimdAVX512, 8>>();
-    check_kernel<BitExtractKernelBlock<SimdAVX512, 32>>();
+    check_kernel<BitExtractKernelBlockShift<SimdAVX512, 1>>();
+    check_kernel<BitExtractKernelBlockShift<SimdAVX512, 8>>();
+    check_kernel<BitExtractKernelBlockShift<SimdAVX512, 32>>();
 }
 
 #endif
 
 #ifdef FISK_HAS_NEON
 
-TEST(BitExtractSimd, KernelBlockNEON)
+TEST(BitExtractSimd, KernelBlockShiftNEON)
 {
-    check_kernel<BitExtractKernelBlock<SimdNEON, 1>>();
-    check_kernel<BitExtractKernelBlock<SimdNEON, 8>>();
-    check_kernel<BitExtractKernelBlock<SimdNEON, 32>>();
+    check_kernel<BitExtractKernelBlockShift<SimdNEON, 1>>();
+    check_kernel<BitExtractKernelBlockShift<SimdNEON, 8>>();
+    check_kernel<BitExtractKernelBlockShift<SimdNEON, 32>>();
 }
 
 #endif

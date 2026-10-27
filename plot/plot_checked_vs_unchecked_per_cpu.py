@@ -59,11 +59,11 @@ SIMD_ARCHS = ["sse2", "avx2", "avx512", "neon"]
 # references.
 TECHNIQUES = (
     [
-        "bytewise_scalar_pext", "bytewise_scalar_butterfly_table",
+        "bytewise_scalar_pext", "bytewise_scalar_butterfly",
         "bytewise_simd_pext_vectors", "bytewise_simd_pext_scalars",
     ]
     + [
-        f"bytewise_simd_butterfly_table_{arch}_{form}"
+        f"bytewise_simd_butterfly_{arch}_{form}"
         for arch in SIMD_ARCHS for form in ["vectors", "scalars"]
     ]
     + ["bytewise_scalar"]

@@ -212,7 +212,7 @@ static void check_checked_kernel(
     }
 }
 
-// Checks the butterfly and block table kernels of every arch of the build, and the PEXT kernel, for
+// Checks the butterfly and block shift kernels of every arch of the build, and the PEXT kernel, for
 // one set of masks.
 template <Encoding E, Layout L, std::size_t N>
 static void check_all_kernels(std::array<std::string, N> const& mask_strings)
@@ -224,7 +224,7 @@ static void check_all_kernels(std::array<std::string, N> const& mask_strings)
         auto const expected = oracle_spaced_events<E, L>(seq, mask_vector);
         auto const check_arch = [&]<typename Simd>() {
             check_kernel<BitExtractKernelButterfly<Simd>>(mask_strings, packed, expected);
-            check_kernel<BitExtractKernelBlock<Simd>>(mask_strings, packed, expected);
+            check_kernel<BitExtractKernelBlockShift<Simd>>(mask_strings, packed, expected);
         };
         check_arch.template operator()<SimdScalar>();
         #if defined(FISK_HAS_SSE2)
@@ -256,7 +256,7 @@ static void check_all_checked_kernels(std::array<std::string, N> const& mask_str
         auto const expected = oracle_spaced_events<E, L>(seq, mask_vector);
         auto const check_arch = [&]<typename Simd>() {
             check_checked_kernel<BitExtractKernelButterfly<Simd>>(mask_strings, packed, expected);
-            check_checked_kernel<BitExtractKernelBlock<Simd>>(mask_strings, packed, expected);
+            check_checked_kernel<BitExtractKernelBlockShift<Simd>>(mask_strings, packed, expected);
         };
         check_arch.template operator()<SimdScalar>();
         #if defined(FISK_HAS_SSE2)
@@ -335,7 +335,7 @@ static_assert(CanExtractPackedSimd<
 >);
 static_assert(CanExtractPackedSimd<
     PackedSequence<Encoding::kACTG, Layout::kLSB>,
-    SpacedKmerMask<Layout::kLSB, BitExtractKernelBlock<SimdScalar>>
+    SpacedKmerMask<Layout::kLSB, BitExtractKernelBlockShift<SimdScalar>>
 >);
 static_assert(!CanExtractPackedSimd<
     PackedSequence<Encoding::kACGT, Layout::kMSB>,

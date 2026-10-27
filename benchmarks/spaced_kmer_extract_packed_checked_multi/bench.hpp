@@ -48,22 +48,22 @@ void bench_spaced_kmer_extract_packed_checked_multi(
 // (see fisk/util/intrinsics.hpp). They are overloaded for both Layouts, defined in var_*_msb.cpp
 // and var_*_lsb.cpp, respectively. The SIMD ones take their spaced k-mers either as vectors
 // (`_vectors`), or one at a time (`_scalars`).
-std::uint64_t run_var_bytewise_scalar_bitloop(
+std::uint64_t run_var_bytewise_scalar_bit_loop(
     CheckedMsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractMask>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_bitloop(
+std::uint64_t run_var_bytewise_scalar_bit_loop(
     CheckedLsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractMask>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_byte_table(
+std::uint64_t run_var_bytewise_scalar_byte_lookup(
     CheckedMsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractMask>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_byte_table(
+std::uint64_t run_var_bytewise_scalar_byte_lookup(
     CheckedLsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractMask>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
@@ -80,54 +80,54 @@ std::uint64_t run_var_bytewise_scalar_pext(
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
-std::uint64_t run_var_bytewise_scalar_block_table(
+std::uint64_t run_var_bytewise_scalar_block_shift(
     CheckedMsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_block_table(
+std::uint64_t run_var_bytewise_scalar_block_shift(
     CheckedLsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_block_table_unrolled2(
+std::uint64_t run_var_bytewise_scalar_block_shift_unrolled2(
     CheckedMsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_block_table_unrolled2(
+std::uint64_t run_var_bytewise_scalar_block_shift_unrolled2(
     CheckedLsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_block_table_unrolled4(
+std::uint64_t run_var_bytewise_scalar_block_shift_unrolled4(
     CheckedMsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_block_table_unrolled4(
+std::uint64_t run_var_bytewise_scalar_block_shift_unrolled4(
     CheckedLsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_block_table_unrolled8(
+std::uint64_t run_var_bytewise_scalar_block_shift_unrolled8(
     CheckedMsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_block_table_unrolled8(
+std::uint64_t run_var_bytewise_scalar_block_shift_unrolled8(
     CheckedLsb const& seq,
     std::vector<fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractBlockTable>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_butterfly_table(
+std::uint64_t run_var_bytewise_scalar_butterfly(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractButterflyTable>
     > const& masks,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_scalar_butterfly_table(
+std::uint64_t run_var_bytewise_scalar_butterfly(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractButterflyTable>
@@ -135,233 +135,233 @@ std::uint64_t run_var_bytewise_scalar_butterfly_table(
     std::vector<std::uint64_t>& sink_buffer
 );
 #if defined(FISK_HAS_SSE2)
-std::uint64_t run_var_bytewise_simd_butterfly_table_sse2_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_sse2_vectors(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_sse2_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_sse2_vectors(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_sse2_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_sse2_scalars(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_sse2_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_sse2_scalars(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_sse2_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_sse2_vectors(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdSSE2>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdSSE2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_sse2_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_sse2_vectors(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdSSE2>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdSSE2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_sse2_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_sse2_scalars(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdSSE2>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdSSE2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_sse2_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_sse2_scalars(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdSSE2>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdSSE2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX2)
-std::uint64_t run_var_bytewise_simd_butterfly_table_avx2_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_avx2_vectors(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_avx2_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_avx2_vectors(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_avx2_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_avx2_scalars(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_avx2_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_avx2_scalars(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_avx2_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_avx2_vectors(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdAVX2>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdAVX2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_avx2_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_avx2_vectors(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdAVX2>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdAVX2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_avx2_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_avx2_scalars(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdAVX2>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdAVX2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_avx2_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_avx2_scalars(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdAVX2>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdAVX2>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX512)
-std::uint64_t run_var_bytewise_simd_butterfly_table_avx512_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_avx512_vectors(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_avx512_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_avx512_vectors(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_avx512_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_avx512_scalars(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_avx512_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_avx512_scalars(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_avx512_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_avx512_vectors(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdAVX512>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdAVX512>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_avx512_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_avx512_vectors(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdAVX512>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdAVX512>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_avx512_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_avx512_scalars(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdAVX512>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdAVX512>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_avx512_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_avx512_scalars(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdAVX512>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdAVX512>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_NEON)
-std::uint64_t run_var_bytewise_simd_butterfly_table_neon_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_neon_vectors(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_neon_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_neon_vectors(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_neon_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_neon_scalars(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_neon_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_neon_scalars(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_neon_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_neon_vectors(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdNEON>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdNEON>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_neon_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_neon_vectors(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdNEON>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdNEON>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_neon_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_neon_scalars(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdNEON>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdNEON>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_neon_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_neon_scalars(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdNEON>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdNEON>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
@@ -396,59 +396,59 @@ std::uint64_t run_var_bytewise_simd_pext_scalars(
     std::vector<std::uint64_t>& sink_buffer
 );
 #endif
-std::uint64_t run_var_bytewise_simd_butterfly_table_scalar_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_scalar_vectors(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_scalar_vectors(
+std::uint64_t run_var_bytewise_simd_butterfly_scalar_vectors(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_scalar_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_scalar_scalars(
     CheckedMsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_butterfly_table_scalar_scalars(
+std::uint64_t run_var_bytewise_simd_butterfly_scalar_scalars(
     CheckedLsb const& seq,
     std::vector<
         fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_scalar_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_scalar_vectors(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdScalar>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdScalar>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_scalar_vectors(
+std::uint64_t run_var_bytewise_simd_block_shift_scalar_vectors(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdScalar>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdScalar>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_scalar_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_scalar_scalars(
     CheckedMsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlock<fisk::SimdScalar>>
+        fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractKernelBlockShift<fisk::SimdScalar>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_bytewise_simd_block_table_scalar_scalars(
+std::uint64_t run_var_bytewise_simd_block_shift_scalar_scalars(
     CheckedLsb const& seq,
     std::vector<
-        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlock<fisk::SimdScalar>>
+        fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractKernelBlockShift<fisk::SimdScalar>>
     > const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 );

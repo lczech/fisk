@@ -36,7 +36,7 @@ inline std::vector<std::uint64_t> const& edge_case_masks()
         0x0000000000000001ULL, // single bit, position 0
         0x0000000080000000ULL, // single bit, position 31
         0x8000000000000000ULL, // single bit, position 63
-        0x5555555555555555ULL, // alternating bits: 32 runs of length 1, the block table's max
+        0x5555555555555555ULL, // alternating bits: 32 runs of length 1, the most for block shift
         0x00000000FFFF0000ULL, // one contiguous run
         0xF0F0F0F0F0F0F0F0ULL, // several contiguous runs of length 4
     };

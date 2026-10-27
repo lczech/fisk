@@ -178,7 +178,7 @@ TEST(SpacedKmerExtractAsciiRollingSimd, ButterflyScalar)
 
 TEST(SpacedKmerExtractAsciiRollingSimd, BlockScalar)
 {
-    check_simd_kernel<BitExtractKernelBlock<SimdScalar>>();
+    check_simd_kernel<BitExtractKernelBlockShift<SimdScalar>>();
 }
 
 #if defined(FISK_HAS_SSE2)
@@ -190,7 +190,7 @@ TEST(SpacedKmerExtractAsciiRollingSimd, ButterflySse2)
 
 TEST(SpacedKmerExtractAsciiRollingSimd, BlockSse2)
 {
-    check_simd_kernel<BitExtractKernelBlock<SimdSSE2>>();
+    check_simd_kernel<BitExtractKernelBlockShift<SimdSSE2>>();
 }
 
 #endif
@@ -204,7 +204,7 @@ TEST(SpacedKmerExtractAsciiRollingSimd, ButterflyAvx2)
 
 TEST(SpacedKmerExtractAsciiRollingSimd, BlockAvx2)
 {
-    check_simd_kernel<BitExtractKernelBlock<SimdAVX2>>();
+    check_simd_kernel<BitExtractKernelBlockShift<SimdAVX2>>();
 }
 
 #endif
@@ -218,7 +218,7 @@ TEST(SpacedKmerExtractAsciiRollingSimd, ButterflyAvx512)
 
 TEST(SpacedKmerExtractAsciiRollingSimd, BlockAvx512)
 {
-    check_simd_kernel<BitExtractKernelBlock<SimdAVX512>>();
+    check_simd_kernel<BitExtractKernelBlockShift<SimdAVX512>>();
 }
 
 #endif
@@ -232,7 +232,7 @@ TEST(SpacedKmerExtractAsciiRollingSimd, ButterflyNeon)
 
 TEST(SpacedKmerExtractAsciiRollingSimd, BlockNeon)
 {
-    check_simd_kernel<BitExtractKernelBlock<SimdNEON>>();
+    check_simd_kernel<BitExtractKernelBlockShift<SimdNEON>>();
 }
 
 #endif

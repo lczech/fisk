@@ -63,7 +63,7 @@ static void check_mask_factories()
     auto const masks = make_spaced_kmer_masks<L>(strings);
     auto const butterfly_tables = make_spaced_kmer_butterfly_tables(masks);
     auto const block_tables = make_spaced_kmer_block_tables(masks);
-    auto const kernels = make_spaced_kmer_kernels<BitExtractKernelBlock<SimdScalar>>(masks);
+    auto const kernels = make_spaced_kmer_kernels<BitExtractKernelBlockShift<SimdScalar>>(masks);
     ASSERT_EQ(masks.size(), strings.size());
 
     for (std::size_t i = 0; i < strings.size(); ++i) {
@@ -74,7 +74,7 @@ static void check_mask_factories()
         auto const butterfly_table = make_spaced_kmer_butterfly_table<L>(strings[i]);
         auto const block_table = make_spaced_kmer_block_table<L>(strings[i]);
         auto const kernel
-            = make_spaced_kmer_kernel<BitExtractKernelBlock<SimdScalar>, L>(strings[i])
+            = make_spaced_kmer_kernel<BitExtractKernelBlockShift<SimdScalar>, L>(strings[i])
         ;
         static_assert(decltype(butterfly_table)::layout == L);
         static_assert(decltype(block_table)::layout == L);
@@ -91,12 +91,12 @@ static void check_mask_factories()
 
         // The tables and kernels extract the same bits as the plain mask.
         for (std::uint64_t const x : {0x0ull, ~0x0ull, 0x0123456789ABCDEFull}) {
-            auto const expected = bit_extract_bitloop(x, mask);
-            EXPECT_EQ(bit_extract_butterfly_table(x, butterfly_table), expected);
-            EXPECT_EQ(bit_extract_block_table(x, block_table), expected);
+            auto const expected = bit_extract_bit_loop(x, mask);
+            EXPECT_EQ(bit_extract_butterfly(x, butterfly_table), expected);
+            EXPECT_EQ(bit_extract_block_shift(x, block_table), expected);
             EXPECT_EQ(kernel.bit_extract(x), expected);
-            EXPECT_EQ(bit_extract_butterfly_table(x, butterfly_tables[i]), expected);
-            EXPECT_EQ(bit_extract_block_table(x, block_tables[i]), expected);
+            EXPECT_EQ(bit_extract_butterfly(x, butterfly_tables[i]), expected);
+            EXPECT_EQ(bit_extract_block_shift(x, block_tables[i]), expected);
             EXPECT_EQ(kernels[i].bit_extract(x), expected);
         }
     }

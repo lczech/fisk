@@ -73,7 +73,7 @@ inline std::uint64_t bit_extract_pext(std::uint64_t x, BitExtractMask mask)
 /**
  * @brief Bit extract via a simple bit loop over all bits set in the mask.
  */
-inline std::uint64_t bit_extract_bitloop(std::uint64_t x, BitExtractMask mask) noexcept
+inline std::uint64_t bit_extract_bit_loop(std::uint64_t x, BitExtractMask mask) noexcept
 {
     // This is the classic "extract selected bits and pack them densely" loop.
     // Complexity ~64 iterations, but cheap operations.
@@ -106,7 +106,7 @@ inline std::uint64_t bit_extract_split32(std::uint64_t x, BitExtractMask mask) n
     // Same as above, but split into two 32-bit halves.
     // Sometimes generates slightly better code depending on compiler/flags.
 
-    auto bit_extract_bitloop32_ = [](std::uint32_t xx, std::uint32_t mm) -> std::uint32_t
+    auto bit_extract_bit_loop32_ = [](std::uint32_t xx, std::uint32_t mm) -> std::uint32_t
     {
         std::uint32_t out = 0;
         std::uint32_t out_bit = 1;
@@ -127,7 +127,7 @@ inline std::uint64_t bit_extract_split32(std::uint64_t x, BitExtractMask mask) n
     std::uint32_t m_lo = static_cast<std::uint32_t>(mask.mask);
     std::uint32_t m_hi = static_cast<std::uint32_t>(mask.mask >> 32);
 
-    std::uint32_t out_lo = bit_extract_bitloop32_(x_lo, m_lo);
+    std::uint32_t out_lo = bit_extract_bit_loop32_(x_lo, m_lo);
 
     // number of bits extracted from low half determines shift for high half
     // #ifdef SYSTEM_X86_64_GNU_CLANG
@@ -138,7 +138,7 @@ inline std::uint64_t bit_extract_split32(std::uint64_t x, BitExtractMask mask) n
     // #endif
     auto const shift = std::popcount(m_lo);
 
-    std::uint32_t out_hi = bit_extract_bitloop32_(x_hi, m_hi);
+    std::uint32_t out_hi = bit_extract_bit_loop32_(x_hi, m_hi);
     return static_cast<std::uint64_t>(out_lo) | (static_cast<std::uint64_t>(out_hi) << shift);
 }
 
@@ -184,13 +184,13 @@ struct BitExtractByteTable
 };
 
 /**
- * @brief Bit extract via Byte Table lookup.
+ * @brief Bit extract via byte lookup.
  *
  * This implementation uses a precomputed table of each compbination of input byte and mask byte,
  * and loops over all bytes to extract them individually, then shifts them to the correct position
  * using a second, smaller, lookup table for each byte.
  */
-inline std::uint64_t bit_extract_byte_table(std::uint64_t x, BitExtractMask mask) noexcept
+inline std::uint64_t bit_extract_byte_lookup(std::uint64_t x, BitExtractMask mask) noexcept
 {
     // Use the precomputed bytes to implement a fast pext.
     static const BitExtractByteTable byte_table;
@@ -209,7 +209,7 @@ inline std::uint64_t bit_extract_byte_table(std::uint64_t x, BitExtractMask mask
 }
 
 // =================================================================================================
-//     Bit extract with block table
+//     Bit extract via block shift
 // =================================================================================================
 
 /**
@@ -300,12 +300,12 @@ inline BitExtractBlockTable make_bit_extract_block_table( std::uint64_t mask )
 }
 
 /**
- * @brief Bit extract via Block Shift table.
+ * @brief Bit extract via block shift.
  *
  * This implementation uses a BitExtractBlockTable that is precomputed for the mask, and runs
  * as many iterations as there are blocks of consecutive 1s in the mask.
  */
-inline std::uint64_t bit_extract_block_table(
+inline std::uint64_t bit_extract_block_shift(
     std::uint64_t x, BitExtractBlockTable const& bt
 ) noexcept {
     // Apply blockwise bit extraction using the preprocessing above.
@@ -321,11 +321,11 @@ inline std::uint64_t bit_extract_block_table(
 }
 
 /**
- * @brief Helper for bit_extract_block_table_unrolled() to run the unrolled block table for one
+ * @brief Helper for bit_extract_block_shift_unrolled() to run the unrolled block shift for one
  * chunk.
  */
 template<std::size_t... Is>
-inline std::uint64_t bit_extract_block_table_chunk_(
+inline std::uint64_t bit_extract_block_shift_chunk_(
     std::uint64_t x,
     BitExtractBlockTable const& bt,
     std::size_t i,
@@ -338,11 +338,11 @@ inline std::uint64_t bit_extract_block_table_chunk_(
 }
 
 /**
- * @brief Bit extract via Block Shift table, with compile-time loop unrolling
+ * @brief Bit extract via block shift, with compile-time loop unrolling
  * according to a given unrolling factor `UF`.
  */
 template<std::size_t UF = 1>
-inline std::uint64_t bit_extract_block_table_unrolled(
+inline std::uint64_t bit_extract_block_shift_unrolled(
     std::uint64_t x,
     BitExtractBlockTable const& bt
 ) noexcept
@@ -359,7 +359,7 @@ inline std::uint64_t bit_extract_block_table_unrolled(
     std::uint64_t res = 0;
     std::size_t i = 0;
     while( bt.blocks[i] ) {
-        res |= bit_extract_block_table_chunk_(x, bt, i, idx);
+        res |= bit_extract_block_shift_chunk_(x, bt, i, idx);
         i += UF;
     }
 
@@ -424,7 +424,7 @@ inline constexpr BitExtractButterflyTable make_bit_extract_butterfly_table( std:
 /**
  * @brief Bit extract via extraction butterfly network.
  */
-inline std::uint64_t bit_extract_butterfly_table(
+inline std::uint64_t bit_extract_butterfly(
     std::uint64_t x,
     BitExtractButterflyTable const& bf
 ) noexcept {

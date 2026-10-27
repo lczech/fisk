@@ -80,40 +80,40 @@ static void check_all_scalar_variants(
 
     check_scalar_variant(
         mask_strings, direct_masks, enc,
-        [](std::uint64_t x, BitExtractMask const& mask) { return bit_extract_bitloop(x, mask); }
+        [](std::uint64_t x, BitExtractMask const& mask) { return bit_extract_bit_loop(x, mask); }
     );
     check_scalar_variant(
         mask_strings, direct_masks, enc,
-        [](std::uint64_t x, BitExtractMask const& mask) { return bit_extract_byte_table(x, mask); }
+        [](std::uint64_t x, BitExtractMask const& mask) { return bit_extract_byte_lookup(x, mask); }
     );
     check_scalar_variant(
         mask_strings, block_masks, enc,
         [](std::uint64_t x, BitExtractBlockTable const& mask) {
-            return bit_extract_block_table(x, mask);
+            return bit_extract_block_shift(x, mask);
         }
     );
     check_scalar_variant(
         mask_strings, block_masks, enc,
         [](std::uint64_t x, BitExtractBlockTable const& mask) {
-            return bit_extract_block_table_unrolled<2>(x, mask);
+            return bit_extract_block_shift_unrolled<2>(x, mask);
         }
     );
     check_scalar_variant(
         mask_strings, block_masks, enc,
         [](std::uint64_t x, BitExtractBlockTable const& mask) {
-            return bit_extract_block_table_unrolled<4>(x, mask);
+            return bit_extract_block_shift_unrolled<4>(x, mask);
         }
     );
     check_scalar_variant(
         mask_strings, block_masks, enc,
         [](std::uint64_t x, BitExtractBlockTable const& mask) {
-            return bit_extract_block_table_unrolled<8>(x, mask);
+            return bit_extract_block_shift_unrolled<8>(x, mask);
         }
     );
     check_scalar_variant(
         mask_strings, butterfly_masks, enc,
         [](std::uint64_t x, BitExtractButterflyTable const& mask) {
-            return bit_extract_butterfly_table(x, mask);
+            return bit_extract_butterfly(x, mask);
         }
     );
 
@@ -145,7 +145,7 @@ static void check_scalar_masks(Enc const& enc)
 template <typename Mask>
 concept CanExtractWith = requires(std::string_view seq, Mask const& mask) {
     for_each_spaced_kmer_ascii_checked_rolling_scalar(
-        seq, mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop,
+        seq, mask, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bit_loop,
         [](std::size_t, auto const&) {}
     );
 };
@@ -173,7 +173,7 @@ static void check_emitted_kmers()
         for_each_spaced_kmer_ascii_checked_rolling_scalar(
             std::string_view(seq), std::span<SpacedKmerMask<L, BitExtractMask> const, 2>(masks),
             CharEncoderTable<Encoding::kACGT>{},
-            bit_extract_bitloop,
+            bit_extract_bit_loop,
             [&](std::size_t pos, std::size_t mask_idx, auto const& kmer) {
                 using K = SpacedKmer<Encoding::kACGT, L>;
                 static_assert(std::is_same_v<std::remove_cvref_t<decltype(kmer)>, K>);
@@ -230,12 +230,12 @@ TEST(SpacedKmerExtractAsciiRollingScalar, LayoutsAgreeViaConversion)
             std::vector<std::pair<std::size_t, SpacedKmerAcgtLsb>> lsb;
             for_each_spaced_kmer_ascii_checked_rolling_scalar(
                 std::string_view(seq), msb_mask, CharEncoderTable<Encoding::kACGT>{},
-                bit_extract_bitloop,
+                bit_extract_bit_loop,
                 [&](std::size_t pos, auto const& kmer) { msb.emplace_back(pos, kmer); }
             );
             for_each_spaced_kmer_ascii_checked_rolling_scalar(
                 std::string_view(seq), lsb_mask, CharEncoderTable<Encoding::kACGT>{},
-                bit_extract_bitloop,
+                bit_extract_bit_loop,
                 [&](std::size_t pos, auto const& kmer) { lsb.emplace_back(pos, kmer); }
             );
 
@@ -260,7 +260,7 @@ TEST(SpacedKmerExtractAsciiRollingScalar, AllOnesMaskMatchesContiguousKmers)
             std::vector<std::uint64_t> spaced_values;
             for_each_spaced_kmer_ascii_checked_rolling_scalar(
                 std::string_view(seq), mask, CharEncoderTable<Encoding::kACGT>{},
-                bit_extract_bitloop,
+                bit_extract_bit_loop,
                 [&](std::size_t /*pos*/, std::size_t /*mask_idx*/, auto const& kmer) {
                     spaced_values.push_back(kmer_value(kmer));
                 }
@@ -297,7 +297,7 @@ TEST(SpacedKmerExtractAsciiRollingScalar, Actg)
 TEST(SpacedKmerExtractAsciiRollingScalar, InvalidSpan)
 {
     auto const extract = [](std::uint64_t x, BitExtractMask const& m) {
-        return bit_extract_bitloop(x, m);
+        return bit_extract_bit_loop(x, m);
     };
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         auto mask = make_spaced_kmer_mask("1");
@@ -319,7 +319,7 @@ TEST(SpacedKmerExtractAsciiRollingScalar, MixedSpans)
     EXPECT_THROW(
         dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
             for_each_spaced_kmer_ascii_checked_rolling_scalar(
-                seq, mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop, callback
+                seq, mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bit_loop, callback
             );
         }),
         std::invalid_argument
@@ -334,7 +334,7 @@ TEST(SpacedKmerExtractAsciiRollingScalar, EmptyMasks)
     EXPECT_THROW(
         dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
             for_each_spaced_kmer_ascii_checked_rolling_scalar(
-                seq, mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bitloop,
+                seq, mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bit_loop,
                 [](std::size_t, std::size_t, auto const&) {}
             );
         }),

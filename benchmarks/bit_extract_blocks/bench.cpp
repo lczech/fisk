@@ -346,9 +346,9 @@ void bench_bit_extract_blocks(std::ostream& csv_os)
             ),
             #endif
             bench(
-                "bitloop",
+                "bit_loop",
                 [&](BitExtractBlocksBatch const& b){
-                    return run_var_bitloop(b, rounds, sink_buffer);
+                    return run_var_bit_loop(b, rounds, sink_buffer);
                 }
             ),
             bench(
@@ -358,45 +358,45 @@ void bench_bit_extract_blocks(std::ostream& csv_os)
                 }
             ),
             bench(
-                "byte_table",
+                "byte_lookup",
                 [&](BitExtractBlocksBatch const& b){
-                    return run_var_byte_table(b, rounds, sink_buffer);
+                    return run_var_byte_lookup(b, rounds, sink_buffer);
                 }
             ),
             bench(
-                "block_table",
+                "block_shift",
                 [&](BitExtractBlocksBatch const& b){
-                    return run_var_block_table(b, rounds, sink_buffer);
+                    return run_var_block_shift(b, rounds, sink_buffer);
                 }
             ),
             bench(
-                "block_table_unrolled1",
+                "block_shift_unrolled1",
                 [&](BitExtractBlocksBatch const& b){
-                    return run_var_block_table_unrolled1(b, rounds, sink_buffer);
+                    return run_var_block_shift_unrolled1(b, rounds, sink_buffer);
                 }
             ),
             bench(
-                "block_table_unrolled2",
+                "block_shift_unrolled2",
                 [&](BitExtractBlocksBatch const& b){
-                    return run_var_block_table_unrolled2(b, rounds, sink_buffer);
+                    return run_var_block_shift_unrolled2(b, rounds, sink_buffer);
                 }
             ),
             bench(
-                "block_table_unrolled4",
+                "block_shift_unrolled4",
                 [&](BitExtractBlocksBatch const& b){
-                    return run_var_block_table_unrolled4(b, rounds, sink_buffer);
+                    return run_var_block_shift_unrolled4(b, rounds, sink_buffer);
                 }
             ),
             bench(
-                "block_table_unrolled8",
+                "block_shift_unrolled8",
                 [&](BitExtractBlocksBatch const& b){
-                    return run_var_block_table_unrolled8(b, rounds, sink_buffer);
+                    return run_var_block_shift_unrolled8(b, rounds, sink_buffer);
                 }
             ),
             bench(
-                "butterfly_table",
+                "butterfly",
                 [&](BitExtractBlocksBatch const& b){
-                    return run_var_butterfly_table(b, rounds, sink_buffer);
+                    return run_var_butterfly(b, rounds, sink_buffer);
                 }
             ),
             #if defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)

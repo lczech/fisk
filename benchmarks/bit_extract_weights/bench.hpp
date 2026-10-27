@@ -61,7 +61,7 @@ std::uint64_t run_var_pext(
 );
 #endif
 
-std::uint64_t run_var_bitloop(
+std::uint64_t run_var_bit_loop(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer
@@ -71,39 +71,39 @@ std::uint64_t run_var_split32(
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_byte_table(
+std::uint64_t run_var_byte_lookup(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer
 );
 
-std::uint64_t run_var_block_table(
+std::uint64_t run_var_block_shift(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_block_table_unrolled1(
+std::uint64_t run_var_block_shift_unrolled1(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_block_table_unrolled2(
+std::uint64_t run_var_block_shift_unrolled2(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_block_table_unrolled4(
+std::uint64_t run_var_block_shift_unrolled4(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer
 );
-std::uint64_t run_var_block_table_unrolled8(
+std::uint64_t run_var_block_shift_unrolled8(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer
 );
 
-std::uint64_t run_var_butterfly_table(
+std::uint64_t run_var_butterfly(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
     std::vector<std::uint64_t>& sink_buffer

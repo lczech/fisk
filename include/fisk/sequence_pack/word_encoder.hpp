@@ -415,7 +415,7 @@ struct WordEncoderButterfly
     FISK_ALWAYS_INLINE
     std::uint64_t operator()(std::uint64_t word) const noexcept
     {
-        return bit_extract_butterfly_table(
+        return bit_extract_butterfly(
             pack_prepare_codes_<E>(pack_orient_chunk_<L>(word)), table
         );
     }

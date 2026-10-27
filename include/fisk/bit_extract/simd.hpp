@@ -104,7 +104,7 @@ struct BitExtractKernelPEXT
 #endif
 
 // =================================================================================================
-//     Butterfly Table Kernel
+//     Butterfly Kernel
 // =================================================================================================
 
 /**
@@ -160,7 +160,7 @@ struct BitExtractKernelButterfly
 
     std::uint64_t bit_extract_scalar(std::uint64_t x) const noexcept
     {
-        return bit_extract_butterfly_table(x, mask);
+        return bit_extract_butterfly(x, mask);
     }
 
     /**
@@ -209,11 +209,11 @@ private:
 };
 
 // =================================================================================================
-//     Block Table Kernel
+//     Block Shift Kernel
 // =================================================================================================
 
 /**
- * @brief Kernel for bit extract using the unrolled block table, for a SIMD arch.
+ * @brief Kernel for bit extract using the unrolled block shift, for a SIMD arch.
  *
  * The kernel is templetized with an unrolling factor `UF`, for loop unrolling at compile time.
  * As here the compiler might not have sufficient optimization to see through the operations,
@@ -225,7 +225,7 @@ private:
  * @tparam UF Unroll factor for compile-time loop unrolling, defaults to 8-fold unrolling.
  */
 template <SimdArch Simd, std::size_t UF = 8>
-struct BitExtractKernelBlock
+struct BitExtractKernelBlockShift
 {
     static_assert(UF > 0 && ((UF & (UF - 1)) == 0), "UF must be a power of 2");
     static_assert(UF <= 32, "UF must be <= 32");
@@ -240,9 +240,9 @@ struct BitExtractKernelBlock
     simd_vector blocks_simd[33]{};
     shift_count shifts_simd[33]{};
 
-    BitExtractKernelBlock() = default;
+    BitExtractKernelBlockShift() = default;
 
-    explicit BitExtractKernelBlock(std::uint64_t const mask_value)
+    explicit BitExtractKernelBlockShift(std::uint64_t const mask_value)
         : mask(make_bit_extract_block_table(mask_value))
     {
         assert( mask.blocks[32] == 0 && mask.shifts[32] == 0 );
@@ -282,7 +282,7 @@ struct BitExtractKernelBlock
 
     std::uint64_t bit_extract_scalar(std::uint64_t x) const noexcept
     {
-        return bit_extract_block_table(x, mask);
+        return bit_extract_block_shift(x, mask);
     }
 
 private:

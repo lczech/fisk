@@ -19,11 +19,11 @@ TEST(BitExtractSelector, RunBitExtractMode)
     // implementation), not re-proving algorithm correctness.
 
     std::vector<BitExtractMode> modes = {
-        BitExtractMode::kBlockTable,
-        BitExtractMode::kBlockTableUnrolled2,
-        BitExtractMode::kBlockTableUnrolled4,
-        BitExtractMode::kBlockTableUnrolled8,
-        BitExtractMode::kButterflyTable,
+        BitExtractMode::kBlockShift,
+        BitExtractMode::kBlockShiftUnrolled2,
+        BitExtractMode::kBlockShiftUnrolled4,
+        BitExtractMode::kBlockShiftUnrolled8,
+        BitExtractMode::kButterfly,
     };
 #ifdef FISK_HAS_BMI2
     modes.push_back(BitExtractMode::kPext);
@@ -69,11 +69,11 @@ TEST(BitExtractSelector, SmokeTest)
         auto const mode = bit_extract_selector(mask);
         bool const is_known_mode =
             mode == BitExtractMode::kPext ||
-            mode == BitExtractMode::kBlockTable ||
-            mode == BitExtractMode::kBlockTableUnrolled2 ||
-            mode == BitExtractMode::kBlockTableUnrolled4 ||
-            mode == BitExtractMode::kBlockTableUnrolled8 ||
-            mode == BitExtractMode::kButterflyTable;
+            mode == BitExtractMode::kBlockShift ||
+            mode == BitExtractMode::kBlockShiftUnrolled2 ||
+            mode == BitExtractMode::kBlockShiftUnrolled4 ||
+            mode == BitExtractMode::kBlockShiftUnrolled8 ||
+            mode == BitExtractMode::kButterfly;
         EXPECT_TRUE(is_known_mode);
     }
 }

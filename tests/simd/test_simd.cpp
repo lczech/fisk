@@ -24,33 +24,33 @@ using namespace fisk;
 // =================================================================================================
 
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdScalar>>);
-static_assert(BitExtractKernel<BitExtractKernelBlock<SimdScalar>>);
+static_assert(BitExtractKernel<BitExtractKernelBlockShift<SimdScalar>>);
 
 #if defined(FISK_HAS_SSE2)
 
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdSSE2>>);
-static_assert(BitExtractKernel<BitExtractKernelBlock<SimdSSE2>>);
+static_assert(BitExtractKernel<BitExtractKernelBlockShift<SimdSSE2>>);
 
 #endif
 
 #if defined(FISK_HAS_AVX2)
 
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX2>>);
-static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX2>>);
+static_assert(BitExtractKernel<BitExtractKernelBlockShift<SimdAVX2>>);
 
 #endif
 
 #if defined(FISK_HAS_AVX512)
 
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdAVX512>>);
-static_assert(BitExtractKernel<BitExtractKernelBlock<SimdAVX512>>);
+static_assert(BitExtractKernel<BitExtractKernelBlockShift<SimdAVX512>>);
 
 #endif
 
 #if defined(FISK_HAS_NEON)
 
 static_assert(BitExtractKernel<BitExtractKernelButterfly<SimdNEON>>);
-static_assert(BitExtractKernel<BitExtractKernelBlock<SimdNEON>>);
+static_assert(BitExtractKernel<BitExtractKernelBlockShift<SimdNEON>>);
 
 #endif
 
