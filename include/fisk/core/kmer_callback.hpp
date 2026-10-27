@@ -56,12 +56,13 @@ concept KmerVectorValidLanesCallback =
 
 /**
  * @brief A callback for single spaced k-mers, as `callback(pos, mask_idx, spaced_kmer)`, or, when
- * `SingleMask` is true, also as `callback(pos, spaced_kmer)`.
+ * `SingleMask` is true, also as `callback(pos, spaced_kmer)` or `callback(spaced_kmer)`.
  */
 template <typename Callback, Encoding E, Layout L, bool SingleMask>
 concept SpacedKmerCallback =
     std::invocable<Callback, std::size_t, std::size_t, SpacedKmer<E, L> const&> ||
-    (SingleMask && std::invocable<Callback, std::size_t, SpacedKmer<E, L> const&>);
+    (SingleMask && std::invocable<Callback, std::size_t, SpacedKmer<E, L> const&>) ||
+    (SingleMask && std::invocable<Callback, SpacedKmer<E, L> const&>);
 
 /**
  * @brief A callback for vectors of spaced k-mers, as `callback(pos, mask_idx, vec, valid_count)`,
@@ -184,13 +185,14 @@ inline void invoke_kmer_vector_valid_lanes_callback(
 // -------------------------------------------------------------------------------------------------
 
 /**
- * @brief Invoke a spaced k-mer extraction callback with the spaced k-mer of a raw word, with an
- * optional position-only shorthand.
+ * @brief Invoke a spaced k-mer extraction callback with the spaced k-mer of a raw word, with
+ * optional shorthands for a single mask.
  *
  * Accepts `callback(pos, mask_idx, spaced_kmer)`. When `SingleMask` is true (exactly one mask,
- * known at compile time), the shorthand `callback(pos, spaced_kmer)` is also accepted, as
- * `mask_idx` is always 0 then, see SpacedKmerCallback. The word must already be a valid spaced
- * k-mer, see spaced_kmer_cast_unchecked().
+ * known at compile time), the shorthands `callback(pos, spaced_kmer)` and `callback(spaced_kmer)`
+ * are also accepted, as `mask_idx` is always 0 then, see SpacedKmerCallback. As for
+ * invoke_kmer_callback(), a callback without `pos` does not pay for it. The word must already be a
+ * valid spaced k-mer, see spaced_kmer_cast_unchecked().
  *
  * @tparam SingleMask Whether the caller is known at compile time to iterate exactly one mask.
  */
@@ -204,22 +206,27 @@ inline void invoke_spaced_kmer_callback(
 
     // There is no `callback(mask_idx, spaced_kmer)` shorthand for multiple masks: it would have the
     // same shape as the single-mask shorthand, so a `(std::size_t, Value)` callback would receive
-    // either pos or mask_idx, depending on how many masks are used at the call site.
+    // either pos or mask_idx, depending on how many masks are used at the call site. And
+    // `callback(spaced_kmer)` is only accepted for a single mask, as with multiple masks it would
+    // lose which mask a spaced k-mer belongs to.
     if constexpr (std::invocable<Callback, std::size_t, std::size_t, Value const&>) {
         callback(pos, mask_idx, value);
     } else if constexpr (SingleMask && std::invocable<Callback, std::size_t, Value const&>) {
         callback(pos, value);
+    } else if constexpr (SingleMask && std::invocable<Callback, Value const&>) {
+        callback(value);
     } else if constexpr (SingleMask) {
         static_assert(
             SpacedKmerCallback<Callback, E, L, SingleMask>,
-            "Callback must be callable as callback(pos, mask_idx, value) or callback(pos, value)."
+            "Callback must be callable as callback(pos, mask_idx, value), callback(pos, value), "
+            "or callback(value)."
         );
     } else {
         static_assert(
             SpacedKmerCallback<Callback, E, L, SingleMask>,
-            "Callback must be callable as callback(pos, mask_idx, value). The 2-arg "
-            "callback(pos, value) shorthand is only available for a single mask (known at "
-            "compile time), since with multiple masks the mask index must be explicit."
+            "Callback must be callable as callback(pos, mask_idx, value). The shorthands "
+            "callback(pos, value) and callback(value) are only available for a single mask (known "
+            "at compile time), since with multiple masks the mask index must be explicit."
         );
     }
 }

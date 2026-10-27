@@ -142,8 +142,8 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
  * @param bit_ext   Bit extraction functor, called as bit_ext(word, mask). It must ignore all bits
  *                  of `word` outside of the mask, as PEXT and all fisk bit extraction functions do.
  * @param callback  Callback functor, called as callback(pos, mask_idx, spaced_kmer), or as
- *                  callback(pos, spaced_kmer). `pos` is the start index of the spaced k-mer's
- *                  span (into `seq`). See invoke_spaced_kmer_callback().
+ *                  callback(pos, spaced_kmer) or callback(spaced_kmer). `pos` is the start index
+ *                  of the spaced k-mer's span (into `seq`). See invoke_spaced_kmer_callback().
  */
 template<typename Mask, typename Enc, typename BitExtract, typename Callback>
     requires SpacedKmerMaskType<Mask> && CharEncoder<std::remove_cvref_t<Enc>>
@@ -168,8 +168,8 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar(
  * Same as the single-mask overload above, but for a set of masks, which all need to have the same
  * span, as a std::span of compile-time size, possibly of const masks; see dispatch_static_span()
  * for a std::vector of masks. The callback must be callable as
- * callback(pos, mask_idx, spaced_kmer); the shorthand callback(pos, spaced_kmer) is only available
- * for a single mask. See invoke_spaced_kmer_callback().
+ * callback(pos, mask_idx, spaced_kmer); the shorthands callback(pos, spaced_kmer) and
+ * callback(spaced_kmer) are only available for a single mask. See invoke_spaced_kmer_callback().
  */
 template<typename Mask, std::size_t N, typename Enc, typename BitExtract, typename Callback>
     requires SpacedKmerMaskType<std::remove_const_t<Mask>> && (N != std::dynamic_extent)

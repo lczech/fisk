@@ -91,12 +91,14 @@ static_assert(VectorCb<decltype([](auto, auto, auto) {})>);
 //     Spaced K-mers
 // =================================================================================================
 
-// The shorthand without mask_idx is only accepted for a single mask.
+// The shorthands without mask_idx, with or without pos, are only accepted for a single mask.
 static_assert(SpacedCb<decltype([](std::size_t, std::size_t, S const&) {})>);
 static_assert(SpacedSingleCb<decltype([](std::size_t, std::size_t, S const&) {})>);
 static_assert(!SpacedCb<decltype([](std::size_t, S const&) {})>);
 static_assert(SpacedSingleCb<decltype([](std::size_t, S const&) {})>);
-static_assert(!SpacedSingleCb<decltype([](S const&) {})>);
+static_assert(!SpacedCb<decltype([](S const&) {})>);
+static_assert(SpacedSingleCb<decltype([](S const&) {})>);
+static_assert(!SpacedSingleCb<decltype([](K const&) {})>);
 static_assert(!SpacedCb<decltype([](std::size_t, std::size_t, K const&) {})>);
 
 // The same holds for the vector forms.

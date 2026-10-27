@@ -311,9 +311,11 @@ inline void check_spaced_events(
 }
 
 // Runs `extract`, called as `extract(callback)`, once with a `callback(pos, mask_idx, value)`, and,
-// if SingleMask, once more with the `callback(pos, value)` shorthand, which is only accepted for a
-// single mask known at compile time (see invoke_spaced_kmer_callback()). Returns the events of
-// each run, to be checked against the same expected events. The spaced k-mers have to be in `L`.
+// if SingleMask, once more with each of the `callback(pos, value)` and `callback(value)`
+// shorthands, which are only accepted for a single mask known at compile time (see
+// invoke_spaced_kmer_callback()). Returns the events of each run, to be checked against the same
+// expected events. The spaced k-mers have to be in `L`. The run without positions takes them from
+// the first run, so that it checks the values and their order.
 template <fisk::Layout L, bool SingleMask, typename Extract>
 inline std::vector<std::vector<SpacedEvent>> collect_spaced_callback_forms(Extract&& extract)
 {
@@ -328,6 +330,14 @@ inline std::vector<std::vector<SpacedEvent>> collect_spaced_callback_forms(Extra
             static_assert(std::remove_cvref_t<decltype(value)>::layout == L);
             runs[1].push_back({pos, 0, fisk::kmer_value(value)});
         });
+        runs.emplace_back();
+        extract([&](auto const& value) {
+            static_assert(std::remove_cvref_t<decltype(value)>::layout == L);
+            runs[2].push_back({0, 0, fisk::kmer_value(value)});
+        });
+        for (std::size_t i = 0; i < std::min(runs[0].size(), runs[2].size()); ++i) {
+            runs[2][i].pos = runs[0][i].pos;
+        }
     }
     return runs;
 }
