@@ -159,4 +159,48 @@ inline void for_each_kmer_ascii_unchecked_chunked_scalar(
     );
 }
 
+// -------------------------------------------------------------------------------------------------
+//     for_each_kmer_ascii_checked_chunked_scalar()
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Extract the valid k-mers for k in [1, 32] from an ASCII sequence, and call a callback on
+ * each, using caller-provided temporary storage.
+ *
+ * As for_each_kmer_ascii_unchecked_chunked_scalar(), packing each chunk with its validity, see
+ * pack_sequence_checked(), and emitting only the k-mers that consist of valid nucleotides, with
+ * for_each_kmer_packed_checked_bytewise_scalar(). The valid nucleotides are `ACGT`, in upper or
+ * lower case, as the word encoders tell them apart; every k-mer that overlaps another character is
+ * skipped, also across the ends of the chunks.
+ *
+ * The callback and `scratch` are as for for_each_kmer_ascii_unchecked_chunked_scalar(), with a
+ * PackedSequenceWithValidity as `scratch`.
+ */
+template <std::size_t ChunkSize = kDefaultAsciiChunkSize, WordEncoder Encoder, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_kmer_ascii_checked_chunked_scalar(
+    std::string_view seq, std::size_t k, Encoder const& encoder,
+    PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& scratch,
+    Func&& func
+) {
+    // `func` is called from every chunk, so it is passed on as an lvalue, never forwarded.
+    for_each_kmer_ascii_chunked_scalar_<ChunkSize>(seq, k, encoder, scratch, func);
+}
+
+/**
+ * @brief Same as above, using a thread-local buffer, see the thread-local overload of
+ * for_each_kmer_ascii_unchecked_chunked_scalar().
+ */
+template <std::size_t ChunkSize = kDefaultAsciiChunkSize, WordEncoder Encoder, typename Func>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_kmer_ascii_checked_chunked_scalar(
+    std::string_view seq, std::size_t k, Encoder const& encoder, Func&& func
+) {
+    for_each_kmer_ascii_checked_chunked_scalar<ChunkSize>(
+        seq, k, encoder,
+        ascii_chunked_buffer_<PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>>(),
+        std::forward<Func>(func)
+    );
+}
+
 } // namespace fisk
