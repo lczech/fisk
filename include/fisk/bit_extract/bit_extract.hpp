@@ -48,6 +48,15 @@ struct BitExtractMask
     constexpr operator std::uint64_t() const noexcept { return mask; }
 };
 
+// The bit extract functions below are function objects: bit_extract_<algorithm> is an object of
+// the type BitExtract<Algorithm>, whose call operator is always inlined. The scalar spaced k-mer
+// extraction takes a bit extract function as an argument and calls it once per mask and position.
+// The type of a function object names the algorithm, so that this call is a direct one, which the
+// compiler inlines. A plain function would be passed as a function reference instead, whose call
+// GCC keeps as an actual call in a large translation unit, such as one that instantiates the
+// extraction for every number of masks with dispatch_static_span(), even if the function is
+// declared always_inline.
+
 // =================================================================================================
 //     Bit extract via hardware PEXT
 // =================================================================================================
@@ -57,12 +66,18 @@ struct BitExtractMask
 /**
  * @brief Bit extract via hardware PEXT from the BMI2 instruction set.
  */
-inline std::uint64_t bit_extract_pext(std::uint64_t x, BitExtractMask mask)
+struct BitExtractPext
 {
-    // For speed, not using bmi2_enabled() for check here, and instead assume
-    // that hardware availablility means we are allowed to call it.
-    return _pext_u64(x, mask.mask);
-}
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(std::uint64_t x, BitExtractMask mask) const
+    {
+        // For speed, not using bmi2_enabled() for check here, and instead assume
+        // that hardware availablility means we are allowed to call it.
+        return _pext_u64(x, mask.mask);
+    }
+};
+
+inline constexpr BitExtractPext bit_extract_pext{};
 
 #endif
 
@@ -73,23 +88,29 @@ inline std::uint64_t bit_extract_pext(std::uint64_t x, BitExtractMask mask)
 /**
  * @brief Bit extract via a simple bit loop over all bits set in the mask.
  */
-inline std::uint64_t bit_extract_bit_loop(std::uint64_t x, BitExtractMask mask) noexcept
+struct BitExtractBitLoop
 {
-    // This is the classic "extract selected bits and pack them densely" loop.
-    // Complexity ~64 iterations, but cheap operations.
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(std::uint64_t x, BitExtractMask mask) const noexcept
+    {
+        // This is the classic "extract selected bits and pack them densely" loop.
+        // Complexity ~64 iterations, but cheap operations.
 
-    std::uint64_t out = 0;
-    std::uint64_t bit = 1;
-    std::uint64_t msk = mask.mask;
+        std::uint64_t out = 0;
+        std::uint64_t bit = 1;
+        std::uint64_t msk = mask.mask;
 
-    while (msk) {
-        std::uint64_t lsb = msk & (~msk + 1); // mask & -mask, but unsigned-safe
-        out |= (x & lsb) ? bit : 0;
-        msk ^= lsb;
-        bit <<= 1;
+        while (msk) {
+            std::uint64_t lsb = msk & (~msk + 1); // mask & -mask, but unsigned-safe
+            out |= (x & lsb) ? bit : 0;
+            msk ^= lsb;
+            bit <<= 1;
+        }
+        return out;
     }
-    return out;
-}
+};
+
+inline constexpr BitExtractBitLoop bit_extract_bit_loop{};
 
 // =================================================================================================
 //     Bit extract via split into two 32-bit halves
@@ -101,46 +122,52 @@ inline std::uint64_t bit_extract_bit_loop(std::uint64_t x, BitExtractMask mask) 
  *
  * This might be a bit faster, but mostly just used out of curiosity. Not really that useful.
  */
-inline std::uint64_t bit_extract_split32(std::uint64_t x, BitExtractMask mask) noexcept
+struct BitExtractSplit32
 {
-    // Same as above, but split into two 32-bit halves.
-    // Sometimes generates slightly better code depending on compiler/flags.
-
-    auto bit_extract_bit_loop32_ = [](std::uint32_t xx, std::uint32_t mm) -> std::uint32_t
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(std::uint64_t x, BitExtractMask mask) const noexcept
     {
-        std::uint32_t out = 0;
-        std::uint32_t out_bit = 1;
-        std::uint32_t zero = 0;
-        std::uint32_t one  = 1;
+        // Same as above, but split into two 32-bit halves.
+        // Sometimes generates slightly better code depending on compiler/flags.
 
-        while (mm) {
-            std::uint32_t lsb = mm & (~mm + 1u);
-            out |= (xx & lsb) ? out_bit : zero;
-            mm ^= lsb;
-            out_bit <<= one;
-        }
-        return out;
-    };
+        auto bit_extract_bit_loop32_ = [](std::uint32_t xx, std::uint32_t mm) -> std::uint32_t
+        {
+            std::uint32_t out = 0;
+            std::uint32_t out_bit = 1;
+            std::uint32_t zero = 0;
+            std::uint32_t one  = 1;
 
-    std::uint32_t x_lo = static_cast<std::uint32_t>(x);
-    std::uint32_t x_hi = static_cast<std::uint32_t>(x >> 32);
-    std::uint32_t m_lo = static_cast<std::uint32_t>(mask.mask);
-    std::uint32_t m_hi = static_cast<std::uint32_t>(mask.mask >> 32);
+            while (mm) {
+                std::uint32_t lsb = mm & (~mm + 1u);
+                out |= (xx & lsb) ? out_bit : zero;
+                mm ^= lsb;
+                out_bit <<= one;
+            }
+            return out;
+        };
 
-    std::uint32_t out_lo = bit_extract_bit_loop32_(x_lo, m_lo);
+        std::uint32_t x_lo = static_cast<std::uint32_t>(x);
+        std::uint32_t x_hi = static_cast<std::uint32_t>(x >> 32);
+        std::uint32_t m_lo = static_cast<std::uint32_t>(mask.mask);
+        std::uint32_t m_hi = static_cast<std::uint32_t>(mask.mask >> 32);
 
-    // number of bits extracted from low half determines shift for high half
-    // #ifdef SYSTEM_X86_64_GNU_CLANG
-    //     unsigned shift = static_cast<unsigned>(__builtin_popcount(m_lo));
-    // #else
-    //     unsigned shift = 0;
-    //     for (std::uint32_t t = m_lo; t; t &= (t - 1)) ++shift;
-    // #endif
-    auto const shift = std::popcount(m_lo);
+        std::uint32_t out_lo = bit_extract_bit_loop32_(x_lo, m_lo);
 
-    std::uint32_t out_hi = bit_extract_bit_loop32_(x_hi, m_hi);
-    return static_cast<std::uint64_t>(out_lo) | (static_cast<std::uint64_t>(out_hi) << shift);
-}
+        // number of bits extracted from low half determines shift for high half
+        // #ifdef SYSTEM_X86_64_GNU_CLANG
+        //     unsigned shift = static_cast<unsigned>(__builtin_popcount(m_lo));
+        // #else
+        //     unsigned shift = 0;
+        //     for (std::uint32_t t = m_lo; t; t &= (t - 1)) ++shift;
+        // #endif
+        auto const shift = std::popcount(m_lo);
+
+        std::uint32_t out_hi = bit_extract_bit_loop32_(x_hi, m_hi);
+        return static_cast<std::uint64_t>(out_lo) | (static_cast<std::uint64_t>(out_hi) << shift);
+    }
+};
+
+inline constexpr BitExtractSplit32 bit_extract_split32{};
 
 // =================================================================================================
 //     Bit extract via byte lookup (8-bit chunks)
@@ -190,23 +217,29 @@ struct BitExtractByteLookupTable
  * and loops over all bytes to extract them individually, then shifts them to the correct position
  * using a second, smaller, lookup table for each byte.
  */
-inline std::uint64_t bit_extract_byte_lookup(std::uint64_t x, BitExtractMask mask) noexcept
+struct BitExtractByteLookup
 {
-    // Use the precomputed bytes to implement a fast pext.
-    static const BitExtractByteLookupTable lookup_table;
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(std::uint64_t x, BitExtractMask mask) const noexcept
+    {
+        // Use the precomputed bytes to implement a fast pext.
+        static const BitExtractByteLookupTable lookup_table;
 
-    std::uint64_t out = 0;
-    unsigned shift = 0;
+        std::uint64_t out = 0;
+        unsigned shift = 0;
 
-    for (int i = 0; i < 8; ++i) {
-        std::uint8_t mm = static_cast<std::uint8_t>(mask.mask >> (8 * i));
-        std::uint8_t xx = static_cast<std::uint8_t>(x >> (8 * i));
-        std::uint64_t part = static_cast<std::uint64_t>(lookup_table.table[mm][xx]);
-        out |= (part << shift);
-        shift += lookup_table.popcnt[mm];
+        for (int i = 0; i < 8; ++i) {
+            std::uint8_t mm = static_cast<std::uint8_t>(mask.mask >> (8 * i));
+            std::uint8_t xx = static_cast<std::uint8_t>(x >> (8 * i));
+            std::uint64_t part = static_cast<std::uint64_t>(lookup_table.table[mm][xx]);
+            out |= (part << shift);
+            shift += lookup_table.popcnt[mm];
+        }
+        return out;
     }
-    return out;
-}
+};
+
+inline constexpr BitExtractByteLookup bit_extract_byte_lookup{};
 
 // =================================================================================================
 //     Bit extract via block shift
@@ -306,20 +339,27 @@ inline BitExtractBlockShiftMask make_bit_extract_block_shift_mask( std::uint64_t
  * This implementation uses a BitExtractBlockShiftMask that is precomputed for the mask, and runs
  * as many iterations as there are blocks of consecutive 1s in the mask.
  */
-inline std::uint64_t bit_extract_block_shift(
-    std::uint64_t x, BitExtractBlockShiftMask const& bt
-) noexcept {
-    // Apply blockwise bit extraction using the preprocessing above.
-    // Semantics match _pext_u64(x, mask) for the same mask.
-    assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
-    std::uint64_t res = 0;
-    size_t i = 0;
-    while(bt.blocks[i]) {
-        res |= (x & bt.blocks[i]) >> bt.shifts[i];
-        ++i;
+struct BitExtractBlockShift
+{
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(
+        std::uint64_t x, BitExtractBlockShiftMask const& bt
+    ) const noexcept
+    {
+        // Apply blockwise bit extraction using the preprocessing above.
+        // Semantics match _pext_u64(x, mask) for the same mask.
+        assert( bt.blocks[32] == 0 && bt.shifts[32] == 0 );
+        std::uint64_t res = 0;
+        size_t i = 0;
+        while(bt.blocks[i]) {
+            res |= (x & bt.blocks[i]) >> bt.shifts[i];
+            ++i;
+        }
+        return res;
     }
-    return res;
-}
+};
+
+inline constexpr BitExtractBlockShift bit_extract_block_shift{};
 
 /**
  * @brief Helper for bit_extract_block_shift_unrolled() to run the unrolled block shift for one
@@ -342,30 +382,37 @@ inline std::uint64_t bit_extract_block_shift_chunk_(
  * @brief Bit extract via block shift, with compile-time loop unrolling
  * according to a given unrolling factor `UF`.
  */
-template<std::size_t UF = 1>
-inline std::uint64_t bit_extract_block_shift_unrolled(
-    std::uint64_t x,
-    BitExtractBlockShiftMask const& bt
-) noexcept
+template<std::size_t UF>
+struct BitExtractBlockShiftUnrolled
 {
-    static_assert(
-        UF == 1 || UF == 2 || UF == 4 || UF == 8 || UF == 16 || UF == 32,
-        "Supported unroll factors are 1, 2, 4, 8, 16, 32."
-    );
-    assert(bt.blocks[32] == 0 && bt.shifts[32] == 0);
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(
+        std::uint64_t x,
+        BitExtractBlockShiftMask const& bt
+    ) const noexcept
+    {
+        static_assert(
+            UF == 1 || UF == 2 || UF == 4 || UF == 8 || UF == 16 || UF == 32,
+            "Supported unroll factors are 1, 2, 4, 8, 16, 32."
+        );
+        assert(bt.blocks[32] == 0 && bt.shifts[32] == 0);
 
-    // Loop over chunks of the size of the unrolling factor,
-    // until we reach the block sential (the first block that is 0).
-    constexpr auto idx = std::make_index_sequence<UF>{};
-    std::uint64_t res = 0;
-    std::size_t i = 0;
-    while( bt.blocks[i] ) {
-        res |= bit_extract_block_shift_chunk_(x, bt, i, idx);
-        i += UF;
+        // Loop over chunks of the size of the unrolling factor,
+        // until we reach the block sential (the first block that is 0).
+        constexpr auto idx = std::make_index_sequence<UF>{};
+        std::uint64_t res = 0;
+        std::size_t i = 0;
+        while( bt.blocks[i] ) {
+            res |= bit_extract_block_shift_chunk_(x, bt, i, idx);
+            i += UF;
+        }
+
+        return res;
     }
+};
 
-    return res;
-}
+template<std::size_t UF = 1>
+inline constexpr BitExtractBlockShiftUnrolled<UF> bit_extract_block_shift_unrolled{};
 
 // =================================================================================================
 //     Bit extract with extraction butterfly permutation network
@@ -426,23 +473,30 @@ inline constexpr BitExtractButterflyMask make_bit_extract_butterfly_mask( std::u
 /**
  * @brief Bit extract via extraction butterfly network.
  */
-inline std::uint64_t bit_extract_butterfly(
-    std::uint64_t x,
-    BitExtractButterflyMask const& bf
-) noexcept {
-    x &= bf.mask;
-    auto step = [&]( std::size_t s, std::uint64_t mv_i )
+struct BitExtractButterfly
+{
+    FISK_ALWAYS_INLINE
+    std::uint64_t operator()(
+        std::uint64_t x,
+        BitExtractButterflyMask const& bf
+    ) const noexcept
     {
-        std::uint64_t t = x & mv_i;
-        x = (x ^ t) | (t >> s);
-    };
-    step(  1, bf.sieves[0] );
-    step(  2, bf.sieves[1] );
-    step(  4, bf.sieves[2] );
-    step(  8, bf.sieves[3] );
-    step( 16, bf.sieves[4] );
-    step( 32, bf.sieves[5] );
-    return x;
-}
+        x &= bf.mask;
+        auto step = [&]( std::size_t s, std::uint64_t mv_i )
+        {
+            std::uint64_t t = x & mv_i;
+            x = (x ^ t) | (t >> s);
+        };
+        step(  1, bf.sieves[0] );
+        step(  2, bf.sieves[1] );
+        step(  4, bf.sieves[2] );
+        step(  8, bf.sieves[3] );
+        step( 16, bf.sieves[4] );
+        step( 32, bf.sieves[5] );
+        return x;
+    }
+};
+
+inline constexpr BitExtractButterfly bit_extract_butterfly{};
 
 } // namespace fisk
