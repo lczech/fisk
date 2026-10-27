@@ -190,7 +190,7 @@ jobs:
         run: |
           if [[ "${{ matrix.sde }}" == "true" ]]; then
             "${SDE_PATH}/sde64" -spr -- bin/fisk_tests 2>&1 | tee tests.log
-            grep -q 'OK \] SimdArch.AVX512$' tests.log
+            grep -q 'OK \] CoreSimd.AVX512$' tests.log
           else
             ctest --test-dir build --output-on-failure
           fi
