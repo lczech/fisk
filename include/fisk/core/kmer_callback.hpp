@@ -301,15 +301,16 @@ inline void invoke_kmer_vector_lane_callback_(Func& func, std::size_t pos, std::
     }
 }
 
-// Copy the lanes of a vector of k-mers or spaced k-mers into `words`. Clang 16 (but not Apple
-// Clang) crashes in its SLP vectorizer on some loops that sum the lanes of these vectors, for
-// several vectors per iteration; there, an empty asm keeps the lanes in memory, which avoids that.
+// Copy the lanes of a vector of k-mers or spaced k-mers into `words`. Clang 16 and older (but
+// not Apple Clang) crash in their SLP vectorizer on some loops that sum the lanes of these
+// vectors, for several vectors per iteration; there, an empty asm keeps the lanes in memory,
+// which avoids that.
 template <KmerVectorType V>
 FISK_ALWAYS_INLINE
 inline void copy_kmer_vector_lanes_(V const& kmers, std::uint64_t (&words)[V::lanes])
 {
     std::memcpy(words, &kmers.value, sizeof(words));
-    #if defined(__clang__) && !defined(__apple_build_version__) && __clang_major__ == 16
+    #if defined(__clang__) && !defined(__apple_build_version__) && __clang_major__ <= 16
     __asm__ volatile("" : "+m"(words));
     #endif
 }
