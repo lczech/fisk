@@ -176,6 +176,7 @@ for EXT in png svg ; do
 
     for SUITE in \
       spaced_kmer_extract_ascii_checked_single spaced_kmer_extract_ascii_checked_multi \
+      spaced_kmer_extract_ascii_unchecked_single spaced_kmer_extract_ascii_unchecked_multi \
       spaced_kmer_extract_packed_unchecked_single spaced_kmer_extract_packed_unchecked_multi \
       spaced_kmer_extract_packed_checked_single spaced_kmer_extract_packed_checked_multi
     do

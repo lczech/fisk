@@ -165,6 +165,8 @@ SUMMARIES=(
   "kmer_extract_ascii supp,full kmer_extract_ascii_checked.csv kmer_extract_ascii_unchecked.csv"
   "spaced_kmer_extract_ascii_checked_multi supp,full spaced_kmer_extract_ascii_checked_multi.csv"
   "spaced_kmer_extract_ascii_checked_single supp,full spaced_kmer_extract_ascii_checked_single.csv"
+  "spaced_kmer_extract_ascii_unchecked_multi supp,full"
+  "spaced_kmer_extract_ascii_unchecked_single supp,full"
   "spaced_kmer_extract_packed_unchecked_multi supp,full"
   "spaced_kmer_extract_packed_unchecked_single supp,full"
   "spaced_kmer_extract_packed_checked_multi supp,full"
@@ -282,6 +284,10 @@ for pair in "${CHECKED_PAIRS[@]}"; do
     --unchecked "$unchecked" --checked "$checked"
 done
 
+echo "Plotting chunked extraction from ASCII"
+plot_modes main "${OUT}/chunked_per_cpu" \
+  python ./plot/plot_chunked_per_cpu.py "${dir_args[@]}"
+
 # ------------------------------------------------------------
 # Conventions, one panel per CPU
 # ------------------------------------------------------------
@@ -296,6 +302,8 @@ CONVENTIONS=(
   "kmer_extract_packed_checked"
   "spaced_kmer_extract_ascii_checked_single"
   "spaced_kmer_extract_ascii_checked_multi"
+  "spaced_kmer_extract_ascii_unchecked_single"
+  "spaced_kmer_extract_ascii_unchecked_multi"
   "spaced_kmer_extract_packed_unchecked_single"
   "spaced_kmer_extract_packed_unchecked_multi"
   "spaced_kmer_extract_packed_checked_single"
