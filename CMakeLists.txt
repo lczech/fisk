@@ -326,6 +326,11 @@ if(FISK_BUILD_TESTS)
     target_include_directories(fisk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
     target_link_libraries(fisk_tests PRIVATE fisk::fisk)
 
+    # The k-mer loops are not forced inline in the tests, see FISK_ALWAYS_INLINE_FOR_EACH
+    # (util/intrinsics.hpp): the tests instantiate them many times, for instance once per chunk
+    # size of the chunked loops, and inlining each copy multiplies their compile time and memory.
+    target_compile_definitions(fisk_tests PRIVATE "FISK_ALWAYS_INLINE_FOR_EACH=")
+
     # Same rationale as fisk_benchmarks above: build-quality choices private to this binary.
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
         # Activate whatever ISA extensions this build machine actually has, for the test

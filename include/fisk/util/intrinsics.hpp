@@ -79,8 +79,13 @@
 // Alias for FISK_ALWAYS_INLINE, applied to the for_each_kmer_*/for_each_spaced_kmer_* driver
 // loops specifically. Distinguishes "always-inlined because it's one of the hot per-sequence
 // loops" from any other reason a function might carry FISK_ALWAYS_INLINE, and gives that family
-// a single place to pick up something more (e.g. [[gnu::flatten]]) later, if ever needed.
-#define FISK_ALWAYS_INLINE_FOR_EACH FISK_ALWAYS_INLINE
+// a single place to pick up something more (e.g. [[gnu::flatten]]) later, if ever needed. It can
+// be defined before, for instance as empty, which the test suite does: inlining these loops into
+// each of their many instantiations there only costs compile time, and does not change what the
+// tests check.
+#ifndef FISK_ALWAYS_INLINE_FOR_EACH
+    #define FISK_ALWAYS_INLINE_FOR_EACH FISK_ALWAYS_INLINE
+#endif
 
 // For lambdas, placed after the parameter list: `[&](int x) FISK_ALWAYS_INLINE_LAMBDA { ... }`.
 // That is the one position that both GCC and clang honor without a pedantic warning. Needed where
