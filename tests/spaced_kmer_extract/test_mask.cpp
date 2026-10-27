@@ -6,7 +6,7 @@
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
-#include "fisk/core/simd_scalar.hpp"
+#include "fisk/simd/scalar.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "corpus.hpp"

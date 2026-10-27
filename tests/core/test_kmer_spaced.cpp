@@ -12,7 +12,7 @@
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_spaced.hpp"
-#include "fisk/core/simd_scalar.hpp"
+#include "fisk/simd/scalar.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "corpus.hpp"

@@ -6,7 +6,7 @@
 #include <ostream>
 #include <string>
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 
 #if defined(SYSTEM_X86_64_GNU_CLANG)
     #include <cpuid.h>

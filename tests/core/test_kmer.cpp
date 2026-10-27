@@ -10,7 +10,7 @@
 #include "fisk/core/cast.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/kmer.hpp"
-#include "fisk/core/random.hpp"
+#include "fisk/util/random.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/ascii_rolling_scalar.hpp"
 #include "corpus.hpp"

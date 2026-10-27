@@ -6,7 +6,7 @@
 #include <cstring>
 #include <string_view>
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "fisk/core/types.hpp"
 
 // Adapted from https://github.com/eitanf/fastdna/blob/main/fastdna.cc, encoding functions.

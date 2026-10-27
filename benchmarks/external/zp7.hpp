@@ -15,7 +15,7 @@
 // We bridge fisk and the original feature flags to private FISK_ZP7_* flags below.
 // These internal flags are undefined at the end of this header.
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 
 // =================================================================================================
 //     Feature Flags

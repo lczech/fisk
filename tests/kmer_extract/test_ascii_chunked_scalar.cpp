@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "fisk/core/cast.hpp"
-#include "fisk/core/random.hpp"
+#include "fisk/util/random.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
 #include "fisk/sequence_pack/word_encoder.hpp"

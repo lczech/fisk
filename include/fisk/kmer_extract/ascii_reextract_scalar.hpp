@@ -6,7 +6,7 @@
 #include <type_traits>
 
 #include "fisk/core/char_encoder.hpp"
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"

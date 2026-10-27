@@ -6,7 +6,7 @@
 
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_wide.hpp"
-#include "fisk/core/random.hpp"
+#include "fisk/util/random.hpp"
 #include "fisk/core/types.hpp"
 
 namespace fisk {
@@ -43,7 +43,7 @@ struct KmerHashIdentity
 /**
  * @brief Hash a k-mer through the splitmix64 finalizer.
  *
- * The same mix64_() that Splitmix64::get_uint64() applies to its counter (see core/random.hpp),
+ * The same mix64_() that Splitmix64::get_uint64() applies to its counter (see util/random.hpp),
  * applied to the k-mer word instead. A handful of cycles, against the cache miss that the hash
  * table lookup around it costs anyway, in exchange for full avalanche.
  *

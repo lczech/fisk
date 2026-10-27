@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 
 using namespace fisk;
 

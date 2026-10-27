@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "bit_extract_blocks/bench.hpp"
 
 #if defined(FISK_HAS_BMI2)

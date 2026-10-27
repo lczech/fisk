@@ -8,7 +8,7 @@
 #include <string>
 #include <type_traits>
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "fisk/core/types.hpp"
 
 namespace fisk {
@@ -40,7 +40,7 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
 
 // Both MSB and LSB below load larger words from raw bytes via memcpy and rely on how the host
 // interprets them as an integer. Both are therefore little-endian-specific; see
-// core/platform.hpp for the assertion that enforces this.
+// util/platform.hpp for the assertion that enforces this.
 
 // -------------------------------------------------------------------------------------------------
 //     Details

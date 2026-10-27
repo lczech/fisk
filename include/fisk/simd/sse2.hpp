@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <cstring>
 
-#include "fisk/core/intrinsics.hpp"
-#include "fisk/core/simd.hpp"
+#include "fisk/util/intrinsics.hpp"
+#include "fisk/simd/simd.hpp"
 
 namespace fisk {
 

@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-#include "fisk/core/cpu_runtime.hpp"
+#include "fisk/util/cpu_runtime.hpp"
 #include "testing.hpp"
 
 int main()

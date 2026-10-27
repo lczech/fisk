@@ -7,10 +7,10 @@
 #include <vector>
 
 #include "fisk/sequence_pack/pack_sequence.hpp"
-#include "fisk/core/simd_sse2.hpp"
-#include "fisk/core/simd_avx2.hpp"
-#include "fisk/core/simd_avx512.hpp"
-#include "fisk/core/simd_neon.hpp"
+#include "fisk/simd/sse2.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/avx512.hpp"
+#include "fisk/simd/neon.hpp"
 #include "sink.hpp"
 
 // Every sequence benchmarked below is packed with an ACGT word encoder; only the layout varies.
@@ -54,7 +54,7 @@ void bench_kmer_extract_packed_unchecked(
 // they exist to produce for a caller to use downstream, so Sink::consume() is overloaded per
 // register width (see sink.hpp) rather than extracting lanes here, which would benchmark work
 // these extractors were never meant to do. Guarded to match the ISA availability of the extractor
-// each one benchmarks (see fisk/core/intrinsics.hpp).
+// each one benchmarks (see fisk/util/intrinsics.hpp).
 std::uint64_t run_var_unchecked_bytewise_scalar_msb(
     PackedMsb const& seq,
     std::size_t k,

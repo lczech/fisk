@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <type_traits>
 
-#include "fisk/core/platform.hpp"
+#include "fisk/util/platform.hpp"
 
 // =================================================================================================
 //     Platform Macros

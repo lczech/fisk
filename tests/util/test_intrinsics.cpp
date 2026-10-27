@@ -1,7 +1,7 @@
 #include <cstdint>
 
-#include "fisk/core/intrinsics.hpp"
-#include "fisk/core/random.hpp"
+#include "fisk/util/intrinsics.hpp"
+#include "fisk/util/random.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -10,7 +10,7 @@ using namespace fisk;
 //     Intrinsics Tests
 // =================================================================================================
 
-TEST(CoreIntrinsics, ByteSwap16KnownValues)
+TEST(UtilIntrinsics, ByteSwap16KnownValues)
 {
     EXPECT_EQ(byte_swap_16(0x0000), 0x0000);
     EXPECT_EQ(byte_swap_16(0x0001), 0x0100);
@@ -18,7 +18,7 @@ TEST(CoreIntrinsics, ByteSwap16KnownValues)
     EXPECT_EQ(byte_swap_16(0xffff), 0xffff);
 }
 
-TEST(CoreIntrinsics, ByteSwap16IsInvolution)
+TEST(UtilIntrinsics, ByteSwap16IsInvolution)
 {
     // byte_swap_16() applied twice must be the identity, for any input.
     Splitmix64 rng(2024);
@@ -28,7 +28,7 @@ TEST(CoreIntrinsics, ByteSwap16IsInvolution)
     }
 }
 
-TEST(CoreIntrinsics, ByteSwap32KnownValues)
+TEST(UtilIntrinsics, ByteSwap32KnownValues)
 {
     EXPECT_EQ(byte_swap_32(0x00000000u), 0x00000000u);
     EXPECT_EQ(byte_swap_32(0x00000001u), 0x01000000u);
@@ -36,7 +36,7 @@ TEST(CoreIntrinsics, ByteSwap32KnownValues)
     EXPECT_EQ(byte_swap_32(0xffffffffu), 0xffffffffu);
 }
 
-TEST(CoreIntrinsics, ByteSwap32IsInvolution)
+TEST(UtilIntrinsics, ByteSwap32IsInvolution)
 {
     // byte_swap_32() applied twice must be the identity, for any input.
     Splitmix64 rng(2024);
@@ -46,7 +46,7 @@ TEST(CoreIntrinsics, ByteSwap32IsInvolution)
     }
 }
 
-TEST(CoreIntrinsics, ByteSwap64KnownValues)
+TEST(UtilIntrinsics, ByteSwap64KnownValues)
 {
     EXPECT_EQ(byte_swap_64(0x0000000000000000ULL), 0x0000000000000000ULL);
     EXPECT_EQ(byte_swap_64(0x0000000000000001ULL), 0x0100000000000000ULL);
@@ -54,7 +54,7 @@ TEST(CoreIntrinsics, ByteSwap64KnownValues)
     EXPECT_EQ(byte_swap_64(0xffffffffffffffffULL), 0xffffffffffffffffULL);
 }
 
-TEST(CoreIntrinsics, ByteSwap64IsInvolution)
+TEST(UtilIntrinsics, ByteSwap64IsInvolution)
 {
     // byte_swap_64() applied twice must be the identity, for any input.
     Splitmix64 rng(2024);

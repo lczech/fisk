@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "external/instlatx64.hpp"
 #include "bit_extract_weights/bench.hpp"
 

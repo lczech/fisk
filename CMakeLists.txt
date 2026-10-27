@@ -50,7 +50,7 @@ target_compile_features(fisk INTERFACE cxx_std_20)
 # opt-in FISK_ENABLE_* option, and, if enabled and supported, a compile flag plus a FISK_HAS_*
 # define. The best way to get "everything this build machine actually has" is -march=native, which
 # only ever enables extensions the CPU building reports. Those predefine the compiler flags such as
-#  __AVX2__/__BMI2__/etc., which core/intrinsics.hpp checks.
+#  __AVX2__/__BMI2__/etc., which util/intrinsics.hpp checks.
 #
 # MSVC has no per-extension flags the way GCC/Clang do -- only /arch: tiers that bundle several
 # extensions together, so the checks and the flags applied below differ for it:
@@ -160,7 +160,7 @@ if (FISK_ENABLE_AVX2 AND COMPILER_SUPPORTS_AVX2)
     target_compile_definitions(fisk INTERFACE FISK_HAS_AVX2=1)
 endif()
 
-# AVX512BW is required alongside AVX512F: the byte shuffles of SimdAVX512 (core/simd_avx512.hpp),
+# AVX512BW is required alongside AVX512F: the byte shuffles of SimdAVX512 (simd/avx512.hpp),
 # such as the MSB byte reversal of the packing, use _mm512_shuffle_epi8, which needs BW. It's
 # present on essentially all mainstream AVX512 hardware since Skylake-X/Ice Lake -- only the
 # earliest, now-obsolete Xeon Phi "Knights Landing" parts are F-only -- so this is folded into the
@@ -274,7 +274,7 @@ if(FISK_BUILD_BENCHMARKS)
             /W4
             /WX
             # C4714: function marked as [[msvc::forceinline]]/__forceinline not inlined. Some of
-            # the for_each_kmer_*() loops (see FISK_ALWAYS_INLINE_FOR_EACH, core/intrinsics.hpp)
+            # the for_each_kmer_*() loops (see FISK_ALWAYS_INLINE_FOR_EACH, util/intrinsics.hpp)
             # are large enough that compilers may decline to inline them; MSVC declining should
             # stay a silent no-op rather than fail the /WX build.
             /wd4714

@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
-#include "fisk/core/random.hpp"
+#include "fisk/util/random.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
 #include "fisk/sequence_pack/word_encoder.hpp"

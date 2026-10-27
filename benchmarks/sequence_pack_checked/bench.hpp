@@ -6,10 +6,10 @@
 #include <vector>
 
 #include "fisk/sequence_pack/pack_sequence.hpp"
-#include "fisk/core/simd_sse2.hpp"
-#include "fisk/core/simd_avx2.hpp"
-#include "fisk/core/simd_avx512.hpp"
-#include "fisk/core/simd_neon.hpp"
+#include "fisk/simd/sse2.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/avx512.hpp"
+#include "fisk/simd/neon.hpp"
 
 /**
  * @brief Benchmark pack_sequence_checked() across all four encoding x layout combinations.

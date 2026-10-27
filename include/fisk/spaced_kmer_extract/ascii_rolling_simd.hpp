@@ -14,7 +14,7 @@
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/cast.hpp"
 #include "fisk/core/char_encoder.hpp"
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/types.hpp"

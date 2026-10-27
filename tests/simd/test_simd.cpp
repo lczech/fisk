@@ -6,14 +6,14 @@
 #include <vector>
 
 #include "fisk/bit_extract/simd.hpp"
-#include "fisk/core/intrinsics.hpp"
-#include "fisk/core/random.hpp"
-#include "fisk/core/simd.hpp"
-#include "fisk/core/simd_avx2.hpp"
-#include "fisk/core/simd_avx512.hpp"
-#include "fisk/core/simd_neon.hpp"
-#include "fisk/core/simd_scalar.hpp"
-#include "fisk/core/simd_sse2.hpp"
+#include "fisk/util/intrinsics.hpp"
+#include "fisk/util/random.hpp"
+#include "fisk/simd/simd.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/avx512.hpp"
+#include "fisk/simd/neon.hpp"
+#include "fisk/simd/scalar.hpp"
+#include "fisk/simd/sse2.hpp"
 #include "fisk/core/types.hpp"
 #include "testing.hpp"
 
@@ -396,20 +396,20 @@ static void check_simd_arch()
 //     Tests
 // =================================================================================================
 
-TEST(CoreSimd, Scalar)
+TEST(SimdSimd, Scalar)
 {
     check_simd_arch<SimdScalar>();
 }
 
 #if defined(FISK_HAS_SSE2)
 
-TEST(CoreSimd, SSE2)
+TEST(SimdSimd, SSE2)
 {
     check_simd_arch<SimdSSE2>();
 }
 
 // The operations that SimdSSE2 has in place of the shifts per lane.
-TEST(CoreSimd, SSE2LaneHelpers)
+TEST(SimdSimd, SSE2LaneHelpers)
 {
     using Simd = SimdSSE2;
     auto const lanes = random_lanes<Simd>(42);
@@ -432,7 +432,7 @@ TEST(CoreSimd, SSE2LaneHelpers)
 }
 
 // SimdSSE2 picks one of each of these per build, so that the test above only covers those.
-TEST(CoreSimd, SSE2ByteHelpers)
+TEST(SimdSimd, SSE2ByteHelpers)
 {
     using Simd = SimdSSE2;
     auto const check_swap = [](auto const& swap, Lanes<Simd> const& in) {
@@ -483,7 +483,7 @@ TEST(CoreSimd, SSE2ByteHelpers)
 
 #if defined(FISK_HAS_AVX2)
 
-TEST(CoreSimd, AVX2)
+TEST(SimdSimd, AVX2)
 {
     check_simd_arch<SimdAVX2>();
 }
@@ -492,7 +492,7 @@ TEST(CoreSimd, AVX2)
 
 #if defined(FISK_HAS_AVX512)
 
-TEST(CoreSimd, AVX512)
+TEST(SimdSimd, AVX512)
 {
     check_simd_arch<SimdAVX512>();
 }
@@ -501,7 +501,7 @@ TEST(CoreSimd, AVX512)
 
 #if defined(FISK_HAS_NEON)
 
-TEST(CoreSimd, NEON)
+TEST(SimdSimd, NEON)
 {
     check_simd_arch<SimdNEON>();
 }

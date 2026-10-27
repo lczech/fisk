@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <stdexcept>
 
-#include "fisk/core/platform.hpp"
+#include "fisk/util/platform.hpp"
 #include "fisk/core/types.hpp"
 
 namespace fisk {

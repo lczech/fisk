@@ -6,8 +6,8 @@
 #include <cstring>
 #include <string_view>
 
-#include "fisk/core/intrinsics.hpp"
-#include "fisk/core/simd_scalar.hpp"
+#include "fisk/util/intrinsics.hpp"
+#include "fisk/simd/scalar.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/sequence_pack/word_encoder.hpp"
 

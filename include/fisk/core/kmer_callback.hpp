@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "fisk/core/cast.hpp"
-#include "fisk/core/intrinsics.hpp"
-#include "fisk/core/simd.hpp"
+#include "fisk/util/intrinsics.hpp"
+#include "fisk/simd/simd.hpp"
 #include "fisk/core/types.hpp"
 
 namespace fisk {

@@ -55,7 +55,7 @@ void bench_bit_extract_blocks(std::ostream& csv_os);
 // compiler can no longer prove the accumulator doesn't alias anything else the loop touches.
 // sink_buffer itself is still an ordinary reference parameter -- only live for the Write strategy,
 // harmlessly unused by Sum and Barrier's make_sink(). Guarded to match the ISA availability of the
-// implementation each one benchmarks (see fisk/core/intrinsics.hpp).
+// implementation each one benchmarks (see fisk/util/intrinsics.hpp).
 #if defined(FISK_HAS_BMI2)
 std::uint64_t run_var_pext(
     BitExtractBlocksBatch const& batch,

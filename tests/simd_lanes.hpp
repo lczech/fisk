@@ -16,13 +16,13 @@
 #include <vector>
 
 #include "fisk/core/cast.hpp"
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/core/simd_avx2.hpp"
-#include "fisk/core/simd_avx512.hpp"
-#include "fisk/core/simd_neon.hpp"
-#include "fisk/core/simd_sse2.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/avx512.hpp"
+#include "fisk/simd/neon.hpp"
+#include "fisk/simd/sse2.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"

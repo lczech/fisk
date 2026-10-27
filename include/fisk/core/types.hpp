@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "fisk/core/platform.hpp"
-#include "fisk/core/simd.hpp"
+#include "fisk/util/platform.hpp"
+#include "fisk/simd/simd.hpp"
 
 namespace fisk {
 

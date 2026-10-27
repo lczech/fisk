@@ -7,10 +7,10 @@
 #include <type_traits>
 
 #include "fisk/core/cast.hpp"
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/core/simd.hpp"
+#include "fisk/simd/simd.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/internal.hpp"
 
@@ -20,7 +20,7 @@ namespace fisk {
 //     K-mer Extraction from a PackedSequence, Bytewise, SIMD
 // =================================================================================================
 
-// Extractors for PackedSequence values, generic over the SIMD arch, see core/simd.hpp, and
+// Extractors for PackedSequence values, generic over the SIMD arch, see simd/simd.hpp, and
 // packed_bytewise_scalar.hpp for an overview of the extraction from a PackedSequence.
 // for_each_kmer_packed_unchecked_bytewise_simd() accepts k in [1, 32] and calls `func(pos, kmers,
 // valid_count)` with consecutive k-mers in a KmerVector of the arch: `pos` is the start position of

@@ -45,7 +45,7 @@
 #include "sequence_pack_checked/bench.hpp"
 #include "utils.hpp"
 #include "seq_data.hpp"
-#include "fisk/core/cpu_runtime.hpp"
+#include "fisk/util/cpu_runtime.hpp"
 
 using namespace fisk;
 

@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "fisk/core/char_encoder.hpp"
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"
@@ -90,7 +90,7 @@ inline std::uint32_t encode_32_nts_avx2_(char const* data, std::uint8_t* codes) 
  * Vectorizes nucleotide encoding and validity testing with AVX2 in blocks of 32 characters, then
  * rolls the k-mers over each block, with a tight inner loop for fully valid blocks, see
  * for_each_kmer_ascii_checked_rolling_block_(). This is a fixed AVX2 loop, not generic over the
- * SIMD archs of core/simd.hpp. Without AVX2, all characters take the scalar path, see
+ * SIMD archs of simd/simd.hpp. Without AVX2, all characters take the scalar path, see
  * for_each_kmer_ascii_checked_rolling_tail_().
  *
  * Invalid characters reset the valid-window state and suppress any overlapping k-mers.

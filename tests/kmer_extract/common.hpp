@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "fisk/core/cast.hpp"
-#include "fisk/core/random.hpp"
+#include "fisk/util/random.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"

@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 
 // Selects which of three strategies every run_var_*() function's per-element accumulation
 // compiles against. One build, one strategy: change the value below, or override the

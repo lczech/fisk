@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 
 namespace fisk {
 

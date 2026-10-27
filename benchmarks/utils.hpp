@@ -126,7 +126,7 @@ inline bool stdout_is_terminal()
 
 /**
  * @brief Print the benchmark-specific build settings that affect results, complementing the
- * platform and compiler info from fisk/core/cpu_runtime.hpp.
+ * platform and compiler info from fisk/util/cpu_runtime.hpp.
  */
 inline void info_print_benchmark_build(std::ostream& os)
 {

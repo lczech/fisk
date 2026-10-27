@@ -6,7 +6,7 @@
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_wide.hpp"
-#include "fisk/core/simd_scalar.hpp"
+#include "fisk/simd/scalar.hpp"
 #include "fisk/core/types.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"

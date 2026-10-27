@@ -9,11 +9,11 @@
 #include "fisk/spaced_kmer_extract/ascii_rolling_simd.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "fisk/core/kmer_spaced.hpp"
-#include "fisk/core/simd_scalar.hpp"
-#include "fisk/core/simd_sse2.hpp"
-#include "fisk/core/simd_avx2.hpp"
-#include "fisk/core/simd_avx512.hpp"
-#include "fisk/core/simd_neon.hpp"
+#include "fisk/simd/scalar.hpp"
+#include "fisk/simd/sse2.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/avx512.hpp"
+#include "fisk/simd/neon.hpp"
 #include "sink.hpp"
 
 /**
@@ -29,7 +29,7 @@ void bench_spaced_kmer_extract_ascii_checked_multi(
 // alongside the sequence, the piece of per-mask-set setup it needs (which carries the span k) --
 // prepared once per mask set in bench.cpp and threaded in here, so that setup cost never enters
 // the timed region. Guarded to match the ISA availability of the kernel each one benchmarks (see
-// fisk/core/intrinsics.hpp). The ones taking spaced k-mer masks are overloaded for both Layouts,
+// fisk/util/intrinsics.hpp). The ones taking spaced k-mer masks are overloaded for both Layouts,
 // defined in var_*_msb.cpp and var_*_lsb.cpp, respectively. The ones taking a dispatcher create
 // their sink inside of its run(), see BitExtractKernelDispatcher::run().
 //

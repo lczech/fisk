@@ -1,5 +1,5 @@
 
-#include "fisk/core/cpu_runtime.hpp"
+#include "fisk/util/cpu_runtime.hpp"
 #include "testing.hpp"
 
 using namespace fisk;
@@ -11,7 +11,7 @@ using namespace fisk;
 // cpu_runtime.hpp is mostly hardware/platform strings with no fixed "correct" answer to assert
 // on portably (whatever info_cpu_vendor() etc. return depends on the machine running the test).
 // What we can check regardless of machine is the invariants between its tiers.
-TEST(CoreCpuRuntime, CompiledFlagsMatchMacros)
+TEST(UtilCpuRuntime, CompiledFlagsMatchMacros)
 {
     // compiled_*() must reflect exactly the FISK_HAS_* macros set up by intrinsics.hpp, whatever
     // this particular build was configured with.
@@ -58,7 +58,7 @@ TEST(CoreCpuRuntime, CompiledFlagsMatchMacros)
 #endif
 }
 
-TEST(CoreCpuRuntime, EnabledImpliesCompiled)
+TEST(UtilCpuRuntime, EnabledImpliesCompiled)
 {
     // The "safe to use in this build" checks may only report enabled when the corresponding
     // code path was actually compiled in, regardless of what the CPU running the test supports.

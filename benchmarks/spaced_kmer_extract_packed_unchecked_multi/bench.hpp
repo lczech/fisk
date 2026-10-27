@@ -10,11 +10,11 @@
 #include "fisk/spaced_kmer_extract/packed_bytewise_simd.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
-#include "fisk/core/simd_scalar.hpp"
-#include "fisk/core/simd_sse2.hpp"
-#include "fisk/core/simd_avx2.hpp"
-#include "fisk/core/simd_avx512.hpp"
-#include "fisk/core/simd_neon.hpp"
+#include "fisk/simd/scalar.hpp"
+#include "fisk/simd/sse2.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/avx512.hpp"
+#include "fisk/simd/neon.hpp"
 #include "sink.hpp"
 
 using PackedMsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>;
@@ -33,7 +33,7 @@ void bench_spaced_kmer_extract_packed_unchecked_multi(
 // alongside the packed sequence, the piece of per-mask-set setup it needs (which carries the span
 // k) -- prepared once per mask set in bench.cpp and threaded in here, so that setup cost never
 // enters the timed region. Guarded to match the ISA availability of the kernel each one benchmarks
-// (see fisk/core/intrinsics.hpp). They are overloaded for both Layouts, defined in var_*_msb.cpp
+// (see fisk/util/intrinsics.hpp). They are overloaded for both Layouts, defined in var_*_msb.cpp
 // and var_*_lsb.cpp, respectively. The SIMD ones take their spaced k-mers either as vectors
 // (`_vectors`), or one at a time (`_scalars`). The ones taking a dispatcher create their sink
 // inside of its run(), see BitExtractKernelDispatcher::run().

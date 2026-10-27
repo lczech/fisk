@@ -6,10 +6,10 @@
 #include <vector>
 
 #include "fisk/sequence_pack/pack_sequence.hpp"
-#include "fisk/core/simd_sse2.hpp"
-#include "fisk/core/simd_avx2.hpp"
-#include "fisk/core/simd_avx512.hpp"
-#include "fisk/core/simd_neon.hpp"
+#include "fisk/simd/sse2.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/avx512.hpp"
+#include "fisk/simd/neon.hpp"
 
 /**
  * @brief Benchmark pack_sequence_unchecked() across all four encoding x layout combinations.
@@ -24,7 +24,7 @@ void bench_sequence_pack_unchecked(std::vector<std::string> const& sequences, st
 // into `out`, owned and reused by the calling suite (see bench.cpp) rather than by the kernel
 // itself, so that summing it into a sink can happen once, in Microbench::finalize(), outside the
 // timed region. Guarded to match the ISA availability of the word encoder each one benchmarks
-// (see fisk/core/intrinsics.hpp).
+// (see fisk/util/intrinsics.hpp).
 std::uint64_t run_var_unchecked_butterfly_scalar_acgt_lsb(
     std::string const& seq, fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>& out
 );

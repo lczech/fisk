@@ -11,8 +11,8 @@
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
-#include "fisk/core/random.hpp"
-#include "fisk/core/cpu_runtime.hpp"
+#include "fisk/util/random.hpp"
+#include "fisk/util/cpu_runtime.hpp"
 
 namespace fisk {
 

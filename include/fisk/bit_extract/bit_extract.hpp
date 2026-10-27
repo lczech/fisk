@@ -17,7 +17,7 @@
 #include <stdexcept>
 #include <limits>
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 
 #ifdef FISK_HAS_BMI2
 #include <immintrin.h>

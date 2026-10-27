@@ -3,24 +3,28 @@
 // Umbrella header that includes the entire fisk library.
 // Most users will want to include only the specific headers they need instead;
 // see the theme subdirectories (bit_extract/, kmer_extract/, spaced_kmer_extract/, sequence_pack/,
-// core/).
+// core/, simd/, util/).
+
+// Utilities
+#include "fisk/util/platform.hpp"
+#include "fisk/util/intrinsics.hpp"
+#include "fisk/util/cpu_runtime.hpp"
+#include "fisk/util/random.hpp"
+
+// SIMD archs
+#include "fisk/simd/simd.hpp"
+#include "fisk/simd/scalar.hpp"
+#include "fisk/simd/sse2.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/avx512.hpp"
+#include "fisk/simd/neon.hpp"
 
 // Core
-#include "fisk/core/platform.hpp"
-#include "fisk/core/intrinsics.hpp"
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_wide.hpp"
 #include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/kmer_hash.hpp"
-#include "fisk/core/cpu_runtime.hpp"
-#include "fisk/core/random.hpp"
-#include "fisk/core/simd.hpp"
-#include "fisk/core/simd_scalar.hpp"
-#include "fisk/core/simd_sse2.hpp"
-#include "fisk/core/simd_avx2.hpp"
-#include "fisk/core/simd_avx512.hpp"
-#include "fisk/core/simd_neon.hpp"
 #include "fisk/core/char_encoder.hpp"
 #include "fisk/core/types.hpp"
 

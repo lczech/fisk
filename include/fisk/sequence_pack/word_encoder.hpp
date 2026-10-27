@@ -7,9 +7,9 @@
 #include <cstdint>
 #include <cstring>
 
-#include "fisk/core/intrinsics.hpp"
-#include "fisk/core/simd.hpp"
-#include "fisk/core/simd_scalar.hpp"
+#include "fisk/util/intrinsics.hpp"
+#include "fisk/simd/simd.hpp"
+#include "fisk/simd/scalar.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
@@ -29,7 +29,7 @@ namespace fisk {
 // or the software butterfly network. WordEncoderFold and WordEncoderDirect instead move the codes
 // of each word together: the former with shifts and masks, the latter with instructions specific
 // to the SIMD arch, which makes it the fastest of them. All are templated on a SIMD arch
-// (core/simd.hpp), with which they encode `lanes` words at once; WordEncoderPext still uses one
+// (simd/simd.hpp), with which they encode `lanes` words at once; WordEncoderPext still uses one
 // PEXT per word. WordEncoderDirectDouble is a variant of WordEncoderDirect that processes two
 // vectors of the arch per step.
 //
@@ -338,7 +338,7 @@ struct WordEncoderPext
  * The fallback tier for hardware without fast PEXT (e.g. pre-Zen3 AMD, where PEXT/PDEP are
  * microcoded and slow), or without PEXT at all.
  *
- * With a SIMD arch other than SimdScalar (see core/simd.hpp), the call operator on a whole
+ * With a SIMD arch other than SimdScalar (see simd/simd.hpp), the call operator on a whole
  * `simd_vector` encodes `lanes` words at once, applying the same steps to each lane. The call
  * operator on a single word remains, for sequences shorter than a vector, and for the last bases
  * of a sequence that do not fill a whole word.
@@ -430,7 +430,7 @@ struct WordEncoderButterfly
  *
  * Three rounds of shifting and masking move the codes next to each other: first the two codes of
  * each two bytes, then the resulting pairs, and then the two halves of each word. This only uses
- * the operations that every SIMD arch provides (see core/simd.hpp), without any code specific to
+ * the operations that every SIMD arch provides (see simd/simd.hpp), without any code specific to
  * an arch. It is faster than WordEncoderButterfly, but slower than WordEncoderDirect on all archs
  * measured, and is kept as a simple reference to compare against.
  *
@@ -533,7 +533,7 @@ private:
  *
  * Instead of gathering bits under a mask, this reduces each character to its 2-bit code, and then
  * packs each four codes into a byte with a few instructions that are specific to the SIMD arch,
- * see `store_two_bit_codes()` in core/simd.hpp. This is the fastest word encoder on every arch.
+ * see `store_two_bit_codes()` in simd/simd.hpp. This is the fastest word encoder on every arch.
  *
  * Where the arch has a byte shuffle, the codes are looked up in a table. For invalid characters
  * of 128 and above, this can give a different code than the other word encoders do.
@@ -630,7 +630,7 @@ protected:
  * @brief Same as WordEncoderDirect, but processing two vectors of the SIMD arch per step.
  *
  * Storing the packed bytes of two vectors together takes fewer instructions than storing them one
- * after the other, see the overload of `store_two_bit_codes()` for two vectors in core/simd.hpp.
+ * after the other, see the overload of `store_two_bit_codes()` for two vectors in simd/simd.hpp.
  * This is only available for the archs that have that overload, see SimdArchWithDoubleStore, and
  * is then the fastest word encoder for long sequences.
  *

@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "fisk/core/random.hpp"
+#include "fisk/util/random.hpp"
 
 // =================================================================================================
 //     Character Sets

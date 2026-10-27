@@ -6,7 +6,7 @@
 #include <cstring>
 #include <string_view>
 
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #include "fisk/core/types.hpp"
 
 // Adapted from https://github.com/Daniel-Liu-c0deb0t/cute-nucleotides/blob/master/src/n_to_bits.rs,

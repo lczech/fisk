@@ -20,7 +20,7 @@
 
 // The whole functionality relies heavily on Intel intrinsics, which are not available on ARM,
 // and unconditionally uses the CLMUL instruction, so we require that to be enabled as well.
-#include "fisk/core/intrinsics.hpp"
+#include "fisk/util/intrinsics.hpp"
 #if defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)
 
 #include <immintrin.h>

@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "fisk/bit_extract/bit_extract.hpp"
-#include "fisk/core/intrinsics.hpp"
-#include "fisk/core/simd.hpp"
-#include "fisk/core/simd_scalar.hpp"
+#include "fisk/util/intrinsics.hpp"
+#include "fisk/simd/simd.hpp"
+#include "fisk/simd/scalar.hpp"
 
 namespace fisk {
 
@@ -22,7 +22,7 @@ namespace fisk {
 //     Kernel Concept
 // =================================================================================================
 
-// A kernel implements a bit extraction algorithm for a SIMD arch (core/simd.hpp), with the tables
+// A kernel implements a bit extraction algorithm for a SIMD arch (simd/simd.hpp), with the tables
 // of one mask, and applies it to all lanes of a SIMD vector in parallel. It names that arch as
 // `simd_arch`, for functions that fill the vectors of the kernel with operations of the arch.
 //
