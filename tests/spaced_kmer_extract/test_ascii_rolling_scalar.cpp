@@ -44,7 +44,7 @@ static void check_scalar_variant(
         auto const expected = oracle_spaced_events<Enc::encoding, Mask::layout>(seq, mask_strings);
         auto const runs = collect_spaced_callback_forms<Mask::layout, false>(
             [&](auto const& callback) {
-                dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+                dispatch_static_span<kMaxTestMasks>(masks, [&](auto mask_span) {
                     for_each_spaced_kmer_ascii_checked_rolling_scalar(
                         seq, mask_span, enc, bit_extract, callback
                     );
@@ -317,7 +317,7 @@ TEST(SpacedKmerExtractAsciiRollingScalar, MixedSpans)
 
     auto const masks = make_spaced_kmer_masks({"101", "10001"});
     EXPECT_THROW(
-        dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+        dispatch_static_span<kMaxTestMasks>(masks, [&](auto mask_span) {
             for_each_spaced_kmer_ascii_checked_rolling_scalar(
                 seq, mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bit_loop, callback
             );
@@ -332,7 +332,7 @@ TEST(SpacedKmerExtractAsciiRollingScalar, EmptyMasks)
     std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>> const masks;
     std::string const seq = "ACGTACGTACGT";
     EXPECT_THROW(
-        dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+        dispatch_static_span<kMaxTestMasks>(masks, [&](auto mask_span) {
             for_each_spaced_kmer_ascii_checked_rolling_scalar(
                 seq, mask_span, CharEncoderTable<Encoding::kACGT>{}, bit_extract_bit_loop,
                 [](std::size_t, std::size_t, auto const&) {}

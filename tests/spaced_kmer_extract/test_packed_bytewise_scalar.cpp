@@ -14,6 +14,7 @@
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "fisk/spaced_kmer_extract/packed_bytewise_scalar.hpp"
 #include "corpus.hpp"
+#include "spaced_kmer_extract/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 
@@ -127,7 +128,7 @@ static void check_callback_forms(
     Masks const& masks, std::vector<SpacedEvent> const& expected, Extract&& extract
 ) {
     auto const runs = collect_spaced_callback_forms<L, false>([&](auto const& callback) {
-        dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+        dispatch_static_span<kMaxTestMasks>(masks, [&](auto mask_span) {
             extract(mask_span, callback);
         });
     });
@@ -234,7 +235,7 @@ static void check_checked_extraction()
             // Unchecked, all positions, whose number the oracle gives for a sequence without
             // invalid characters.
             std::size_t calls = 0;
-            dispatch_static_span<kMaxDispatchedMasks>(direct_masks, [&](auto mask_span) {
+            dispatch_static_span<kMaxTestMasks>(direct_masks, [&](auto mask_span) {
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
                     packed, mask_span, bit_extract_bit_loop,
                     [&](std::size_t, std::size_t, auto const&) { ++calls; }
@@ -326,13 +327,50 @@ static void check_error_contract()
 
         auto const mixed = make_spaced_kmer_masks<L>({"101", "1001"});
         EXPECT_THROW(
-            dispatch_static_span<kMaxDispatchedMasks>(mixed, [&](auto mask_span) {
+            dispatch_static_span<kMaxTestMasks>(mixed, [&](auto mask_span) {
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
                     packed, mask_span, bit_extract_bit_loop, NoopSpacedCallback{}
                 );
             }),
             std::invalid_argument
         );
+    }
+}
+
+// The largest set of masks that dispatch_static_span() hands on in the library, of
+// kMaxDispatchedMasks masks, as a span of that fixed size, with one bit extractor: the other checks
+// dispatch only up to kMaxTestMasks masks.
+template <Layout L>
+static void check_max_dispatched_masks()
+{
+    constexpr Encoding E = Encoding::kACGT;
+    WordEncoderButterfly<E, L> const encoder;
+    Splitmix64 rng(7008);
+    std::vector<std::string> mask_strings;
+    for (std::size_t i = 0; i < kMaxDispatchedMasks; ++i) {
+        std::string mask(21, '0');
+        for (auto& c : mask) {
+            c = (rng.get_uint64() & 1u) ? '1' : '0';
+        }
+        mask.front() = '1';
+        mask.back() = '1';
+        mask_strings.push_back(std::move(mask));
+    }
+    auto const masks = make_spaced_kmer_masks<L>(mask_strings);
+    std::span<SpacedKmerMask<L, BitExtractMask> const, kMaxDispatchedMasks> const mask_span(
+        masks.data(), kMaxDispatchedMasks
+    );
+
+    for (auto const& seq : test_sequences()) {
+        auto const packed = pack_sequence_unchecked(seq, encoder);
+        std::vector<SpacedEvent> events;
+        for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
+            packed, mask_span, bit_extract_bit_loop,
+            [&](std::size_t pos, std::size_t mask_idx, SpacedKmer<E, L> const& spaced_kmer) {
+                events.push_back({pos, mask_idx, kmer_value(spaced_kmer)});
+            }
+        );
+        check_spaced_events(events, oracle_spaced_events<E, L>(seq, mask_strings));
     }
 }
 
@@ -384,6 +422,12 @@ TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedInvalidInGaps)
 {
     check_invalid_in_gaps<Layout::kMSB>();
     check_invalid_in_gaps<Layout::kLSB>();
+}
+
+TEST(SpacedKmerExtractPackedBytewiseScalar, MaxDispatchedMasks)
+{
+    check_max_dispatched_masks<Layout::kMSB>();
+    check_max_dispatched_masks<Layout::kLSB>();
 }
 
 TEST(SpacedKmerExtractPackedBytewiseScalar, ErrorContract)

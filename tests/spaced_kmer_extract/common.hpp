@@ -19,6 +19,14 @@
 //     Helpers
 // =================================================================================================
 
+// The sets of masks of the heavier spaced k-mer tests, which check many bit extractors and callback
+// forms, have at most this many masks. They dispatch them with
+// dispatch_static_span<kMaxTestMasks>(), which compiles the loops for the sizes up to this only,
+// rather than for every size up to kMaxDispatchedMasks, and throws for a larger set. Larger sets, up to kMaxDispatchedMasks, are
+// checked on their own, with few extractors, see test_packed_bytewise_scalar.cpp and
+// test_ascii_rolling_simd.cpp.
+inline constexpr std::size_t kMaxTestMasks = 3;
+
 // Sequences around the span and the SIMD block width: empty, one short of a span, and a span plus
 // up to two blocks, with random content (rather than a periodic pattern, under which a k-mer taken
 // from the wrong window could still have the right value). Then invalid characters: hand-picked
