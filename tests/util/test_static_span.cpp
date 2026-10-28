@@ -135,10 +135,10 @@ TEST(UtilStaticSpan, VoidResult)
 TEST(UtilStaticSpan, ReferenceResult)
 {
     // A reference that f returns comes back as that reference, to the element of the input.
+    // The lambda is named, as GCC 13 warns about a dangling reference for a temporary argument.
     auto const values = iota_vector_(3);
-    int const& last = dispatch_static_span<4>(values, [](auto span) -> int const& {
-        return span[span.size() - 1];
-    });
+    auto const last_of = [](auto span) -> int const& { return span[span.size() - 1]; };
+    int const& last = dispatch_static_span<4>(values, last_of);
     EXPECT_EQ(&last, &values[2]);
 }
 

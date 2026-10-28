@@ -300,6 +300,10 @@ if(FISK_BUILD_BENCHMARKS)
             # style, where here `k` happens to be a hardcoded local rather than a runtime
             # parameter -- harmless, and GCC/Clang don't warn on it either.
             /wd4127
+            # The files that instantiate the spaced k-mer extraction for each dispatched number of
+            # masks (FISK_MAX_DISPATCHED_MASKS) exceed the default section limit of COFF object
+            # files (C1128).
+            /bigobj
         )
     endif()
 endif()
@@ -364,9 +368,10 @@ if(FISK_BUILD_TESTS)
             /UNDEBUG
             /W4
             /WX
-            # See the matching /wd4714 and /wd4324 on fisk_benchmarks above for why.
+            # See the matching /wd4714, /wd4324 and /bigobj on fisk_benchmarks above for why.
             /wd4714
             /wd4324
+            /bigobj
             # C4127: conditional expression is constant. Fires on the EXPECT_*() macros when they
             # check a template parameter, which is intended in the tests.
             /wd4127
