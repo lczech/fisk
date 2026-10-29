@@ -149,7 +149,8 @@ static void check_chunked_simd_vectors()
     for (auto const& seq : chunked_test_sequences()) {
         for (std::size_t const k : {std::size_t{1}, std::size_t{15}, std::size_t{32}}) {
             std::size_t const num_kmers = seq.size() >= k ? seq.size() - k + 1 : 0;
-            for_each_chunk_size([&]<std::size_t ChunkSize>() {
+            for_each_chunk_size([&](auto chunk_size) {
+                constexpr std::size_t ChunkSize = decltype(chunk_size)::value;
                 std::size_t next_pos = 0;
                 for_each_kmer_ascii_unchecked_chunked_simd<Simd, ChunkSize>(
                     seq, k, encoder, UncheckedVectorShape<Simd>{ChunkSize, num_kmers, &next_pos}

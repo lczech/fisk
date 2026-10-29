@@ -20,7 +20,8 @@
  * packing that they are compared against, for the arch of the build.
  *
  * WordEncoderDirectDouble, the fastest word encoder in the sequence_pack suites, with AVX2 or Neon,
- * else SSE2, else WordEncoderButterfly. AVX512 is left out, as it is not measured for packing yet.
+ * else SSE2 (whose double store needs SSSE3, as in the sequence_pack suites), else
+ * WordEncoderButterfly. AVX512 is left out, as it is not measured for packing yet.
  * The encoder is independent of the arch of the k-mer loops, see kmer_extract/ascii_chunked.hpp.
  */
 #if defined(FISK_HAS_AVX2)
@@ -29,7 +30,7 @@ using ChunkedWordEncoder = fisk::WordEncoderDirectDouble<E, L, fisk::SimdAVX2>;
 #elif defined(FISK_HAS_NEON)
 template <fisk::Encoding E, fisk::Layout L>
 using ChunkedWordEncoder = fisk::WordEncoderDirectDouble<E, L, fisk::SimdNEON>;
-#elif defined(FISK_HAS_SSE2)
+#elif defined(FISK_HAS_SSSE3)
 template <fisk::Encoding E, fisk::Layout L>
 using ChunkedWordEncoder = fisk::WordEncoderDirectDouble<E, L, fisk::SimdSSE2>;
 #else

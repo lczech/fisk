@@ -605,16 +605,18 @@ inline std::vector<std::string> const& chunked_invalid_sequences()
     return seqs;
 }
 
-// Calls `f.template operator()<ChunkSize>()` for chunk sizes spanning: smaller than most k
-// (each chunk then emits fewer k-mers than it looks ahead by), around the blocks of 32 positions
-// of the packed loops, and much larger than the longest test sequence (degenerating to a single
-// chunk). Few of them, as the chunked loops are inlined into each chunk size, which makes them
-// expensive to compile.
+// Calls `f(std::integral_constant<std::size_t, ChunkSize>{})` for chunk sizes spanning: smaller
+// than most k (each chunk then emits fewer k-mers than it looks ahead by), around the blocks of 32
+// positions of the packed loops, and much larger than the longest test sequence (degenerating to a
+// single chunk). Few of them, as the chunked loops are inlined into each chunk size, which makes
+// them expensive to compile. The size goes in as a value rather than as a template argument of a
+// lambda, as Clang 13 and MSVC fail on lambdas with a template parameter list that capture the
+// locals of a check.
 template <typename F>
 inline void for_each_chunk_size(F&& f)
 {
     [&]<std::size_t... Sizes>(std::index_sequence<Sizes...>) {
-        (f.template operator()<Sizes>(), ...);
+        (f(std::integral_constant<std::size_t, Sizes>{}), ...);
     }(std::index_sequence<1, 7, 31, 32, 33, 1000>{});
 }
 
@@ -665,7 +667,8 @@ inline void check_ascii_chunked(std::vector<std::string> const& seqs, Extract co
             auto const expected = Checked
                 ? oracle_kmers_skipping_invalid<E, L>(seq, k)
                 : oracle_kmers_all_windows<E, L>(seq, k);
-            for_each_chunk_size([&]<std::size_t ChunkSize>() {
+            for_each_chunk_size([&](auto chunk_size) {
+                constexpr std::size_t ChunkSize = decltype(chunk_size)::value;
                 for (Scratch* const s : {static_cast<Scratch*>(nullptr), &scratch}) {
                     positions.clear();
                     values.clear();

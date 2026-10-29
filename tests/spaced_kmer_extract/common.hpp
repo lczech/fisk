@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <numeric>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -22,9 +23,9 @@
 // The sets of masks of the heavier spaced k-mer tests, which check many bit extractors and callback
 // forms, have at most this many masks. They dispatch them with
 // dispatch_static_span<kMaxTestMasks>(), which compiles the loops for the sizes up to this only,
-// rather than for every size up to kMaxDispatchedMasks, and throws for a larger set. Larger sets, up to kMaxDispatchedMasks, are
-// checked on their own, with few extractors, see test_packed_bytewise_scalar.cpp and
-// test_ascii_rolling_simd.cpp.
+// rather than for every size up to kMaxDispatchedMasks, and throws for a larger set. Larger sets,
+// up to kMaxDispatchedMasks, are checked on their own, with few extractors, see
+// test_packed_bytewise_scalar.cpp and test_ascii_rolling_simd.cpp.
 inline constexpr std::size_t kMaxTestMasks = 3;
 
 // Sequences around the span and the SIMD block width: empty, one short of a span, and a span plus
@@ -183,16 +184,35 @@ inline std::vector<std::string> chunked_spaced_sequences(std::size_t span_k, boo
     return out;
 }
 
-// Calls `f.template operator()<ChunkSize>()` for chunk sizes smaller than most spans, around the
-// blocks of 32 positions of the packed loops, and larger than the longest test sequence. Few of
-// them, as the chunked loops are inlined into each chunk size, which makes them expensive to
-// compile.
+// Calls `f(std::integral_constant<std::size_t, ChunkSize>{})` for chunk sizes smaller than most
+// spans, around the blocks of 32 positions of the packed loops, and larger than the longest test
+// sequence. Few of them, as the chunked loops are inlined into each chunk size, which makes them
+// expensive to compile. See for_each_chunk_size() (kmer_extract/common.hpp) for why the size is a
+// value.
 template <typename F>
 inline void for_each_spaced_chunk_size(F&& f)
 {
     [&]<std::size_t... Sizes>(std::index_sequence<Sizes...>) {
-        (f.template operator()<Sizes>(), ...);
+        (f(std::integral_constant<std::size_t, Sizes>{}), ...);
     }(std::index_sequence<1, 7, 32, 33, 1000>{});
+}
+
+// Sorts `events` by position, keeping their order at each position, such as that of the masks.
+// Not with std::stable_sort(), whose temporary buffer is deprecated in some libstdc++ versions;
+// instead, the index of each event breaks the ties.
+inline void sort_spaced_events_by_position(std::vector<SpacedEvent>& events)
+{
+    std::vector<std::size_t> order(events.size());
+    std::iota(order.begin(), order.end(), std::size_t{0});
+    std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+        return events[a].pos != events[b].pos ? events[a].pos < events[b].pos : a < b;
+    });
+    std::vector<SpacedEvent> sorted;
+    sorted.reserve(events.size());
+    for (std::size_t const i : order) {
+        sorted.push_back(events[i]);
+    }
+    events = std::move(sorted);
 }
 
 // Checks `extract` with the word encoder of the given conventions against the oracle, for every
@@ -215,7 +235,8 @@ inline void check_spaced_ascii_chunked(Extract const& extract)
         std::size_t const span_k = mask_strings.front().size();
         for (auto const& seq : chunked_spaced_sequences(span_k, Checked)) {
             auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
-            for_each_spaced_chunk_size([&]<std::size_t ChunkSize>() {
+            for_each_spaced_chunk_size([&](auto chunk_size) {
+                constexpr std::size_t ChunkSize = decltype(chunk_size)::value;
                 for (Scratch* const s : {static_cast<Scratch*>(nullptr), &scratch}) {
                     auto const run = [&](auto single, auto const& callback) {
                         events.clear();
@@ -223,12 +244,7 @@ inline void check_spaced_ascii_chunked(Extract const& extract)
                             seq, mask_strings, single, s, callback
                         );
                         if constexpr (ByPosition) {
-                            std::stable_sort(
-                                events.begin(), events.end(),
-                                [](SpacedEvent const& a, SpacedEvent const& b) {
-                                    return a.pos < b.pos;
-                                }
-                            );
+                            sort_spaced_events_by_position(events);
                         }
                     };
                     run(std::false_type{}, ChunkedSpacedEventCollector<E, L>{&events});
