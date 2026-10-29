@@ -215,6 +215,25 @@ inline void sort_spaced_events_by_position(std::vector<SpacedEvent>& events)
     events = std::move(sorted);
 }
 
+// Runs `extract` with the given chunk size and conventions into `events`, which `callback` fills,
+// and with `ByPosition`, sorts them by position, see check_spaced_ascii_chunked(). A function
+// rather than a lambda in there, as MSVC fails on a lambda that uses the chunk size of its
+// enclosing one.
+template <
+    std::size_t ChunkSize, fisk::Encoding E, fisk::Layout L, bool ByPosition, typename Extract,
+    typename Single, typename Scratch, typename Callback
+>
+inline void run_spaced_ascii_chunked_(
+    Extract const& extract, std::string const& seq, std::vector<std::string> const& mask_strings,
+    Single single, Scratch* scratch, Callback const& callback, std::vector<SpacedEvent>& events
+) {
+    events.clear();
+    extract.template operator()<ChunkSize, E, L>(seq, mask_strings, single, scratch, callback);
+    if constexpr (ByPosition) {
+        sort_spaced_events_by_position(events);
+    }
+}
+
 // Checks `extract` with the word encoder of the given conventions against the oracle, for every
 // set of masks, sequence, and chunk size, with a scratch and with the thread-local buffer: through
 // the overload for a span of masks, and for a single mask also through the overload for a single
@@ -238,26 +257,29 @@ inline void check_spaced_ascii_chunked(Extract const& extract)
             for_each_spaced_chunk_size([&](auto chunk_size) {
                 constexpr std::size_t ChunkSize = decltype(chunk_size)::value;
                 for (Scratch* const s : {static_cast<Scratch*>(nullptr), &scratch}) {
-                    auto const run = [&](auto single, auto const& callback) {
-                        events.clear();
-                        extract.template operator()<ChunkSize, E, L>(
-                            seq, mask_strings, single, s, callback
-                        );
-                        if constexpr (ByPosition) {
-                            sort_spaced_events_by_position(events);
-                        }
-                    };
-                    run(std::false_type{}, ChunkedSpacedEventCollector<E, L>{&events});
+                    run_spaced_ascii_chunked_<ChunkSize, E, L, ByPosition>(
+                        extract, seq, mask_strings, std::false_type{}, s,
+                        ChunkedSpacedEventCollector<E, L>{&events}, events
+                    );
                     check_spaced_events(events, expected);
                     if (mask_strings.size() != 1) {
                         continue;
                     }
-                    run(std::true_type{}, ChunkedSpacedEventCollector<E, L>{&events});
+                    run_spaced_ascii_chunked_<ChunkSize, E, L, ByPosition>(
+                        extract, seq, mask_strings, std::true_type{}, s,
+                        ChunkedSpacedEventCollector<E, L>{&events}, events
+                    );
                     check_spaced_events(events, expected);
-                    run(std::true_type{}, ChunkedSpacedPosCollector<E, L>{&events});
+                    run_spaced_ascii_chunked_<ChunkSize, E, L, ByPosition>(
+                        extract, seq, mask_strings, std::true_type{}, s,
+                        ChunkedSpacedPosCollector<E, L>{&events}, events
+                    );
                     check_spaced_events(events, expected);
                     first = events;
-                    run(std::true_type{}, ChunkedSpacedValueCollector<E, L>{&events});
+                    run_spaced_ascii_chunked_<ChunkSize, E, L, ByPosition>(
+                        extract, seq, mask_strings, std::true_type{}, s,
+                        ChunkedSpacedValueCollector<E, L>{&events}, events
+                    );
                     for (std::size_t i = 0; i < std::min(first.size(), events.size()); ++i) {
                         events[i].pos = first[i].pos;
                     }
