@@ -117,9 +117,10 @@ static std::vector<SpacedEvent> collect_vector_events(std::size_t mask_count, Ex
     std::vector<SpacedEvent> events;
     std::vector<std::size_t> next_pos(mask_count, 0);
     std::size_t expected_mask = 0;
+    // Not inlined into each step of the unrolled loops, as that multiplies the compile time.
     auto const on_vector = [&](
         std::size_t pos, std::size_t mask_idx, V spaced_kmers, std::size_t valid_count
-    ) {
+    ) FISK_NOINLINE_LAMBDA {
         EXPECT_EQ(mask_idx, expected_mask);
         expected_mask = (expected_mask + 1) % mask_count;
         EXPECT_TRUE(mask_idx < mask_count);

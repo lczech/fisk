@@ -167,6 +167,8 @@ fisk::dispatch_static_span<fisk::kMaxDispatchedMasks>(masks, [&](auto mask_span)
 });
 ```
 
+The `bytewise` and `chunked` functions call the callback at every step of their unrolled loops. A small callback should be inlined there, which `FISK_ALWAYS_INLINE_LAMBDA` (`util/intrinsics.hpp`, placed after the parameter list) ensures with GCC, which otherwise tends to keep it as a call. A large callback, on the other hand, inlined into each step, can multiply the code and its compile time many times over, in particular with clang before version 18. `FISK_NOINLINE_LAMBDA` keeps it as one function, at the cost of a call per callback. Which one is faster depends on the callback, so it is worth measuring with your own code.
+
 The `benchmarks/` directory contains the driver code for the benchmark program: `main.cpp`, `arg_parser.hpp`, `microbench.hpp`, `sink.hpp`, `utils.hpp`, `seq_data.hpp`, and one directory per suite, with its `bench.cpp` and one `var_*.cpp` per variant. These might be useful to see how each algorithm is intended to be called and used.
 
 Functions that process k-mers are mostly templated here, in order to allow us to benchmark different implemenations of, e.g., the nucleotide to two-bit encoding and the bit extraction. Thus, to use these function in your code, you might want to replace those template parameters with hard-coded versions for simplicity - no need to use any of the sub-par alterative implementations if you can just use the fastest one.

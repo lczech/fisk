@@ -203,9 +203,10 @@ inline std::vector<SpacedEvent> collect_valid_lanes_events(
     std::vector<SpacedEvent> events;
     std::size_t next_pos = 0;
     std::size_t expected_mask = 0;
+    // Not inlined into each step of the unrolled loops, as that multiplies the compile time.
     auto const on_vector = [&](
         std::size_t pos, std::size_t mask_idx, V spaced_kmers, Lanes valid_lanes
-    ) {
+    ) FISK_NOINLINE_LAMBDA {
         EXPECT_EQ(mask_idx, expected_mask);
         EXPECT_EQ(pos, next_pos);
         if (++expected_mask == mask_count) {

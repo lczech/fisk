@@ -99,6 +99,18 @@
     #define FISK_ALWAYS_INLINE_LAMBDA
 #endif
 
+// The opposite of FISK_ALWAYS_INLINE_LAMBDA, in the same position. For large callbacks of the
+// packed k-mer loops, which call them at every step of their unrolled blocks: inlining such a
+// callback into each step multiplies the code, and the time to compile it, especially with clang
+// before 18. MSVC is left to its own inlining decisions here.
+#if defined(_MSC_VER)
+    #define FISK_NOINLINE_LAMBDA
+#elif defined(__GNUC__) || defined(__clang__)
+    #define FISK_NOINLINE_LAMBDA __attribute__((noinline))
+#else
+    #define FISK_NOINLINE_LAMBDA
+#endif
+
 // For rare/cold-path helpers, such as precondition checks that throw, that should stay out of a
 // hot path's inlined body and icache footprint. MSVC has no "cold" hint to pair with noinline,
 // so it only gets the noinline half.
