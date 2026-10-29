@@ -166,10 +166,16 @@ jobs:
             cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
           fi
 
+      # The sanitizer builds compile with fewer jobs, as their test files need several GB each,
+      # and too many at once exhaust the memory of the runner.
       - name: Build
         id: build
         run: |
-          cmake --build build -- -j 4 -k 0 2>&1 | tee build.log
+          jobs=4
+          if [[ "${{ matrix.sanitize }}" == "true" ]]; then
+            jobs=2
+          fi
+          cmake --build build -- -j "${jobs}" -k 0 2>&1 | tee build.log
 
       # GitHub shows at most 10 error annotations per step, so all distinct error lines of the
       # build also go to the job summary.
