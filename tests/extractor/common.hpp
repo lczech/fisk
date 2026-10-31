@@ -1,6 +1,8 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <initializer_list>
 #include <string>
 #include <utility>
@@ -13,6 +15,8 @@
 #include "fisk/sequence_pack/word_encoder.hpp"
 #include "fisk/util/random.hpp"
 #include "corpus.hpp"
+#include "oracle.hpp"
+#include "spaced_kmer_extract/common.hpp"
 
 // =================================================================================================
 //     Extractor Test Helpers
@@ -53,3 +57,42 @@ inline auto extractor_test_input(std::string const& seq)
     }
 }
 
+// A callback of single spaced k-mers that records them.
+struct SpacedKmerRecorder
+{
+    std::vector<SpacedEvent> events;
+
+    template <typename K>
+    void operator()(std::size_t pos, std::size_t mask_idx, K const& kmer)
+    {
+        events.push_back({pos, mask_idx, fisk::kmer_value(kmer)});
+    }
+};
+
+// The events of each mask in the order of emission, one mask after the other: the order that all
+// algorithms guarantee, see SpacedKmerExtractor.
+inline std::vector<SpacedEvent> by_mask(std::vector<SpacedEvent> events)
+{
+    std::stable_sort(events.begin(), events.end(), [](auto const& a, auto const& b) {
+        return a.mask_idx < b.mask_idx;
+    });
+    return events;
+}
+
+// Random masks of a span, each with its first and last position kept.
+inline std::vector<std::string> random_masks(
+    std::size_t count, std::size_t span, std::uint64_t seed
+) {
+    fisk::Splitmix64 rng(seed);
+    std::vector<std::string> masks;
+    for (std::size_t i = 0; i < count; ++i) {
+        std::string mask(span, '0');
+        for (auto& c : mask) {
+            c = (rng.get_uint64() & 1u) ? '1' : '0';
+        }
+        mask.front() = '1';
+        mask.back() = '1';
+        masks.push_back(std::move(mask));
+    }
+    return masks;
+}
