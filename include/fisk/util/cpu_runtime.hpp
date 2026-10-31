@@ -139,11 +139,40 @@ inline std::string info_cpu_model()
     #endif
 }
 
+/**
+ * @brief The x86 CPU family, as the base family plus, for base family 0xF, the extended family
+ * (CPUID leaf 1). 0 on ARM.
+ */
+inline unsigned info_cpu_family()
+{
+    #if defined(PLATFORM_ARM64)
+
+        return 0;
+
+    #else
+
+        std::uint32_t eax = 0;
+        #if defined(SYSTEM_X86_64_GNU_CLANG)
+            std::uint32_t ebx, ecx, edx;
+            __cpuid(1, eax, ebx, ecx, edx);
+        #elif defined(_MSC_VER)
+            int r[4]; __cpuid(r, 1);
+            eax = static_cast<std::uint32_t>(r[0]);
+        #endif
+
+        unsigned const base = (eax >> 8) & 0xFu;
+        unsigned const extended = (eax >> 20) & 0xFFu;
+        return base == 0xFu ? base + extended : base;
+
+    #endif
+}
+
 inline void info_print_cpu(std::ostream& os)
 {
     os << "CPU:\n";
     os << "  vendor  : " << info_cpu_vendor() << "\n";
     os << "  model   : " << info_cpu_model() << "\n";
+    os << "  family  : 0x" << std::hex << info_cpu_family() << std::dec << "\n";
 }
 
 // =================================================================================================
@@ -525,6 +554,43 @@ inline bool neon_enabled() noexcept
 {
     static bool const enabled = compiled_neon() && cpu_neon();
     return enabled;
+}
+
+// -----------------------------------------------------------------
+//     Heuristics
+// -----------------------------------------------------------------
+
+/**
+ * @brief Whether PEXT is likely fast on a CPU of this vendor and family, by a list of known CPUs
+ * rather than a measurement.
+ *
+ * AMD Zen 1, Zen+ and Zen 2 (family 0x17) and Hygon Dhyana (family 0x18) implement PEXT in
+ * microcode, with a latency that grows with the number of set bits in the mask; there, it is
+ * slower than its software replacements. All other CPUs with BMI2 are assumed to have it in
+ * hardware: Intel since Haswell, and AMD since Zen 3 (family 0x19).
+ */
+inline bool pext_likely_fast(std::string const& vendor, unsigned family) noexcept
+{
+    if (vendor == "AuthenticAMD" && family == 0x17) {
+        return false;
+    }
+    if (vendor == "HygonGenuine" && family == 0x18) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * @brief Whether PEXT can be used in this build and on this CPU, and is likely fast there.
+ *
+ * This is a heuristic, see the overload above: a CPU that is not on its list is assumed to have a
+ * fast PEXT. Measure, when in doubt.
+ */
+inline bool pext_likely_fast()
+{
+    static bool const fast =
+        bmi2_enabled() && pext_likely_fast(info_cpu_vendor(), info_cpu_family());
+    return fast;
 }
 
 // -----------------------------------------------------------------

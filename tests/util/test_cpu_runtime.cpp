@@ -70,3 +70,18 @@ TEST(UtilCpuRuntime, EnabledImpliesCompiled)
     EXPECT_TRUE(!avx512_enabled() || compiled_avx512());
     EXPECT_TRUE(!neon_enabled()   || compiled_neon());
 }
+
+TEST(UtilCpuRuntime, PextLikelyFast)
+{
+    // The CPUs with microcoded PEXT: AMD Zen 1, Zen+, Zen 2, and Hygon Dhyana.
+    EXPECT_FALSE(pext_likely_fast("AuthenticAMD", 0x17));
+    EXPECT_FALSE(pext_likely_fast("HygonGenuine", 0x18));
+
+    // AMD since Zen 3, and Intel.
+    EXPECT_TRUE(pext_likely_fast("AuthenticAMD", 0x19));
+    EXPECT_TRUE(pext_likely_fast("AuthenticAMD", 0x1A));
+    EXPECT_TRUE(pext_likely_fast("GenuineIntel", 0x6));
+
+    // The check of this CPU needs PEXT to be usable here.
+    EXPECT_TRUE(!pext_likely_fast() || bmi2_enabled());
+}
