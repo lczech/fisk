@@ -325,7 +325,9 @@ if(FISK_BUILD_TESTS)
     )
     add_executable(fisk_tests ${FISK_TEST_SOURCES})
     target_include_directories(fisk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
-    target_link_libraries(fisk_tests PRIVATE fisk::fisk)
+    # The extractor tests run on several threads.
+    find_package(Threads REQUIRED)
+    target_link_libraries(fisk_tests PRIVATE fisk::fisk Threads::Threads)
 
     # The k-mer loops are not forced inline in the tests, see FISK_ALWAYS_INLINE_FOR_EACH
     # (util/intrinsics.hpp): the tests instantiate them many times, for instance once per chunk

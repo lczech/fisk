@@ -46,7 +46,7 @@ namespace fisk {
 // otherwise, for both upper and lower case, except
 // CharEncoderAscii<E, InputCheck::kUnchecked>, which trusts the caller instead of checking,
 // and so returns a valid-looking 0-3 code even for input that is not actually a nucleotide; see
-// InputCheck below.
+// InputCheck in types.hpp.
 
 // Every encoder below relies on the ASCII code points of the nucleotide characters, whether
 // through the lookup tables or the bit tricks. Assert once here that the host character set
@@ -64,21 +64,8 @@ static_assert( static_cast<int>('t') == 0x74, "Non-ASCII char set" );
 //     Shared
 // -----------------------------------------------------------------------------
 
-/**
- * @brief Whether a per-character encoder checks its input, or trusts the caller to have done so.
- */
-enum class InputCheck
-{
-    /**
-     * @brief Check every character, returning kInvalidNucleotide for anything not a nucleotide.
-     */
-    kChecked,
-
-    /**
-     * @brief Trust the caller that every character is already a valid nucleotide; skip the check.
-     */
-    kUnchecked
-};
+// InputCheck, whether an encoder checks its input, is in types.hpp, as the extraction uses it as
+// well.
 
 /**
  * @brief Code returned for any character that is not a nucleotide.

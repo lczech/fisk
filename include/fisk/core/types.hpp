@@ -61,6 +61,37 @@ enum class Layout
     kLSB
 };
 
+/**
+ * @brief Whether the input is checked for characters that are not nucleotides, or trusted to have
+ * none.
+ *
+ * Used by the per-character encoders, see CharEncoderAscii, and by the extractors, see
+ * KmerExtractor.
+ */
+enum class InputCheck
+{
+    /**
+     * @brief Check every character: the encoders return kInvalidNucleotide for anything not a
+     * nucleotide, and the extraction skips the k-mers that contain one.
+     */
+    kChecked,
+
+    /**
+     * @brief Trust the caller that every character is already a valid nucleotide; skip the check.
+     */
+    kUnchecked
+};
+
+/**
+ * @brief The input of the extractors, see KmerExtractor: ASCII characters, as a `std::string_view`,
+ * or a packed sequence, as a PackedSequence or PackedSequenceWithValidity.
+ */
+enum class InputFormat
+{
+    kAscii,
+    kPacked
+};
+
 // Code that branches on these conventions does so with an `if constexpr` chain, and ends it in a
 // static_assert rather than an unguarded `else`, so that adding a third Encoding or Layout later
 // fails to compile at every site that has to be updated, instead of silently falling into whichever
