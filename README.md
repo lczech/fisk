@@ -47,6 +47,92 @@ By default, `fisk::fisk` does not force any instruction-set-specific flags onto 
 When fisk is built standalone (i.e., not pulled in via `add_subdirectory()`/`FetchContent()` from another project), the benchmark suite and test suite below are built by default; set `-DFISK_BUILD_BENCHMARKS=OFF` and/or `-DFISK_BUILD_TESTS=OFF` to skip them.
 
 
+## Tuned extraction
+
+The extractors choose the fastest of the [k-mer extraction functions](#k-mer-extraction-functions) on the hardware, and run it with your callback:
+
+```cpp
+#include "fisk/extractor/kmer_extractor.hpp"
+
+using namespace fisk;
+
+using Extractor = KmerExtractor<
+    InputFormat::kAscii,
+    InputCheck::kChecked,
+    Encoding::kACGT,
+    Layout::kMSB
+>;
+Extractor extractor(31);
+extractor.tune();
+for (auto const& read : reads) {
+    extractor.for_each(read, [&](std::size_t pos, KmerAcgtMsb kmer) {
+        // ...
+    });
+}
+```
+
+`SpacedKmerExtractor` does the same for a set of spaced k-mer masks of the same span, and calls back as `callback(pos, mask_idx, spaced_kmer)`:
+
+```cpp
+#include "fisk/extractor/spaced_kmer_extractor.hpp"
+
+using namespace fisk;
+
+using Extractor = SpacedKmerExtractor<
+    InputFormat::kPacked,
+    InputCheck::kUnchecked,
+    Encoding::kACGT,
+    Layout::kMSB,
+    2  // MaxMasks
+>;
+Extractor extractor({
+    "1101101101101101101101101101101",
+    "1011011011011011011011011011011"
+});
+```
+
+Its last template parameter, `MaxMasks`, is the largest number of masks it takes, `FISK_DEFAULT_MAX_MASKS` (4) by default. Each number of masks up to it compiles the extraction once, so a small `MaxMasks` shortens the compile time a lot, see below. More masks throw `std::invalid_argument` when the extractor is constructed; if the users of your program choose the masks, set `MaxMasks` to the most that it accepts.
+
+The other template parameters set, in this order, the input format (`InputFormat::kAscii` for a `std::string_view`, `InputFormat::kPacked` for a `PackedSequence`, or a `PackedSequenceWithValidity` when checked), whether the input is checked for invalid characters (`InputCheck`, see the check in [K-mer extraction functions](#k-mer-extraction-functions)), and the `Encoding` and `Layout` of the k-mers.
+
+**Choosing the algorithm.** A new extractor uses an estimate. For k-mers, it is the scalar `chunked` or `bytewise` loop, or, for a callback that takes vectors (see below), the SIMD loop of AVX2 or Neon. For spaced k-mers, it is the scalar loop with PEXT, unless the CPU is known for a slow PEXT (see `pext_likely_fast()`), else the SIMD loop with the butterfly kernel of AVX2 or Neon. `tune()` times the algorithms that are the fastest on some hardware on 1 Mi random bases, and keeps the fastest; with the defaults, this takes some tens of milliseconds. `TuneOptions` sets the amount of data, the length of its sequences (e.g., of short reads), and its rate of invalid characters. `tune(sample)` times on your data instead, one sequence or a range of them, and `tune(callback)` and `tune(sample, callback)` time with your callback, which is then called during tuning as well. `algorithm_name()` names the choice, e.g. `"chunked_scalar_pext"`, and `set_algorithm(name)` sets it, for instance to reuse a measurement in a later run.
+
+**Vectors.** The callback can also take the vectors of the SIMD algorithms, for consumers that process the k-mers with SIMD themselves. This saves unpacking the lanes, and is usually faster when the consumer works on vectors anyway. The SIMD algorithms then hand it the vectors, and else their k-mers one by one. For example, with `callback_overload`:
+
+```cpp
+extractor.for_each(seq, callback_overload{
+    [&](std::size_t pos, KmerAcgtMsb kmer) {
+        // a single k-mer
+    },
+    [&](std::size_t pos, auto kmers, auto valid_lanes) {
+        // a KmerVector of any SIMD arch
+    }
+});
+```
+
+or with a struct:
+
+```cpp
+struct Consumer
+{
+    void operator()(std::size_t pos, KmerAcgtMsb kmer);
+
+    template <typename Simd>
+    void operator()(
+        std::size_t pos,
+        KmerVector<Encoding::kACGT, Layout::kMSB, Simd> kmers,
+        SimdVectorValidLanes<Simd> valid_lanes
+    );
+};
+```
+
+The vector forms are those of the extraction functions: with a count of valid lanes when unchecked, and with `SimdVectorValidLanes` when checked; for spaced k-mers with `mask_idx` after `pos`. Such a callback should also be passed to `tune()`, so that the vectors are part of the measurement.
+
+**Threads.** `for_each()` is `const`, and one extractor can be used by several threads at once, but not while `tune()` or `set_algorithm()` run. ASCII input is packed chunk by chunk into a buffer per thread.
+
+**Order and compile time.** The k-mers are handed out in order of their positions; spaced k-mers in order of their positions per mask, while the order between masks differs between the algorithms: the scalar algorithms hand out the spaced k-mers of all masks at one position before going on to the next position, while the SIMD algorithms hand out those of one mask for a whole vector of positions, then those of the next mask for the same positions. Each callback type compiles all algorithms of the extractor, and for spaced k-mers each of them for each number of masks up to `MaxMasks`.
+
+
 ## Reproducing the benchmarks
 
 To build and run the benchmark suite that produced the results in the manuscript, simply call
@@ -122,6 +208,7 @@ Overview of the library headers (in `include/fisk/`), and their most important f
  - `bit_extract/simd.hpp`: SIMD kernels of the bit extract algorithms, templated on the SIMD arch (e.g., `BitExtractKernelButterfly<SimdAVX2>`).
  - `bit_extract/selector.hpp`: Helper that runs a quick benchmark to find the most performant bit extraction algorithm for a given mask.
  - `sequence_pack/`: Packing of ASCII sequences into a compact 2-bit-per-base `PackedSequence`, 8 characters at a time via a word encoder. `pack_sequence_unchecked()` takes the input as valid, while `pack_sequence_checked()` also records one validity bit per nucleotide, in a `PackedSequenceWithValidity`. The word encoders are in `word_encoder.hpp`: the `WordEncoder` family, using the same PEXT/butterfly building blocks as bit extraction, the simple `WordEncoderFold`, or the fastest `WordEncoderDirect` and `WordEncoderDirectDouble`. All are templated on the SIMD arch, to pack several words at once (e.g., `WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX2>`).
+ - `extractor/`: `KmerExtractor` and `SpacedKmerExtractor`, which choose the fastest extraction function, see [Tuned extraction](#tuned-extraction).
  - `kmer_extract/` and `spaced_kmer_extract/`: The extraction of k-mers and of spaced k-mers, see below. `spaced_kmer_extract/mask.hpp` has the masks: they are created from a string of 1s and 0s via `make_spaced_kmer_mask()` and the related functions for the bit extraction tables (`make_spaced_kmer_butterfly_mask()`, etc.) and SIMD kernels (`make_spaced_kmer_kernel()`), for spaced k-mers in either `Layout` (e.g., `make_spaced_kmer_mask<Layout::kLSB>()`).
 
 ### K-mer extraction functions
@@ -173,7 +260,7 @@ The `benchmarks/` directory contains the driver code for the benchmark program: 
 
 Functions that process k-mers are mostly templated here, in order to allow us to benchmark different implemenations of, e.g., the nucleotide to two-bit encoding and the bit extraction. Thus, to use these function in your code, you might want to replace those template parameters with hard-coded versions for simplicity - no need to use any of the sub-par alterative implementations if you can just use the fastest one.
 
-To use this in our own code, we recommend to use PEXT for bit extraction where possible, and a SIMD-accelerated Butterfly network otherwise. In the simplest case, use `bit_extract_selector()` as a dynamic check to test this, and a switch as shown in `switch_bit_extract_mode()` and `run_bit_extract_mode()` to run. This avoids overhead for function pointers in the hot loop per extracted value.
+To use this in our own code, we recommend to use PEXT for bit extraction where possible, and a SIMD-accelerated Butterfly network otherwise. For the extraction of k-mers, the extractors of [Tuned extraction](#tuned-extraction) make this choice. In the simplest case, use `bit_extract_selector()` as a dynamic check to test this, and a switch as shown in `switch_bit_extract_mode()` and `run_bit_extract_mode()` to run. This avoids overhead for function pointers in the hot loop per extracted value.
 
 Note that the SIMD implementations need to be guarded by hardware checks to ensure not calling invalid intrinsics. We mostly solve this here via preprocessor checks (e.g., for AVX). These checks likely need to be adapted as needed for your build system. They can be adapted to perform a dynamic check, allowing to cross-compile for different hardware architectures.
 
