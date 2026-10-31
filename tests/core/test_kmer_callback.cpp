@@ -127,3 +127,31 @@ static_assert(!SpacedLanesCb<decltype([](std::size_t, std::size_t, SV, std::size
 static_assert(!SpacedLanesSingleCb<decltype([](std::size_t, SV, std::size_t) {})>);
 static_assert(!SpacedLanesCb<decltype([](std::size_t, std::size_t, KV, Lanes) {})>);
 static_assert(!SpacedVectorCb<decltype([](std::size_t, std::size_t, SV, Lanes) {})>);
+
+// =================================================================================================
+//     Callback Overload Sets
+// =================================================================================================
+
+// A callback_overload takes the forms of all of its callables, each by its own.
+using Both = decltype(callback_overload{
+    [](std::size_t, K const&) { return 1; },
+    [](std::size_t, KV, std::size_t) { return 2; }
+});
+static_assert(KmerCallback<Both, Encoding::kACGT, Layout::kMSB>);
+static_assert(KmerVectorCallback<Both, Encoding::kACGT, Layout::kMSB, SimdScalar>);
+static_assert(!KmerVectorValidLanesCallback<Both, Encoding::kACGT, Layout::kMSB, SimdScalar>);
+
+TEST(CoreKmerCallback, CallbackOverload)
+{
+    std::size_t single = 0;
+    std::size_t vectors = 0;
+    auto const callback = callback_overload{
+        [&](std::size_t, K const&) { ++single; },
+        [&](std::size_t, auto, auto) { ++vectors; }
+    };
+    callback(0, K{});
+    callback(0, KV{}, std::size_t{1});
+    callback(0, SV{}, Lanes{});
+    EXPECT_EQ(single, std::size_t{1});
+    EXPECT_EQ(vectors, std::size_t{2});
+}

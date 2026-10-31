@@ -393,4 +393,30 @@ inline std::size_t store_valid_lanes(
     return count;
 }
 
+// =================================================================================================
+//     Callback Overload Sets
+// =================================================================================================
+
+/**
+ * @brief A callback made of several callables, such as lambdas, with the `operator()` of each.
+ *
+ * For instance, a callback for single k-mers and one for vectors of k-mers, for the extractors
+ * that hand vectors to callbacks that take them, see KmerExtractor:
+ *
+ *     auto callback = callback_overload{
+ *         [&](std::size_t pos, KmerAcgtMsb kmer) { ... },
+ *         [&](std::size_t pos, auto kmers, auto valid) { ... }
+ *     };
+ */
+template <typename... Fs>
+struct callback_overload : Fs...
+{
+    using Fs::operator()...;
+};
+
+// Deduction guide, for compilers without the deduction for aggregates of C++20, such as Clang
+// before 17.
+template <typename... Fs>
+callback_overload(Fs...) -> callback_overload<Fs...>;
+
 } // namespace fisk
