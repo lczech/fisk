@@ -197,15 +197,18 @@ inline void for_each_spaced_chunk_size(F&& f)
     }(std::index_sequence<1, 7, 32, 33, 1000>{});
 }
 
-// Sorts `events` by position, keeping their order at each position, such as that of the masks.
+// Sorts `events` by `key`, such as their position or mask, keeping their order for equal keys.
 // Not with std::stable_sort(), whose temporary buffer is deprecated in some libstdc++ versions;
 // instead, the index of each event breaks the ties.
-inline void sort_spaced_events_by_position(std::vector<SpacedEvent>& events)
+template <typename Key>
+inline void stable_sort_spaced_events(std::vector<SpacedEvent>& events, Key key)
 {
     std::vector<std::size_t> order(events.size());
     std::iota(order.begin(), order.end(), std::size_t{0});
     std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
-        return events[a].pos != events[b].pos ? events[a].pos < events[b].pos : a < b;
+        auto const key_a = key(events[a]);
+        auto const key_b = key(events[b]);
+        return key_a != key_b ? key_a < key_b : a < b;
     });
     std::vector<SpacedEvent> sorted;
     sorted.reserve(events.size());
@@ -230,7 +233,7 @@ inline void run_spaced_ascii_chunked_(
     events.clear();
     extract.template operator()<ChunkSize, E, L>(seq, mask_strings, single, scratch, callback);
     if constexpr (ByPosition) {
-        sort_spaced_events_by_position(events);
+        stable_sort_spaced_events(events, [](SpacedEvent const& e) { return e.pos; });
     }
 }
 

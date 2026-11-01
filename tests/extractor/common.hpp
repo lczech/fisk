@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -73,9 +72,7 @@ struct SpacedKmerRecorder
 // algorithms guarantee, see SpacedKmerExtractor.
 inline std::vector<SpacedEvent> by_mask(std::vector<SpacedEvent> events)
 {
-    std::stable_sort(events.begin(), events.end(), [](auto const& a, auto const& b) {
-        return a.mask_idx < b.mask_idx;
-    });
+    stable_sort_spaced_events(events, [](SpacedEvent const& e) { return e.mask_idx; });
     return events;
 }
 
