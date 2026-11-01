@@ -158,12 +158,11 @@ taskset -c 2 ./bin/fisk_benchmarks
 
 This will produce performance measurements for all implemented benchmarks on the given hardware, measuring time per operation, such as per extracted k-mer, with one CSV file per benchmark suite. The suites of the k-mer extraction and the sequence packing are named after the functions they test (see [K-mer extraction functions](#k-mer-extraction-functions) below), and their variants complete that name: for instance, the variant `rolling_scalar_ifs` of the suite `kmer_extract_ascii_checked` is `for_each_kmer_ascii_checked_rolling_scalar()` with the `CharEncoderIfs` encoder. The Encoding and Layout are in the `case` column of the tables.
 
-| | ASCII, checked | ASCII, unchecked | packed, unchecked | packed, checked |
-|---|---|---|---|---|
-| k-mers | `kmer_extract_ascii_checked` | `kmer_extract_ascii_unchecked` | `kmer_extract_packed_unchecked` | `kmer_extract_packed_checked` |
-| spaced k-mers, one mask | `spaced_kmer_extract_ascii_checked_single` | `spaced_kmer_extract_ascii_unchecked_single` | `spaced_kmer_extract_packed_unchecked_single` | `spaced_kmer_extract_packed_checked_single` |
-| spaced k-mers, several masks | `spaced_kmer_extract_ascii_checked_multi` | `spaced_kmer_extract_ascii_unchecked_multi` | `spaced_kmer_extract_packed_unchecked_multi` | `spaced_kmer_extract_packed_checked_multi` |
-| sequence packing | | | `sequence_pack_unchecked` | `sequence_pack_checked` |
+ - `kmer_extract_<input>_<check>`: k-mers
+ - `spaced_kmer_extract_<input>_<check>_single` and `…_multi`: spaced k-mers, one mask or several
+ - `sequence_pack_<check>`: sequence packing
+
+with `<input>` being `ascii` or `packed`, and `<check>` being `checked` or `unchecked`.
 
 Furthermore:
 
@@ -233,10 +232,10 @@ These combinations exist, as `<algorithm>_<technique>`:
 
 | | `for_each_kmer_…` | `for_each_spaced_kmer_…` |
 |---|---|---|
-| `…_ascii_checked_…` | `rolling_scalar`, `reextract_scalar`, `rolling_swar`, `rolling_avx2`, `chunked_scalar`, `chunked_simd` | `rolling_scalar`, `rolling_simd`, `chunked_scalar`, `chunked_simd` |
-| `…_ascii_unchecked_…` | `chunked_scalar`, `chunked_simd` | `chunked_scalar`, `chunked_simd` |
-| `…_packed_checked_…` | `bytewise_scalar`, `rolling_scalar`, `bytewise_simd` | `bytewise_scalar`, `bytewise_simd` |
-| `…_packed_unchecked_…` | `bytewise_scalar`, `rolling_scalar`, `bytewise_simd` | `bytewise_scalar`, `bytewise_simd` |
+| `ascii_checked` | `rolling_scalar`, `reextract_scalar`, `rolling_swar`, `rolling_avx2`, `chunked_scalar`, `chunked_simd` | `rolling_scalar`, `rolling_simd`, `chunked_scalar`, `chunked_simd` |
+| `ascii_unchecked` | `chunked_scalar`, `chunked_simd` | `chunked_scalar`, `chunked_simd` |
+| `packed_checked` | `bytewise_scalar`, `rolling_scalar`, `bytewise_simd` | `bytewise_scalar`, `bytewise_simd` |
+| `packed_unchecked` | `bytewise_scalar`, `rolling_scalar`, `bytewise_simd` | `bytewise_scalar`, `bytewise_simd` |
 
 Each `<input>_<algorithm>_<technique>` has its own header in `kmer_extract/` or `spaced_kmer_extract/`, with its checked and unchecked functions, e.g. `kmer_extract/packed_bytewise_scalar.hpp`. The internals that several of them share are in an `internal.hpp` in each directory, and the chunking that all `chunked` ones share in `kmer_extract/ascii_chunked.hpp`.
 
