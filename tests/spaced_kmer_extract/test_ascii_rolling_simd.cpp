@@ -136,6 +136,10 @@ static void check_simd_kernel()
     check_simd_kernel_in_layout<Kernel, Layout::kLSB>();
 }
 
+// The largest set of masks that the dispatch checks hand on, more than the library default
+// kDefaultMaxMasks, to check sets with more masks than SIMD lanes.
+constexpr std::size_t kMaxDispatchCheckMasks = 16;
+
 template <typename Kernel, Layout L>
 static void check_simd_dispatch_in_layout(std::vector<std::string> const& masks)
 {
@@ -145,7 +149,7 @@ static void check_simd_dispatch_in_layout(std::vector<std::string> const& masks)
     for (auto const& seq : sequence_corpus(span_k, Kernel::lanes)) {
         auto const expected = oracle_spaced_events<Encoding::kACGT, L>(seq, masks);
         auto const extract = [&](auto const& callback) {
-            dispatch_static_span<kMaxDispatchedMasks>(kernels, [&](auto kernel_span) {
+            dispatch_static_span<kMaxDispatchCheckMasks>(kernels, [&](auto kernel_span) {
                 for_each_spaced_kmer_ascii_checked_rolling_simd(
                     seq, kernel_span, CharEncoderTable<Encoding::kACGT>{}, callback
                 );

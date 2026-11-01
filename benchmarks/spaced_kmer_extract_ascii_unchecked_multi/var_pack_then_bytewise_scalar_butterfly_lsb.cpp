@@ -18,7 +18,7 @@ std::uint64_t run_var_pack_then_bytewise_scalar_butterfly(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     constexpr Layout L = Layout::kLSB;
-    return dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+    return dispatch_static_span<kBenchmarkMaxMasks>(masks, [&](auto mask_span) {
         auto sink = make_sink(sink_buffer);
         pack_sequence_unchecked(seq, ChunkedWordEncoder<Encoding::kACGT, L>{}, scratch);
         for_each_spaced_kmer_packed_unchecked_bytewise_scalar(

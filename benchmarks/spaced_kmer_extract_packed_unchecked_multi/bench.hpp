@@ -16,6 +16,7 @@
 #include "fisk/simd/avx512.hpp"
 #include "fisk/simd/neon.hpp"
 #include "sink.hpp"
+#include "spaced_masks.hpp"
 
 using PackedMsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kMSB>;
 using PackedLsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB>;

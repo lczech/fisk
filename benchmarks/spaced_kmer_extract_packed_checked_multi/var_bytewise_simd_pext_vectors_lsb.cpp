@@ -14,7 +14,7 @@ std::uint64_t run_var_bytewise_simd_pext_vectors(
     std::vector<SpacedKmerMask<Layout::kLSB, BitExtractKernelPext>> const& kernels,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    return dispatch_static_span<kMaxDispatchedMasks>(kernels, [&](auto kernel_span) {
+    return dispatch_static_span<kBenchmarkMaxMasks>(kernels, [&](auto kernel_span) {
         auto sink = make_sink(sink_buffer);
         for_each_spaced_kmer_packed_checked_bytewise_simd(
             seq, kernel_span,

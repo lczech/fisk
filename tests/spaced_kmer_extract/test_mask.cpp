@@ -138,24 +138,24 @@ TEST(SpacedKmerExtractMask, ValidityMask)
 
 TEST(SpacedKmerExtractMask, DispatchMaskSets)
 {
-    // A vector of up to kMaxDispatchedMasks masks is dispatched as a span of its size, and one
+    // A vector of up to kDefaultMaxMasks masks is dispatched as a span of its size, and one
     // more mask throws.
-    static_assert(kMaxDispatchedMasks == FISK_MAX_DISPATCHED_MASKS);
-    std::vector<std::string> strings(kMaxDispatchedMasks, "1101");
+    static_assert(kDefaultMaxMasks == FISK_DEFAULT_MAX_MASKS);
+    std::vector<std::string> strings(kDefaultMaxMasks, "1101");
     auto masks = make_spaced_kmer_masks(strings);
-    auto const weight = dispatch_static_span<kMaxDispatchedMasks>(masks, [](auto span) {
-        EXPECT_EQ(decltype(span)::extent, kMaxDispatchedMasks);
+    auto const weight = dispatch_static_span<kDefaultMaxMasks>(masks, [](auto span) {
+        EXPECT_EQ(decltype(span)::extent, kDefaultMaxMasks);
         std::size_t total = 0;
         for (auto const& mask : span) {
             total += spaced_kmer_weight(mask);
         }
         return total;
     });
-    EXPECT_EQ(weight, 3 * kMaxDispatchedMasks);
+    EXPECT_EQ(weight, 3 * kDefaultMaxMasks);
 
     strings.push_back("1101");
     masks = make_spaced_kmer_masks(strings);
     EXPECT_THROW(
-        dispatch_static_span<kMaxDispatchedMasks>(masks, [](auto) {}), std::invalid_argument
+        dispatch_static_span<kDefaultMaxMasks>(masks, [](auto) {}), std::invalid_argument
     );
 }

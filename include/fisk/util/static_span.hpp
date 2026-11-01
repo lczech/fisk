@@ -48,10 +48,15 @@ inline decltype(auto) dispatch_static_span(Range const& range, F&& f)
     using T = std::remove_reference_t<decltype(*std::data(range))> const;
 
     std::size_t const n = std::size(range);
-    if (n == 0 || n > MaxN) {
+    if (n == 0) {
+        throw std::invalid_argument("dispatch_static_span(): the range is empty");
+    }
+    if (n > MaxN) {
         throw std::invalid_argument(
-            "dispatch_static_span(): size " + std::to_string(n) + " not in [1, "
-            + std::to_string(MaxN) + "]"
+            "dispatch_static_span(): " + std::to_string(n) + " elements, but the compile-time "
+            "maximum is " + std::to_string(MaxN) + ". Raise the template parameter MaxN of the "
+            "call; for sets of spaced k-mer masks, this is usually kDefaultMaxMasks, set by the "
+            "CMake option or macro FISK_DEFAULT_MAX_MASKS."
         );
     }
     return dispatch_static_span_<T, 1, MaxN>(std::data(range), n, f);

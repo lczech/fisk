@@ -16,6 +16,7 @@
 #include "fisk/simd/neon.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
 #include "sink.hpp"
+#include "spaced_masks.hpp"
 
 // Every sequence benchmarked below is packed with its validity, with an ACGT word encoder; only
 // the layout varies.

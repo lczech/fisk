@@ -42,11 +42,12 @@ target_include_directories(fisk INTERFACE
 )
 target_compile_features(fisk INTERFACE cxx_std_20)
 
-# The largest number of spaced k-mer masks that a std::vector of masks is dispatched for, see
-# spaced_kmer_extract/mask.hpp. Defined for the target, so that all code using it sees one value.
-set(FISK_MAX_DISPATCHED_MASKS 16 CACHE STRING
-    "Largest number of spaced k-mer masks that a std::vector of masks is dispatched for")
-target_compile_definitions(fisk INTERFACE FISK_MAX_DISPATCHED_MASKS=${FISK_MAX_DISPATCHED_MASKS})
+# The default largest number of spaced k-mer masks that a std::vector of masks is dispatched for,
+# see spaced_kmer_extract/mask.hpp. Defined for the target, so that all code using it sees one
+# value.
+set(FISK_DEFAULT_MAX_MASKS 4 CACHE STRING
+    "Default largest number of spaced k-mer masks that a std::vector of masks is dispatched for")
+target_compile_definitions(fisk INTERFACE FISK_DEFAULT_MAX_MASKS=${FISK_DEFAULT_MAX_MASKS})
 
 # ==================================================================================================
 #     Detect Instruction Sets
@@ -301,8 +302,8 @@ if(FISK_BUILD_BENCHMARKS)
             # parameter -- harmless, and GCC/Clang don't warn on it either.
             /wd4127
             # The files that instantiate the spaced k-mer extraction for each dispatched number of
-            # masks (FISK_MAX_DISPATCHED_MASKS) exceed the default section limit of COFF object
-            # files (C1128).
+            # masks (kBenchmarkMaxMasks, FISK_DEFAULT_MAX_MASKS) exceed the default section limit
+            # of COFF object files (C1128).
             /bigobj
         )
     endif()

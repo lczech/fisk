@@ -337,17 +337,17 @@ static void check_error_contract()
     }
 }
 
-// The largest set of masks that dispatch_static_span() hands on in the library, of
-// kMaxDispatchedMasks masks, as a span of that fixed size, with one bit extractor: the other checks
+// The largest set of masks that dispatch_static_span() hands on by default, of
+// kDefaultMaxMasks masks, as a span of that fixed size, with one bit extractor: the other checks
 // dispatch only up to kMaxTestMasks masks.
 template <Layout L>
-static void check_max_dispatched_masks()
+static void check_default_max_masks()
 {
     constexpr Encoding E = Encoding::kACGT;
     WordEncoderButterfly<E, L> const encoder;
     Splitmix64 rng(7008);
     std::vector<std::string> mask_strings;
-    for (std::size_t i = 0; i < kMaxDispatchedMasks; ++i) {
+    for (std::size_t i = 0; i < kDefaultMaxMasks; ++i) {
         std::string mask(21, '0');
         for (auto& c : mask) {
             c = (rng.get_uint64() & 1u) ? '1' : '0';
@@ -357,8 +357,8 @@ static void check_max_dispatched_masks()
         mask_strings.push_back(std::move(mask));
     }
     auto const masks = make_spaced_kmer_masks<L>(mask_strings);
-    std::span<SpacedKmerMask<L, BitExtractMask> const, kMaxDispatchedMasks> const mask_span(
-        masks.data(), kMaxDispatchedMasks
+    std::span<SpacedKmerMask<L, BitExtractMask> const, kDefaultMaxMasks> const mask_span(
+        masks.data(), kDefaultMaxMasks
     );
 
     for (auto const& seq : test_sequences()) {
@@ -424,10 +424,10 @@ TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedInvalidInGaps)
     check_invalid_in_gaps<Layout::kLSB>();
 }
 
-TEST(SpacedKmerExtractPackedBytewiseScalar, MaxDispatchedMasks)
+TEST(SpacedKmerExtractPackedBytewiseScalar, DefaultMaxMasks)
 {
-    check_max_dispatched_masks<Layout::kMSB>();
-    check_max_dispatched_masks<Layout::kLSB>();
+    check_default_max_masks<Layout::kMSB>();
+    check_default_max_masks<Layout::kLSB>();
 }
 
 TEST(SpacedKmerExtractPackedBytewiseScalar, ErrorContract)

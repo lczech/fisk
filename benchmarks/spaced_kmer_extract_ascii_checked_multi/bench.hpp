@@ -16,6 +16,7 @@
 #include "fisk/simd/neon.hpp"
 #include "chunked.hpp"
 #include "sink.hpp"
+#include "spaced_masks.hpp"
 
 /**
  * @brief Benchmark spaced k-mer extract with multiple masks at once.

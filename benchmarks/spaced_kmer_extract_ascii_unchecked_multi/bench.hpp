@@ -9,6 +9,7 @@
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "chunked.hpp"
 #include "sink.hpp"
+#include "spaced_masks.hpp"
 
 /**
  * @brief Benchmark the extraction of spaced k-mers from ASCII input without checks, for sets of

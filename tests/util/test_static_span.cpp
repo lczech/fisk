@@ -64,14 +64,14 @@ TEST(UtilStaticSpan, ThrowsAboveMax)
     );
     EXPECT_FALSE(called);
 
-    // The message names the size and the range of sizes.
+    // The message names the size, and that the maximum is a compile-time one.
     std::string message;
     try {
         dispatch_static_span<4>(values, [](auto) {});
     } catch (std::invalid_argument const& e) {
         message = e.what();
     }
-    EXPECT_NE(message.find("size 5 not in [1, 4]"), std::string::npos);
+    EXPECT_NE(message.find("5 elements, but the compile-time maximum is 4"), std::string::npos);
 }
 
 TEST(UtilStaticSpan, MaxOfOne)

@@ -19,7 +19,7 @@ std::uint64_t run_var_chunked_simd_butterfly_avx2_vectors(
     std::vector<std::uint64_t>& sink_buffer
 ) {
     constexpr Layout L = Layout::kLSB;
-    return dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+    return dispatch_static_span<kBenchmarkMaxMasks>(masks, [&](auto mask_span) {
         auto sink = make_sink(sink_buffer);
         for_each_spaced_kmer_ascii_checked_chunked_simd(
             seq, mask_span, ChunkedWordEncoder<Encoding::kACGT, L>{}, scratch,

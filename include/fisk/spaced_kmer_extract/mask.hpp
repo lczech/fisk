@@ -25,15 +25,16 @@ namespace fisk {
 //     Mask Sets
 // -------------------------------------------------------------------------------------------------
 
-// The largest number of masks that a std::vector of masks is dispatched for, as a std::span of
-// that compile-time size, see dispatch_static_span() (util/static_span.hpp). Each size up to this
-// one instantiates the function called on the span once. The CMake cache variable of the same name
-// sets it for all code that uses the fisk target alike.
-#ifndef FISK_MAX_DISPATCHED_MASKS
-#define FISK_MAX_DISPATCHED_MASKS 16
+// The default largest number of masks that a std::vector of masks is dispatched for, as a std::span
+// of that compile-time size, see dispatch_static_span() (util/static_span.hpp). Each size up to it
+// instantiates the function called on the span once, so the default is kept small; code that needs
+// more masks passes a larger bound as the template parameter, or raises this default. The CMake
+// cache variable of the same name sets it for all code that uses the fisk target alike.
+#ifndef FISK_DEFAULT_MAX_MASKS
+#define FISK_DEFAULT_MAX_MASKS 4
 #endif
 
-inline constexpr std::size_t kMaxDispatchedMasks = FISK_MAX_DISPATCHED_MASKS;
+inline constexpr std::size_t kDefaultMaxMasks = FISK_DEFAULT_MAX_MASKS;
 
 // -------------------------------------------------------------------------------------------------
 //     Helper Functions

@@ -14,7 +14,7 @@ std::uint64_t run_var_rolling_scalar_butterfly(
     std::vector<SpacedKmerMask<Layout::kLSB, BitExtractButterflyMask>> const& masks,
     std::vector<std::uint64_t>& sink_buffer
 ) {
-    return dispatch_static_span<kMaxDispatchedMasks>(masks, [&](auto mask_span) {
+    return dispatch_static_span<kBenchmarkMaxMasks>(masks, [&](auto mask_span) {
         auto sink = make_sink(sink_buffer);
         for_each_spaced_kmer_ascii_checked_rolling_scalar(
             std::string_view(seq),
