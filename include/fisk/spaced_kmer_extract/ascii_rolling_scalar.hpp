@@ -58,7 +58,10 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
     // LSB shifts new bases in at the top of the span instead, and shifts them out below.
     for_each_mask_(masks, [&]([[maybe_unused]] auto const& mask) {
         assert(is_valid_spaced_kmer_mask(mask));
-        assert(bit_ext(~std::uint64_t{0}, mask) == bit_ext(spaced_kmer_mask_bits_(mask), mask));
+        assert(
+            bit_ext(~std::uint64_t{0}, mask.mask_pieces[0])
+            == bit_ext(spaced_kmer_mask_bits_(mask), mask.mask_pieces[0])
+        );
     });
     std::size_t const top_shift = 2 * (span_k - 1);
 
@@ -108,9 +111,10 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
         // Apply the callback for all masks that are satisfied at this position.
         std::size_t mask_idx = 0;
         for_each_mask_(masks, [&](auto const& mask) {
-            if ((valid_bits & mask.mask) == mask.mask) {
-                auto const word = bit_ext(kmer_bits, mask);
-                assert_fits_width_(word, spaced_kmer_weight(mask.mask));
+            std::uint64_t const bits = spaced_kmer_mask_bits_(mask);
+            if ((valid_bits & bits) == bits) {
+                auto const word = bit_ext(kmer_bits, mask.mask_pieces[0]);
+                assert_fits_width_(word, spaced_kmer_weight(bits));
                 invoke_spaced_kmer_callback<
                     std::remove_cvref_t<Enc>::encoding, L, SingleMask
                 >(callback, mask_idx, pos, word);

@@ -386,8 +386,8 @@ static void check_error_contract()
         auto const checked = pack_sequence_checked(seq, encoder);
         for (std::size_t const span_k : {std::size_t{0}, std::size_t{33}}) {
             SpacedKmerMask<L, Kernel> kernel;
-            static_cast<Kernel&>(kernel) = Kernel(3);
-            kernel.span_k = span_k;
+            kernel.mask_pieces[0] = Kernel(3);
+            kernel.span_k = static_cast<std::uint16_t>(span_k);
             EXPECT_THROW(
                 for_each_spaced_kmer_packed_unchecked_bytewise_simd(
                     packed, kernel, NoopSpacedVectorCallback{}

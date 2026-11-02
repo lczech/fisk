@@ -222,7 +222,9 @@ TEST(SpacedKmerExtractAsciiRollingScalar, LayoutsAgreeViaConversion)
         auto const lsb_mask = make_spaced_kmer_mask<Layout::kLSB>(mask_string);
         std::size_t const weight = spaced_kmer_weight(mask_string);
         std::string const reversed(mask_string.rbegin(), mask_string.rend());
-        EXPECT_EQ(msb_mask.mask == lsb_mask.mask, reversed == mask_string);
+        EXPECT_EQ(
+            msb_mask.mask_pieces[0].mask == lsb_mask.mask_pieces[0].mask, reversed == mask_string
+        );
 
         bool any_differ = false;
         for (auto const& seq : sequence_corpus(mask_string.size(), 8)) {
@@ -301,7 +303,7 @@ TEST(SpacedKmerExtractAsciiRollingScalar, InvalidSpan)
     };
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         auto mask = make_spaced_kmer_mask("1");
-        mask.span_k = k;
+        mask.span_k = static_cast<std::uint16_t>(k);
         for_each_spaced_kmer_ascii_checked_rolling_scalar(
             seq, mask, CharEncoderTable<Encoding::kACGT>{}, extract,
             [](std::size_t, auto const&) {}

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -25,77 +24,33 @@ namespace fisk {
 // -------------------------------------------------------------------------------------------------
 
 /**
- * @brief Parse a spaced k-mer mask string into a two-bit mask, with the first position of the span
- * in the highest bits.
- *
- * For instance, mask `1011` becomes `0b11001111`.
- */
-inline std::uint64_t parse_spaced_kmer_mask_( std::string const& mask )
-{
-    if( mask.size() == 0 || mask.size() > 32 ) {
-        throw std::invalid_argument( "Invalid spaced k-mer mask size not in [1,32]" );
-    }
-    if( mask.front() != '1' || mask.back() != '1' ) {
-        throw std::invalid_argument(
-            "Invalid spaced k-mer mask: first and last position must be set"
-        );
-    }
-
-    std::uint64_t result = 0;
-    for( size_t i = 0; i < mask.size(); ++i ) {
-        result <<= 2;
-        if( mask[i] == '0' || mask[i] == '*' ) {
-            continue;
-        } else if( mask[i] == '1' ) {
-            result |= 3;
-        } else {
-            throw std::invalid_argument( "Invalid spaced k-mer mask with symbols not in [0,*,1]" );
-        }
-    }
-    return result;
-}
-
-/**
- * @brief Format a two-bit mask of span @p k as a string of 0s and 1s, with the highest bits first.
- */
-inline std::string format_spaced_kmer_mask_( std::uint64_t mask, size_t k )
-{
-    std::string str;
-    for( size_t i = 0; i < k; ++i ) {
-        if(( mask & 0x3 ) == 0x0 ) {
-            str.append("0");
-        } else if(( mask & 0x3 ) == 0x3 ) {
-            str.append("1");
-        } else {
-            throw std::invalid_argument(
-                "Invalid spaced k-mer mask with entries that are not 00 or 11."
-            );
-        }
-        mask >>= 2;
-    }
-    if( mask != 0 ) {
-        throw std::invalid_argument(
-            "Invalid spaced k-mer mask not of size k."
-        );
-    }
-    std::reverse(str.begin(), str.end());
-    return str;
-}
-
-/**
- * @brief Get the raw two-bit mask of a spaced k-mer mask, in whichever representation it is.
+ * @brief Get the raw two-bit mask of piece @p piece of a spaced k-mer mask, in whichever
+ * representation it is.
  *
  * `.mask` is the raw mask for BitExtractMask and the tables, and the mask or table of a SIMD
  * kernel.
  */
 template <SpacedKmerMaskType Mask>
-inline std::uint64_t spaced_kmer_mask_bits_(Mask const& mask) noexcept
+inline std::uint64_t spaced_kmer_mask_bits_(Mask const& mask, std::size_t piece = 0) noexcept
 {
-    if constexpr (std::is_convertible_v<decltype(mask.mask), std::uint64_t>) {
-        return mask.mask;
+    auto const& m = mask.mask_pieces[piece];
+    if constexpr (std::is_convertible_v<decltype(m.mask), std::uint64_t>) {
+        return m.mask;
     } else {
-        return mask.mask.mask;
+        return m.mask.mask;
     }
+}
+
+/**
+ * @brief Get the span of piece @p piece of a spaced k-mer mask of span @p span_k, see
+ * SpacedKmerMask.
+ */
+inline constexpr std::size_t spaced_kmer_mask_piece_span_(
+    std::size_t span_k, std::size_t piece
+) noexcept
+{
+    return piece + 1 == spaced_kmer_mask_piece_count(span_k)
+        ? spaced_kmer_mask_tail_span(span_k) : 28;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -105,13 +60,16 @@ inline std::uint64_t spaced_kmer_mask_bits_(Mask const& mask) noexcept
 /**
  * @brief Take a spaced k-mer mask string and turn it into a list of the positions of its '1's.
  *
+ * The first and last position must be kept, and at most 32 positions. The span is not limited
+ * here; the masks of the extraction limit it, see SpacedKmerMask.
+ *
  * This is the position-list counterpart to make_spaced_kmer_mask() in spaced_kmer_extract/mask.hpp,
  * which instead packs the same mask into a single 2-bit-per-position bitmask.
  */
 inline std::vector<std::size_t> spaced_kmer_mask_positions(std::string const& mask)
 {
-    if( mask.size() == 0 || mask.size() > 32 ) {
-        throw std::invalid_argument( "Invalid mask size not in [1,32]" );
+    if( mask.size() == 0 ) {
+        throw std::invalid_argument( "Invalid spaced k-mer mask of size 0" );
     }
     if( mask.front() != '1' || mask.back() != '1' ) {
         throw std::invalid_argument(
@@ -127,6 +85,9 @@ inline std::vector<std::size_t> spaced_kmer_mask_positions(std::string const& ma
         } else {
             throw std::invalid_argument( "Invalid mask with symbols not in [0,1]" );
         }
+    }
+    if( result.size() > 32 ) {
+        throw std::invalid_argument( "Invalid spaced k-mer mask with more than 32 kept positions" );
     }
     return result;
 }
@@ -152,7 +113,7 @@ inline std::size_t spaced_kmer_weight( std::uint64_t const mask )
  */
 inline std::size_t spaced_kmer_weight( std::string const& mask )
 {
-    return spaced_kmer_weight( parse_spaced_kmer_mask_( mask ));
+    return spaced_kmer_mask_positions( mask ).size();
 }
 
 /**
@@ -161,7 +122,11 @@ inline std::size_t spaced_kmer_weight( std::string const& mask )
 template <SpacedKmerMaskType Mask>
 inline std::size_t spaced_kmer_weight(Mask const& mask)
 {
-    return spaced_kmer_weight(spaced_kmer_mask_bits_(mask));
+    std::size_t weight = 0;
+    for (std::size_t j = 0; j < spaced_kmer_mask_piece_count(mask.span_k); ++j) {
+        weight += spaced_kmer_weight(spaced_kmer_mask_bits_(mask, j));
+    }
+    return weight;
 }
 
 /**
@@ -204,25 +169,64 @@ inline bool is_valid_spaced_kmer_mask( std::uint64_t const mask, size_t const k 
 }
 
 /**
- * @brief Check if a spaced k-mer mask is valid for its span, see above, and if its validity_mask
- * holds the positions that it keeps, see SpacedKmerMask.
+ * @brief Check if a spaced k-mer mask is valid, see SpacedKmerMask: its span is in [1, MaxSpan],
+ * the bits of each of its pieces are 00 or 11 at each position of the piece and 0 above it, with
+ * the first and last position of the span kept, its weight is at most 32, its validity pieces hold
+ * the positions that it keeps, its shifts place the bits of each piece after those of the pieces
+ * before it, and the pieces beyond its piece count are empty.
  */
 template <SpacedKmerMaskType Mask>
 inline bool is_valid_spaced_kmer_mask(Mask const& mask)
 {
-    std::uint64_t const bits = spaced_kmer_mask_bits_(mask);
-    if (!is_valid_spaced_kmer_mask(bits, mask.span_k)) {
+    static_assert(
+        Mask::layout == Layout::kMSB || Mask::layout == Layout::kLSB,
+        "Unhandled Layout in is_valid_spaced_kmer_mask()"
+    );
+    std::size_t const span_k = mask.span_k;
+    if (span_k == 0 || span_k > Mask::max_span) {
+        return false;
+    }
+    std::size_t const count = spaced_kmer_mask_piece_count(span_k);
+
+    // The weight up front, as the shifts for kMSB place each piece by the kept positions after it.
+    // With a lane that is neither 00 nor 11, this is off, but the check of its piece below fails.
+    std::size_t const total = spaced_kmer_weight(mask);
+    if (total > 32) {
         return false;
     }
 
-    // The validity mask from the bits, whose first position is in the highest two bits for kMSB,
-    // and in the lowest two bits for kLSB.
-    std::uint64_t validity_mask = 0;
-    for (std::size_t i = 0; i < mask.span_k; ++i) {
-        std::size_t const lane = Mask::layout == Layout::kMSB ? mask.span_k - 1 - i : i;
-        validity_mask |= ((bits >> (2 * lane)) & 1u) << i;
+    // Each piece, as built by make_spaced_kmer_mask() (spaced_kmer_extract/mask.hpp), with a span
+    // of 0 for the pieces beyond the count, which then have to be empty.
+    std::size_t before = 0;
+    for (std::size_t j = 0; j < Mask::max_pieces; ++j) {
+        std::uint64_t const bits = spaced_kmer_mask_bits_(mask, j);
+        std::size_t const len = j < count ? spaced_kmer_mask_piece_span_(span_k, j) : 0;
+        std::uint32_t validity = 0;
+        for (std::size_t i = 0; i < len; ++i) {
+            std::size_t const lane = Mask::layout == Layout::kMSB ? len - 1 - i : i;
+            std::uint64_t const lane_bits = (bits >> (2 * lane)) & 0x3u;
+            if (lane_bits != 0x0u && lane_bits != 0x3u) {
+                return false;
+            }
+            validity |= std::uint32_t{lane_bits == 0x3u} << i;
+        }
+
+        // For a piece of span 32 the whole uint64_t is within it; shifting it by 64 is undefined.
+        if ((len < 32 && (bits >> (2 * len)) != 0) || mask.validity_pieces[j] != validity) {
+            return false;
+        }
+        std::size_t const weight = static_cast<std::size_t>(std::popcount(validity));
+        std::size_t const shift = j >= count ? 0 : Mask::layout == Layout::kMSB
+            ? 2 * (total - before - weight) : 2 * before;
+        if (mask.mask_shifts[j] != shift) {
+            return false;
+        }
+        before += weight;
     }
-    return mask.validity_mask == validity_mask;
+
+    // The first and last position of the span, in the order of the span in the validity pieces.
+    std::size_t const tail = spaced_kmer_mask_tail_span(span_k);
+    return (mask.validity_pieces[0] & 1u) && ((mask.validity_pieces[count - 1] >> (tail - 1)) & 1u);
 }
 
 /**
@@ -231,17 +235,34 @@ inline bool is_valid_spaced_kmer_mask(Mask const& mask)
 template <SpacedKmerMaskType Mask>
 inline std::string spaced_kmer_mask_string(Mask const& mask)
 {
-    std::uint64_t const bits = spaced_kmer_mask_bits_(mask);
-    if constexpr (Mask::layout == Layout::kMSB) {
-        return format_spaced_kmer_mask_(bits, mask.span_k);
-    } else if constexpr (Mask::layout == Layout::kLSB) {
-        std::string const mirrored = format_spaced_kmer_mask_(bits, mask.span_k);
-        return std::string(mirrored.rbegin(), mirrored.rend());
-    } else {
-        static_assert(
-            dependent_false_v<Mask::layout>, "Unhandled Layout in spaced_kmer_mask_string()"
-        );
+    static_assert(
+        Mask::layout == Layout::kMSB || Mask::layout == Layout::kLSB,
+        "Unhandled Layout in spaced_kmer_mask_string()"
+    );
+
+    // Each position of each piece, whose first position is in the highest two bits for kMSB, and in
+    // the lowest two bits for kLSB.
+    std::string result;
+    for (std::size_t j = 0; j < spaced_kmer_mask_piece_count(mask.span_k); ++j) {
+        std::uint64_t const bits = spaced_kmer_mask_bits_(mask, j);
+        std::size_t const len = spaced_kmer_mask_piece_span_(mask.span_k, j);
+        for (std::size_t i = 0; i < len; ++i) {
+            std::size_t const lane = Mask::layout == Layout::kMSB ? len - 1 - i : i;
+            std::uint64_t const lane_bits = (bits >> (2 * lane)) & 0x3u;
+            if (lane_bits != 0x0u && lane_bits != 0x3u) {
+                throw std::invalid_argument(
+                    "Invalid spaced k-mer mask with entries that are not 00 or 11."
+                );
+            }
+            result += lane_bits == 0x3u ? '1' : '0';
+        }
+
+        // For a piece of span 32 the whole uint64_t is within it; shifting it by 64 is undefined.
+        if (len < 32 && (bits >> (2 * len)) != 0) {
+            throw std::invalid_argument("Invalid spaced k-mer mask not of size k.");
+        }
     }
+    return result;
 }
 
 // =================================================================================================

@@ -60,7 +60,7 @@ inline void emit_spaced_kmers_packed_unchecked_bytewise_scalar_(
 ) {
     std::size_t mask_idx = 0;
     for_each_mask_(masks, [&](auto const& mask) {
-        auto const word = bit_ext(window, mask);
+        auto const word = bit_ext(window, mask.mask_pieces[0]);
         assert_fits_width_(word, spaced_kmer_weight(mask));
         invoke_spaced_kmer_callback<E, L, SingleMask>(callback, mask_idx, pos, word);
         ++mask_idx;
@@ -88,8 +88,8 @@ inline void emit_spaced_kmers_packed_checked_bytewise_scalar_(
     } else {
         std::size_t mask_idx = 0;
         for_each_mask_(masks, [&](auto const& mask) {
-            if ((validity & mask.validity_mask) == mask.validity_mask) {
-                auto const word = bit_ext(window, mask);
+            if ((validity & mask.validity_pieces[0]) == mask.validity_pieces[0]) {
+                auto const word = bit_ext(window, mask.mask_pieces[0]);
                 assert_fits_width_(word, spaced_kmer_weight(mask));
                 invoke_spaced_kmer_callback<E, L, SingleMask>(callback, mask_idx, pos, word);
             }
@@ -298,7 +298,10 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
 ) {
     for_each_mask_(masks, [&]([[maybe_unused]] auto const& mask) {
         assert(is_valid_spaced_kmer_mask(mask));
-        assert(bit_ext(~std::uint64_t{0}, mask) == bit_ext(spaced_kmer_mask_bits_(mask), mask));
+        assert(
+            bit_ext(~std::uint64_t{0}, mask.mask_pieces[0])
+            == bit_ext(spaced_kmer_mask_bits_(mask), mask.mask_pieces[0])
+        );
     });
     if (seq.length() < span_k) {
         return;

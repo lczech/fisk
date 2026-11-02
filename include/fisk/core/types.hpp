@@ -96,7 +96,8 @@ enum class InputFormat
 // fails to compile at every site that has to be updated, instead of silently falling into whichever
 // branch happened to be last. The condition has to be made dependent on the template parameter:
 // a plain `static_assert(false)` in a discarded if-constexpr branch is ill-formed in C++20
-// (only C++23 fixed that), and would fire even when never taken.
+// (only C++23 fixed that), and would fire even when never taken. A function with several plain
+// ternaries on them instead starts with a static_assert of the values that they handle.
 template <auto V>
 inline constexpr bool dependent_false_v = false;
 
@@ -583,15 +584,38 @@ concept SpacedKmerType = KmerType<K> && std::same_as<K, SpacedKmer<K::encoding, 
 // =================================================================================================
 
 /**
+ * @brief The number of pieces of a spaced k-mer mask of span @p span_k, see SpacedKmerMask.
+ */
+inline constexpr std::size_t spaced_kmer_mask_piece_count(std::size_t span_k) noexcept
+{
+    return span_k <= 32 ? 1 : 1 + (span_k - 29 + 27) / 28;
+}
+
+/**
+ * @brief The span of the last piece, the tail, of a spaced k-mer mask of span @p span_k, see
+ * SpacedKmerMask.
+ */
+inline constexpr std::size_t spaced_kmer_mask_tail_span(std::size_t span_k) noexcept
+{
+    return span_k - 28 * (spaced_kmer_mask_piece_count(span_k) - 1);
+}
+
+/**
  * @brief A spaced k-mer mask in the representation `M` of some bit extraction algorithm, tagged
  * with the Layout of the spaced k-mers that it extracts, and with its span.
  *
  * `M` is a bit extraction mask, table, or SIMD kernel, such as BitExtractMask,
- * BitExtractButterflyMask, or BitExtractKernelButterfly<SimdAVX2>. As this derives from `M`, it
- * can be passed to the generic bit extraction functions as is. The spaced k-mer extraction
- * functions on the other hand only accept masks tagged this way, and use the tag as the Layout of
- * the rolling window and of the emitted spaced k-mers. Hence, the bits of the mask have to be
- * arranged for that Layout.
+ * BitExtractButterflyMask, or BitExtractKernelButterfly<SimdAVX2>. The spaced k-mer extraction
+ * functions only accept masks tagged this way, and use the tag as the Layout of the window and of
+ * the emitted spaced k-mers. Hence, the bits of the mask have to be arranged for that Layout.
+ *
+ * The span is at most `MaxSpan`, and the weight, i.e., the number of kept positions, at most 32. A
+ * span of up to 32 is one piece. A longer span is cut into leading pieces of 28 positions and a
+ * tail of the remaining 1 to 29, see spaced_kmer_mask_piece_count() and
+ * spaced_kmer_mask_tail_span(). Each piece is a mask of its own, in the format of a mask of its
+ * span, and the spaced k-mer is the OR of the bits extracted with each piece, each shifted to its
+ * place by its `mask_shifts`, so that the first kept position is in the highest bits for kMSB, and
+ * in the lowest bits for kLSB, as for a single piece.
  *
  * Create via make_spaced_kmer_mask() and the related functions, which take care of this.
  */
@@ -601,25 +625,35 @@ concept SpacedKmerType = KmerType<K> && std::same_as<K, SpacedKmer<K::encoding, 
     #pragma warning(push)
     #pragma warning(disable: 4324)
 #endif
-template <Layout L, typename M>
-struct SpacedKmerMask : M
+template <Layout L, typename M, std::size_t MaxSpan = 64>
+struct SpacedKmerMask
 {
-    static constexpr Layout layout = L;
+    static_assert(MaxSpan >= 1 && MaxSpan <= 0xFFFF, "MaxSpan must be in [1, 65535]");
 
-    // The representation of the bit extraction that this mask is, such as BitExtractMask.
+    static constexpr Layout layout = L;
+    static constexpr std::size_t max_span = MaxSpan;
+    static constexpr std::size_t max_pieces = spaced_kmer_mask_piece_count(MaxSpan);
+
+    // The representation of the bit extraction of each piece, such as BitExtractMask.
     using bit_extract_type = M;
 
     // Declared so that this is not an aggregate, as setting the members by hand is not safe.
     SpacedKmerMask() = default;
 
-    // Number of positions that the mask spans, i.e., the k of the rolling window.
-    std::size_t span_k = 0;
+    // Per piece, in the order of the span: the bit extraction mask of the piece.
+    std::array<M, max_pieces> mask_pieces{};
 
-    // The positions of the span that the mask keeps, in the order of the sequence for both
-    // layouts: bit `i` is set if position `i` of the span is kept. This is the order of the
-    // validity bits of a PackedSequenceWithValidity, so that a spaced k-mer at `pos` is valid if
-    // the validity bits from `pos` on have all bits of this mask set.
-    std::uint64_t validity_mask = 0;
+    // Per piece: the positions of the piece that the mask keeps, in the order of the sequence for
+    // both layouts: bit `i` is set if position `i` of the piece is kept. This is the order of the
+    // validity bits of a PackedSequenceWithValidity, so that a piece at `pos` is valid if the
+    // validity bits from `pos` on have all bits of its validity piece set.
+    std::array<std::uint32_t, max_pieces> validity_pieces{};
+
+    // Per piece: the shift of the bits extracted with it to their place in the spaced k-mer.
+    std::array<std::uint8_t, max_pieces> mask_shifts{};
+
+    // Number of positions that the mask spans, i.e., the k of the window.
+    std::uint16_t span_k = 0;
 };
 #if defined(_MSC_VER)
     #pragma warning(pop)
@@ -628,8 +662,8 @@ struct SpacedKmerMask : M
 template <typename T>
 struct is_spaced_kmer_mask_ : std::false_type {};
 
-template <Layout L, typename M>
-struct is_spaced_kmer_mask_<SpacedKmerMask<L, M>> : std::true_type {};
+template <Layout L, typename M, std::size_t MaxSpan>
+struct is_spaced_kmer_mask_<SpacedKmerMask<L, M, MaxSpan>> : std::true_type {};
 
 /**
  * @brief A spaced k-mer mask, i.e., a SpacedKmerMask, and not an untagged bit extraction mask.

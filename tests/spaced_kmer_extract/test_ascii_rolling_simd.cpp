@@ -256,7 +256,7 @@ TEST(SpacedKmerExtractAsciiRollingSimd, InvalidSpan)
 {
     check_invalid_k_throws(32, [&](std::string const& seq, std::size_t k) {
         auto kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("1");
-        kernel.span_k = k;
+        kernel.span_k = static_cast<std::uint16_t>(k);
         for_each_spaced_kmer_ascii_checked_rolling_simd(
             seq, kernel, CharEncoderTable<Encoding::kACGT>{}, [](std::size_t, auto, auto) {}
         );

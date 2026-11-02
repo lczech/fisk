@@ -36,29 +36,38 @@ TEST(SpacedKmerMasks, Forms)
         ASSERT_EQ(forms.size(), raw.size());
         for (std::size_t i = 0; i < raw.size(); ++i) {
             EXPECT_EQ(forms[i].span_k, raw[i].span_k);
-            EXPECT_EQ(forms[i].validity_mask, raw[i].validity_mask);
+            EXPECT_EQ(forms[i].validity_pieces, raw[i].validity_pieces);
+            EXPECT_EQ(forms[i].mask_shifts, raw[i].mask_shifts);
         }
     };
 
     auto const plain = masks.get<BitExtractMask>();
     check_common(plain);
     for (std::size_t i = 0; i < raw.size(); ++i) {
-        EXPECT_EQ(plain[i].mask, raw[i].mask);
+        for (std::size_t j = 0; j < raw[i].max_pieces; ++j) {
+            EXPECT_EQ(plain[i].mask_pieces[j].mask, raw[i].mask_pieces[j].mask);
+        }
     }
 
     auto const butterfly = masks.get<BitExtractButterflyMask>();
     auto const expected_butterfly = make_spaced_kmer_butterfly_masks(raw);
     check_common(butterfly);
     for (std::size_t i = 0; i < raw.size(); ++i) {
-        EXPECT_EQ(butterfly[i].mask, expected_butterfly[i].mask);
-        EXPECT_EQ(butterfly[i].sieves, expected_butterfly[i].sieves);
+        for (std::size_t j = 0; j < raw[i].max_pieces; ++j) {
+            auto const& piece = butterfly[i].mask_pieces[j];
+            auto const& expected = expected_butterfly[i].mask_pieces[j];
+            EXPECT_EQ(piece.mask, expected.mask);
+            EXPECT_EQ(piece.sieves, expected.sieves);
+        }
     }
 
     #if defined(FISK_HAS_BMI2)
     auto const pext = masks.get<BitExtractKernelPext>();
     check_common(pext);
     for (std::size_t i = 0; i < raw.size(); ++i) {
-        EXPECT_EQ(pext[i].mask.mask, raw[i].mask);
+        for (std::size_t j = 0; j < raw[i].max_pieces; ++j) {
+            EXPECT_EQ(pext[i].mask_pieces[j].mask.mask, raw[i].mask_pieces[j].mask);
+        }
     }
     #endif
 
@@ -69,8 +78,12 @@ TEST(SpacedKmerMasks, Forms)
                 auto const kernels = masks.get<BitExtractKernelButterfly<Simd>>();
                 check_common(kernels);
                 for (std::size_t i = 0; i < raw.size(); ++i) {
-                    EXPECT_EQ(kernels[i].mask.mask, expected_butterfly[i].mask);
-                    EXPECT_EQ(kernels[i].mask.sieves, expected_butterfly[i].sieves);
+                    for (std::size_t j = 0; j < raw[i].max_pieces; ++j) {
+                        auto const& piece = kernels[i].mask_pieces[j].mask;
+                        auto const& expected = expected_butterfly[i].mask_pieces[j];
+                        EXPECT_EQ(piece.mask, expected.mask);
+                        EXPECT_EQ(piece.sieves, expected.sieves);
+                    }
                 }
             }(),
             ...

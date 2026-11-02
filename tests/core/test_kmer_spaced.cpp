@@ -30,8 +30,8 @@ static SpacedKmerMask<Layout::kMSB, BitExtractMask> raw_spaced_kmer_mask(
     std::uint64_t bits, std::size_t span_k
 ) {
     SpacedKmerMask<Layout::kMSB, BitExtractMask> mask;
-    static_cast<BitExtractMask&>(mask) = BitExtractMask(bits);
-    mask.span_k = span_k;
+    mask.mask_pieces[0] = BitExtractMask(bits);
+    mask.span_k = static_cast<std::uint16_t>(span_k);
     return mask;
 }
 
@@ -222,7 +222,7 @@ static void check_mask_formatting()
     for (auto const& mask_string : valid_spaced_kmer_masks()) {
         auto const mask = make_spaced_kmer_mask<L>(mask_string);
         EXPECT_TRUE(is_valid_spaced_kmer_mask(mask));
-        EXPECT_TRUE(is_valid_spaced_kmer_mask(mask.mask, mask_string.size()));
+        EXPECT_TRUE(is_valid_spaced_kmer_mask(mask.mask_pieces[0].mask, mask_string.size()));
 
         std::string normalized = mask_string;
         std::replace(normalized.begin(), normalized.end(), '*', '0');
@@ -237,7 +237,7 @@ static void check_mask_formatting()
 
         // A validity mask that does not match the kept positions makes the mask invalid.
         auto mismatched = mask;
-        mismatched.validity_mask ^= std::uint64_t{1} << (mask_string.size() - 1);
+        mismatched.validity_pieces[0] ^= std::uint32_t{1} << (mask_string.size() - 1);
         EXPECT_TRUE(!is_valid_spaced_kmer_mask(mismatched));
     }
 

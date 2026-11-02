@@ -63,7 +63,7 @@ inline void emit_spaced_kmers_packed_unchecked_bytewise_simd_(
     std::span<Kernel, N> kernels, std::size_t pos, Vector windows,
     std::size_t valid_count, Callback& callback
 ) {
-    using Simd = typename Kernel::simd_arch;
+    using Simd = typename Kernel::bit_extract_type::simd_arch;
     static_assert(
         SpacedKmerVectorCallback<Callback&, E, L, Simd, N == 1>,
         "Callback must be callable as callback(pos, mask_idx, spaced_kmers, valid_count), or, "
@@ -72,7 +72,9 @@ inline void emit_spaced_kmers_packed_unchecked_bytewise_simd_(
     [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
         (invoke_spaced_kmer_vector_callback<E, L, Simd, N == 1>(
             callback, M, pos,
-            spaced_kmer_vector_cast_unchecked<E, L, Simd>(kernels[M].bit_extract(windows)),
+            spaced_kmer_vector_cast_unchecked<E, L, Simd>(
+                kernels[M].mask_pieces[0].bit_extract(windows)
+            ),
             valid_count
         ), ...);
     }(std::make_index_sequence<N>{});
@@ -91,7 +93,7 @@ inline void emit_spaced_kmers_packed_checked_bytewise_simd_(
     std::span<Kernel, N> kernels, std::size_t pos, Vector windows,
     Validity validity, Callback& callback
 ) {
-    using Simd = typename Kernel::simd_arch;
+    using Simd = typename Kernel::bit_extract_type::simd_arch;
     constexpr std::size_t lanes = Simd::lanes;
     static_assert(
         SpacedKmerVectorValidLanesCallback<Callback&, E, L, Simd, N == 1>,
@@ -103,7 +105,7 @@ inline void emit_spaced_kmers_packed_checked_bytewise_simd_(
             (void) m;
             return (std::uint64_t{1} << lanes) - 1u;
         } else {
-            std::uint64_t const vm = kernels[m].validity_mask;
+            std::uint64_t const vm = kernels[m].validity_pieces[0];
             std::uint64_t bits = 0;
             for (std::size_t j = 0; j < lanes; ++j) {
                 bits |= static_cast<std::uint64_t>(((validity >> j) & vm) == vm) << j;
@@ -114,7 +116,9 @@ inline void emit_spaced_kmers_packed_checked_bytewise_simd_(
     [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
         (invoke_spaced_kmer_vector_valid_lanes_callback<E, L, Simd, N == 1>(
             callback, M, pos,
-            spaced_kmer_vector_cast_unchecked<E, L, Simd>(kernels[M].bit_extract(windows)),
+            spaced_kmer_vector_cast_unchecked<E, L, Simd>(
+                kernels[M].mask_pieces[0].bit_extract(windows)
+            ),
             SimdVectorValidLanes<Simd>{lanes_of(M)}
         ), ...);
     }(std::make_index_sequence<N>{});
@@ -150,7 +154,7 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one kernel.");
-    using Simd = typename Kernel::simd_arch;
+    using Simd = typename Kernel::bit_extract_type::simd_arch;
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Kernel::layout;
 
@@ -232,7 +236,7 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one kernel.");
-    using Simd = typename Kernel::simd_arch;
+    using Simd = typename Kernel::bit_extract_type::simd_arch;
 
     std::size_t const span_k = common_spaced_kmer_span_(kernels);
     for ([[maybe_unused]] auto const& kernel : kernels) {

@@ -18,7 +18,7 @@ std::vector<fisk::BitExtractMask> make_masks()
     };
     std::vector<fisk::BitExtractMask> masks;
     for (auto const& mask : mask_strings) {
-        masks.push_back(fisk::make_spaced_kmer_mask(mask));
+        masks.push_back(fisk::make_spaced_kmer_mask(mask).mask_pieces[0]);
     }
     return masks;
 }

@@ -109,8 +109,8 @@ template <Layout L>
 static SpacedKmerMask<L, BitExtractMask> raw_spaced_kmer_mask(std::size_t span_k)
 {
     SpacedKmerMask<L, BitExtractMask> mask;
-    static_cast<BitExtractMask&>(mask) = BitExtractMask(3);
-    mask.span_k = span_k;
+    mask.mask_pieces[0] = BitExtractMask(3);
+    mask.span_k = static_cast<std::uint16_t>(span_k);
     return mask;
 }
 
