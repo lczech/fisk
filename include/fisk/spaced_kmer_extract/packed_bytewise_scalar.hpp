@@ -33,10 +33,20 @@ namespace fisk {
 // for_each_spaced_kmer_ascii_checked_rolling_scalar(). The masks are hence used as they are. Above
 // the span, the window still holds the neighboring bases. They need no clearing, as the bit
 // extraction only takes the bits of the mask, see `bit_ext` below.
+//
+// For kMSB, each load needs a byte swap, see load_packed_word_() (kmer_extract/internal.hpp),
+// which on Intel competes with PEXT for the same port. A step hence covers 8 bytes with one load:
+// the word of each following byte is the one of the byte before it, shifted by a byte, with the
+// byte after its end shifted in, see spaced_kmer_packed_bytewise_step_bytes_v. Each step starts
+// with a load of its own.
 
 // -------------------------------------------------------------------------------------------------
 //     Helpers
 // -------------------------------------------------------------------------------------------------
+
+// The number of bytes of a step, see above.
+template <Layout L>
+inline constexpr std::size_t spaced_kmer_packed_bytewise_step_bytes_v = L == Layout::kMSB ? 8 : 1;
 
 // Extract and emit the spaced k-mers of all masks from the `window` of the span starting at `pos`.
 template <
@@ -107,6 +117,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_narrow_width_(
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
     constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
+    constexpr std::size_t StepBytes = spaced_kmer_packed_bytewise_step_bytes_v<L>;
     assert(span_k >= 1 && span_k <= 29);
     std::uint8_t const* const codes = seq.codes().data();
 
@@ -117,8 +128,9 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_narrow_width_(
     };
 
     // One step of run_packed_bytewise_blocks_() (kmer_extract/internal.hpp): the spans that start
-    // in byte `b`, of which those that are valid by `validity_at` are emitted. Unchecked, that is a
-    // test of the whole span, for all masks at once, and checked, a test per mask.
+    // in the `StepBytes` bytes from `b`, of which those that are valid by `validity_at` are
+    // emitted. Unchecked, that is a test of the whole span, for all masks at once, and checked, a
+    // test per mask.
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         auto const emit_if_valid_ = [&](
             std::size_t pos, std::uint64_t window
@@ -132,27 +144,34 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_narrow_width_(
             }
         };
         std::uint64_t word = load_packed_word_<L>(codes + b);
-        if constexpr (L == Layout::kMSB) {
-            // Move the span at position 3 to the lowest bits once, so that the shifts per
-            // position are constants, as in for_each_kmer_packed_bytewise_scalar_narrow_width_().
-            word >>= 58 - 2 * span_k;
-            emit_if_valid_(4 * b + 0, word >> 6);
-            emit_if_valid_(4 * b + 1, word >> 4);
-            emit_if_valid_(4 * b + 2, word >> 2);
-            emit_if_valid_(4 * b + 3, word);
-        } else if constexpr (L == Layout::kLSB) {
-            emit_if_valid_(4 * b + 0, word);
-            emit_if_valid_(4 * b + 1, word >> 2);
-            emit_if_valid_(4 * b + 2, word >> 4);
-            emit_if_valid_(4 * b + 3, word >> 6);
-        } else {
-            static_assert(
-                dependent_false_v<L>,
-                "Unhandled Layout in for_each_spaced_kmer_packed_bytewise_scalar_narrow_width_()"
-            );
+        for (std::size_t i = 0; i < StepBytes; ++i) {
+            std::size_t const at = b + i;
+            if constexpr (L == Layout::kMSB) {
+                if (i > 0) {
+                    word = (word << 8) | codes[at + 7];
+                }
+                // Move the span at position 3 to the lowest bits, so that the shifts per position
+                // are constants, as in for_each_kmer_packed_bytewise_scalar_narrow_width_().
+                std::uint64_t const window = word >> (58 - 2 * span_k);
+                emit_if_valid_(4 * at + 0, window >> 6);
+                emit_if_valid_(4 * at + 1, window >> 4);
+                emit_if_valid_(4 * at + 2, window >> 2);
+                emit_if_valid_(4 * at + 3, window);
+            } else if constexpr (L == Layout::kLSB) {
+                emit_if_valid_(4 * at + 0, word);
+                emit_if_valid_(4 * at + 1, word >> 2);
+                emit_if_valid_(4 * at + 2, word >> 4);
+                emit_if_valid_(4 * at + 3, word >> 6);
+            } else {
+                static_assert(
+                    dependent_false_v<L>,
+                    "Unhandled Layout in "
+                    "for_each_spaced_kmer_packed_bytewise_scalar_narrow_width_()"
+                );
+            }
         }
     };
-    run_packed_bytewise_blocks_<1, PackedValidity::kNucleotides>(seq, span_k, step_);
+    run_packed_bytewise_blocks_<StepBytes, PackedValidity::kNucleotides>(seq, span_k, step_);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -204,6 +223,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_full_width_(
     MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
 ) {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
+    constexpr std::size_t StepBytes = spaced_kmer_packed_bytewise_step_bytes_v<Seq::layout>;
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
     constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
@@ -227,23 +247,31 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_full_width_(
                 emit_(pos, window);
             }
         };
-        std::uint64_t const word = load_packed_word_<L>(codes + b);
-        std::uint64_t const next = L == Layout::kMSB
-            ? std::uint64_t{codes[b + 8]} : load_packed_word_<L>(codes + b + 1);
-        emit_if_valid_(
-            4 * b + 0, spaced_kmer_packed_bytewise_full_width_window_<L, K, 0>(word, next)
-        );
-        emit_if_valid_(
-            4 * b + 1, spaced_kmer_packed_bytewise_full_width_window_<L, K, 1>(word, next)
-        );
-        emit_if_valid_(
-            4 * b + 2, spaced_kmer_packed_bytewise_full_width_window_<L, K, 2>(word, next)
-        );
-        emit_if_valid_(
-            4 * b + 3, spaced_kmer_packed_bytewise_full_width_window_<L, K, 3>(word, next)
-        );
+        std::uint64_t word = load_packed_word_<L>(codes + b);
+        for (std::size_t i = 0; i < StepBytes; ++i) {
+            std::size_t const at = b + i;
+            if constexpr (L == Layout::kMSB) {
+                if (i > 0) {
+                    word = (word << 8) | codes[at + 7];
+                }
+            }
+            std::uint64_t const next = L == Layout::kMSB
+                ? std::uint64_t{codes[at + 8]} : load_packed_word_<L>(codes + at + 1);
+            emit_if_valid_(
+                4 * at + 0, spaced_kmer_packed_bytewise_full_width_window_<L, K, 0>(word, next)
+            );
+            emit_if_valid_(
+                4 * at + 1, spaced_kmer_packed_bytewise_full_width_window_<L, K, 1>(word, next)
+            );
+            emit_if_valid_(
+                4 * at + 2, spaced_kmer_packed_bytewise_full_width_window_<L, K, 2>(word, next)
+            );
+            emit_if_valid_(
+                4 * at + 3, spaced_kmer_packed_bytewise_full_width_window_<L, K, 3>(word, next)
+            );
+        }
     };
-    run_packed_bytewise_blocks_<1, PackedValidity::kNucleotides>(seq, K, step_);
+    run_packed_bytewise_blocks_<StepBytes, PackedValidity::kNucleotides>(seq, K, step_);
 }
 
 // -------------------------------------------------------------------------------------------------

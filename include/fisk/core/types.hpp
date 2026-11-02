@@ -265,8 +265,11 @@ public:
 
     /**
      * @brief The number of zero bytes after the validity bits, for a length above 0.
+     *
+     * The loops whose steps cover 8 bytes of codes load validity words up to 31 positions past
+     * the last k-mer, see run_packed_bytewise_blocks_() (kmer_extract/internal.hpp).
      */
-    static constexpr std::size_t validity_padding = 8;
+    static constexpr std::size_t validity_padding = 16;
 
     /**
      * @brief An empty sequence, without storage.
