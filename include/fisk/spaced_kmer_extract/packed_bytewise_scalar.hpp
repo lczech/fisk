@@ -28,8 +28,8 @@ namespace fisk {
 // Layout of the sequence, and the spaced k-mers are emitted with its Encoding and Layout.
 //
 // Each byte of the sequence holds four bases, and a span starts at each of them. Each span is taken
-// from the word of the 8 bytes loaded at that byte, plus a ninth byte for spans of 30 to 32, as a
-// window whose lowest bits hold the span, as for the rolling window of
+// from the word of the 8 bytes loaded at that byte, plus the bases after it for spans of 30 to 32,
+// as a window whose lowest bits hold the span, as for the rolling window of
 // for_each_spaced_kmer_ascii_checked_rolling_scalar(). The masks are hence used as they are. Above
 // the span, the window still holds the neighboring bases. They need no clearing, as the bit
 // extraction only takes the bits of the mask, see `bit_ext` below.
@@ -160,14 +160,15 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_narrow_width_(
 // -------------------------------------------------------------------------------------------------
 
 // The window of a span of 30 to 32 starting at base `Local` (0 to 3) of its byte, from the
-// `word` loaded at that byte, and the `ninth` byte after it, as described above. Where the span
-// reaches into the ninth byte, the bases from it are shifted in at the bottom of the shifted word,
-// for kMSB in a way that compilers do not turn into a double shift (shld), which on Intel competes
-// with PEXT for the same port.
+// `word` loaded at that byte, and the bases after it in `next`: for kMSB the ninth byte, and for
+// kLSB the word loaded at the byte after `word`. Where the span reaches past `word`, the bases from
+// `next` are shifted in, such that the two shifts do not add up to 64, which compilers would turn
+// into a double shift (shld, shrd), which on Intel competes with PEXT for the same port. For kLSB,
+// the bases of `next` that overlap with `word` are the same, so that the OR keeps them.
 template <Layout L, unsigned K, unsigned Local>
 FISK_ALWAYS_INLINE
 inline std::uint64_t spaced_kmer_packed_bytewise_full_width_window_(
-    std::uint64_t word, std::uint64_t ninth
+    std::uint64_t word, std::uint64_t next
 ) {
     constexpr bool in_word = 2 * K + 2 * Local <= 64;
     if constexpr (L == Layout::kMSB) {
@@ -175,13 +176,13 @@ inline std::uint64_t spaced_kmer_packed_bytewise_full_width_window_(
             return word >> (64 - 2 * K - 2 * Local);
         } else {
             constexpr unsigned shift = 2 * K + 2 * Local - 64;
-            return (word << shift) | (ninth >> (8 - shift));
+            return (word << shift) | (next >> (8 - shift));
         }
     } else if constexpr (L == Layout::kLSB) {
         if constexpr (in_word) {
             return word >> (2 * Local);
         } else {
-            return (word >> (2 * Local)) | (ninth << (64 - 2 * Local));
+            return (word >> (2 * Local)) | (next << (8 - 2 * Local));
         }
     } else {
         static_assert(
@@ -191,8 +192,8 @@ inline std::uint64_t spaced_kmer_packed_bytewise_full_width_window_(
     }
 }
 
-// Spans of 30 to 32 can reach into a ninth byte. K is a template parameter, so that it is known at
-// compile time which positions need it.
+// Spans of 30 to 32 can reach past the 8 bytes loaded at their starting byte. K is a template
+// parameter, so that it is known at compile time which positions need the bases after them.
 template <
     unsigned K, bool SingleMask, PackedSequenceType Seq,
     typename MaskOrMasks, typename BitExtract, typename Callback
@@ -227,18 +228,19 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_full_width_(
             }
         };
         std::uint64_t const word = load_packed_word_<L>(codes + b);
-        std::uint64_t const ninth = codes[b + 8];
+        std::uint64_t const next = L == Layout::kMSB
+            ? std::uint64_t{codes[b + 8]} : load_packed_word_<L>(codes + b + 1);
         emit_if_valid_(
-            4 * b + 0, spaced_kmer_packed_bytewise_full_width_window_<L, K, 0>(word, ninth)
+            4 * b + 0, spaced_kmer_packed_bytewise_full_width_window_<L, K, 0>(word, next)
         );
         emit_if_valid_(
-            4 * b + 1, spaced_kmer_packed_bytewise_full_width_window_<L, K, 1>(word, ninth)
+            4 * b + 1, spaced_kmer_packed_bytewise_full_width_window_<L, K, 1>(word, next)
         );
         emit_if_valid_(
-            4 * b + 2, spaced_kmer_packed_bytewise_full_width_window_<L, K, 2>(word, ninth)
+            4 * b + 2, spaced_kmer_packed_bytewise_full_width_window_<L, K, 2>(word, next)
         );
         emit_if_valid_(
-            4 * b + 3, spaced_kmer_packed_bytewise_full_width_window_<L, K, 3>(word, ninth)
+            4 * b + 3, spaced_kmer_packed_bytewise_full_width_window_<L, K, 3>(word, next)
         );
     };
     run_packed_bytewise_blocks_<1, PackedValidity::kNucleotides>(seq, K, step_);
