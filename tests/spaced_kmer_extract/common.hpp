@@ -153,6 +153,33 @@ inline std::vector<std::vector<std::string>> const& chunked_mask_sets()
     return sets;
 }
 
+// For spans above 32, around the boundaries of the pieces of the masks, see SpacedKmerMask, a
+// single random mask and a set of three, which keep the first and the last position, and at most 32
+// positions.
+inline std::vector<std::vector<std::string>> const& chunked_wide_mask_sets()
+{
+    static std::vector<std::vector<std::string>> const sets = [] {
+        fisk::Splitmix64 rng(7118);
+        auto random_mask = [&](std::size_t span_k) {
+            std::string mask(span_k, '0');
+            std::size_t const weight = 2 + rng.get_uint64() % 31;
+            for (std::size_t i = 0; i < weight; ++i) {
+                mask[rng.get_uint64() % span_k] = '1';
+            }
+            mask.front() = '1';
+            mask.back() = '1';
+            return mask;
+        };
+        std::vector<std::vector<std::string>> out;
+        for (std::size_t span_k : {33u, 57u, 58u, 85u, 100u}) {
+            out.push_back({ random_mask(span_k) });
+            out.push_back({ random_mask(span_k), random_mask(span_k), random_mask(span_k) });
+        }
+        return out;
+    }();
+    return sets;
+}
+
 // Sequences of the lengths 0..80 and two longer ones, with random nucleotides, and with checked,
 // also with invalid characters: the corpus of the span, see sequence_corpus(), and the same lengths
 // with scattered invalid characters, and with many.
@@ -238,22 +265,24 @@ inline void run_spaced_ascii_chunked_(
 }
 
 // Checks `extract` with the word encoder of the given conventions against the oracle, for every
-// set of masks, sequence, and chunk size, with a scratch and with the thread-local buffer: through
-// the overload for a span of masks, and for a single mask also through the overload for a single
-// mask, in all its callback forms; the form without positions takes them from the first form, so
-// that it checks the values and their order. Unchecked, on sequences without invalid characters.
-// With `ByPosition`, the events are sorted by position first, keeping the order of the masks at
-// each position, for the loops that call back with vectors of positions per mask.
+// set of masks of `mask_sets`, sequence, and chunk size, with a scratch and with the thread-local
+// buffer: through the overload for a span of masks, and for a single mask also through the
+// overload for a single mask, in all its callback forms; the form without positions takes them
+// from the first form, so that it checks the values and their order. Unchecked, on sequences
+// without invalid characters. With `ByPosition`, the events are sorted by position first, keeping
+// the order of the masks at each position, for the loops that call back with vectors of positions
+// per mask.
 template <fisk::Encoding E, fisk::Layout L, bool Checked, bool ByPosition, typename Extract>
-inline void check_spaced_ascii_chunked(Extract const& extract)
-{
+inline void check_spaced_ascii_chunked(
+    Extract const& extract, std::vector<std::vector<std::string>> const& mask_sets
+) {
     using Scratch = std::conditional_t<
         Checked, fisk::PackedSequenceWithValidity<E, L>, fisk::PackedSequence<E, L>
     >;
     Scratch scratch;
     std::vector<SpacedEvent> events;
     std::vector<SpacedEvent> first;
-    for (auto const& mask_strings : chunked_mask_sets()) {
+    for (auto const& mask_strings : mask_sets) {
         std::size_t const span_k = mask_strings.front().size();
         for (auto const& seq : chunked_spaced_sequences(span_k, Checked)) {
             auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
@@ -293,14 +322,25 @@ inline void check_spaced_ascii_chunked(Extract const& extract)
     }
 }
 
-// The checks above under the four conventions.
+// The checks above under the four conventions, by default with the mask sets of
+// chunked_mask_sets().
 template <bool Checked, bool ByPosition, typename Extract>
-inline void check_spaced_ascii_chunked_all(Extract const& extract)
-{
+inline void check_spaced_ascii_chunked_all(
+    Extract const& extract,
+    std::vector<std::vector<std::string>> const& mask_sets = chunked_mask_sets()
+) {
     using fisk::Encoding;
     using fisk::Layout;
-    check_spaced_ascii_chunked<Encoding::kACGT, Layout::kMSB, Checked, ByPosition>(extract);
-    check_spaced_ascii_chunked<Encoding::kACGT, Layout::kLSB, Checked, ByPosition>(extract);
-    check_spaced_ascii_chunked<Encoding::kACTG, Layout::kMSB, Checked, ByPosition>(extract);
-    check_spaced_ascii_chunked<Encoding::kACTG, Layout::kLSB, Checked, ByPosition>(extract);
+    check_spaced_ascii_chunked<Encoding::kACGT, Layout::kMSB, Checked, ByPosition>(
+        extract, mask_sets
+    );
+    check_spaced_ascii_chunked<Encoding::kACGT, Layout::kLSB, Checked, ByPosition>(
+        extract, mask_sets
+    );
+    check_spaced_ascii_chunked<Encoding::kACTG, Layout::kMSB, Checked, ByPosition>(
+        extract, mask_sets
+    );
+    check_spaced_ascii_chunked<Encoding::kACTG, Layout::kLSB, Checked, ByPosition>(
+        extract, mask_sets
+    );
 }
