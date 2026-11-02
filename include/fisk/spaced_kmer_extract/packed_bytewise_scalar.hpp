@@ -452,8 +452,8 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
  * spaced k-mer, across a set of masks.
  *
  * Same as the single-mask overload above, but for a set of masks, which all need to have the same
- * span, in [1, 32], as a std::span of compile-time size, possibly of const masks; see
- * dispatch_static_span() for a std::vector of masks. At each position, the spaced k-mers of all
+ * span, as a std::span of compile-time size, possibly of const masks; see dispatch_static_span()
+ * for a std::vector of masks. At each position, the spaced k-mers of all
  * masks are emitted, in the order of the masks. The callback must be callable as callback(pos,
  * mask_idx, spaced_kmer); the shorthands callback(pos, spaced_kmer) and callback(spaced_kmer) are
  * only available for a single mask.
@@ -473,7 +473,8 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
 ) {
     static_assert(N > 0, "Need at least one mask.");
     for_each_spaced_kmer_packed_bytewise_scalar_<MaxCompiledPieces, false>(
-        without_validity_(seq), common_spaced_kmer_span_(masks), masks, bit_ext, callback
+        without_validity_(seq), common_spaced_kmer_span_<Mask::max_span>(masks), masks, bit_ext,
+        callback
     );
 }
 
@@ -529,7 +530,7 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_scalar(
 ) {
     static_assert(N > 0, "Need at least one mask.");
     for_each_spaced_kmer_packed_bytewise_scalar_<MaxCompiledPieces, false>(
-        seq, common_spaced_kmer_span_(masks), masks, bit_ext, callback
+        seq, common_spaced_kmer_span_<Mask::max_span>(masks), masks, bit_ext, callback
     );
 }
 
