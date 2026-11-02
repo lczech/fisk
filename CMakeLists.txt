@@ -56,6 +56,15 @@ set(FISK_DEFAULT_MAX_MASKS 4 CACHE STRING
     "Default largest number of spaced k-mer masks that a std::vector of masks is dispatched for")
 target_compile_definitions(fisk INTERFACE FISK_DEFAULT_MAX_MASKS=${FISK_DEFAULT_MAX_MASKS})
 
+# The default largest number of pieces of a spaced k-mer mask for which the extraction loops that
+# take spans above 32 have a copy of their own, see spaced_kmer_extract/internal.hpp. Defined for the
+# target, so that all code using it sees one value.
+set(FISK_DEFAULT_MAX_COMPILED_PIECES 2 CACHE STRING
+    "Default largest number of pieces of a spaced k-mer mask with a copy of the extraction loop")
+target_compile_definitions(fisk INTERFACE
+    FISK_DEFAULT_MAX_COMPILED_PIECES=${FISK_DEFAULT_MAX_COMPILED_PIECES}
+)
+
 # ==================================================================================================
 #     Detect Instruction Sets
 # ==================================================================================================

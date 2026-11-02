@@ -54,7 +54,7 @@ or on the command line, e.g., `-DFISK_ENABLE_AVX2=ON`. The options are `FISK_ENA
 
 Each option adds its compiler flag to all targets that link against `fisk::fisk`, so that the compiler may use these instructions anywhere in their code, and the program then crashes on CPUs without them. Hence, choose the options for the oldest CPU that the program needs to run on. For instance, AVX2 and BMI2 are available on most x86-64 CPUs since about 2015, while AVX-512 is not; `-march=native` only fits programs that run where they are built. Of the instruction sets that are compiled in, fisk checks at runtime which ones the CPU has, and picks the algorithm accordingly, see [Tuned extraction](#tuned-extraction).
 
-`FISK_DEFAULT_MAX_MASKS` (default 4) is the default largest number of spaced k-mer masks in a `std::vector` that can be handed on to the extraction, see [K-mer extraction functions](#k-mer-extraction-functions); each count up to it compiles the extraction once. Code that needs more masks passes a larger bound as template parameter, or raises this default.
+`FISK_DEFAULT_MAX_MASKS` (default 4) is the default largest number of spaced k-mer masks in a `std::vector` that can be handed on to the extraction, see [K-mer extraction functions](#k-mer-extraction-functions); each count up to it compiles the extraction once. Code that needs more masks passes a larger bound as template parameter, or raises this default. Likewise, `FISK_DEFAULT_MAX_COMPILED_PIECES` (default 2) is the default largest number of pieces of a spaced k-mer mask with a span above 32 for which the extraction has a copy of its loop.
 
 When fisk is built standalone (i.e., not pulled in via `add_subdirectory()`/`FetchContent()` from another project), the benchmark suite and test suite below are built by default; set `-DFISK_BUILD_BENCHMARKS=OFF` and/or `-DFISK_BUILD_TESTS=OFF` to skip them.
 
@@ -205,6 +205,7 @@ This will produce performance measurements for all implemented benchmarks on the
 
  - `kmer_extract_<input>_<check>`: k-mers
  - `spaced_kmer_extract_<input>_<check>_single` and `…_multi`: spaced k-mers, one mask or several
+ - `spaced_kmer_extract_packed_<check>_spans`: spaced k-mers, one mask per span from 1 to 128
  - `sequence_pack_<check>`: sequence packing
 
 with `<input>` being `ascii` or `packed`, and `<check>` being `checked` or `unchecked`.
@@ -297,6 +298,8 @@ fisk::dispatch_static_span<fisk::kDefaultMaxMasks>(masks, [&](auto mask_span) {
     );
 });
 ```
+
+The masks have a maximum span as their last template parameter, 64 by default, e.g. `make_spaced_kmer_mask<fisk::Layout::kMSB, 128>(mask)`; their weight is at most 32 for any span. Of the spaced k-mer functions, `for_each_spaced_kmer_packed_<check>_bytewise_scalar()` with a single mask takes spans up to that maximum, and the others spans up to 32. Above 32, a span is cut into pieces: leading pieces of 28 positions and a tail of up to 29. The functions that take longer spans have a copy of their loop for each number of pieces up to their first template parameter `MaxCompiledPieces`, `FISK_DEFAULT_MAX_COMPILED_PIECES` (2) by default, i.e., spans up to 57, and run longer spans in one loop over the pieces.
 
 The `bytewise` and `chunked` functions call the callback at every step of their unrolled loops. A small callback should be inlined there, which `FISK_ALWAYS_INLINE_LAMBDA` (`util/intrinsics.hpp`, placed after the parameter list) ensures with GCC, which otherwise tends to keep it as a call. A large callback, on the other hand, inlined into each step, can multiply the code and its compile time many times over, in particular with clang before version 18. `FISK_NOINLINE_LAMBDA` keeps it as one function, at the cost of a call per callback. Which one is faster depends on the callback, so it is worth measuring with your own code.
 

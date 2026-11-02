@@ -1003,6 +1003,8 @@ SUITE_UNIT_NOUN = {
     "spaced_kmer_extract_packed_unchecked_multi"  : "k-mers",
     "spaced_kmer_extract_packed_checked_single"   : "k-mers",
     "spaced_kmer_extract_packed_checked_multi"    : "k-mers",
+    "spaced_kmer_extract_packed_unchecked_spans"  : "k-mers",
+    "spaced_kmer_extract_packed_checked_spans"    : "k-mers",
     "char_encoder"                                : "bases",
     "sequence_pack_unchecked"                     : "bases",
     "sequence_pack_checked"                       : "bases",

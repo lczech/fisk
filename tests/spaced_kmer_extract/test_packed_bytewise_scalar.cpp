@@ -104,6 +104,30 @@ static std::vector<std::vector<std::string>> const& test_mask_sets()
     return sets;
 }
 
+// Masks of spans above 32, around the boundaries of their pieces, see SpacedKmerMask, each with
+// random kept positions, at most 32 of them.
+static std::vector<std::string> const& wide_test_masks()
+{
+    static std::vector<std::string> const masks = [] {
+        Splitmix64 rng(7009);
+        std::vector<std::string> out;
+        for (std::size_t span_k : {33u, 34u, 56u, 57u, 58u, 60u, 64u, 84u, 85u, 86u, 100u, 128u}) {
+            for (std::size_t rep = 0; rep < 2; ++rep) {
+                std::string mask(span_k, '0');
+                std::size_t const weight = 2 + rng.get_uint64() % 31;
+                for (std::size_t i = 0; i < weight; ++i) {
+                    mask[rng.get_uint64() % span_k] = '1';
+                }
+                mask.front() = '1';
+                mask.back() = '1';
+                out.push_back(std::move(mask));
+            }
+        }
+        return out;
+    }();
+    return masks;
+}
+
 // A mask with the given span, bypassing make_spaced_kmer_mask(), to test invalid spans.
 template <Layout L>
 static SpacedKmerMask<L, BitExtractMask> raw_spaced_kmer_mask(std::size_t span_k)
@@ -248,6 +272,74 @@ static void check_checked_extraction()
     }
 }
 
+// Checks single masks with spans above 32, unchecked and checked, with a copy of the loop for each
+// piece count (`MaxCompiledPieces` 5), for one and two pieces (2), and for one piece only (1), in
+// all callback forms, against the oracle.
+template <Encoding E, Layout L>
+static void check_wide_extraction()
+{
+    WordEncoderButterfly<E, L> const encoder;
+    for (auto const& mask_string : wide_test_masks()) {
+        auto const mask = make_spaced_kmer_mask<L, 128>(mask_string);
+        auto const butterfly_mask = make_spaced_kmer_butterfly_mask(mask);
+        std::vector<std::string> const strings{mask_string};
+
+        auto const check = [&](std::string const& seq, auto const& packed) {
+            auto const expected = oracle_spaced_events<E, L>(seq, strings);
+            auto const run = [&]<std::size_t MaxCompiledPieces>(
+                auto const& m, auto const& bit_ext
+            ) {
+                auto const runs = collect_spaced_callback_forms<L, true>(
+                    [&](auto const& callback) {
+                        if constexpr (PackedSequenceWithValidityType<
+                            std::remove_cvref_t<decltype(packed)>
+                        >) {
+                            for_each_spaced_kmer_packed_checked_bytewise_scalar<
+                                MaxCompiledPieces
+                            >(packed, m, bit_ext, callback);
+                        } else {
+                            for_each_spaced_kmer_packed_unchecked_bytewise_scalar<
+                                MaxCompiledPieces
+                            >(packed, m, bit_ext, callback);
+                        }
+                    }
+                );
+                for (auto const& got : runs) {
+                    check_spaced_events(got, expected);
+                }
+            };
+            auto const run_all = [&]<std::size_t MaxCompiledPieces>() {
+                run.template operator()<MaxCompiledPieces>(
+                    mask, [](std::uint64_t x, BitExtractMask const& piece) {
+                        return bit_extract_bit_loop(x, piece);
+                    }
+                );
+                run.template operator()<MaxCompiledPieces>(
+                    butterfly_mask, [](std::uint64_t x, BitExtractButterflyMask const& piece) {
+                        return bit_extract_butterfly(x, piece);
+                    }
+                );
+                #if defined(FISK_HAS_BMI2)
+                run.template operator()<MaxCompiledPieces>(
+                    mask, [](std::uint64_t x, BitExtractMask const& piece) {
+                        return bit_extract_pext(x, piece);
+                    }
+                );
+                #endif
+            };
+            run_all.template operator()<1>();
+            run_all.template operator()<2>();
+            run_all.template operator()<5>();
+        };
+        for (auto const& seq : test_sequences()) {
+            check(seq, pack_sequence_unchecked(seq, encoder));
+        }
+        for (auto const& seq : checked_test_sequences()) {
+            check(seq, pack_sequence_checked(seq, encoder));
+        }
+    }
+}
+
 // Invalid nucleotides at positions that the mask skips leave the spaced k-mer valid, in the narrow
 // and in the full-width loop, and those at kept positions make it invalid.
 template <Layout L>
@@ -300,15 +392,16 @@ static_assert(!CanExtractPacked<
 >);
 static_assert(!CanExtractPacked<PackedSequence<Encoding::kACGT, Layout::kMSB>, BitExtractMask>);
 
-// Spans outside of [1, 32] and sets of masks with different spans are rejected, also for sequences
-// shorter than the span.
+// Spans outside of [1, max_span] for a single mask, and outside of [1, 32] for a set of masks, and
+// sets of masks with different spans are rejected, also for sequences shorter than the span.
 template <Layout L>
 static void check_error_contract()
 {
     WordEncoderButterfly<Encoding::kACGT, L> const encoder;
     for (std::string const& seq : {std::string{}, std::string(129, 'T')}) {
         auto const packed = pack_sequence_unchecked(seq, encoder);
-        for (std::size_t const span_k : {std::size_t{0}, std::size_t{33}}) {
+        constexpr std::size_t max_span = SpacedKmerMask<L, BitExtractMask>::max_span;
+        for (std::size_t const span_k : {std::size_t{0}, max_span + 1}) {
             auto const mask = raw_spaced_kmer_mask<L>(span_k);
             EXPECT_THROW(
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
@@ -316,6 +409,9 @@ static void check_error_contract()
                 ),
                 std::invalid_argument
             );
+        }
+        for (std::size_t const span_k : {std::size_t{0}, std::size_t{33}}) {
+            auto const mask = raw_spaced_kmer_mask<L>(span_k);
             EXPECT_THROW(
                 for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
                     packed, std::span<SpacedKmerMask<L, BitExtractMask> const, 1>(&mask, 1),
@@ -416,6 +512,26 @@ TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedActgMsb)
 TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedActgLsb)
 {
     check_checked_extraction<Encoding::kACTG, Layout::kLSB>();
+}
+
+TEST(SpacedKmerExtractPackedBytewiseScalar, WideAcgtMsb)
+{
+    check_wide_extraction<Encoding::kACGT, Layout::kMSB>();
+}
+
+TEST(SpacedKmerExtractPackedBytewiseScalar, WideAcgtLsb)
+{
+    check_wide_extraction<Encoding::kACGT, Layout::kLSB>();
+}
+
+TEST(SpacedKmerExtractPackedBytewiseScalar, WideActgMsb)
+{
+    check_wide_extraction<Encoding::kACTG, Layout::kMSB>();
+}
+
+TEST(SpacedKmerExtractPackedBytewiseScalar, WideActgLsb)
+{
+    check_wide_extraction<Encoding::kACTG, Layout::kLSB>();
 }
 
 TEST(SpacedKmerExtractPackedBytewiseScalar, CheckedInvalidInGaps)

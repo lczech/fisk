@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -146,19 +147,29 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 // starts of the windows of its k-mers instead. The validity bits are zero after the end of the
 // sequence, which makes its last k-mers invalid without a test of their own.
 //
+// With `Wide`, for spaced k-mers whose span `k` can be above 32, and PackedValidity::kNucleotides
+// only, the test of a block covers its `31 + k` bits in as many words of validity bits as that
+// takes, and outside of the blocks that are all valid, `validity_at(pos)` is the validity window
+// at `pos`, for any `pos` from the step on, so that the step can test each piece of a span at its
+// own start. `BlockWords`, if not 0, is the number of words of the test, known at compile time,
+// with the masks of the words computed once per call.
+//
 // Each copy of the step is inlined. Without validity bits, there are two: for the k-mers within
 // the sequence, and for the step after them. With validity bits, there are three: for the blocks
 // of all valid k-mers, for the other blocks, whose loop has a fixed count, and for the steps after
 // the last whole block.
 template <
-    std::size_t StepBytes, PackedValidity Form = PackedValidity::kStarts,
-    PackedSequenceType Seq, typename Step
+    std::size_t StepBytes, PackedValidity Form = PackedValidity::kStarts, bool Wide = false,
+    std::size_t BlockWords = 0, PackedSequenceType Seq, typename Step
 >
 FISK_ALWAYS_INLINE
 inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& step)
 {
     static_assert(8 % StepBytes == 0, "Steps have to fill a block.");
+    static_assert(!Wide || Form == PackedValidity::kNucleotides);
+    static_assert(Wide || BlockWords == 0);
     assert(k >= 1 && seq.length() >= k);
+    assert(Wide || k <= 32);
 
     // The last k-mer starts at `p_max`, in the byte before `end_bytes`.
     std::size_t const p_max = seq.length() - k;
@@ -182,7 +193,7 @@ inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& st
         }
     } else {
         std::uint8_t const* const valid = seq.validity().data();
-        std::uint64_t const block_mask = (std::uint64_t{1} << (31 + k)) - 1u;
+        std::uint64_t const block_mask = Wide ? 0 : (std::uint64_t{1} << (31 + k)) - 1u;
 
         // The validity window at `pos`, from the 8 bytes at `pos / 8`. At least its lower 57 bits
         // hold nucleotides.
@@ -217,24 +228,65 @@ inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& st
             }
         };
 
+        // With `Wide`, whether the block at `block_pos` and the k - 1 nucleotides after it are all
+        // valid, from as many words as that takes, see above.
+        std::size_t const block_bits = 31 + k;
+        constexpr std::size_t W = BlockWords == 0 ? 1 : BlockWords;
+        std::array<std::uint64_t, W> block_masks{};
+        if constexpr (Wide && BlockWords != 0) {
+            assert(block_bits <= 64 * W);
+            for (std::size_t i = 0; i < W; ++i) {
+                std::size_t const bits = block_bits > 64 * i ? block_bits - 64 * i : 0;
+                block_masks[i] = bits >= 64 ? ~std::uint64_t{0} : (std::uint64_t{1} << bits) - 1u;
+            }
+        }
+        auto const wide_block_valid_ = [&](std::size_t block_pos) FISK_ALWAYS_INLINE_LAMBDA {
+            bool all = true;
+            if constexpr (BlockWords != 0) {
+                for (std::size_t i = 0; i < W; ++i) {
+                    all &= (window_at(block_pos + 64 * i) & block_masks[i]) == block_masks[i];
+                }
+            } else {
+                for (std::size_t i = 0; 64 * i < block_bits; ++i) {
+                    std::size_t const bits = block_bits - 64 * i;
+                    std::uint64_t const m = bits >= 64
+                        ? ~std::uint64_t{0} : (std::uint64_t{1} << bits) - 1u;
+                    all &= (window_at(block_pos + 64 * i) & m) == m;
+                }
+            }
+            return all;
+        };
+
         // The whole blocks, each with one test of the window at its start, and then the steps after
         // them.
         for (; b + 8 <= end_bytes; b += 8) {
             std::size_t const block_pos = 4 * b;
-            std::uint64_t const block_window = window_at(block_pos);
-            if ((block_window & block_mask) == block_mask) {
-                block_(all_valid);
+            if constexpr (Wide) {
+                if (wide_block_valid_(block_pos)) {
+                    block_(all_valid);
+                } else {
+                    block_(window_at);
+                }
             } else {
-                std::uint64_t const starts = valid_starts_(block_window);
-                block_([starts, block_pos](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
-                    return starts >> (pos - block_pos);
-                });
+                std::uint64_t const block_window = window_at(block_pos);
+                if ((block_window & block_mask) == block_mask) {
+                    block_(all_valid);
+                } else {
+                    std::uint64_t const starts = valid_starts_(block_window);
+                    block_([starts, block_pos](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
+                        return starts >> (pos - block_pos);
+                    });
+                }
             }
         }
         for (; b < end_bytes; b += StepBytes) {
-            step(b, [&](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
-                return valid_starts_(window_at(pos));
-            });
+            if constexpr (Wide) {
+                step(b, window_at);
+            } else {
+                step(b, [&](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
+                    return valid_starts_(window_at(pos));
+                });
+            }
         }
     }
 }
