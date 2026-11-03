@@ -12,7 +12,6 @@
 
 #include "fisk/util/cpu_runtime.hpp"
 #include "fisk/util/intrinsics.hpp"
-#include "fisk/core/char_encoder.hpp"
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/extractor/common.hpp"
@@ -21,7 +20,6 @@
 #include "fisk/kmer_extract/ascii_chunked_simd.hpp"
 #include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
 #include "fisk/kmer_extract/packed_bytewise_simd.hpp"
-#include "fisk/kmer_extract/packed_rolling_scalar.hpp"
 
 namespace fisk {
 
@@ -125,32 +123,6 @@ struct KmerCandidateAsciiChunkedSimd
 // -------------------------------------------------------------------------------------------------
 
 template <InputCheck C, Encoding E, Layout L>
-struct KmerCandidatePackedRollingScalar
-{
-    std::size_t k;
-
-    explicit KmerCandidatePackedRollingScalar(KmerExtractorSettings const& settings)
-        : k(settings.k)
-    {}
-
-    static std::string name() { return "rolling_scalar"; }
-    static bool available() { return true; }
-
-    template <typename Callback>
-    static constexpr bool takes_vectors = false;
-
-    template <typename Seq, typename Callback>
-    FISK_ALWAYS_INLINE void run(Seq const& seq, Callback& callback) const
-    {
-        if constexpr (C == InputCheck::kChecked) {
-            for_each_kmer_packed_checked_rolling_scalar(seq, k, callback);
-        } else {
-            for_each_kmer_packed_unchecked_rolling_scalar(seq, k, callback);
-        }
-    }
-};
-
-template <InputCheck C, Encoding E, Layout L>
 struct KmerCandidatePackedBytewiseScalar
 {
     std::size_t k;
@@ -224,10 +196,7 @@ struct KmerExtractorCandidates
     >;
 
     using Packed = type_list_concat_t<
-        TypeList<
-            KmerCandidatePackedRollingScalar<C, E, L>,
-            KmerCandidatePackedBytewiseScalar<C, E, L>
-        >,
+        TypeList<KmerCandidatePackedBytewiseScalar<C, E, L>>,
         type_list_map_t<PackedBytewiseSimd, ExtractorSimdArchs>
     >;
 
