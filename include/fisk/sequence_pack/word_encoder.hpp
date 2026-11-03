@@ -217,6 +217,51 @@ inline void store_valid_nucleotide_bits_(typename Simd::simd_vector v, std::uint
     std::memcpy(out, &bits, Simd::lanes);
 }
 
+// -----------------------------------------------------------------------------
+//     Nucleotide Codes
+// -----------------------------------------------------------------------------
+
+// The code of Encoding `E` of a character, for each value of its low four bits, which are all that
+// the code depends on.
+template <Encoding E>
+inline constexpr std::array<std::uint8_t, 16> nucleotide_code_table_ = [] {
+    std::array<std::uint8_t, 16> table{};
+    for (std::uint64_t nibble = 0; nibble < table.size(); ++nibble) {
+        std::uint64_t const code = pack_prepare_codes_<E>(nibble) & pack_mask_v<E>;
+        table[nibble] = static_cast<std::uint8_t>(code >> std::countr_zero(pack_mask_v<E>));
+    }
+    return table;
+}();
+
+/**
+ * @brief Reduce each byte of `v` to the 2-bit code of Encoding `E` of its character, in the two
+ * lowest bits of the byte, with the other bits zero.
+ *
+ * Archs with a byte shuffle look up the code in a table, the others compute it with shifts. The
+ * shifts are per lane, but what they move across byte boundaries is masked out. Invalid characters
+ * get an arbitrary code, which is also within 0-3; for characters of 128 and above, it can differ
+ * between the two forms.
+ */
+template <Encoding E, SimdArch Simd>
+FISK_ALWAYS_INLINE
+inline typename Simd::simd_vector nucleotide_code_bytes(typename Simd::simd_vector v) noexcept
+{
+    if constexpr (SimdArchWithByteShuffle<Simd>) {
+        return Simd::lookup_low_nibbles(v, nucleotide_code_table_<E>);
+    } else {
+        if constexpr (E == Encoding::kACGT) {
+            v = Simd::bitwise_xor(
+                Simd::template shift_right<1>(v), Simd::template shift_right<2>(v)
+            );
+        } else if constexpr (E == Encoding::kACTG) {
+            v = Simd::template shift_right<1>(v);
+        } else {
+            static_assert(dependent_false_v<E>, "Unhandled Encoding in nucleotide_code_bytes()");
+        }
+        return Simd::bitwise_and(v, Simd::broadcast(0x0303030303030303ULL));
+    }
+}
+
 // =================================================================================================
 //     Word Encoder Pext
 // =================================================================================================
@@ -535,8 +580,9 @@ private:
  * packs each four codes into a byte with a few instructions that are specific to the SIMD arch,
  * see `store_two_bit_codes()` in simd/simd.hpp. This is the fastest word encoder on every arch.
  *
- * Where the arch has a byte shuffle, the codes are looked up in a table. For invalid characters
- * of 128 and above, this can give a different code than the other word encoders do.
+ * The codes are those of nucleotide_code_bytes(): where the arch has a byte shuffle, they are
+ * looked up in a table. For invalid characters of 128 and above, this can give a different code
+ * than the other word encoders do.
  *
  * As for WordEncoderButterfly, the call operator on a whole `simd_vector` processes `lanes` words
  * at once, and the one on a single word the rest.
@@ -578,47 +624,15 @@ struct WordEncoderDirect
     simd_vector operator()(simd_vector x) const noexcept
     requires (lanes > 1)
     {
-        return codes_<Simd>(x);
+        return nucleotide_code_bytes<E, Simd>(x);
     }
 
     FISK_ALWAYS_INLINE
     std::uint64_t operator()(std::uint64_t word) const noexcept
     {
-        return SimdScalar::pack_two_bit_codes_(codes_<SimdScalar>(pack_orient_chunk_<L>(word)));
-    }
-
-protected:
-
-    // The code of a character, for each value of its low four bits, which are all that the code
-    // depends on.
-    static constexpr std::array<std::uint8_t, 16> code_table_ = [] {
-        std::array<std::uint8_t, 16> table{};
-        for (std::uint64_t nibble = 0; nibble < table.size(); ++nibble) {
-            std::uint64_t const code = pack_prepare_codes_<E>(nibble) & pack_mask_v<E>;
-            table[nibble] = static_cast<std::uint8_t>(code >> std::countr_zero(pack_mask_v<E>));
-        }
-        return table;
-    }();
-
-    // Reduce each byte to its 2-bit code, in its two lowest bits: with a table lookup where the
-    // arch has one, and with shifts otherwise. The shifts are per lane, but what they move across
-    // byte boundaries is masked out.
-    template <SimdArch S>
-    FISK_ALWAYS_INLINE
-    static typename S::simd_vector codes_(typename S::simd_vector x) noexcept
-    {
-        if constexpr (SimdArchWithByteShuffle<S>) {
-            return S::lookup_low_nibbles(x, code_table_);
-        } else {
-            if constexpr (E == Encoding::kACGT) {
-                x = S::bitwise_xor(S::template shift_right<1>(x), S::template shift_right<2>(x));
-            } else if constexpr (E == Encoding::kACTG) {
-                x = S::template shift_right<1>(x);
-            } else {
-                static_assert(dependent_false_v<E>, "Unhandled Encoding in WordEncoderDirect");
-            }
-            return S::bitwise_and(x, S::broadcast(0x0303030303030303ULL));
-        }
+        return SimdScalar::pack_two_bit_codes_(
+            nucleotide_code_bytes<E, SimdScalar>(pack_orient_chunk_<L>(word))
+        );
     }
 };
 
@@ -680,8 +694,8 @@ struct WordEncoderDirectDouble : WordEncoderDirect<E, L, Simd>
     simd_vector operator()(simd_vector const& x) const noexcept
     {
         return {{
-            WordEncoderDirect<E, L, Simd>::template codes_<Simd>(x.v[0]),
-            WordEncoderDirect<E, L, Simd>::template codes_<Simd>(x.v[1])
+            nucleotide_code_bytes<E, Simd>(x.v[0]),
+            nucleotide_code_bytes<E, Simd>(x.v[1])
         }};
     }
 
