@@ -236,20 +236,14 @@ inline auto packed_bytewise_simd_emit_(Seq const& seq, std::size_t k, Emit& emit
 /**
  * @brief Extracts k in [1, 29] as vectors of k-mers.
  *
- * Any such k-mer is within the word of its starting byte, which needs one shift and a mask. With
- * `Masked` false, the mask is left out, so that the bits above each k-mer hold the bases next to
- * it, for callers that select bits with a mask of their own, such as spaced k-mer extraction.
+ * Any such k-mer is within the word of its starting byte, which needs one shift and a mask.
  *
  * The vectors are emitted as `emit(pos, vec, valid_count)`, as for
  * for_each_kmer_packed_unchecked_bytewise_simd(). For a sequence with validity bits, see
  * PackedSequenceWithValidityType (core/types.hpp), they are emitted as `emit(pos, vec,
- * valid_lanes)` instead, as for for_each_kmer_packed_checked_bytewise_simd(), or, with `Form`
- * PackedValidity::kNucleotides, as `emit(pos, vec, validity)`, see packed_bytewise_simd_emit_().
+ * valid_lanes)` instead, as for for_each_kmer_packed_checked_bytewise_simd().
  */
-template <
-    SimdArch Simd, bool Masked = true, PackedValidity Form = PackedValidity::kStarts,
-    PackedSequenceType Seq, typename Emit
->
+template <SimdArch Simd, PackedSequenceType Seq, typename Emit>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
     Seq const& seq, std::size_t k, Emit&& emit
@@ -272,7 +266,7 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
     std::uint64_t const mask = width_mask_(k);
     unsigned const k32 = static_cast<unsigned>(k);
     std::uint8_t const* const codes = seq.codes().data();
-    auto const emit_ = packed_bytewise_simd_emit_<Simd, Form>(seq, k, emit);
+    auto const emit_ = packed_bytewise_simd_emit_<Simd>(seq, k, emit);
 
     // Right shift that moves the k-mer at position `local` of a starting byte to the low bits.
     simd_vector const mask_v = Simd::broadcast(mask);
@@ -296,14 +290,15 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         simd_vector const words = load_packed_words_<Simd, L>(codes + b);
         emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
-            simd_vector const kmers = packed_bytewise_simd_shift_right_<Simd>(words, counts.at[i]);
-            return Masked ? Simd::bitwise_and(kmers, mask_v) : kmers;
+            return Simd::bitwise_and(
+                packed_bytewise_simd_shift_right_<Simd>(words, counts.at[i]), mask_v
+            );
         }, validity_at, emit_);
     };
 
     // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks_()
     // (internal.hpp).
-    run_packed_bytewise_blocks_<step_bytes, Form>(seq, k, step_);
+    run_packed_bytewise_blocks_<step_bytes>(seq, k, step_);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -314,13 +309,9 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
  * @brief Extracts k in [1, 32] as vectors of k-mers.
  *
  * A k-mer of more than 29 bases can reach into a ninth byte, so that this combines two words.
- * `Masked`, `Form`, and `emit` are as for for_each_kmer_packed_bytewise_simd_narrow_width_().
- * `Masked` only affects kLSB, as the shift down of kMSB leaves nothing above the k-mer.
+ * `emit` is as for for_each_kmer_packed_bytewise_simd_narrow_width_().
  */
-template <
-    SimdArch Simd, bool Masked = true, PackedValidity Form = PackedValidity::kStarts,
-    PackedSequenceType Seq, typename Emit
->
+template <SimdArch Simd, PackedSequenceType Seq, typename Emit>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_bytewise_simd_full_width_(
     Seq const& seq, std::size_t k, Emit&& emit
@@ -340,7 +331,7 @@ inline void for_each_kmer_packed_bytewise_simd_full_width_(
     std::uint64_t const mask = width_mask_(k);
     unsigned const k32 = static_cast<unsigned>(k);
     std::uint8_t const* const codes = seq.codes().data();
-    auto const emit_ = packed_bytewise_simd_emit_<Simd, Form>(seq, k, emit);
+    auto const emit_ = packed_bytewise_simd_emit_<Simd>(seq, k, emit);
 
     // The k-mer at position `local` of a starting byte spans up to nine bytes: the word at the
     // starting byte, and a ninth byte, for which we take the word `step_bytes` after it. That is
@@ -384,7 +375,7 @@ inline void for_each_kmer_packed_bytewise_simd_full_width_(
                     packed_bytewise_simd_shift_right_<Simd>(words, word_counts.at[i]),
                     packed_bytewise_simd_shift_left_<Simd>(next, next_counts.at[i])
                 );
-                return Masked ? Simd::bitwise_and(kmers, mask_v) : kmers;
+                return Simd::bitwise_and(kmers, mask_v);
             } else {
                 static_assert(
                     dependent_false_v<L>,
@@ -395,7 +386,7 @@ inline void for_each_kmer_packed_bytewise_simd_full_width_(
     };
 
     // As in the narrow-width loop.
-    run_packed_bytewise_blocks_<step_bytes, Form>(seq, k, step_);
+    run_packed_bytewise_blocks_<step_bytes>(seq, k, step_);
 }
 
 // -------------------------------------------------------------------------------------------------

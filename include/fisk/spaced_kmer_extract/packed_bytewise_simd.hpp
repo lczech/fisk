@@ -27,9 +27,10 @@ namespace fisk {
 // The SIMD counterpart of for_each_spaced_kmer_packed_unchecked_bytewise_scalar()
 // (packed_bytewise_scalar.hpp), for the bit extraction kernels of a SIMD arch
 // (bit_extract/simd.hpp), such as BitExtractKernelButterfly<SimdAVX2>, created via
-// make_spaced_kmer_kernel(). The vectors of the k-mer extraction from packed sequences
-// (kmer_extract/packed_bytewise_simd.hpp) hold the windows of consecutive spans, and each kernel
-// extracts its spaced k-mers from all of them at once. As in
+// make_spaced_kmer_kernel(). The loop below holds the windows of consecutive spans in the lanes of
+// its vectors, as the k-mer extraction from packed sequences holds its k-mers, see
+// kmer_extract/packed_bytewise_simd.hpp, and each kernel extracts its spaced k-mers from all of
+// them at once. As in
 // for_each_spaced_kmer_packed_unchecked_bytewise_scalar(), the windows still hold the neighboring
 // bases above the span, which the bit extraction does not take.
 //
@@ -125,6 +126,97 @@ inline void emit_spaced_kmers_packed_checked_bytewise_simd_(
 }
 
 // -------------------------------------------------------------------------------------------------
+//     Loop
+// -------------------------------------------------------------------------------------------------
+
+// The loop over the windows of the spans, in vectors of consecutive spans, see the overview of
+// kmer_extract/packed_bytewise_simd.hpp: a span of up to 29 is within the word of its starting
+// byte, which a shift per lane moves to the lowest bits. With `Full`, a span of 30 to 32 can reach
+// into a ninth byte, whose bases are shifted in from the words of the next step, which that step
+// starts with, as in for_each_kmer_packed_bytewise_simd_full_width_(). The vectors are emitted as
+// `emit(pos, windows, validity)`, with the validity of `Form`, see packed_bytewise_simd_emit_().
+template <
+    bool Full, typename Simd, PackedValidity Form, PackedSequenceType Seq, typename Emit
+>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
+    Seq const& seq, std::size_t span_k, Emit& emit
+) {
+    using simd_vector = typename Simd::simd_vector;
+    constexpr std::size_t step_bytes = packed_bytewise_simd_step_bytes_v<Simd>;
+    constexpr Layout L = Seq::layout;
+    unsigned const span32 = static_cast<unsigned>(span_k);
+    std::uint8_t const* const codes = seq.codes().data();
+    auto const emit_ = packed_bytewise_simd_emit_<Simd, Form>(seq, span_k, emit);
+
+    if constexpr (!Full) {
+        // Right shift that moves the span at position `local` of a starting byte to the low bits.
+        auto const counts = make_packed_bytewise_simd_counts_<Simd>(
+            [&](std::size_t local) -> std::uint64_t {
+                return L == Layout::kMSB ? (64u - 2u * span32) - 2u * local : 2u * local;
+            }
+        );
+        auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
+            simd_vector const words = load_packed_words_<Simd, L>(codes + b);
+            emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
+                return packed_bytewise_simd_shift_right_<Simd>(words, counts.at[i]);
+            }, validity_at, emit_);
+        };
+        run_packed_bytewise_blocks_<step_bytes, Form>(seq, span_k, step_);
+    } else {
+        // The word of the starting byte, shifted by `2 * local` so that the span starts at its
+        // first base, and the word `step_bytes` after it, shifted the other way, as in
+        // for_each_kmer_packed_bytewise_simd_full_width_(). kMSB then moves the span down by
+        // `64 - 2 * span_k`.
+        auto const word_counts = make_packed_bytewise_simd_counts_<Simd>(
+            [](std::size_t local) -> std::uint64_t { return 2 * local; }
+        );
+        auto const next_counts = make_packed_bytewise_simd_counts_<Simd>(
+            [](std::size_t local) -> std::uint64_t { return 8 * step_bytes - 2 * local; }
+        );
+        auto const down_counts = make_packed_bytewise_simd_counts_<Simd>(
+            [&](std::size_t) -> std::uint64_t { return 64u - 2u * span32; }
+        );
+        simd_vector next = load_packed_words_<Simd, L>(codes);
+        auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
+            simd_vector const words = next;
+            next = load_packed_words_<Simd, L>(codes + b + step_bytes);
+            emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
+                // Without shifts per lane, the first vector has position 0 of the starting bytes
+                // in all lanes, where the words hold the whole span already.
+                bool const whole = !SimdArchWithLaneShifts<Simd> && i == 0;
+                if constexpr (L == Layout::kMSB) {
+                    simd_vector const windows = whole ? words : Simd::bitwise_or(
+                        packed_bytewise_simd_shift_left_<Simd>(words, word_counts.at[i]),
+                        packed_bytewise_simd_shift_right_<Simd>(next, next_counts.at[i])
+                    );
+                    return packed_bytewise_simd_shift_right_<Simd>(windows, down_counts.at[i]);
+                } else {
+                    return whole ? words : Simd::bitwise_or(
+                        packed_bytewise_simd_shift_right_<Simd>(words, word_counts.at[i]),
+                        packed_bytewise_simd_shift_left_<Simd>(next, next_counts.at[i])
+                    );
+                }
+            }, validity_at, emit_);
+        };
+        run_packed_bytewise_blocks_<step_bytes, Form>(seq, span_k, step_);
+    }
+}
+
+// The loop for the spans of the kernels, see above.
+template <typename Simd, PackedValidity Form, PackedSequenceType Seq, typename Emit>
+FISK_ALWAYS_INLINE_FOR_EACH
+inline void for_each_spaced_kmer_packed_bytewise_simd_(
+    Seq const& seq, std::size_t span_k, Emit& emit
+) {
+    if (span_k <= 29) {
+        for_each_spaced_kmer_packed_bytewise_simd_loop_<false, Simd, Form>(seq, span_k, emit);
+    } else {
+        for_each_spaced_kmer_packed_bytewise_simd_loop_<true, Simd, Form>(seq, span_k, emit);
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
 //     Extraction
 // -------------------------------------------------------------------------------------------------
 
@@ -166,7 +258,6 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
         return;
     }
 
-    // The windows come without the mask of the k-mers, which the kernels make redundant.
     auto const emit = [&](
         std::size_t pos, auto windows, std::size_t valid_count
     ) FISK_ALWAYS_INLINE_LAMBDA {
@@ -174,15 +265,9 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
             kernels, pos, windows, valid_count, callback
         );
     };
-    if (span_k <= 29) {
-        for_each_kmer_packed_bytewise_simd_narrow_width_<Simd, false>(
-            without_validity_(seq), span_k, emit
-        );
-    } else {
-        for_each_kmer_packed_bytewise_simd_full_width_<Simd, false>(
-            without_validity_(seq), span_k, emit
-        );
-    }
+    for_each_spaced_kmer_packed_bytewise_simd_<Simd, PackedValidity::kStarts>(
+        without_validity_(seq), span_k, emit
+    );
 }
 
 /**
@@ -253,12 +338,9 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
             kernels, pos, windows, validity, callback
         );
     };
-    constexpr PackedValidity form = PackedValidity::kNucleotides;
-    if (span_k <= 29) {
-        for_each_kmer_packed_bytewise_simd_narrow_width_<Simd, false, form>(seq, span_k, emit);
-    } else {
-        for_each_kmer_packed_bytewise_simd_full_width_<Simd, false, form>(seq, span_k, emit);
-    }
+    for_each_spaced_kmer_packed_bytewise_simd_<Simd, PackedValidity::kNucleotides>(
+        seq, span_k, emit
+    );
 }
 
 /**
