@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -11,7 +10,6 @@
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer.hpp"
-#include "fisk/core/kmer_wide.hpp"
 #include "fisk/simd/scalar.hpp"
 #include "fisk/core/types.hpp"
 #include "corpus.hpp"
@@ -125,100 +123,6 @@ TEST(CoreTypes, Comparison)
     EXPECT_TRUE(a < b);
     EXPECT_TRUE(b > a);
     EXPECT_TRUE(a <= a);
-}
-
-// =================================================================================================
-//     Wide K-mers
-// =================================================================================================
-
-// -------------------------------------------------------------------------------------------------
-//     Helpers
-// -------------------------------------------------------------------------------------------------
-
-// Ordering is numeric over all words, highest word first, independent of the conventions. The
-// first pair differs in opposite directions in its lowest and highest word, so that comparing from
-// the wrong end gives the wrong answer; the second pair differs only in the lowest word.
-template <typename K>
-static void check_word_order()
-{
-    static_assert(K::word_count >= 2);
-    using Words = std::array<std::uint64_t, K::word_count>;
-
-    Words low_heavy{};
-    low_heavy[0] = ~std::uint64_t{0};
-    Words high_light{};
-    high_light[K::word_count - 1] = 1;
-    auto high_light_plus = high_light;
-    high_light_plus[0] = 1;
-
-    K const a{low_heavy};
-    K const b{high_light};
-    K const c{high_light_plus};
-    EXPECT_TRUE(a == a);
-    EXPECT_TRUE(a != b);
-    EXPECT_TRUE(a < b);
-    EXPECT_TRUE(b > a);
-    EXPECT_TRUE(a <= a);
-    EXPECT_TRUE(b >= b);
-    EXPECT_TRUE(b < c);
-    EXPECT_FALSE(c < b);
-}
-
-// -------------------------------------------------------------------------------------------------
-//     Compile-Time Guarantees
-// -------------------------------------------------------------------------------------------------
-
-// Capacity sets the number of words, while the width remains a runtime argument of every operation.
-static_assert(WideKmerAcgtMsb::capacity == 64 && WideKmerAcgtMsb::word_count == 2);
-static_assert(WideKmer<Encoding::kACGT, Layout::kMSB, 32>::word_count == 1);
-static_assert(WideKmer<Encoding::kACGT, Layout::kMSB, 128>::word_count == 4);
-static_assert(std::is_same_v<
-    decltype(kmer_value(WideKmerAcgtMsb{})), std::array<std::uint64_t, 2>
->);
-
-// Wide, contiguous and spaced k-mers satisfy distinct concepts, and rebind keeps the capacity.
-static_assert(WideKmerType<WideKmerAcgtMsb>);
-static_assert(!WideKmerType<KmerAcgtMsb>);
-static_assert(!WideKmerType<std::uint64_t>);
-static_assert(!KmerType<WideKmerAcgtMsb>);
-static_assert(!ContiguousKmerType<WideKmerAcgtMsb>);
-static_assert(!std::is_same_v<WideKmerAcgtMsb, WideKmerActgMsb>);
-static_assert(!std::is_same_v<WideKmerAcgtMsb, WideKmerAcgtLsb>);
-static_assert(!std::is_convertible_v<WideKmerAcgtMsb, WideKmerActgMsb>);
-static_assert(!std::is_convertible_v<WideKmerAcgtMsb, WideKmerAcgtLsb>);
-static_assert(std::is_same_v<
-    WideKmer<Encoding::kACGT, Layout::kMSB, 96>::rebind<Encoding::kACTG, Layout::kLSB>,
-    WideKmer<Encoding::kACTG, Layout::kLSB, 96>
->);
-
-// -------------------------------------------------------------------------------------------------
-//     Ordering
-// -------------------------------------------------------------------------------------------------
-
-TEST(CoreTypes, WideComparison)
-{
-    check_word_order<WideKmerAcgtMsb>();
-    check_word_order<WideKmerActgLsb>();
-    check_word_order<WideKmer<Encoding::kACGT, Layout::kLSB, 96>>();
-    check_word_order<WideKmer<Encoding::kACTG, Layout::kMSB, 128>>();
-}
-
-// As for Kmer, the order matches lexicographic order of the decoded strings for ACGT/MSB, here
-// across word boundaries.
-TEST(CoreTypes, WideLexicographicOrderForAcgtMsb)
-{
-    using K = WideKmer<Encoding::kACGT, Layout::kMSB, 128>;
-    for (std::size_t const width : {std::size_t{33}, std::size_t{64}, std::size_t{100}}) {
-        auto seqs = random_seqs(width, 40, 160000 + width);
-        std::sort(seqs.begin(), seqs.end());
-        seqs.erase(std::unique(seqs.begin(), seqs.end()), seqs.end());
-
-        bool ordered = true;
-        for (std::size_t i = 1; i < seqs.size(); ++i) {
-            ordered &= kmer_encode<K>(seqs[i - 1]) < kmer_encode<K>(seqs[i]);
-        }
-        EXPECT_TRUE(ordered);
-    }
 }
 
 // =================================================================================================

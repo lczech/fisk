@@ -1,13 +1,10 @@
 #include <cstddef>
 #include <functional>
-#include <set>
-#include <string>
 #include <unordered_set>
 
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer.hpp"
 #include "fisk/core/kmer_hash.hpp"
-#include "fisk/core/kmer_wide.hpp"
 #include "fisk/core/types.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
@@ -46,52 +43,6 @@ TEST(CoreKmerHash, Hashing)
     auto const probe = oracle_kmer<KmerAcgtMsb>(seqs.front());
     EXPECT_EQ(std::hash<KmerAcgtMsb>{}(probe), KmerHashMix{}(probe));
     EXPECT_NE(std::hash<KmerAcgtMsb>{}(probe), KmerHashIdentity{}(probe));
-}
-
-// =================================================================================================
-//     Wide K-mers
-// =================================================================================================
-
-// -------------------------------------------------------------------------------------------------
-//     Hashing
-// -------------------------------------------------------------------------------------------------
-
-// Both hashers must be usable as container hashers and agree with equality. The mixing hash, which
-// is the default, must depend on every word; the identity hash is the lowest word only.
-TEST(CoreKmerHash, WideHashing)
-{
-    using K = WideKmer<Encoding::kACGT, Layout::kMSB, 128>;
-    auto const seqs = random_seqs(100, 64, 170000);
-
-    std::unordered_set<K> mixed;
-    std::unordered_set<K, KmerHashIdentity> identity;
-    for (auto const& seq : seqs) {
-        auto const kmer = kmer_encode<K>(seq);
-        mixed.insert(kmer);
-        identity.insert(kmer);
-        EXPECT_EQ(mixed.count(kmer), std::size_t{1});
-        EXPECT_EQ(identity.count(kmer), std::size_t{1});
-    }
-    EXPECT_EQ(mixed.size(), std::set<std::string>(seqs.begin(), seqs.end()).size());
-    EXPECT_EQ(identity.size(), mixed.size());
-
-    auto const probe = kmer_encode<K>(seqs.front());
-    EXPECT_EQ(std::hash<K>{}(probe), KmerHashMix{}(probe));
-    EXPECT_EQ(KmerHashIdentity{}(probe), static_cast<std::size_t>(kmer_value(probe)[0]));
-    for (std::size_t i = 0; i < K::word_count; ++i) {
-        auto words = kmer_value(probe);
-        words[i] ^= 1;
-        K const flipped{words};
-        EXPECT_NE(KmerHashMix{}(flipped), KmerHashMix{}(probe));
-        EXPECT_EQ(KmerHashIdentity{}(flipped) == KmerHashIdentity{}(probe), i != 0);
-    }
-
-    // A single word hashes as the Kmer of the same value.
-    auto const seq32 = random_seqs(32, 1, 180000).front();
-    EXPECT_EQ(
-        KmerHashMix{}(kmer_encode<WideKmer<Encoding::kACGT, Layout::kMSB, 32>>(seq32)),
-        KmerHashMix{}(kmer_encode<KmerAcgtMsb>(seq32))
-    );
 }
 
 // =================================================================================================

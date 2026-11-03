@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <compare>
 #include <concepts>
 #include <cstddef>
@@ -575,101 +574,6 @@ using SpacedKmerActgLsb = SpacedKmer<Encoding::kACTG, Layout::kLSB>;
  */
 template <typename K>
 concept SpacedKmerType = KmerType<K> && std::same_as<K, SpacedKmer<K::encoding, K::layout>>;
-
-// =================================================================================================
-//     Wide K-mer
-// =================================================================================================
-
-/**
- * @brief A k-mer of up to `Capacity` bases, densely encoded at 2 bits per base over several words,
- * tagged with its conventions.
- *
- * The wide counterpart of Kmer, for k-mers longer than 32 bases, with the same Encoding and Layout
- * conventions and the same runtime width. The bases occupy the lowest `2 * width` bits of `words`,
- * with zero padding above them. Each word holds 32 two-bit slots: `words[0]` holds slots 0-31,
- * `words[1]` holds slots 32-63, etc. Under kLSB, base `i` occupies slot `i`; under kMSB it occupies
- * slot `width - 1 - i`.
- *
- * For width 40, from lowest to highest slot:
- *   kLSB: words[0] holds bases 0-31; words[1] holds bases 32-39, then zeros.
- *   kMSB: words[0] holds bases 39-8; words[1] holds bases 7-0, then zeros.
- *
- * `Capacity` is in bases and must be a multiple of 32, so that the type always fills its words. It
- * only bounds the width, which is passed to every operation at runtime, as for Kmer. Also as for
- * Kmer, this is a plain aggregate, and `words` is public as the sanctioned way out of the type.
- */
-template <Encoding E, Layout L, std::size_t Capacity = 64>
-struct WideKmer
-{
-    static_assert(
-        Capacity > 0 && Capacity % 32 == 0, "WideKmer capacity must be a positive multiple of 32"
-    );
-
-    static constexpr Encoding encoding = E;
-    static constexpr Layout layout = L;
-    static constexpr std::size_t capacity = Capacity;
-    static constexpr std::size_t word_count = Capacity / 32;
-
-    /**
-     * @brief The same wide k-mer type, with the same capacity, under different conventions.
-     */
-    template <Encoding E2, Layout L2>
-    using rebind = WideKmer<E2, L2, Capacity>;
-
-    std::array<std::uint64_t, word_count> words;
-
-    [[nodiscard]] constexpr bool operator==(WideKmer const&) const noexcept = default;
-
-    /**
-     * @brief Compare as one unsigned integer, starting with the highest word.
-     *
-     * Not defaulted, as that would compare the array from `words[0]` up, i.e. lowest word first.
-     * As for Kmer, the order matches lexicographic order of the decoded string for Encoding::kACGT
-     * combined with Layout::kMSB only.
-     */
-    [[nodiscard]] constexpr std::strong_ordering operator<=>(WideKmer const& other) const noexcept
-    {
-        for (std::size_t i = word_count; i-- > 0;) {
-            if (words[i] < other.words[i]) {
-                return std::strong_ordering::less;
-            }
-            if (words[i] > other.words[i]) {
-                return std::strong_ordering::greater;
-            }
-        }
-        return std::strong_ordering::equal;
-    }
-};
-
-// -------------------------------------------------------------------------------------------------
-//     Type Traits and Helpers
-// -------------------------------------------------------------------------------------------------
-
-/**
- * @brief A wide k-mer of capacity 64 under the conventions of KmerAcgtMsb.
- */
-using WideKmerAcgtMsb = WideKmer<Encoding::kACGT, Layout::kMSB>;
-
-/**
- * @brief A wide k-mer of capacity 64 under the conventions of KmerAcgtLsb.
- */
-using WideKmerAcgtLsb = WideKmer<Encoding::kACGT, Layout::kLSB>;
-
-/**
- * @brief A wide k-mer of capacity 64 under the conventions of KmerActgMsb.
- */
-using WideKmerActgMsb = WideKmer<Encoding::kACTG, Layout::kMSB>;
-
-/**
- * @brief A wide k-mer of capacity 64 under the conventions of KmerActgLsb.
- */
-using WideKmerActgLsb = WideKmer<Encoding::kACTG, Layout::kLSB>;
-
-/**
- * @brief A wide k-mer, i.e. a WideKmer itself and not a look-alike with the same members.
- */
-template <typename K>
-concept WideKmerType = std::same_as<K, WideKmer<K::encoding, K::layout, K::capacity>>;
 
 // =================================================================================================
 //     Spaced K-mer Mask

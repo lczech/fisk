@@ -23,7 +23,6 @@
 // Core
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer.hpp"
-#include "fisk/core/kmer_wide.hpp"
 #include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/kmer_hash.hpp"
 #include "fisk/core/char_encoder.hpp"

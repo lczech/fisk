@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -54,44 +53,6 @@ FISK_ALWAYS_INLINE inline constexpr void assert_fits_width_(
 ) noexcept {
     assert_width_(width);
     assert(fits_width_(word, width));
-}
-
-/**
- * @brief Debug check that a width is in [1, Capacity].
- */
-template <std::size_t Capacity>
-FISK_ALWAYS_INLINE inline constexpr void assert_wide_width_(
-    [[maybe_unused]] std::size_t width
-) noexcept {
-    assert(width >= 1 && width <= Capacity);
-}
-
-/**
- * @brief Whether words hold no bits above `width` bases, i.e. they are a valid wide k-mer of that
- * width.
- */
-template <std::size_t N>
-inline constexpr bool wide_fits_width_(
-    std::array<std::uint64_t, N> const& words, std::size_t width
-) noexcept {
-    for (std::size_t i = 0; i < N; ++i) {
-        std::size_t const used = (width > 32 * i) ? width - 32 * i : 0;
-        if ((words[i] & ~width_mask_(used)) != 0) {
-            return false;
-        }
-    }
-    return true;
-}
-
-/**
- * @brief Debug check that words are a valid wide k-mer of `width` bases, see wide_kmer_cast().
- */
-template <std::size_t N>
-FISK_ALWAYS_INLINE inline constexpr void assert_wide_fits_width_(
-    [[maybe_unused]] std::array<std::uint64_t, N> const& words, [[maybe_unused]] std::size_t width
-) noexcept {
-    assert_wide_width_<32 * N>(width);
-    assert(wide_fits_width_(words, width));
 }
 
 // =================================================================================================
@@ -286,54 +247,6 @@ template <Encoding E, Layout L, SimdArch Simd>
     typename Simd::simd_vector vec, std::size_t weight
 ) noexcept {
     return kmer_vector_cast_<SpacedKmerVector<E, L, Simd>>(vec, weight);
-}
-
-// =================================================================================================
-//     Wide K-mer Cast
-// =================================================================================================
-
-/**
- * @brief Get the raw words of a wide k-mer, the counterpart of wide_kmer_cast().
- */
-template <WideKmerType K>
-[[nodiscard]] inline constexpr auto kmer_value(K const& kmer) noexcept
-{
-    return kmer.words;
-}
-
-/**
- * @brief Adopt raw words as a wide k-mer, without checking them against the width.
- *
- * For words that the caller already knows to be valid. Otherwise use wide_kmer_cast(), which
- * asserts the width in debug builds.
- */
-template <Encoding E, Layout L, std::size_t N>
-[[nodiscard]] inline constexpr WideKmer<E, L, 32 * N> wide_kmer_cast_unchecked(
-    std::array<std::uint64_t, N> const& words
-) noexcept {
-    // A bare array of words, as Kmer is a bare word (see kmer_cast_unchecked()).
-    using K = WideKmer<E, L, 32 * N>;
-    static_assert(sizeof(K) == N * sizeof(std::uint64_t));
-    static_assert(alignof(K) == alignof(std::uint64_t));
-    static_assert(std::is_trivially_copyable_v<K>);
-    static_assert(std::is_standard_layout_v<K>);
-    static_assert(std::is_aggregate_v<K>);
-    return K{words};
-}
-
-/**
- * @brief Adopt raw words as a wide k-mer of a given convention.
- *
- * The wide counterpart of kmer_cast() for Kmer, with the same caveat that the caller asserts the
- * convention and the width, both checked by assert() only. The capacity is deduced from the number
- * of words, as `32 * N`.
- */
-template <Encoding E, Layout L, std::size_t N>
-[[nodiscard]] inline constexpr WideKmer<E, L, 32 * N> wide_kmer_cast(
-    std::array<std::uint64_t, N> const& words, [[maybe_unused]] std::size_t width
-) noexcept {
-    assert_wide_fits_width_(words, width);
-    return wide_kmer_cast_unchecked<E, L>(words);
 }
 
 } // namespace fisk

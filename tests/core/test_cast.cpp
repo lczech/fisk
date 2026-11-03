@@ -1,11 +1,9 @@
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer.hpp"
-#include "fisk/core/kmer_wide.hpp"
 #include "fisk/simd/scalar.hpp"
 #include "fisk/core/types.hpp"
 #include "corpus.hpp"
@@ -103,42 +101,6 @@ TEST(CoreCast, KmerVector)
     check_kmer_vector<KmerActgMsb>(909090);
     check_kmer_vector<KmerActgLsb>(909090);
 }
-
-// =================================================================================================
-//     Wide K-mers
-// =================================================================================================
-
-// -------------------------------------------------------------------------------------------------
-//     Compile-Time Guarantees
-// -------------------------------------------------------------------------------------------------
-
-// wide_kmer_cast() deduces the capacity from the number of words; kmer_cast() stays the narrow one.
-static_assert(std::is_same_v<
-    decltype(wide_kmer_cast<Encoding::kACTG, Layout::kLSB>(std::array<std::uint64_t, 3>{}, 65)),
-    WideKmer<Encoding::kACTG, Layout::kLSB, 96>
->);
-static_assert(std::is_same_v<
-    decltype(
-        wide_kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(std::array<std::uint64_t, 1>{})
-    ),
-    WideKmer<Encoding::kACGT, Layout::kMSB, 32>
->);
-static_assert(std::is_same_v<
-    decltype(kmer_cast<Encoding::kACGT, Layout::kMSB>(std::uint64_t{0}, 1)), KmerAcgtMsb
->);
-
-// The predicate behind the debug check in wide_kmer_cast(): words fit a width iff they have no bits
-// set above it, neither in the partly used word nor in any wholly unused one.
-using Words2 = std::array<std::uint64_t, 2>;
-using Words3 = std::array<std::uint64_t, 3>;
-static_assert(wide_fits_width_(Words2{0x3, 0}, 1) && !wide_fits_width_(Words2{0x4, 0}, 1));
-static_assert(!wide_fits_width_(Words2{0x3, 1}, 1));
-static_assert(wide_fits_width_(Words2{~std::uint64_t{0}, 0}, 32));
-static_assert(!wide_fits_width_(Words2{~std::uint64_t{0}, 1}, 32));
-static_assert(wide_fits_width_(Words2{~std::uint64_t{0}, 0x3}, 33));
-static_assert(!wide_fits_width_(Words2{~std::uint64_t{0}, 0x4}, 33));
-static_assert(wide_fits_width_(Words2{~std::uint64_t{0}, ~std::uint64_t{0}}, 64));
-static_assert(!wide_fits_width_(Words3{~std::uint64_t{0}, ~std::uint64_t{0}, 1}, 64));
 
 // =================================================================================================
 //     Spaced K-mers
