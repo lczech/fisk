@@ -39,8 +39,7 @@
 
 // K-mer extraction
 #include "fisk/kmer_extract/ascii_rolling_scalar.hpp"
-#include "fisk/kmer_extract/ascii_rolling_avx2.hpp"
-#include "fisk/kmer_extract/ascii_rolling_swar.hpp"
+#include "fisk/kmer_extract/ascii_rolling_simd.hpp"
 #include "fisk/kmer_extract/ascii_reextract_scalar.hpp"
 #include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
 #include "fisk/kmer_extract/packed_bytewise_scalar.hpp"

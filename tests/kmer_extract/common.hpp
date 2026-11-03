@@ -238,12 +238,10 @@ inline void check_ascii_invalid_injection_fuzz(Extract const& extract)
 //     Block Boundaries
 // -------------------------------------------------------------------------------------------------
 
-// for_each_kmer_ascii_checked_rolling_avx2() processes 32-character AVX2 blocks (falling back to a
-// scalar tail), and for_each_kmer_ascii_checked_rolling_swar() processes 8-character blocks; both
-// then finish with a byte-at-a-time remainder. 16 and 64 are included pre-emptively, matching the
-// SSE2/AVX512 block widths already used elsewhere in the codebase, so this generator needs no
-// changes if k-mer extraction grows those variants too. The loops without blocks are checked on
-// the same sequences.
+// for_each_kmer_ascii_checked_rolling_simd() processes blocks of 8 characters per lane of its SIMD
+// arch, that is, 8 (SimdScalar), 16 (SSE2, Neon), 32 (AVX2) or 64 (AVX512) characters, then
+// finishes with a byte-at-a-time remainder. The loops without blocks are checked on the same
+// sequences.
 //
 // For each block size, builds sequences one-under/on/one-over one and two block widths, with an
 // invalid marker at the last character of a block, the first character of the next, or straddling

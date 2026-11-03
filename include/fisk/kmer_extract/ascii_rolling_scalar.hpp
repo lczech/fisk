@@ -147,8 +147,8 @@ inline void for_each_kmer_ascii_checked_rolling_scalar(
 //     Helpers of the Block-wise Rolling Loops
 // =================================================================================================
 
-// The block-wise loops of ascii_rolling_avx2.hpp and ascii_rolling_swar.hpp encode and check
-// a block of characters at once, then roll the k-mers over the block with the helpers below.
+// The block-wise loop of ascii_rolling_simd.hpp encodes and checks a block of characters at once,
+// then rolls the k-mers over the block with the helpers below.
 
 /**
  * @brief Increment a counter of consecutive valid characters, or reset it to zero, without a
@@ -265,7 +265,7 @@ template<Encoding E, Layout L, unsigned Width, typename Func>
 FISK_ALWAYS_INLINE
 inline void for_each_kmer_ascii_checked_rolling_block_(
     std::uint8_t const* codes,
-    std::uint32_t valid_bits,
+    std::uint64_t valid_bits,
     std::size_t base,
     std::size_t k,
     std::uint64_t mask,
@@ -275,12 +275,12 @@ inline void for_each_kmer_ascii_checked_rolling_block_(
     Func&& func
 ) {
     static_assert(
-        Width >= 1 && Width <= 32,
-        "for_each_kmer_ascii_checked_rolling_block_() supports 1 to 32 lanes"
+        Width >= 1 && Width <= 64,
+        "for_each_kmer_ascii_checked_rolling_block_() supports 1 to 64 lanes"
     );
-    constexpr std::uint32_t all_valid = (Width == 32)
-        ? 0xFFFFFFFFu
-        : ((std::uint32_t{1} << Width) - 1u);
+    constexpr std::uint64_t all_valid = (Width == 64)
+        ? ~std::uint64_t{0}
+        : ((std::uint64_t{1} << Width) - 1u);
 
     // Fast path: whole block valid.
     if (valid_bits == all_valid) {

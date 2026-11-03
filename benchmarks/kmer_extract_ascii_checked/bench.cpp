@@ -231,17 +231,42 @@ void bench_kmer_extract_ascii_checked(
                 }
             ),
             #endif // FISK_HAS_NEON
-            // SIMD, currently only AVX2 and scalar, for testing
+            #if defined(FISK_HAS_SSE2)
             bench(
-                "rolling_avx2",
+                "rolling_simd_sse2",
                 [k, &sink_buffer](std::string const& seq){
-                    return run_var_rolling_avx2_acgt_msb(seq, k, sink_buffer);
+                    return run_var_rolling_simd_sse2_acgt_msb(seq, k, sink_buffer);
                 }
             ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
             bench(
-                "rolling_swar",
+                "rolling_simd_avx2",
                 [k, &sink_buffer](std::string const& seq){
-                    return run_var_rolling_swar_acgt_msb(seq, k, sink_buffer);
+                    return run_var_rolling_simd_avx2_acgt_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "rolling_simd_avx512",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_avx512_acgt_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
+            bench(
+                "rolling_simd_neon",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_neon_acgt_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_NEON
+            bench(
+                "rolling_simd_scalar",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_scalar_acgt_msb(seq, k, sink_buffer);
                 }
             )
         );
@@ -323,16 +348,42 @@ void bench_kmer_extract_ascii_checked(
                 }
             ),
             #endif // FISK_HAS_NEON
+            #if defined(FISK_HAS_SSE2)
             bench(
-                "rolling_avx2",
+                "rolling_simd_sse2",
                 [k, &sink_buffer](std::string const& seq){
-                    return run_var_rolling_avx2_acgt_lsb(seq, k, sink_buffer);
+                    return run_var_rolling_simd_sse2_acgt_lsb(seq, k, sink_buffer);
                 }
             ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
             bench(
-                "rolling_swar",
+                "rolling_simd_avx2",
                 [k, &sink_buffer](std::string const& seq){
-                    return run_var_rolling_swar_acgt_lsb(seq, k, sink_buffer);
+                    return run_var_rolling_simd_avx2_acgt_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "rolling_simd_avx512",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_avx512_acgt_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
+            bench(
+                "rolling_simd_neon",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_neon_acgt_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_NEON
+            bench(
+                "rolling_simd_scalar",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_scalar_acgt_lsb(seq, k, sink_buffer);
                 }
             )
         );
@@ -349,16 +400,42 @@ void bench_kmer_extract_ascii_checked(
                     return run_var_rolling_scalar_ascii_actg_msb(seq, k, sink_buffer);
                 }
             ),
+            #if defined(FISK_HAS_SSE2)
             bench(
-                "rolling_avx2",
+                "rolling_simd_sse2",
                 [k, &sink_buffer](std::string const& seq){
-                    return run_var_rolling_avx2_actg_msb(seq, k, sink_buffer);
+                    return run_var_rolling_simd_sse2_actg_msb(seq, k, sink_buffer);
                 }
             ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
             bench(
-                "rolling_swar",
+                "rolling_simd_avx2",
                 [k, &sink_buffer](std::string const& seq){
-                    return run_var_rolling_swar_actg_msb(seq, k, sink_buffer);
+                    return run_var_rolling_simd_avx2_actg_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
+            bench(
+                "rolling_simd_avx512",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_avx512_actg_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
+            bench(
+                "rolling_simd_neon",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_neon_actg_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_NEON
+            bench(
+                "rolling_simd_scalar",
+                [k, &sink_buffer](std::string const& seq){
+                    return run_var_rolling_simd_scalar_actg_msb(seq, k, sink_buffer);
                 }
             )
         );

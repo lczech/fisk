@@ -1,22 +1,28 @@
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
 
-#include "fisk/kmer_extract/ascii_rolling_avx2.hpp"
+#include "fisk/kmer_extract/ascii_rolling_simd.hpp"
+#include "fisk/simd/sse2.hpp"
 #include "kmer_extract_ascii_checked/bench.hpp"
+
+#if defined(FISK_HAS_SSE2)
 
 using namespace fisk;
 
-std::uint64_t run_var_rolling_avx2_acgt_lsb(
+std::uint64_t run_var_rolling_simd_sse2_acgt_msb(
     std::string const& seq,
     std::size_t k,
     std::vector<std::uint64_t>& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_ascii_checked_rolling_avx2<Encoding::kACGT, Layout::kLSB>(
+    for_each_kmer_ascii_checked_rolling_simd<SimdSSE2, Encoding::kACGT, Layout::kMSB>(
         seq, k, [&](auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(kmer_value(kmer));
         }
     );
     return sink.finalize();
 }
+
+#endif // FISK_HAS_SSE2

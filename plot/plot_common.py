@@ -194,8 +194,11 @@ BENCHMARKS_SUPP = [
     "reextract_scalar_table",
     "rolling_scalar_table",
     "pack_then_bytewise_scalar",
-    "rolling_avx2",
-    "rolling_swar",
+    "rolling_simd_scalar",
+    "rolling_simd_sse2",
+    "rolling_simd_avx2",
+    "rolling_simd_avx512",
+    "rolling_simd_neon",
     "chunked_scalar_threadlocal",
     "chunked_scalar_scratch",
     "chunked_scalar",
@@ -331,7 +334,8 @@ BENCHMARKS_MAIN = [
     "reextract_scalar_table",
     "rolling_scalar_table",
     # "pack_then_bytewise_scalar",
-    "rolling_avx2",
+    "rolling_simd_avx2",
+    "rolling_simd_neon",
 
     # Kmer spaced. Both forms: the vectors, and their single spaced k-mers, as the scalar
     # techniques hand them out.
@@ -378,7 +382,6 @@ VARIANT_PARTS = {
     "technique": {
         "scalar" : "scalar",
         "simd"   : "SIMD",
-        "swar"   : "SWAR",
     },
     "encoder": {
         # Character encoders
@@ -489,7 +492,8 @@ BENCHMARK_RENAMES_MAIN = {
     # Kmer extract packed
     "bytewise_scalar"      : "Scalar",
     "bytewise_simd_sse2"   : "SIMD SSE2",
-    "rolling_avx2"         : "Rolling AVX2",
+    "rolling_simd_avx2"    : "Rolling AVX2",
+    "rolling_simd_neon"    : "Rolling Neon",
     "bytewise_simd_avx2"   : "SIMD AVX2",
     "bytewise_simd_avx512" : "SIMD AVX512",
     "bytewise_simd_neon"   : "SIMD Neon",
@@ -539,8 +543,8 @@ BENCHMARK_COLORS = {
     "reextract_scalar_table"    : "#6AC459",
     "rolling_scalar_table"      : "#6AC459",
     "pack_then_bytewise_scalar" : "#7F7F7F",
-    "rolling_avx2"              : "#207542",
-    "rolling_swar"              : "#9467BD",
+    "rolling_simd_avx2"         : "#207542",
+    "rolling_simd_scalar"       : "#9467BD",
     "chunked_scalar_threadlocal": "#000000",
     "chunked_scalar_scratch"    : "#000000",
 
@@ -623,8 +627,11 @@ BENCHMARK_ORDER = [
     "reextract_scalar_table",
     "rolling_scalar_table",
     "pack_then_bytewise_scalar",
-    "rolling_avx2",
-    "rolling_swar",
+    "rolling_simd_scalar",
+    "rolling_simd_sse2",
+    "rolling_simd_avx2",
+    "rolling_simd_avx512",
+    "rolling_simd_neon",
     "chunked_scalar_threadlocal",
     "chunked_scalar_scratch",
     "chunked_scalar",

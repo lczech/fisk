@@ -19,9 +19,8 @@
 #include "fisk/extractor/internal.hpp"
 #include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
 #include "fisk/kmer_extract/ascii_chunked_simd.hpp"
-#include "fisk/kmer_extract/ascii_rolling_avx2.hpp"
+#include "fisk/kmer_extract/ascii_rolling_simd.hpp"
 #include "fisk/kmer_extract/ascii_rolling_scalar.hpp"
-#include "fisk/kmer_extract/ascii_rolling_swar.hpp"
 #include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
 #include "fisk/kmer_extract/packed_bytewise_simd.hpp"
 #include "fisk/kmer_extract/packed_rolling_scalar.hpp"
@@ -90,17 +89,17 @@ struct KmerCandidateAsciiRollingScalar
     }
 };
 
-template <Encoding E, Layout L>
-struct KmerCandidateAsciiRollingSwar
+template <Encoding E, Layout L, typename Simd>
+struct KmerCandidateAsciiRollingSimd
 {
     std::size_t k;
 
-    explicit KmerCandidateAsciiRollingSwar(KmerExtractorSettings const& settings)
+    explicit KmerCandidateAsciiRollingSimd(KmerExtractorSettings const& settings)
         : k(settings.k)
     {}
 
-    static std::string name() { return "rolling_swar"; }
-    static bool available() { return true; }
+    static std::string name() { return "rolling_simd_" + simd_arch_name_<Simd>(); }
+    static bool available() { return simd_arch_enabled_<Simd>(); }
 
     template <typename Callback>
     static constexpr bool takes_vectors = false;
@@ -108,29 +107,7 @@ struct KmerCandidateAsciiRollingSwar
     template <typename Callback>
     FISK_ALWAYS_INLINE void run(std::string_view seq, Callback& callback) const
     {
-        for_each_kmer_ascii_checked_rolling_swar<E, L>(seq, k, callback);
-    }
-};
-
-template <Encoding E, Layout L>
-struct KmerCandidateAsciiRollingAvx2
-{
-    std::size_t k;
-
-    explicit KmerCandidateAsciiRollingAvx2(KmerExtractorSettings const& settings)
-        : k(settings.k)
-    {}
-
-    static std::string name() { return "rolling_avx2"; }
-    static bool available() { return avx2_enabled(); }
-
-    template <typename Callback>
-    static constexpr bool takes_vectors = false;
-
-    template <typename Callback>
-    FISK_ALWAYS_INLINE void run(std::string_view seq, Callback& callback) const
-    {
-        for_each_kmer_ascii_checked_rolling_avx2<E, L>(seq, k, callback);
+        for_each_kmer_ascii_checked_rolling_simd<Simd, E, L>(seq, k, callback);
     }
 };
 
@@ -282,6 +259,9 @@ template <InputFormat I, InputCheck C, Encoding E, Layout L>
 struct KmerExtractorCandidates
 {
     template <typename Simd>
+    using AsciiRollingSimd = KmerCandidateAsciiRollingSimd<E, L, Simd>;
+
+    template <typename Simd>
     using AsciiChunkedSimd = KmerCandidateAsciiChunkedSimd<C, E, L, Simd>;
 
     template <typename Simd>
@@ -290,12 +270,12 @@ struct KmerExtractorCandidates
     // The rolling loops from ASCII all check their input.
     using AsciiRolling = std::conditional_t<
         C == InputCheck::kChecked,
-        TypeList<
-            KmerCandidateAsciiRollingScalar<E, L>,
-            KmerCandidateAsciiRollingSwar<E, L>
-            #if defined(FISK_HAS_AVX2)
-            , KmerCandidateAsciiRollingAvx2<E, L>
-            #endif
+        type_list_concat_t<
+            TypeList<
+                KmerCandidateAsciiRollingScalar<E, L>,
+                KmerCandidateAsciiRollingSimd<E, L, SimdScalar>
+            >,
+            type_list_map_t<AsciiRollingSimd, ExtractorSimdArchs>
         >,
         TypeList<>
     >;
