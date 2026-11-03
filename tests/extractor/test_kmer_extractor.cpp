@@ -73,8 +73,7 @@ static void check_kmer_extractor_algorithms()
                 extractor.for_each(input, single);
                 check_emitted_kmers(expected, k, single.values, &single.positions);
 
-                // The SIMD algorithms hand their vectors to a callback that takes them, apart from
-                // rolling_simd, which only encodes and checks the characters with its arch.
+                // The SIMD algorithms hand their vectors to a callback that takes them.
                 KmerRecorder unpacked;
                 std::size_t vectors = 0;
                 auto const both = callback_overload{
@@ -86,8 +85,7 @@ static void check_kmer_extractor_algorithms()
                 };
                 extractor.for_each(input, both);
                 check_emitted_kmers(expected, k, unpacked.values, &unpacked.positions);
-                bool const simd = name.find("simd") != std::string::npos
-                    && !name.starts_with("rolling_simd");
+                bool const simd = name.find("simd") != std::string::npos;
                 EXPECT_TRUE(simd ? (vectors > 0 || expected.empty()) : vectors == 0);
             }
         }
