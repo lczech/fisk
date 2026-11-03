@@ -42,7 +42,7 @@ static void check_all_kernels(std::array<std::string, N> const& mask_strings)
 {
     WordEncoderButterfly<E, L> const encoder;
     std::vector<std::string> const mask_vector(mask_strings.begin(), mask_strings.end());
-    for (auto const& seq : test_sequences()) {
+    for (auto const& seq : packed_test_sequences()) {
         auto const packed = pack_sequence_unchecked(seq, encoder);
         auto const expected = oracle_spaced_events<E, L>(seq, mask_vector);
         auto const check_arch = [&]<typename Simd>() {
@@ -88,18 +88,6 @@ static void check_extraction()
 // =================================================================================================
 //     Error Contract
 // =================================================================================================
-
-struct NoopSpacedVectorCallback
-{
-    template <typename V>
-    void operator()(std::size_t, std::size_t, V const&, std::size_t) const {}
-};
-
-struct NoopSpacedValidLanesCallback
-{
-    template <typename V, typename Lanes>
-    void operator()(std::size_t, std::size_t, V const&, Lanes) const {}
-};
 
 // The kernels need to have the Layout of the sequence.
 template <typename Seq, typename Kernel>
@@ -151,52 +139,6 @@ static_assert(!CanExtractPackedCheckedSimd<
     SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdScalar>>
 >);
 
-// Spans outside of [1, 32] and sets of masks with different spans are rejected, also for sequences
-// shorter than the span.
-template <Layout L>
-static void check_error_contract()
-{
-    using Kernel = BitExtractKernelButterfly<SimdScalar>;
-    WordEncoderButterfly<Encoding::kACGT, L> const encoder;
-    for (std::string const& seq : {std::string{}, std::string(129, 'T')}) {
-        auto const packed = pack_sequence_unchecked(seq, encoder);
-        auto const checked = pack_sequence_checked(seq, encoder);
-        for (std::size_t const span_k : {std::size_t{0}, std::size_t{33}}) {
-            SpacedKmerMask<L, Kernel> kernel;
-            kernel.mask_pieces[0] = Kernel(3);
-            kernel.span_k = static_cast<std::uint16_t>(span_k);
-            EXPECT_THROW(
-                for_each_spaced_kmer_packed_unchecked_bytewise_simd(
-                    packed, kernel, NoopSpacedVectorCallback{}
-                ),
-                std::invalid_argument
-            );
-            EXPECT_THROW(
-                for_each_spaced_kmer_packed_checked_bytewise_simd(
-                    checked, kernel, NoopSpacedValidLanesCallback{}
-                ),
-                std::invalid_argument
-            );
-        }
-
-        auto const mixed = std::array<SpacedKmerMask<L, Kernel>, 2>{
-            make_spaced_kmer_kernel<Kernel, L>("101"), make_spaced_kmer_kernel<Kernel, L>("1001")
-        };
-        EXPECT_THROW(
-            for_each_spaced_kmer_packed_unchecked_bytewise_simd(
-                packed, std::span{mixed}, NoopSpacedVectorCallback{}
-            ),
-            std::invalid_argument
-        );
-        EXPECT_THROW(
-            for_each_spaced_kmer_packed_checked_bytewise_simd(
-                checked, std::span{mixed}, NoopSpacedValidLanesCallback{}
-            ),
-            std::invalid_argument
-        );
-    }
-}
-
 // =================================================================================================
 //     Tests
 // =================================================================================================
@@ -223,6 +165,6 @@ TEST(SpacedKmerExtractPackedBytewiseSimd, UncheckedActgLsb)
 
 TEST(SpacedKmerExtractPackedBytewiseSimd, ErrorContract)
 {
-    check_error_contract<Layout::kMSB>();
-    check_error_contract<Layout::kLSB>();
+    check_simd_error_contract<Layout::kMSB, kNarrowMaxSpan>();
+    check_simd_error_contract<Layout::kLSB, kNarrowMaxSpan>();
 }

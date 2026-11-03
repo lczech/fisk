@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "fisk/bit_extract/simd.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
 #include "fisk/sequence_pack/word_encoder.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
@@ -41,8 +42,37 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
 
     auto const mask = make_spaced_kmer_mask<L, kSpanSweepMaxSpan>(spaced_mask_for_span(span));
     auto const butterfly_mask = make_spaced_kmer_butterfly_mask(mask);
-    auto results = suite.run(
-        sequences,
+    auto const bf_scalar_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(mask);
+    #if defined(FISK_HAS_SSE2)
+    auto const bf_sse2_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdSSE2>>(mask);
+    #endif
+    #if defined(FISK_HAS_AVX2)
+    auto const bf_avx2_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdAVX2>>(mask);
+    #endif
+    #if defined(FISK_HAS_AVX512)
+    auto const bf_avx512_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdAVX512>>(mask);
+    #endif
+    #if defined(FISK_HAS_NEON)
+    auto const bf_neon_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdNEON>>(mask);
+    #endif
+    #if defined(FISK_HAS_BMI2)
+    auto const pext_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelPext>(mask);
+    #endif
+    // Each run_() is a suite.run() of its own, as Microbench::run() cross-validates the sinks of
+    // all benches within one call. The functions that hand out single valid spaced k-mers all sum
+    // the same ones. The vector variants sum all lanes, valid or not, see bench.hpp, and the lanes
+    // past the last spaced k-mer depend on the arch, so that each arch has its own run.
+    auto const run_ = [&](auto const&... benches) {
+        auto results = suite.run(sequences, benches...);
+        write_csv_rows(csv_os, suite_title, layout_case, results, kSinkName);
+    };
+    run_(
         #if defined(FISK_HAS_BMI2)
         bench(
             "bytewise_scalar_pext",
@@ -58,7 +88,74 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
             }
         )
     );
-    write_csv_rows(csv_os, suite_title, layout_case, results, kSinkName);
+    #if defined(FISK_HAS_SSE2)
+    run_(
+        bench(
+            "bytewise_simd_butterfly_sse2_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_sse2_vectors(
+                    seq, bf_sse2_kernel, sink_buffer
+                );
+            }
+        )
+    );
+    #endif
+    #if defined(FISK_HAS_AVX2)
+    run_(
+        bench(
+            "bytewise_simd_butterfly_avx2_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_avx2_vectors(
+                    seq, bf_avx2_kernel, sink_buffer
+                );
+            }
+        )
+    );
+    #endif
+    #if defined(FISK_HAS_AVX512)
+    run_(
+        bench(
+            "bytewise_simd_butterfly_avx512_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_avx512_vectors(
+                    seq, bf_avx512_kernel, sink_buffer
+                );
+            }
+        )
+    );
+    #endif
+    #if defined(FISK_HAS_NEON)
+    run_(
+        bench(
+            "bytewise_simd_butterfly_neon_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_neon_vectors(
+                    seq, bf_neon_kernel, sink_buffer
+                );
+            }
+        )
+    );
+    #endif
+    run_(
+        #if defined(FISK_HAS_BMI2)
+        bench(
+            "bytewise_simd_pext_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_pext_vectors(
+                    seq, pext_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        bench(
+            "bytewise_simd_butterfly_scalar_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_scalar_vectors(
+                    seq, bf_scalar_kernel, sink_buffer
+                );
+            }
+        )
+    );
 }
 
 void bench_spaced_kmer_extract_packed_checked_spans(

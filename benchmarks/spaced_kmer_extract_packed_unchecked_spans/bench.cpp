@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "fisk/bit_extract/simd.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
 #include "fisk/sequence_pack/word_encoder.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
@@ -41,6 +42,28 @@ static void bench_spaced_kmer_extract_packed_unchecked_spans_layout_(
 
     auto const mask = make_spaced_kmer_mask<L, kSpanSweepMaxSpan>(spaced_mask_for_span(span));
     auto const butterfly_mask = make_spaced_kmer_butterfly_mask(mask);
+    auto const bf_scalar_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(mask);
+    #if defined(FISK_HAS_SSE2)
+    auto const bf_sse2_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdSSE2>>(mask);
+    #endif
+    #if defined(FISK_HAS_AVX2)
+    auto const bf_avx2_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdAVX2>>(mask);
+    #endif
+    #if defined(FISK_HAS_AVX512)
+    auto const bf_avx512_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdAVX512>>(mask);
+    #endif
+    #if defined(FISK_HAS_NEON)
+    auto const bf_neon_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdNEON>>(mask);
+    #endif
+    #if defined(FISK_HAS_BMI2)
+    auto const pext_kernel
+        = make_spaced_kmer_kernel<BitExtractKernelPext>(mask);
+    #endif
     auto results = suite.run(
         sequences,
         #if defined(FISK_HAS_BMI2)
@@ -48,6 +71,64 @@ static void bench_spaced_kmer_extract_packed_unchecked_spans_layout_(
             "bytewise_scalar_pext",
             [&](Packed const& seq) {
                 return run_var_bytewise_scalar_pext(seq, mask, sink_buffer);
+            }
+        ),
+        #endif
+        bench(
+            "bytewise_simd_butterfly_scalar_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_scalar_vectors(
+                    seq, bf_scalar_kernel, sink_buffer
+                );
+            }
+        ),
+        #if defined(FISK_HAS_SSE2)
+        bench(
+            "bytewise_simd_butterfly_sse2_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_sse2_vectors(
+                    seq, bf_sse2_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX2)
+        bench(
+            "bytewise_simd_butterfly_avx2_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_avx2_vectors(
+                    seq, bf_avx2_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX512)
+        bench(
+            "bytewise_simd_butterfly_avx512_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_avx512_vectors(
+                    seq, bf_avx512_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_NEON)
+        bench(
+            "bytewise_simd_butterfly_neon_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_neon_vectors(
+                    seq, bf_neon_kernel, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_BMI2)
+        bench(
+            "bytewise_simd_pext_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_pext_vectors(
+                    seq, pext_kernel, sink_buffer
+                );
             }
         ),
         #endif

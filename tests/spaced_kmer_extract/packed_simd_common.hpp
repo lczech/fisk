@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 #include <span>
 #include <string>
@@ -27,6 +28,7 @@
 #include "corpus.hpp"
 #include "oracle.hpp"
 #include "simd_lanes.hpp"
+#include "spaced_kmer_extract/common.hpp"
 #include "testing.hpp"
 
 // =================================================================================================
@@ -34,54 +36,9 @@
 // =================================================================================================
 
 // The helpers of the tests of packed_bytewise_simd.hpp, which are split into
-// test_packed_bytewise_simd_unchecked.cpp and test_packed_bytewise_simd_checked.cpp, so that each
-// compiles with less memory.
-
-// Sequence lengths 0..100, which covers sequences shorter than the span, the last step, and the
-// main loop for every span and arch, plus two longer ones, each with random per-position content.
-inline std::vector<std::string> const& test_sequences()
-{
-    static std::vector<std::string> const seqs = [] {
-        std::vector<std::string> out;
-        fisk::Splitmix64 rng(8008);
-        for (std::size_t len = 0; len <= 100; ++len) {
-            out.push_back(random_sequence(rng, len));
-        }
-        out.push_back(random_sequence(rng, 257));
-        out.push_back(random_sequence(rng, 511));
-        return out;
-    }();
-    return seqs;
-}
-
-// Random sequences of the lengths 0..100 with lower and upper case nucleotides, without invalid
-// characters, with scattered ones, and with many, plus longer ones with runs of N, as in
-// assemblies, for the checked extraction.
-inline std::vector<std::string> const& checked_test_sequences()
-{
-    static std::vector<std::string> const seqs = [] {
-        std::vector<std::string> out;
-        fisk::Splitmix64 rng(9119);
-        for (std::size_t len = 0; len <= 100; ++len) {
-            std::string seq = random_sequence(rng, len);
-            double const rates[] = {0.0, 0.02, 0.2};
-            inject_invalid(seq, rng, rates[len % 3], all_invalid_bytes());
-            out.push_back(std::move(seq));
-        }
-        for (std::size_t len : {257u, 511u}) {
-            std::string seq = random_sequence(rng, len);
-            inject_invalid(seq, rng, 0.01, kHandPickedInvalid);
-            for (std::size_t r = 0; r < 3; ++r) {
-                std::size_t const run = 1 + rng.get_uint64() % 60;
-                std::size_t const at = rng.get_uint64() % (seq.size() - run);
-                seq.replace(at, run, run, 'N');
-            }
-            out.push_back(std::move(seq));
-        }
-        return out;
-    }();
-    return seqs;
-}
+// test_packed_bytewise_simd_unchecked.cpp and _checked.cpp for spans up to 32, and
+// test_packed_bytewise_simd_wide_unchecked.cpp and _wide_checked.cpp for spans above 32, so that
+// each compiles with less memory.
 
 // Random masks of the given span, which keep the first and last position.
 template <std::size_t N>
@@ -99,13 +56,14 @@ inline std::array<std::string, N> random_masks(fisk::Splitmix64& rng, std::size_
     return masks;
 }
 
-template <typename Kernel, fisk::Layout L, std::size_t N>
-inline std::array<fisk::SpacedKmerMask<L, Kernel>, N> make_kernels(
+// The kernels of the given masks, by default with the maximum span of the tests of spans up to 32.
+template <typename Kernel, fisk::Layout L, std::size_t MaxSpan = kNarrowMaxSpan, std::size_t N>
+inline std::array<fisk::SpacedKmerMask<L, Kernel, MaxSpan>, N> make_kernels(
     std::array<std::string, N> const& masks
 ) {
-    std::array<fisk::SpacedKmerMask<L, Kernel>, N> kernels;
+    std::array<fisk::SpacedKmerMask<L, Kernel, MaxSpan>, N> kernels;
     for (std::size_t m = 0; m < N; ++m) {
-        kernels[m] = fisk::make_spaced_kmer_kernel<Kernel, L>(masks[m]);
+        kernels[m] = fisk::make_spaced_kmer_kernel<Kernel, L, MaxSpan>(masks[m]);
     }
     return kernels;
 }
@@ -154,4 +112,167 @@ inline std::vector<SpacedEvent> collect_vector_events(std::size_t mask_count, Ex
         return std::tie(lhs.pos, lhs.mask_idx) < std::tie(rhs.pos, rhs.mask_idx);
     });
     return events;
+}
+
+struct NoopSpacedVectorCallback
+{
+    template <typename V>
+    void operator()(std::size_t, std::size_t, V const&, std::size_t) const {}
+};
+
+struct NoopSpacedValidLanesCallback
+{
+    template <typename V, typename Lanes>
+    void operator()(std::size_t, std::size_t, V const&, Lanes const&) const {}
+};
+
+// Checks that spans outside of [1, MaxSpan] and sets of kernels with different spans are rejected,
+// unchecked and checked, through the single-kernel overload and a set of kernels, also for
+// sequences shorter than the span; with spans above 32 among the different ones where MaxSpan
+// allows them.
+template <fisk::Layout L, std::size_t MaxSpan>
+inline void check_simd_error_contract()
+{
+    using Kernel = fisk::BitExtractKernelButterfly<fisk::SimdScalar>;
+    using Mask = fisk::SpacedKmerMask<L, Kernel, MaxSpan>;
+    fisk::WordEncoderButterfly<fisk::Encoding::kACGT, L> const encoder;
+    for (std::string const& seq : {std::string{}, std::string(2 * MaxSpan + 1, 'T')}) {
+        auto const packed = fisk::pack_sequence_unchecked(seq, encoder);
+        auto const checked = fisk::pack_sequence_checked(seq, encoder);
+        auto const expect_throw = [&](auto const& kernel_or_kernels) {
+            EXPECT_THROW(
+                fisk::for_each_spaced_kmer_packed_unchecked_bytewise_simd(
+                    packed, kernel_or_kernels, NoopSpacedVectorCallback{}
+                ),
+                std::invalid_argument
+            );
+            EXPECT_THROW(
+                fisk::for_each_spaced_kmer_packed_checked_bytewise_simd(
+                    checked, kernel_or_kernels, NoopSpacedValidLanesCallback{}
+                ),
+                std::invalid_argument
+            );
+        };
+
+        // A kernel with an invalid span, which make_spaced_kmer_kernel() would reject.
+        for (std::size_t const span_k : {std::size_t{0}, MaxSpan + 1}) {
+            Mask kernel;
+            kernel.mask_pieces[0] = Kernel(3);
+            kernel.span_k = static_cast<std::uint16_t>(span_k);
+            expect_throw(kernel);
+            expect_throw(std::span<Mask const, 1>(&kernel, 1));
+        }
+
+        std::vector<std::array<std::string, 2>> mixed_sets = {{"101", "1001"}};
+        if constexpr (MaxSpan > 32) {
+            mixed_sets.push_back({
+                std::string("1").append(38, '0').append("1"),
+                std::string("1").append(39, '0').append("1")
+            });
+        }
+        for (auto const& mask_strings : mixed_sets) {
+            auto const mixed = make_kernels<Kernel, L, MaxSpan>(mask_strings);
+            expect_throw(std::span<Mask const, 2>(mixed.data(), 2));
+        }
+    }
+}
+
+// =================================================================================================
+//     Spans above 32
+// =================================================================================================
+
+// Checks kernels with spans above 32, see wide_test_mask_sets(), unchecked or checked, against the
+// oracle: the butterfly kernel of every arch of the build and the PEXT kernel, with the default
+// `MaxCompiledPieces`, through the overload for a set of kernels and, for a single kernel, also the
+// single-kernel overload; and the butterfly kernel of the scalar arch with a copy of the loop for
+// each piece count (`MaxCompiledPieces` 5) and for one piece only (1). The Encoding does not change
+// the loop, so that ACGT suffices here.
+template <fisk::Layout L, bool Checked>
+inline void check_simd_wide_extraction()
+{
+    constexpr fisk::Encoding E = fisk::Encoding::kACGT;
+    fisk::WordEncoderButterfly<E, L> const encoder;
+    for (auto const& mask_strings : wide_test_mask_sets()) {
+        std::size_t const span_k = mask_strings.front().size();
+        auto const& seqs = Checked ? packed_checked_test_sequences() : packed_test_sequences();
+        for (auto const& seq : seqs) {
+            auto const packed = [&] {
+                if constexpr (Checked) {
+                    return fisk::pack_sequence_checked(seq, encoder);
+                } else {
+                    return fisk::pack_sequence_unchecked(seq, encoder);
+                }
+            }();
+            auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
+            std::size_t const positions = seq.size() < span_k ? 0 : seq.size() - span_k + 1;
+
+            // The events of `extract`, which calls back with vectors of `mask_count` kernels.
+            auto const collect = [&]<typename Simd>(std::size_t mask_count, auto const& extract) {
+                if constexpr (Checked) {
+                    return collect_valid_lanes_events<Simd, E, L, false, true>(
+                        mask_count, positions, extract
+                    );
+                } else {
+                    return collect_vector_events<Simd, E, L>(mask_count, extract);
+                }
+            };
+            auto const run = [&]<std::size_t MaxCompiledPieces>(
+                auto const& kernel_or_kernels, auto const& callback
+            ) {
+                if constexpr (Checked) {
+                    fisk::for_each_spaced_kmer_packed_checked_bytewise_simd<MaxCompiledPieces>(
+                        packed, kernel_or_kernels, callback
+                    );
+                } else {
+                    fisk::for_each_spaced_kmer_packed_unchecked_bytewise_simd<MaxCompiledPieces>(
+                        packed, kernel_or_kernels, callback
+                    );
+                }
+            };
+
+            // The single kernel, also as itself, or the set of three kernels.
+            auto const check = [&]<
+                typename Kernel, std::size_t MaxCompiledPieces, std::size_t N
+            >() {
+                using Simd = typename Kernel::simd_arch;
+                std::array<std::string, N> masks;
+                std::copy(mask_strings.begin(), mask_strings.end(), masks.begin());
+                auto const kernels = make_kernels<Kernel, L, 128>(masks);
+                check_spaced_events(collect.template operator()<Simd>(N, [&](auto const& cb) {
+                    run.template operator()<MaxCompiledPieces>(std::span{kernels}, cb);
+                }), expected);
+                if constexpr (N == 1) {
+                    check_spaced_events(collect.template operator()<Simd>(1, [&](auto const& cb) {
+                        run.template operator()<MaxCompiledPieces>(kernels[0], cb);
+                    }), expected);
+                }
+            };
+            auto const check_sizes = [&]<typename Kernel, std::size_t MaxCompiledPieces>() {
+                if (mask_strings.size() == 1) {
+                    check.template operator()<Kernel, MaxCompiledPieces, 1>();
+                } else {
+                    check.template operator()<Kernel, MaxCompiledPieces, 3>();
+                }
+            };
+            constexpr std::size_t D = fisk::kDefaultMaxCompiledPieces;
+            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdScalar>, D>();
+            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdScalar>, 1>();
+            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdScalar>, 5>();
+            #if defined(FISK_HAS_SSE2)
+            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdSSE2>, D>();
+            #endif
+            #if defined(FISK_HAS_AVX2)
+            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdAVX2>, D>();
+            #endif
+            #if defined(FISK_HAS_AVX512)
+            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdAVX512>, D>();
+            #endif
+            #if defined(FISK_HAS_NEON)
+            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdNEON>, D>();
+            #endif
+            #if defined(FISK_HAS_BMI2)
+            check_sizes.template operator()<fisk::BitExtractKernelPext, D>();
+            #endif
+        }
+    }
 }

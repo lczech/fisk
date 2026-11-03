@@ -31,63 +31,8 @@
 // test_packed_bytewise_scalar_wide_unchecked.cpp and _wide_checked.cpp for spans above 32, so that
 // each compiles with less memory.
 
-// Maximum span of the masks of the tests of spans up to 32, see SpacedKmerMask: masks that can
-// have more pieces would also compile the loops for them, which these tests do not run, see the
-// checks of spans above 32 below for those.
-inline constexpr std::size_t kNarrowMaxSpan = 32;
 template <fisk::Layout L, typename M>
 using NarrowSpacedKmerMask = fisk::SpacedKmerMask<L, M, kNarrowMaxSpan>;
-
-// Sequence lengths 0..100, which covers sequences shorter than the span, the last step, and the
-// main loop for every span, plus two longer ones, each with random per-position content. The
-// oracle (oracle.hpp) works on the ASCII input, independent of the packing and the extraction.
-inline std::vector<std::string> const& test_sequences()
-{
-    static std::vector<std::string> const seqs = [] {
-        std::vector<std::string> out;
-        fisk::Splitmix64 rng(6006);
-        for (std::size_t len = 0; len <= 100; ++len) {
-            out.push_back(random_sequence(rng, len));
-        }
-        out.push_back(random_sequence(rng, 257));
-        out.push_back(random_sequence(rng, 511));
-        return out;
-    }();
-    return seqs;
-}
-
-// Random sequences of the lengths 0..160 with lower and upper case nucleotides, without invalid
-// characters, with scattered ones, and with many, plus longer ones around blocks of 32 positions,
-// and with runs of N of up to 100, as in assemblies, for the checked extraction.
-inline std::vector<std::string> const& checked_test_sequences()
-{
-    static std::vector<std::string> const seqs = [] {
-        std::vector<std::string> out;
-        fisk::Splitmix64 rng(8008);
-        for (std::size_t len = 0; len <= 160; ++len) {
-            std::string seq = random_sequence(rng, len);
-            double const rates[] = {0.0, 0.02, 0.2};
-            inject_invalid(seq, rng, rates[len % 3], all_invalid_bytes());
-            out.push_back(std::move(seq));
-        }
-        for (std::size_t len : {511u, 512u, 513u, 1023u, 1024u, 1025u}) {
-            std::string seq = random_sequence(rng, len);
-            inject_invalid(seq, rng, 0.005, kHandPickedInvalid);
-            out.push_back(std::move(seq));
-        }
-        for (std::size_t i = 0; i < 4; ++i) {
-            std::string seq = random_sequence(rng, 1000);
-            for (std::size_t r = 0; r < 5; ++r) {
-                std::size_t const run = 1 + rng.get_uint64() % 100;
-                std::size_t const at = rng.get_uint64() % (seq.size() - run);
-                seq.replace(at, run, run, 'N');
-            }
-            out.push_back(std::move(seq));
-        }
-        return out;
-    }();
-    return seqs;
-}
 
 // For every span in [1, 32], a single random mask, and a set of three random masks, plus masks
 // that keep all positions, or only the first and the last.
@@ -220,7 +165,7 @@ inline void check_default_max_masks()
     std::span<NarrowSpacedKmerMask<L, fisk::BitExtractMask> const, fisk::kDefaultMaxMasks> const
         mask_span(masks.data(), fisk::kDefaultMaxMasks);
 
-    for (auto const& seq : Checked ? checked_test_sequences() : test_sequences()) {
+    for (auto const& seq : Checked ? packed_checked_test_sequences() : packed_test_sequences()) {
         std::vector<SpacedEvent> events;
         auto const collect = [&](
             std::size_t pos, std::size_t mask_idx, fisk::SpacedKmer<E, L> const& spaced_kmer
@@ -245,48 +190,6 @@ inline void check_default_max_masks()
 // =================================================================================================
 //     Spans above 32
 // =================================================================================================
-
-// For the spans of one piece at a maximum span above 32, and for spans above 32, around the
-// boundaries of their pieces, see SpacedKmerMask, a single mask and a set of three masks, each with
-// random kept positions, at most 32 of them. Plus single masks that keep only the first and the
-// last position, so that the pieces between them keep none, and masks that keep 32 positions
-// spread over all pieces.
-inline std::vector<std::vector<std::string>> const& wide_test_mask_sets()
-{
-    static std::vector<std::vector<std::string>> const sets = [] {
-        fisk::Splitmix64 rng(7009);
-        auto random_mask = [&](std::size_t span_k) {
-            std::string mask(span_k, '0');
-            std::size_t const weight = 2 + rng.get_uint64() % 31;
-            for (std::size_t i = 0; i < weight; ++i) {
-                mask[rng.get_uint64() % span_k] = '1';
-            }
-            mask.front() = '1';
-            mask.back() = '1';
-            return mask;
-        };
-        std::vector<std::vector<std::string>> out;
-        for (std::size_t span_k : {
-            29u, 30u, 31u, 32u, 33u, 34u, 56u, 57u, 58u, 60u, 64u, 84u, 85u, 86u, 100u, 113u,
-            114u, 128u
-        }) {
-            out.push_back({ random_mask(span_k) });
-            out.push_back({ random_mask(span_k), random_mask(span_k), random_mask(span_k) });
-        }
-        for (std::size_t span_k : {60u, 86u, 128u}) {
-            out.push_back({ std::string("1").append(span_k - 2, '0').append("1") });
-        }
-        for (std::size_t span_k : {64u, 100u, 128u}) {
-            std::string mask(span_k, '0');
-            for (std::size_t i = 0; i < 32; ++i) {
-                mask[i * (span_k - 1) / 31] = '1';
-            }
-            out.push_back({ mask });
-        }
-        return out;
-    }();
-    return sets;
-}
 
 // Checks masks with spans above 32, unchecked or checked, against the oracle: with the default
 // `MaxCompiledPieces`, through the overload for a set of masks and, for a single mask, also the
@@ -363,11 +266,11 @@ inline void check_wide_extraction()
             check_cap.template operator()<5>();
         };
         if constexpr (Checked) {
-            for (auto const& seq : checked_test_sequences()) {
+            for (auto const& seq : packed_checked_test_sequences()) {
                 check(seq, fisk::pack_sequence_checked(seq, encoder));
             }
         } else {
-            for (auto const& seq : test_sequences()) {
+            for (auto const& seq : packed_test_sequences()) {
                 check(seq, fisk::pack_sequence_unchecked(seq, encoder));
             }
         }
@@ -413,11 +316,11 @@ inline void check_default_max_span()
             check_spaced_events(events, oracle_spaced_events<E, L>(seq, mask_strings));
         };
         if constexpr (Checked) {
-            for (auto const& seq : checked_test_sequences()) {
+            for (auto const& seq : packed_checked_test_sequences()) {
                 check(seq, fisk::pack_sequence_checked(seq, encoder));
             }
         } else {
-            for (auto const& seq : test_sequences()) {
+            for (auto const& seq : packed_test_sequences()) {
                 check(seq, fisk::pack_sequence_unchecked(seq, encoder));
             }
         }

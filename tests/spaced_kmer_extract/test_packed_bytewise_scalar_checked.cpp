@@ -32,7 +32,7 @@ static void check_checked_extraction()
         auto const direct_masks = make_spaced_kmer_masks<L, kNarrowMaxSpan>(mask_strings);
         auto const butterfly_masks = make_spaced_kmer_butterfly_masks(direct_masks);
 
-        for (auto const& seq : checked_test_sequences()) {
+        for (auto const& seq : packed_checked_test_sequences()) {
             auto const packed = pack_sequence_checked(seq, encoder);
             auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
 

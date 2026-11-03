@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <type_traits>
 
 #include "fisk/core/cast.hpp"
@@ -141,21 +142,47 @@ inline typename Simd::simd_vector packed_bytewise_simd_shift_left_(
     }
 }
 
+// A set of vectors of the same positions, which the steps below handle like a single vector, see
+// emit_packed_bytewise_simd_step_(), such as the windows of the pieces of spaced k-mer masks. Not
+// a std::array, as GCC warns about vector types as template arguments.
+template <SimdArch Simd, std::size_t N>
+struct SimdVectorSet
+{
+    typename Simd::simd_vector at[N];
+};
+
+// Interleave the vectors `a` and `b`, or each vector of two SimdVectorSet, with the low or the
+// `High` lanes, for the archs without shifts per lane, see emit_packed_bytewise_simd_step_(). The
+// set is told by its member, as GCC warns about vector types as template arguments.
+template <SimdArch Simd, bool High, typename Vector>
+FISK_ALWAYS_INLINE
+inline Vector interleave_packed_bytewise_simd_(Vector const& a, Vector const& b) noexcept
+{
+    if constexpr (requires { a.at; }) {
+        Vector out;
+        for (std::size_t j = 0; j < std::size(a.at); ++j) {
+            out.at[j] = interleave_packed_bytewise_simd_<Simd, High>(a.at[j], b.at[j]);
+        }
+        return out;
+    } else {
+        return High ? Simd::interleave_high(a, b) : Simd::interleave_low(a, b);
+    }
+}
+
 // Emit the vectors of the iteration that starts at position `pos` as `emit(pos, vec, validity)`,
 // where `kmers(i)` computes them from the shift counts at index `i`, see
 // make_packed_bytewise_simd_counts_(), and `validity_at(pos)` gives the validity of the k-mer in
 // lane 0, see run_packed_bytewise_blocks_() (internal.hpp). With shifts per lane, `kmers(i)` is
 // vector `i` of the iteration. Otherwise, it has position `i` of two starting bytes, and is
-// interleaved with the next position to get consecutive k-mers.
+// interleaved with the next position to get consecutive k-mers. `kmers(i)` can also be a
+// SimdVectorSet, whose vectors are interleaved each.
 template <SimdArch Simd, typename Kmers, typename ValidityAt, typename Emit>
 FISK_ALWAYS_INLINE
 inline void emit_packed_bytewise_simd_step_(
     std::size_t pos, Kmers&& kmers, ValidityAt const& validity_at, Emit&& emit
 ) {
     constexpr std::size_t lanes = Simd::lanes;
-    auto const emit_at_ = [&](
-        std::size_t at, typename Simd::simd_vector vec
-    ) FISK_ALWAYS_INLINE_LAMBDA {
+    auto const emit_at_ = [&](std::size_t at, auto const& vec) FISK_ALWAYS_INLINE_LAMBDA {
         emit(at, vec, validity_at(at));
     };
     if constexpr (SimdArchWithLaneShifts<Simd>) {
@@ -168,10 +195,10 @@ inline void emit_packed_bytewise_simd_step_(
         auto const k1 = kmers(1);
         auto const k2 = kmers(2);
         auto const k3 = kmers(3);
-        emit_at_(pos + 0, Simd::interleave_low(k0, k1));
-        emit_at_(pos + 2, Simd::interleave_low(k2, k3));
-        emit_at_(pos + 4, Simd::interleave_high(k0, k1));
-        emit_at_(pos + 6, Simd::interleave_high(k2, k3));
+        emit_at_(pos + 0, interleave_packed_bytewise_simd_<Simd, false>(k0, k1));
+        emit_at_(pos + 2, interleave_packed_bytewise_simd_<Simd, false>(k2, k3));
+        emit_at_(pos + 4, interleave_packed_bytewise_simd_<Simd, true>(k0, k1));
+        emit_at_(pos + 6, interleave_packed_bytewise_simd_<Simd, true>(k2, k3));
     }
 }
 
@@ -193,7 +220,7 @@ inline auto packed_bytewise_simd_emit_(Seq const& seq, std::size_t k, Emit& emit
 {
     std::size_t const p_max = seq.length() - k;
     return [&emit, p_max](
-        std::size_t pos, typename Simd::simd_vector vec, auto validity
+        std::size_t pos, auto const& vec, auto validity
     ) FISK_ALWAYS_INLINE_LAMBDA {
         (void) p_max;
         if constexpr (PackedSequenceWithValidityType<Seq> && Form != PackedValidity::kStarts) {
@@ -216,15 +243,26 @@ inline auto packed_bytewise_simd_emit_(Seq const& seq, std::size_t k, Emit& emit
             // be zero, so that the sum matches that of the other extraction functions. Only built
             // for them, as the do_not_optimize barriers, see internal.hpp.
             #if defined(FISK_BENCHMARK_SINK_MODE)
-            alignas(64) std::uint64_t values[Simd::lanes];
-            Simd::store_aligned(vec, values);
-            for (std::size_t j = count; j < Simd::lanes; ++j) {
-                values[j] = 0;
+            auto const zero_from_count = [count](typename Simd::simd_vector v) {
+                alignas(64) std::uint64_t values[Simd::lanes];
+                Simd::store_aligned(v, values);
+                for (std::size_t j = count; j < Simd::lanes; ++j) {
+                    values[j] = 0;
+                }
+                return Simd::load_aligned(values);
+            };
+            auto zeroed = vec;
+            if constexpr (requires { zeroed.at; }) {
+                for (auto& v : zeroed.at) {
+                    v = zero_from_count(v);
+                }
+            } else {
+                zeroed = zero_from_count(zeroed);
             }
-            vec = Simd::load_aligned(values);
-            #endif
-
+            emit(pos, zeroed, count);
+            #else
             emit(pos, vec, count);
+            #endif
         }
     };
 }
