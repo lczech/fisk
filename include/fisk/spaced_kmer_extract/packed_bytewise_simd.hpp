@@ -54,8 +54,10 @@ namespace fisk {
 // -------------------------------------------------------------------------------------------------
 
 // Extract and emit the spaced k-mers of all kernels from the `windows` of the spans at `pos` and
-// after. `Vector` is deduced instead of taken from the kernel, as GCC warns about vector types
-// that are spelled out as template arguments.
+// after, one kernel after the other: a loop with the compile-time trip count N, which the compiler
+// unrolls where the kernels are cheap, as for_each_mask_() (internal.hpp). `Vector` is deduced
+// instead of taken from the kernel, as GCC warns about vector types that are spelled out as
+// template arguments.
 template <
     Encoding E, Layout L, typename Kernel, std::size_t N, typename Callback, typename Vector
 >
@@ -70,15 +72,15 @@ inline void emit_spaced_kmers_packed_unchecked_bytewise_simd_(
         "Callback must be callable as callback(pos, mask_idx, spaced_kmers, valid_count), or, "
         "for a single kernel, as callback(pos, spaced_kmers, valid_count)."
     );
-    [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
-        (invoke_spaced_kmer_vector_callback<E, L, Simd, N == 1>(
-            callback, M, pos,
+    for (std::size_t m = 0; m < N; ++m) {
+        invoke_spaced_kmer_vector_callback<E, L, Simd, N == 1>(
+            callback, m, pos,
             spaced_kmer_vector_cast_unchecked<E, L, Simd>(
-                kernels[M].mask_pieces[0].bit_extract(windows)
+                kernels[m].mask_pieces[0].bit_extract(windows)
             ),
             valid_count
-        ), ...);
-    }(std::make_index_sequence<N>{});
+        );
+    }
 }
 
 // As emit_spaced_kmers_packed_unchecked_bytewise_simd_(), with the valid lanes of each kernel, from
@@ -114,15 +116,15 @@ inline void emit_spaced_kmers_packed_checked_bytewise_simd_(
             return bits;
         }
     };
-    [&]<std::size_t... M>(std::index_sequence<M...>) FISK_ALWAYS_INLINE_LAMBDA {
-        (invoke_spaced_kmer_vector_valid_lanes_callback<E, L, Simd, N == 1>(
-            callback, M, pos,
+    for (std::size_t m = 0; m < N; ++m) {
+        invoke_spaced_kmer_vector_valid_lanes_callback<E, L, Simd, N == 1>(
+            callback, m, pos,
             spaced_kmer_vector_cast_unchecked<E, L, Simd>(
-                kernels[M].mask_pieces[0].bit_extract(windows)
+                kernels[m].mask_pieces[0].bit_extract(windows)
             ),
-            SimdVectorValidLanes<Simd>{lanes_of(M)}
-        ), ...);
-    }(std::make_index_sequence<N>{});
+            SimdVectorValidLanes<Simd>{lanes_of(m)}
+        );
+    }
 }
 
 // -------------------------------------------------------------------------------------------------
