@@ -517,6 +517,7 @@ BENCHMARK_COLORS = {
     "block_shift"                           : "#a1d99b",
     "rolling_scalar_block_shift"            : "#a1d99b",
     "bytewise_scalar_block_shift"           : "#a1d99b",
+    "block_shift_unrolled1"                 : "#c7e9c0",
     "block_shift_unrolled2"                 : "#74c476",
     "rolling_scalar_block_shift_unrolled2"  : "#74c476",
     "bytewise_scalar_block_shift_unrolled2" : "#74c476",
@@ -542,15 +543,52 @@ BENCHMARK_COLORS = {
     "rolling_scalar_switch"     : "#C53939",
     "reextract_scalar_table"    : "#6AC459",
     "rolling_scalar_table"      : "#6AC459",
+    "ifs"                       : "#E9C256",
+    "switch"                    : "#C53939",
+    "table"                     : "#6AC459",
     "pack_then_bytewise_scalar" : "#7F7F7F",
     "rolling_simd_avx2"         : "#207542",
     "rolling_simd_scalar"       : "#9467BD",
+    "clark_original"            : "#7F7F7F",
+    "clark_improved"            : "#3C5BBE",
+
+    # Kmer from text, by arch as for the packed k-mers (PACKED_KMER_VARIANT_COLORS): rolling_simd
+    # in the dark shade of the arch, chunked_simd in the mid one (SSE2 in a lilac, as the mid
+    # purple is rolling_simd_scalar's), and its single k-mers (`_scalars`) in the muted tint of
+    # bytewise_simd_<arch>_scalars. chunked_scalar as bytewise_scalar.
+    "rolling_simd_sse2"           : "#5C338A",
+    "rolling_simd_avx512"         : "#a23236",
+    "rolling_simd_neon"           : "#23609d",
+    "chunked_scalar"              : "#107D84",
+    "chunked_simd_scalar"         : "#bf812d",
+    "chunked_simd_scalar_scalars" : "#967855",
+    "chunked_simd_sse2"           : "#C39BD3",
+    "chunked_simd_sse2_scalars"   : "#7E6A95",
+    "chunked_simd_avx2"           : "#2ca02c",
+    "chunked_simd_avx2_scalars"   : "#608A71",
+    "chunked_simd_avx512"         : "#d62728",
+    "chunked_simd_avx512_scalars" : "#A1696B",
+    "chunked_simd_neon"           : "#6baed6",
+    "chunked_simd_neon_scalars"   : "#62809E",
     "chunked_scalar_threadlocal": "#000000",
     "chunked_scalar_scratch"    : "#000000",
 
 
     # Kmer spaced, from text and from packed sequences. scalars use a lighter tint of the vectors
     # color.
+    "chunked_scalar_butterfly"                     : "#BB2F98",
+    "chunked_scalar_pext"                          : "#5F5F5F",
+    "pack_then_bytewise_scalar_butterfly"          : "#BB2F98",
+    "chunked_simd_butterfly_sse2_vectors"          : "#BB2F98",
+    "chunked_simd_butterfly_sse2_scalars"          : "#E6A8D4",
+    "chunked_simd_butterfly_avx2_vectors"          : "#BB2F98",
+    "chunked_simd_butterfly_avx2_scalars"          : "#E6A8D4",
+    "chunked_simd_butterfly_avx512_vectors"        : "#BB2F98",
+    "chunked_simd_butterfly_avx512_scalars"        : "#E6A8D4",
+    "chunked_simd_butterfly_neon_vectors"          : "#BB2F98",
+    "chunked_simd_butterfly_neon_scalars"          : "#E6A8D4",
+    "chunked_simd_butterfly_scalar_vectors"        : "#BB2F98",
+    "chunked_simd_butterfly_scalar_scalars"        : "#E6A8D4",
     "rolling_simd_butterfly_sse2_vectors"          : "#BB2F98",
     "bytewise_simd_butterfly_sse2_vectors"         : "#BB2F98",
     "rolling_simd_butterfly_sse2_scalars"          : "#E6A8D4",
@@ -752,44 +790,54 @@ PACKED_KMER_VARIANT_ORDER = [
     "bytewise_simd_narrow_width_sse2",
     "bytewise_simd_full_width_sse2",
     "bytewise_simd_sse2",
+    "bytewise_simd_sse2_scalars",
     "bytewise_simd_narrow_width_avx2",
     "bytewise_simd_full_width_avx2",
     "bytewise_simd_avx2",
+    "bytewise_simd_avx2_scalars",
     "bytewise_simd_narrow_width_avx512",
     "bytewise_simd_full_width_avx512",
     "bytewise_simd_avx512",
+    "bytewise_simd_avx512_scalars",
     "bytewise_simd_narrow_width_neon",
     "bytewise_simd_full_width_neon",
     "bytewise_simd_neon",
+    "bytewise_simd_neon_scalars",
     "bytewise_simd_narrow_width_scalar",
     "bytewise_simd_full_width_scalar",
     "bytewise_simd_scalar",
+    "bytewise_simd_scalar_scalars",
     "rolling_scalar",
 ]
 
 PACKED_KMER_VARIANT_COLORS = {
     "bytewise_scalar" : "#107D84",
     "rolling_scalar" : "#636363",  # grey
-    # SSE2: purple shades, ordered narrow-width -> full-width -> dispatcher.
+    # SSE2: purple shades, ordered narrow-width -> full-width -> dispatcher -> _scalars.
     "bytewise_simd_narrow_width_sse2" : "#c5b0d5",
     "bytewise_simd_full_width_sse2" : "#9467bd",
     "bytewise_simd_sse2" : "#5C338A",
-    # AVX2: green shades, ordered narrow-width -> full-width -> dispatcher.
+    "bytewise_simd_sse2_scalars" : "#7E6A95",
+    # AVX2: green shades, ordered narrow-width -> full-width -> dispatcher -> _scalars.
     "bytewise_simd_narrow_width_avx2" : "#78c679",
     "bytewise_simd_full_width_avx2" : "#2ca02c",
     "bytewise_simd_avx2" : "#207542",
-    # AVX-512: red shades, ordered narrow-width -> full-width -> dispatcher.
+    "bytewise_simd_avx2_scalars" : "#608A71",
+    # AVX-512: red shades, ordered narrow-width -> full-width -> dispatcher -> _scalars.
     "bytewise_simd_narrow_width_avx512" : "#fb6a4a",
     "bytewise_simd_full_width_avx512" : "#d62728",
     "bytewise_simd_avx512" : "#a23236",
-    # Neon: blue shades, ordered narrow-width -> full-width -> dispatcher.
+    "bytewise_simd_avx512_scalars" : "#A1696B",
+    # Neon: blue shades, ordered narrow-width -> full-width -> dispatcher -> _scalars.
     "bytewise_simd_narrow_width_neon" : "#9ecae1",
     "bytewise_simd_full_width_neon" : "#6baed6",
     "bytewise_simd_neon" : "#23609d",
-    # SimdScalar: brown shades, ordered narrow-width -> full-width -> dispatcher.
+    "bytewise_simd_neon_scalars" : "#62809E",
+    # SimdScalar: brown shades, ordered narrow-width -> full-width -> dispatcher -> _scalars.
     "bytewise_simd_narrow_width_scalar" : "#dfc27d",
     "bytewise_simd_full_width_scalar" : "#bf812d",
     "bytewise_simd_scalar" : "#8c510a",
+    "bytewise_simd_scalar_scalars" : "#967855",
 }
 
 # Headline subset of PACKED_KMER_VARIANT_ORDER: the scalar baseline plus each ISA's public
