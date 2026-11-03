@@ -1,5 +1,7 @@
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -81,23 +83,28 @@ static void check_word_encoder()
 //     Validity
 // -------------------------------------------------------------------------------------------------
 
+// The characters that the positions around the one under test are drawn from: valid ones, invalid
+// ones, which include those that differ from a valid one in a single bit, and any byte.
+static std::vector<std::string> const& nucleotide_test_backgrounds()
+{
+    static std::vector<std::string> const backgrounds = [] {
+        std::string any_byte;
+        for (int i = 0; i < 256; ++i) {
+            any_byte += static_cast<char>(i);
+        }
+        return std::vector<std::string>{std::string(kValidBases), all_invalid_bytes(), any_byte};
+    }();
+    return backgrounds;
+}
+
 // Checks `valid_bits`, called on a pointer to `Bytes` characters, against the oracle, for every
-// byte value at every position. The other positions hold random valid characters, random invalid
-// ones, which include those that differ from a valid one in a single bit, or random bytes.
+// byte value at every position, with the other positions drawn from each of
+// nucleotide_test_backgrounds().
 template <std::size_t Bytes, typename ValidBits>
 static void check_valid_nucleotide_bits(ValidBits valid_bits)
 {
     Splitmix64 rng(3005);
-    std::string const any_byte = [] {
-        std::string out;
-        for (int i = 0; i < 256; ++i) {
-            out += static_cast<char>(i);
-        }
-        return out;
-    }();
-
-    for (std::string_view background : {kValidBases, std::string_view(all_invalid_bytes()),
-                                        std::string_view(any_byte)}) {
+    for (auto const& background : nucleotide_test_backgrounds()) {
         std::string buffer = random_sequence(rng, Bytes, background);
         for (std::size_t pos = 0; pos < Bytes; ++pos) {
             char const kept = buffer[pos];
@@ -133,6 +140,53 @@ static void check_valid_nucleotide_bits_arch()
             return valid_nucleotide_bits_lookup_<Simd>(load(p));
         });
     }
+}
+
+// -------------------------------------------------------------------------------------------------
+//     Codes
+// -------------------------------------------------------------------------------------------------
+
+// Checks nucleotide_code_bytes() of Encoding `E` for an arch against the oracle, for every byte
+// value at every position, with the other positions drawn from each of
+// nucleotide_test_backgrounds(): every byte becomes a code within 0-3, which is the one of the
+// oracle for the valid nucleotides. All bytes are checked, as the shifts of the form without a byte
+// shuffle cross byte boundaries.
+template <typename Simd, Encoding E>
+static void check_nucleotide_code_bytes_arch()
+{
+    constexpr std::size_t bytes = 8 * Simd::lanes;
+    Splitmix64 rng(3006);
+    for (auto const& background : nucleotide_test_backgrounds()) {
+        std::string buffer = random_sequence(rng, bytes, background);
+        for (std::size_t pos = 0; pos < bytes; ++pos) {
+            char const kept = buffer[pos];
+            for (int value = 0; value < 256; ++value) {
+                buffer[pos] = static_cast<char>(value);
+                alignas(64) std::array<std::uint64_t, Simd::lanes> words{};
+                Simd::store_aligned(
+                    nucleotide_code_bytes<E, Simd>(Simd::load_unaligned(buffer.data())),
+                    words.data()
+                );
+                std::array<std::uint8_t, bytes> codes{};
+                std::memcpy(codes.data(), words.data(), bytes);
+                for (std::size_t j = 0; j < bytes; ++j) {
+                    EXPECT_TRUE(codes[j] <= 3);
+                    std::uint8_t const expected = oracle_code<E>(buffer[j]);
+                    if (expected != kInvalidNucleotide) {
+                        EXPECT_EQ(codes[j], expected);
+                    }
+                }
+            }
+            buffer[pos] = kept;
+        }
+    }
+}
+
+template <typename Simd>
+static void check_nucleotide_code_bytes_arch()
+{
+    check_nucleotide_code_bytes_arch<Simd, Encoding::kACGT>();
+    check_nucleotide_code_bytes_arch<Simd, Encoding::kACTG>();
 }
 
 // =================================================================================================
@@ -834,6 +888,51 @@ TEST(SequencePackWordEncoder, NucleotideBitsAvx512)
 TEST(SequencePackWordEncoder, NucleotideBitsNeon)
 {
     check_valid_nucleotide_bits_arch<SimdNEON>();
+}
+
+#endif
+
+// -------------------------------------------------------------------------------------------------
+//     Nucleotide Codes
+// -------------------------------------------------------------------------------------------------
+
+TEST(SequencePackWordEncoder, NucleotideCodesScalar)
+{
+    check_nucleotide_code_bytes_arch<SimdScalar>();
+}
+
+#if defined(FISK_HAS_SSE2)
+
+TEST(SequencePackWordEncoder, NucleotideCodesSse2)
+{
+    check_nucleotide_code_bytes_arch<SimdSSE2>();
+}
+
+#endif
+
+#if defined(FISK_HAS_AVX2)
+
+TEST(SequencePackWordEncoder, NucleotideCodesAvx2)
+{
+    check_nucleotide_code_bytes_arch<SimdAVX2>();
+}
+
+#endif
+
+#if defined(FISK_HAS_AVX512)
+
+TEST(SequencePackWordEncoder, NucleotideCodesAvx512)
+{
+    check_nucleotide_code_bytes_arch<SimdAVX512>();
+}
+
+#endif
+
+#if defined(FISK_HAS_NEON)
+
+TEST(SequencePackWordEncoder, NucleotideCodesNeon)
+{
+    check_nucleotide_code_bytes_arch<SimdNEON>();
 }
 
 #endif
