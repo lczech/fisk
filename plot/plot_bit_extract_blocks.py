@@ -57,10 +57,11 @@ def main():
     #     g = g.sort_values("weight")
     #     plt.plot(g["weight"], g["ns_per_op"], marker="", label=name, linewidth=2)
 
-    for name in BENCHMARK_ORDER:
+    # The variants in the order of BENCHMARK_ORDER, then any others in their order of appearance.
+    names = [b for b in BENCHMARK_ORDER if b in set(df["benchmark"])]
+    names += [b for b in df["benchmark"].drop_duplicates() if b not in names]
+    for name in names:
         g = df[df["benchmark"] == name]
-        if g.empty:
-            continue
         g = g.sort_values("weight")
         color = BENCHMARK_COLORS.get(name, "black")
         ax.plot(

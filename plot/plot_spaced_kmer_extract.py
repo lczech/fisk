@@ -47,10 +47,9 @@ def make_grouped_bar_plot_impl_first(
     )
     pivot = convert_for_display(pivot, unit)
 
-    # Apply benchmark order, keeping only those actually present
+    # The variants in the order of BENCHMARK_ORDER, then any others in their order of appearance.
     ordered_impls = [b for b in BENCHMARK_ORDER if b in pivot.index]
-    if not ordered_impls:
-        raise ValueError("None of the BENCHMARK_ORDER entries are present in the data")
+    ordered_impls += [b for b in df["benchmark"].drop_duplicates() if b not in ordered_impls]
 
     pivot = pivot.reindex(ordered_impls)
 
