@@ -28,7 +28,7 @@ namespace fisk {
 // =================================================================================================
 
 // The candidate algorithms of KmerExtractor, see ExtractorPlan for their shape. Each calls one of
-// the k-mer extraction functions; the names are those of the functions after the input check.
+// the k-mer extraction functions, and is named after it, followed by the SIMD arch.
 
 /**
  * @brief The settings of a KmerExtractor, which its candidates are constructed from.
@@ -66,7 +66,10 @@ inline constexpr bool kmer_extractor_takes_vectors_ = (C == InputCheck::kChecked
 template <InputCheck C, Encoding E, Layout L>
 struct KmerCandidateAsciiChunkedScalar
 {
-    static std::string name() { return "chunked_scalar"; }
+    static std::string name()
+    {
+        return "for_each_kmer_ascii_" + input_check_name_(C) + "_chunked_scalar";
+    }
     static bool available() { return true; }
 
     template <typename Callback>
@@ -89,7 +92,11 @@ struct KmerCandidateAsciiChunkedScalar
 template <InputCheck C, Encoding E, Layout L, typename Simd>
 struct KmerCandidateAsciiChunkedSimd
 {
-    static std::string name() { return "chunked_simd_" + simd_arch_name_<Simd>(); }
+    static std::string name()
+    {
+        return "for_each_kmer_ascii_" + input_check_name_(C) + "_chunked_simd_" +
+            simd_arch_name_<Simd>();
+    }
     static bool available() { return simd_arch_enabled_<Simd>(); }
 
     template <typename Callback>
@@ -121,7 +128,10 @@ struct KmerCandidateAsciiChunkedSimd
 template <InputCheck C, Encoding E, Layout L>
 struct KmerCandidatePackedBytewiseScalar
 {
-    static std::string name() { return "bytewise_scalar"; }
+    static std::string name()
+    {
+        return "for_each_kmer_packed_" + input_check_name_(C) + "_bytewise_scalar";
+    }
     static bool available() { return true; }
 
     template <typename Callback>
@@ -143,7 +153,11 @@ struct KmerCandidatePackedBytewiseScalar
 template <InputCheck C, Encoding E, Layout L, typename Simd>
 struct KmerCandidatePackedBytewiseSimd
 {
-    static std::string name() { return "bytewise_simd_" + simd_arch_name_<Simd>(); }
+    static std::string name()
+    {
+        return "for_each_kmer_packed_" + input_check_name_(C) + "_bytewise_simd_" +
+            simd_arch_name_<Simd>();
+    }
     static bool available() { return simd_arch_enabled_<Simd>(); }
 
     template <typename Callback>
@@ -168,7 +182,7 @@ struct KmerCandidatePackedBytewiseSimd
 // -------------------------------------------------------------------------------------------------
 
 // The candidates of a KmerExtractor: the loops that are the fastest on some hardware, in the
-// benchmarks, see kmer_extractor_preference_() for the estimate among them. The SIMD loops are
+// benchmarks, see KmerExtractorPreference for the estimate among them. The SIMD loops are
 // those of the `Simds`, a TypeList.
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L, typename Simds = CandidateSimdArchs
@@ -191,17 +205,33 @@ struct KmerExtractorCandidates<I, C, E, L, TypeList<Simd...>>
     using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
 };
 
-// The estimate of a KmerExtractor, as candidate names in order of preference: for callbacks of
+// The estimate of a KmerExtractor and of for_each_kmer(), see ExtractorPreference: for callbacks of
 // single k-mers, the scalar loop, which is as fast as the SIMD loops with their lanes taken out one
-// by one, or faster; for callbacks that take vectors, the SIMD loop of AVX2 or Neon.
-inline std::vector<std::string> kmer_extractor_preference_(InputFormat input_format, bool vectors)
+// by one, or faster; for callbacks that take vectors, the SIMD loop of the `Simds`, a TypeList,
+// which are AVX2 or Neon.
+template <
+    InputFormat I, InputCheck C, Encoding E, Layout L, typename Simds = PreferredSimdArchs
+>
+struct KmerExtractorPreference;
+
+template <InputFormat I, InputCheck C, Encoding E, Layout L, typename... Simd>
+struct KmerExtractorPreference<I, C, E, L, TypeList<Simd...>>
 {
-    std::string const loop = (input_format == InputFormat::kAscii) ? "chunked_" : "bytewise_";
-    if (!vectors) {
-        return { loop + "scalar" };
-    }
-    return { loop + "simd_avx2", loop + "simd_neon", loop + "scalar" };
-}
+    using AsciiScalar = KmerCandidateAsciiChunkedScalar<C, E, L>;
+    using PackedScalar = KmerCandidatePackedBytewiseScalar<C, E, L>;
+
+    using Ascii = ExtractorPreference<
+        TypeList<AsciiScalar>,
+        TypeList<KmerCandidateAsciiChunkedSimd<C, E, L, Simd>..., AsciiScalar>
+    >;
+
+    using Packed = ExtractorPreference<
+        TypeList<PackedScalar>,
+        TypeList<KmerCandidatePackedBytewiseSimd<C, E, L, Simd>..., PackedScalar>
+    >;
+
+    using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
+};
 
 // =================================================================================================
 //     K-mer Extractor
@@ -270,11 +300,7 @@ public:
      * @throws std::invalid_argument if `k` is not in [1, 32].
      */
     explicit KmerExtractor(std::size_t k)
-        : plan_(
-            make_settings_(k),
-            kmer_extractor_preference_(I, false),
-            kmer_extractor_preference_(I, true)
-        )
+        : plan_(make_settings_(k))
     {}
 
     /**
@@ -360,8 +386,9 @@ public:
     }
 
     /**
-     * @brief The name of the chosen algorithm, as in the names of the k-mer extraction functions,
-     * such as "chunked_scalar" for for_each_kmer_ascii_checked_chunked_scalar().
+     * @brief The name of the chosen algorithm: the name of the k-mer extraction function, followed
+     * by the SIMD arch, such as "for_each_kmer_ascii_checked_chunked_simd_avx2" for
+     * for_each_kmer_ascii_checked_chunked_simd<SimdAVX2>().
      *
      * Before tune() or set_algorithm(), the estimate depends on whether the callback takes
      * vectors: this names the one for callbacks of single k-mers, see the overload for others.
@@ -411,7 +438,9 @@ private:
     }
 
     using Plan = ExtractorPlan<
-        KmerExtractorSettings, sequence_type, typename KmerExtractorCandidates<I, C, E, L>::type
+        KmerExtractorSettings, sequence_type,
+        typename KmerExtractorCandidates<I, C, E, L>::type,
+        typename KmerExtractorPreference<I, C, E, L>::type
     >;
     Plan plan_;
 };

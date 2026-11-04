@@ -104,9 +104,9 @@ public:
     {}
 
     /**
-     * @brief Prepare a set of masks, see make_spaced_kmer_masks().
+     * @brief Prepare a set of masks, such as a std::vector of them, see make_spaced_kmer_masks().
      */
-    explicit SpacedKmerMasks(std::vector<mask_type> const& masks)
+    explicit SpacedKmerMasks(std::span<mask_type const> masks)
         : size_(masks.size())
     {
         check_(masks);
@@ -149,7 +149,7 @@ private:
         }(static_cast<Forms const*>(nullptr));
     }
 
-    static void check_(std::vector<mask_type> const& masks)
+    static void check_(std::span<mask_type const> masks)
     {
         if (masks.empty()) {
             throw std::invalid_argument("SpacedKmerMasks: no masks given");
@@ -175,7 +175,7 @@ private:
     // Fill the `forms` of one type with the `masks` in that form.
     template <typename M>
     static void prepare_(
-        std::vector<mask_type> const& masks, std::array<SpacedKmerMask<L, M>, MaxMasks>& forms
+        std::span<mask_type const> masks, std::array<SpacedKmerMask<L, M>, MaxMasks>& forms
     ) {
         for (std::size_t i = 0; i < masks.size(); ++i) {
             if constexpr (std::same_as<M, BitExtractMask>) {

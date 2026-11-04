@@ -50,7 +50,7 @@ using AsciiCheckedSpacedExtractor = SpacedKmerExtractor<
 >;
 
 // The estimate: PEXT where likely fast, else the butterfly in the SIMD loop of AVX2 or Neon, else
-// in the scalar loop; `loop` is the name of the loop for the input.
+// in the scalar loop; `loop` is the name of the function of the loop for the input.
 static std::string expected_spaced_estimate(std::string const& loop)
 {
     std::string expected = loop + "_scalar_butterfly";
@@ -78,15 +78,21 @@ TEST(SpacedKmerExtractor, Estimate)
         [](std::size_t, std::size_t, auto, auto) {}
     };
     AsciiCheckedSpacedExtractor ascii({"1101101"});
-    EXPECT_EQ(ascii.algorithm_name(), expected_spaced_estimate("chunked"));
-    EXPECT_EQ(ascii.algorithm_name(vector_callback), expected_spaced_estimate("chunked"));
+    auto const ascii_estimate = expected_spaced_estimate(
+        "for_each_spaced_kmer_ascii_checked_chunked"
+    );
+    EXPECT_EQ(ascii.algorithm_name(), ascii_estimate);
+    EXPECT_EQ(ascii.algorithm_name(vector_callback), ascii_estimate);
 
     // Packed input, with a single mask, which only builds the candidates, not their loops.
     SpacedKmerExtractor<InputFormat::kPacked, InputCheck::kUnchecked, kAcgt, kMsb, 1> packed(
         {"1101101"}
     );
-    EXPECT_EQ(packed.algorithm_name(), expected_spaced_estimate("bytewise"));
-    EXPECT_EQ(packed.algorithm_name(vector_callback), expected_spaced_estimate("bytewise"));
+    auto const packed_estimate = expected_spaced_estimate(
+        "for_each_spaced_kmer_packed_unchecked_bytewise"
+    );
+    EXPECT_EQ(packed.algorithm_name(), packed_estimate);
+    EXPECT_EQ(packed.algorithm_name(vector_callback), packed_estimate);
 }
 
 TEST(SpacedKmerExtractor, Tune)

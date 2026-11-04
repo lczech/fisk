@@ -157,18 +157,20 @@ TEST(KmerExtractor, Estimate)
         [](std::size_t, auto, auto) {}
     };
     auto const arch = preferred_simd_arch_name();
-    EXPECT_EQ(extractor.algorithm_name(), "chunked_scalar");
+    std::string const scalar = "for_each_kmer_ascii_checked_chunked_scalar";
+    std::string const simd = "for_each_kmer_ascii_checked_chunked_simd_" + arch;
+    EXPECT_EQ(extractor.algorithm_name(), scalar);
     EXPECT_EQ(
         extractor.algorithm_name(vector_callback),
-        arch.empty() ? "chunked_scalar" : "chunked_simd_" + arch
+        arch.empty() ? scalar : simd
     );
 
     KmerExtractor<InputFormat::kPacked, kUnchecked, kAcgt, kMsb> packed(21);
-    EXPECT_EQ(packed.algorithm_name(), "bytewise_scalar");
+    EXPECT_EQ(packed.algorithm_name(), "for_each_kmer_packed_unchecked_bytewise_scalar");
 
     // A set algorithm is used for all callbacks.
-    extractor.set_algorithm("chunked_scalar");
-    EXPECT_EQ(extractor.algorithm_name(vector_callback), "chunked_scalar");
+    extractor.set_algorithm(scalar);
+    EXPECT_EQ(extractor.algorithm_name(vector_callback), scalar);
 
     // An estimate brings the choice by callback back.
     TuneOptions options;
@@ -176,7 +178,7 @@ TEST(KmerExtractor, Estimate)
     extractor.tune(options);
     EXPECT_EQ(
         extractor.algorithm_name(vector_callback),
-        arch.empty() ? "chunked_scalar" : "chunked_simd_" + arch
+        arch.empty() ? scalar : simd
     );
 }
 

@@ -97,6 +97,24 @@ using CandidateSimdArchs = TypeList<SimdSSE2>;
 using CandidateSimdArchs = TypeList<>;
 #endif
 
+/**
+ * @brief The SIMD archs of the estimate, see ExtractorPreference: AVX2, also next to AVX512, or
+ * Neon, else none, so that the estimate is a scalar loop.
+ */
+#if defined(FISK_HAS_AVX2)
+using PreferredSimdArchs = TypeList<SimdAVX2>;
+#elif defined(FISK_HAS_NEON)
+using PreferredSimdArchs = TypeList<SimdNEON>;
+#else
+using PreferredSimdArchs = TypeList<>;
+#endif
+
+// The input check in the names of the candidates.
+inline std::string input_check_name_(InputCheck input_check)
+{
+    return (input_check == InputCheck::kChecked) ? "checked" : "unchecked";
+}
+
 // The name of a SIMD arch in the names of the candidates.
 template <SimdArch Simd>
 inline std::string simd_arch_name_()
@@ -251,8 +269,88 @@ struct ExtractorTuneChecksum
 };
 
 // =================================================================================================
+//     Extractor Estimate
+// =================================================================================================
+
+/**
+ * @brief The estimate of an extractor and of the free functions, such as for_each_kmer(): lists of
+ * candidates in order of preference, as TypeLists, for callbacks of single k-mers and for callbacks
+ * that take vectors. Of the list for a callback, the first candidate that is preferred on this CPU
+ * runs, see visit_estimate(). The last one of each list is a scalar one, which always is
+ * preferred.
+ */
+template <typename Single, typename Vectors>
+struct ExtractorPreference
+{
+    // Whether a candidate of the list hands vectors to a callback of type `Callback`.
+    template <typename Callback, typename... Candidates>
+    static constexpr bool takes_vectors_(TypeList<Candidates...>)
+    {
+        return (Candidates::template takes_vectors<Callback> || ...);
+    }
+
+    // The list for callbacks of type `Callback`.
+    template <typename Callback>
+    using list = std::conditional_t<takes_vectors_<Callback>(Vectors{}), Vectors, Single>;
+};
+
+// Whether the estimate may run `Candidate` on this CPU: its preferred(), where it has one, such as
+// the PEXT candidates, which are measured by tune() wherever they are available, but preferred only
+// where they are likely fast; else its available().
+template <typename Candidate>
+inline bool extractor_candidate_preferred_()
+{
+    if constexpr (requires { Candidate::preferred(); }) {
+        return Candidate::preferred();
+    } else {
+        return Candidate::available();
+    }
+}
+
+// Call `f` with the first preferred candidate of the list, see visit_estimate().
+template <typename Candidate, typename... Rest, typename F>
+FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred_(F& f)
+{
+    if constexpr (sizeof...(Rest) == 0) {
+        return f(Candidate{});
+    } else {
+        if (extractor_candidate_preferred_<Candidate>()) {
+            return f(Candidate{});
+        }
+        return visit_first_preferred_<Rest...>(f);
+    }
+}
+
+template <typename... Candidates, typename F>
+FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred_(TypeList<Candidates...>, F& f)
+{
+    return visit_first_preferred_<Candidates...>(f);
+}
+
+/**
+ * @brief Call `f` with the candidate of the estimate for callbacks of type `Callback`, such as to
+ * run it, or to get its name.
+ *
+ * The `Preference`, an ExtractorPreference, has a list of candidates for the callback type, chosen
+ * at compile time. Of this list, the first one that is preferred on this CPU is chosen at runtime,
+ * with cached checks of the CPU, which are a few predictable branches.
+ */
+template <typename Preference, typename Callback, typename F>
+FISK_ALWAYS_INLINE inline decltype(auto) visit_estimate(F&& f)
+{
+    return visit_first_preferred_(typename Preference::template list<Callback>{}, f);
+}
+
+// =================================================================================================
 //     Extractor Plan
 // =================================================================================================
+
+/**
+ * @brief The plan of an extractor before tune() and set_algorithm(): the estimate, see
+ * visit_estimate().
+ */
+struct ExtractorEstimate
+{};
 
 /**
  * @brief The shared logic of KmerExtractor and SpacedKmerExtractor: the candidate algorithms, the
@@ -260,47 +358,38 @@ struct ExtractorTuneChecksum
  *
  * Each candidate is an empty struct with
  *
- *   - `static std::string name()`, its name in the naming scheme of the extraction functions, such
- *     as "chunked_simd_avx2" for for_each_kmer_ascii_checked_chunked_simd<SimdAVX2>(),
+ *   - `static std::string name()`, the name of the extraction function that it calls, followed by
+ *     its template choices, such as "for_each_kmer_ascii_checked_chunked_simd_avx2" for
+ *     for_each_kmer_ascii_checked_chunked_simd<SimdAVX2>(),
  *   - `static bool available()`, whether it can run in this build on this CPU,
+ *   - optionally `static bool preferred()`, whether the estimate may run it, see
+ *     extractor_candidate_preferred_(),
  *   - `template <typename Cb> static constexpr bool takes_vectors`, whether it hands vectors to a
  *     callback of type `Cb`, rather than single k-mers,
  *   - `void run(Settings const& settings, Seq const& seq, Cb& callback) const`, the extraction,
  *     with the data that it needs from the `settings`, such as the prepared masks.
  *
- * The chosen candidate is held in a std::variant, which for_each() visits. There are two of them,
- * as the estimate depends on the callback: callbacks that take vectors prefer a candidate that
- * hands out vectors, callbacks of single k-mers one that is fastest for them: `kmer_single_plan_`
- * for callbacks of single k-mers, and `kmer_vector_plan_` for callbacks that take vectors.
- * for_each() picks one by the type of the callback, at compile time, see plan_of_callback_().
- * Either can hold any candidate, scalar or SIMD. Once tune() measured or set_algorithm() set a
- * candidate, both hold that one, for all callbacks.
+ * The plan is a std::variant of ExtractorEstimate and the candidates, which for_each() visits. It
+ * starts as the estimate, which picks the candidate per callback type, see visit_estimate(): a
+ * callback that takes vectors gets a candidate that hands out vectors, a callback of single k-mers
+ * one that is fastest for them. Once tune() measured or set_algorithm() set a candidate, the plan
+ * holds that one, for all callbacks.
  */
-template <typename Settings, typename Seq, typename Candidates>
+template <typename Settings, typename Seq, typename Candidates, typename Preference>
 class ExtractorPlan;
 
-template <typename Settings, typename Seq, typename... Candidates>
-class ExtractorPlan<Settings, Seq, TypeList<Candidates...>>
+template <typename Settings, typename Seq, typename... Candidates, typename Preference>
+class ExtractorPlan<Settings, Seq, TypeList<Candidates...>, Preference>
 {
 public:
 
-    using Plan = std::variant<Candidates...>;
+    using Plan = std::variant<ExtractorEstimate, Candidates...>;
 
     /**
-     * @brief Prepare the plan for the `settings`, with the estimates as lists of candidate names,
-     * in order of preference, for callbacks of single k-mers and of vectors. Names of candidates
-     * that are not compiled or not available are skipped.
+     * @brief Prepare the plan for the `settings`, with the estimate.
      */
-    ExtractorPlan(
-        Settings settings,
-        std::vector<std::string> kmer_single_preference,
-        std::vector<std::string> kmer_vector_preference
-    )
+    explicit ExtractorPlan(Settings settings)
         : settings_(std::move(settings))
-        , kmer_single_preference_(std::move(kmer_single_preference))
-        , kmer_vector_preference_(std::move(kmer_vector_preference))
-        , kmer_single_plan_(make_preferred_(kmer_single_preference_))
-        , kmer_vector_plan_(make_preferred_(kmer_vector_preference_))
     {}
 
     Settings const& settings() const noexcept
@@ -315,11 +404,23 @@ public:
     template <typename Callback>
     FISK_ALWAYS_INLINE void for_each(Seq const& seq, Callback& callback) const
     {
+        // At runtime: the jump to the alternative that the plan holds, the estimate or a candidate.
         std::visit(
             [&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
-                candidate.run(settings_, seq, callback);
+                using Candidate = std::remove_cvref_t<decltype(candidate)>;
+                if constexpr (std::same_as<Candidate, ExtractorEstimate>) {
+                    // At compile time, the preference list for this callback type; at runtime,
+                    // its first candidate that is preferred on this CPU, see visit_estimate().
+                    visit_estimate<Preference, Callback>(
+                        [&](auto const& preferred) FISK_ALWAYS_INLINE_LAMBDA {
+                            preferred.run(settings_, seq, callback);
+                        }
+                    );
+                } else {
+                    candidate.run(settings_, seq, callback);
+                }
             },
-            plan_of_callback_<Callback>()
+            plan_
         );
     }
 
@@ -332,9 +433,16 @@ public:
     {
         return std::visit(
             [](auto const& candidate) {
-                return std::remove_cvref_t<decltype(candidate)>::name();
+                using Candidate = std::remove_cvref_t<decltype(candidate)>;
+                if constexpr (std::same_as<Candidate, ExtractorEstimate>) {
+                    return visit_estimate<Preference, Callback>([](auto const& preferred) {
+                        return std::remove_cvref_t<decltype(preferred)>::name();
+                    });
+                } else {
+                    return Candidate::name();
+                }
             },
-            plan_of_callback_<Callback>()
+            plan_
         );
     }
 
@@ -354,15 +462,21 @@ public:
 
     void set_algorithm(std::string_view name)
     {
-        auto plan = make_named_(name);
-        if (!plan) {
+        bool found = false;
+        (
+            [&] {
+                if (!found && Candidates::name() == name && Candidates::available()) {
+                    plan_ = Candidates{};
+                    found = true;
+                }
+            }(),
+            ...
+        );
+        if (!found) {
             throw std::invalid_argument(
                 "set_algorithm(): unknown or unavailable algorithm \"" + std::string(name) + "\""
             );
         }
-        kmer_single_plan_ = *plan;
-        kmer_vector_plan_ = std::move(*plan);
-        estimated_ = false;
     }
 
     // -------------------------------------------------------------------------
@@ -371,9 +485,7 @@ public:
 
     void estimate()
     {
-        kmer_single_plan_ = make_preferred_(kmer_single_preference_);
-        kmer_vector_plan_ = make_preferred_(kmer_vector_preference_);
-        estimated_ = true;
+        plan_ = ExtractorEstimate{};
     }
 
     /**
@@ -408,13 +520,11 @@ public:
         std::optional<Plan> best;
         auto best_time = clock::duration::max();
 
-        auto const measure_one = [&]<std::size_t I>(std::integral_constant<std::size_t, I>) {
-            using Candidate = std::variant_alternative_t<I, Plan>;
+        auto const measure_one = [&]<typename Candidate>() {
             if (!Candidate::available()) {
                 return;
             }
-            Plan plan(std::in_place_index<I>);
-            auto const& candidate = std::get<I>(plan);
+            Candidate const candidate{};
 
             // Checksum, which is also the warmup.
             ExtractorTuneChecksum checksum;
@@ -441,73 +551,22 @@ public:
             }
             if (candidate_time < best_time) {
                 best_time = candidate_time;
-                best = std::move(plan);
+                best = candidate;
             }
         };
-        [&]<std::size_t... I>(std::index_sequence<I...>) {
-            (measure_one(std::integral_constant<std::size_t, I>{}), ...);
-        }(std::index_sequence_for<Candidates...>{});
+        (measure_one.template operator()<Candidates>(), ...);
 
         // The scalar candidates are always available.
         if (!best) {
             throw std::runtime_error("tune(): no algorithm available");
         }
-        kmer_single_plan_ = *best;
-        kmer_vector_plan_ = std::move(*best);
-        estimated_ = false;
+        plan_ = *best;
     }
 
 private:
 
-    // The plan for a callback: while estimated, the one for vectors if any candidate hands vectors
-    // to this callback, else the one for single k-mers.
-    template <typename Callback>
-    FISK_ALWAYS_INLINE Plan const& plan_of_callback_() const
-    {
-        constexpr bool takes_vectors = (Candidates::template takes_vectors<Callback> || ...);
-        if constexpr (takes_vectors) {
-            return estimated_ ? kmer_vector_plan_ : kmer_single_plan_;
-        } else {
-            return kmer_single_plan_;
-        }
-    }
-
-    // The available candidate of the given name, if any.
-    std::optional<Plan> make_named_(std::string_view name) const
-    {
-        std::optional<Plan> result;
-        [&]<std::size_t... I>(std::index_sequence<I...>) {
-            (
-                [&] {
-                    using Candidate = std::variant_alternative_t<I, Plan>;
-                    if (!result && Candidate::name() == name && Candidate::available()) {
-                        result.emplace(std::in_place_index<I>);
-                    }
-                }(),
-                ...
-            );
-        }(std::index_sequence_for<Candidates...>{});
-        return result;
-    }
-
-    // The first available candidate of the preferences. Each list ends in a scalar candidate, which
-    // is always available.
-    Plan make_preferred_(std::vector<std::string> const& preference) const
-    {
-        for (auto const& name : preference) {
-            if (auto plan = make_named_(name)) {
-                return std::move(*plan);
-            }
-        }
-        throw std::logic_error("ExtractorPlan: none of the preferred algorithms is available");
-    }
-
     Settings settings_;
-    std::vector<std::string> kmer_single_preference_;
-    std::vector<std::string> kmer_vector_preference_;
-    Plan kmer_single_plan_;
-    Plan kmer_vector_plan_;
-    bool estimated_ = true;
+    Plan plan_;
 };
 
 } // namespace fisk

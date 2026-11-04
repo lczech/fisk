@@ -36,8 +36,7 @@ namespace fisk {
 
 // The candidate algorithms of SpacedKmerExtractor, see ExtractorPlan for their shape. Each calls
 // one of the spaced k-mer extraction functions, with the masks dispatched to a span of fixed size,
-// see dispatch_static_span(); the names are those of the functions after the input check, followed
-// by the bit extraction.
+// see dispatch_static_span(), and is named after it, followed by the bit extraction.
 
 // -------------------------------------------------------------------------------------------------
 //     Bit Extraction
@@ -83,6 +82,20 @@ inline bool spaced_kmer_extractor_bit_extract_available_()
     } else {
         return simd_arch_enabled_<typename M::simd_arch>();
     }
+}
+
+// Whether the estimate may run the bit extraction of the masks of type `M`, see
+// extractor_candidate_preferred_(): PEXT only where it is likely fast, as it is slow on some CPUs,
+// see pext_likely_fast(); tune() measures it wherever it is available.
+template <typename M>
+inline bool spaced_kmer_extractor_bit_extract_preferred_()
+{
+    #if defined(FISK_HAS_BMI2)
+    if constexpr (std::same_as<M, BitExtractMask> || std::same_as<M, BitExtractKernelPext>) {
+        return pext_likely_fast();
+    }
+    #endif
+    return spaced_kmer_extractor_bit_extract_available_<M>();
 }
 
 // The scalar bit extraction of the masks of type `M`.
@@ -145,9 +158,11 @@ struct SpacedKmerCandidateAsciiChunkedScalar
 {
     static std::string name()
     {
-        return "chunked_scalar_" + spaced_kmer_extractor_bit_extract_name_<M>();
+        return "for_each_spaced_kmer_ascii_" + input_check_name_(C) + "_chunked_scalar_" +
+            spaced_kmer_extractor_bit_extract_name_<M>();
     }
     static bool available() { return spaced_kmer_extractor_bit_extract_available_<M>(); }
+    static bool preferred() { return spaced_kmer_extractor_bit_extract_preferred_<M>(); }
 
     template <typename Callback>
     static constexpr bool takes_vectors = false;
@@ -178,9 +193,11 @@ struct SpacedKmerCandidateAsciiChunkedSimd
 {
     static std::string name()
     {
-        return "chunked_simd_" + spaced_kmer_extractor_bit_extract_name_<Kernel>();
+        return "for_each_spaced_kmer_ascii_" + input_check_name_(C) + "_chunked_simd_" +
+            spaced_kmer_extractor_bit_extract_name_<Kernel>();
     }
     static bool available() { return spaced_kmer_extractor_bit_extract_available_<Kernel>(); }
+    static bool preferred() { return spaced_kmer_extractor_bit_extract_preferred_<Kernel>(); }
 
     template <typename Callback>
     static constexpr bool takes_vectors = spaced_kmer_extractor_takes_vectors_<
@@ -217,9 +234,11 @@ struct SpacedKmerCandidatePackedBytewiseScalar
 {
     static std::string name()
     {
-        return "bytewise_scalar_" + spaced_kmer_extractor_bit_extract_name_<M>();
+        return "for_each_spaced_kmer_packed_" + input_check_name_(C) + "_bytewise_scalar_" +
+            spaced_kmer_extractor_bit_extract_name_<M>();
     }
     static bool available() { return spaced_kmer_extractor_bit_extract_available_<M>(); }
+    static bool preferred() { return spaced_kmer_extractor_bit_extract_preferred_<M>(); }
 
     template <typename Callback>
     static constexpr bool takes_vectors = false;
@@ -249,9 +268,11 @@ struct SpacedKmerCandidatePackedBytewiseSimd
 {
     static std::string name()
     {
-        return "bytewise_simd_" + spaced_kmer_extractor_bit_extract_name_<Kernel>();
+        return "for_each_spaced_kmer_packed_" + input_check_name_(C) + "_bytewise_simd_" +
+            spaced_kmer_extractor_bit_extract_name_<Kernel>();
     }
     static bool available() { return spaced_kmer_extractor_bit_extract_available_<Kernel>(); }
+    static bool preferred() { return spaced_kmer_extractor_bit_extract_preferred_<Kernel>(); }
 
     template <typename Callback>
     static constexpr bool takes_vectors = spaced_kmer_extractor_takes_vectors_<
@@ -280,7 +301,7 @@ struct SpacedKmerCandidatePackedBytewiseSimd
 
 // The candidates of a SpacedKmerExtractor: PEXT, where compiled, and the butterfly bit
 // extraction, in the scalar loops and as kernels of the SIMD loops of the `Simds`, a TypeList, each
-// for up to `MaxMasks` masks; see spaced_kmer_extractor_preference_() for the estimate among them.
+// for up to `MaxMasks` masks; see SpacedKmerExtractorPreference for the estimate among them.
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L, std::size_t MaxMasks,
     typename Simds = CandidateSimdArchs
@@ -312,22 +333,43 @@ struct SpacedKmerExtractorCandidates<I, C, E, L, MaxMasks, TypeList<Simd...>>
     using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
 };
 
-// The estimate of a SpacedKmerExtractor, as candidate names in order of preference: the scalar
-// loop with PEXT, where it is likely fast, else the SIMD loop with the butterfly kernel of AVX2 or
-// Neon, else the scalar loop with the butterfly. These are the fastest for callbacks of single
-// spaced k-mers as well as for those that take vectors.
-inline std::vector<std::string> spaced_kmer_extractor_preference_(InputFormat input_format)
+// The estimate of a SpacedKmerExtractor and of for_each_spaced_kmer(), see ExtractorPreference:
+// the scalar loop with PEXT, where it is likely fast, else the SIMD loop with the butterfly kernel
+// of the `Simds`, a TypeList, which are AVX2 or Neon, else the scalar loop with the butterfly.
+// These are the fastest for callbacks of single spaced k-mers as well as for those that take
+// vectors.
+template <
+    InputFormat I, InputCheck C, Encoding E, Layout L, std::size_t MaxMasks,
+    typename Simds = PreferredSimdArchs
+>
+struct SpacedKmerExtractorPreference;
+
+template <
+    InputFormat I, InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename... Simd
+>
+struct SpacedKmerExtractorPreference<I, C, E, L, MaxMasks, TypeList<Simd...>>
 {
-    std::string const loop = (input_format == InputFormat::kAscii) ? "chunked_" : "bytewise_";
-    std::vector<std::string> result;
-    if (pext_likely_fast()) {
-        result.push_back(loop + "scalar_pext");
-    }
-    result.push_back(loop + "simd_butterfly_avx2");
-    result.push_back(loop + "simd_butterfly_neon");
-    result.push_back(loop + "scalar_butterfly");
-    return result;
-}
+    using Ascii = TypeList<
+        #if defined(FISK_HAS_BMI2)
+        SpacedKmerCandidateAsciiChunkedScalar<C, E, L, MaxMasks, BitExtractMask>,
+        #endif
+        SpacedKmerCandidateAsciiChunkedSimd<C, E, L, MaxMasks, BitExtractKernelButterfly<Simd>>...,
+        SpacedKmerCandidateAsciiChunkedScalar<C, E, L, MaxMasks, BitExtractButterflyMask>
+    >;
+
+    using Packed = TypeList<
+        #if defined(FISK_HAS_BMI2)
+        SpacedKmerCandidatePackedBytewiseScalar<C, E, L, MaxMasks, BitExtractMask>,
+        #endif
+        SpacedKmerCandidatePackedBytewiseSimd<
+            C, E, L, MaxMasks, BitExtractKernelButterfly<Simd>
+        >...,
+        SpacedKmerCandidatePackedBytewiseScalar<C, E, L, MaxMasks, BitExtractButterflyMask>
+    >;
+
+    using List = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
+    using type = ExtractorPreference<List, List>;
+};
 
 // =================================================================================================
 //     Spaced K-mer Extractor
@@ -418,9 +460,10 @@ public:
     {}
 
     /**
-     * @brief Set up the extractor for a set of masks, see make_spaced_kmer_masks().
+     * @brief Set up the extractor for a set of masks, such as a std::vector of them, see
+     * make_spaced_kmer_masks().
      */
-    explicit SpacedKmerExtractor(std::vector<mask_type> const& masks)
+    explicit SpacedKmerExtractor(std::span<mask_type const> masks)
         : SpacedKmerExtractor(masks_type(masks))
     {}
 
@@ -430,11 +473,7 @@ public:
      */
     template <Layout ML, std::size_t M>
     explicit SpacedKmerExtractor(SpacedKmerMasks<ML, M> masks)
-        : plan_(
-            own_masks_(std::move(masks)),
-            spaced_kmer_extractor_preference_(I),
-            spaced_kmer_extractor_preference_(I)
-        )
+        : plan_(own_masks_(std::move(masks)))
     {}
 
     /**
@@ -514,8 +553,9 @@ public:
     }
 
     /**
-     * @brief The name of the chosen algorithm, as in the names of the spaced k-mer extraction
-     * functions, followed by the bit extraction, such as "chunked_scalar_pext" for
+     * @brief The name of the chosen algorithm: the name of the spaced k-mer extraction function,
+     * followed by the bit extraction, such as
+     * "for_each_spaced_kmer_ascii_checked_chunked_scalar_pext" for
      * for_each_spaced_kmer_ascii_checked_chunked_scalar() with bit_extract_pext.
      */
     std::string algorithm_name() const
@@ -578,7 +618,8 @@ private:
 
     using Plan = ExtractorPlan<
         masks_type, sequence_type,
-        typename SpacedKmerExtractorCandidates<I, C, E, L, MaxMasks>::type
+        typename SpacedKmerExtractorCandidates<I, C, E, L, MaxMasks>::type,
+        typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type
     >;
     Plan plan_;
 };
