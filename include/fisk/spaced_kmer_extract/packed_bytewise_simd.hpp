@@ -218,6 +218,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
             }
         );
         auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
+            // Not FISK_ALWAYS_INLINE_LAMBDA: forced inline, GCC compiles the SSE2 loops slower.
             emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
                 Windows windows{};
                 for (std::size_t j = 0; j < Pieces; ++j) {
@@ -258,6 +259,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
         auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
             simd_vector const words = next;
             next = load_packed_words_<Simd, L>(codes + b + step_bytes);
+            // Not FISK_ALWAYS_INLINE_LAMBDA: forced inline, GCC compiles the SSE2 loops slower.
             emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
                 // Without shifts per lane, the first vector has position 0 of the starting bytes
                 // in all lanes, where the words hold the whole span already.
@@ -322,6 +324,8 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_(
         return;
     }
     constexpr std::size_t Compiled = std::min(MaxCompiledPieces, Mask::max_pieces);
+    // Not FISK_ALWAYS_INLINE_LAMBDA: forced inline, GCC compiles the scalar-arch loops slower,
+    // already at 2 pieces.
     bool const done = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
         return ((
             count == Is + 2 && (

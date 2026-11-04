@@ -57,7 +57,7 @@ inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
 
     // Shift a byte of codes in at the end of the newest bases: the low bits for kMSB, and the high
     // bits for kLSB, whose bytes hold their first base in the low bits.
-    auto fold_byte_ = [&](std::uint8_t byte) {
+    auto fold_byte_ = [&](std::uint8_t byte) FISK_ALWAYS_INLINE_LAMBDA {
         if constexpr (L == Layout::kMSB) {
             acc = (acc << 8) | byte;
         } else if constexpr (L == Layout::kLSB) {
@@ -185,7 +185,7 @@ inline void for_each_kmer_packed_rolling_scalar_full_width_(
     }
 
     // As in the narrow-width loop, moving the byte that leaves one word over into the other.
-    auto fold_byte_ = [&](std::uint8_t byte) {
+    auto fold_byte_ = [&](std::uint8_t byte) FISK_ALWAYS_INLINE_LAMBDA {
         if constexpr (L == Layout::kMSB) {
             std::uint64_t const carry = lo >> 56;
             lo = (lo << 8) | byte;
@@ -203,7 +203,7 @@ inline void for_each_kmer_packed_rolling_scalar_full_width_(
     };
 
     // The k-mer of a plan, shifted to the low bits from `hi`, `lo`, or both, and masked.
-    auto window_ = [&](LocalPlan const& p) -> std::uint64_t {
+    auto window_ = [&](LocalPlan const& p) FISK_ALWAYS_INLINE_LAMBDA -> std::uint64_t {
         std::uint64_t bits;
         switch (p.case_id) {
             case 0:  bits = hi >> (p.start - 64); break;

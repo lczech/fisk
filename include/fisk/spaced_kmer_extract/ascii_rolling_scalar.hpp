@@ -110,7 +110,7 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
 
         // Apply the callback for all masks that are satisfied at this position.
         std::size_t mask_idx = 0;
-        for_each_mask_(masks, [&](auto const& mask) {
+        for_each_mask_(masks, [&](auto const& mask) FISK_ALWAYS_INLINE_LAMBDA {
             std::uint64_t const bits = spaced_kmer_mask_bits_(mask);
             if ((valid_bits & bits) == bits) {
                 auto const word = bit_ext(kmer_bits, mask.mask_pieces[0]);

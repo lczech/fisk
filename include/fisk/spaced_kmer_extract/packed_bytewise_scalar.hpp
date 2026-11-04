@@ -74,7 +74,7 @@ inline void emit_spaced_kmers_packed_bytewise_scalar_(
     Callback& callback
 ) {
     std::size_t mask_idx = 0;
-    for_each_mask_(masks, [&](auto const& mask) {
+    for_each_mask_(masks, [&](auto const& mask) FISK_ALWAYS_INLINE_LAMBDA {
         if (valid(mask)) {
             auto const word = extract(mask, mask_idx);
             assert_fits_width_(word, spaced_kmer_weight(mask));
@@ -249,8 +249,8 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
             }
 
             // The spaced k-mers at base `local` of the byte, from the `window` of a single piece.
-            // Not a template over `local`, so that the four calls share one copy of the
-            // extraction and the callbacks, which the compiler inlines where they are small.
+            // Not a template over `local`, so that the four calls share one instantiation; each
+            // call is inlined, with the extraction and the callbacks.
             auto const emit_ = [&](
                 unsigned local, [[maybe_unused]] std::uint64_t window
             ) FISK_ALWAYS_INLINE_LAMBDA {
@@ -298,7 +298,9 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
                     masks, pos, extract, valid, callback
                 );
             };
-            [&]<unsigned... Locals>(std::integer_sequence<unsigned, Locals...>) {
+            [&]<unsigned... Locals>(
+                std::integer_sequence<unsigned, Locals...>
+            ) FISK_ALWAYS_INLINE_LAMBDA {
                 (emit_(Locals, Count == 1 ? tail_window_.template operator()<Locals>() : 0), ...);
             }(std::make_integer_sequence<unsigned, 4>{});
         }
@@ -382,7 +384,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
     // The copies for 2 to MaxCompiledPieces pieces, as far as the masks can have that many, and the
     // loop over the pieces at runtime for masks that can have more.
     constexpr std::size_t Compiled = std::min(MaxCompiledPieces, Mask::max_pieces);
-    bool const done = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    bool const done = [&]<std::size_t... Is>(std::index_sequence<Is...>) FISK_ALWAYS_INLINE_LAMBDA {
         return ((
             count == Is + 1 && (
                 for_each_spaced_kmer_packed_bytewise_scalar_loop_<Is + 1, 0, SingleMask>(

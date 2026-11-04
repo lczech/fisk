@@ -327,7 +327,7 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
     // k-mers, each with the validity of its k-mer in lane 0, see packed_bytewise_simd_emit_().
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         simd_vector const words = load_packed_words_<Simd, L>(codes + b);
-        emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
+        emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) FISK_ALWAYS_INLINE_LAMBDA {
             return Simd::bitwise_and(
                 packed_bytewise_simd_shift_right_<Simd>(words, counts.at[i]), mask_v
             );
@@ -398,7 +398,7 @@ inline void for_each_kmer_packed_bytewise_simd_full_width_(
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         simd_vector const words = next;
         next = load_packed_words_<Simd, L>(codes + b + step_bytes);
-        emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
+        emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) FISK_ALWAYS_INLINE_LAMBDA {
             // Without shifts per lane, the first vector has position 0 of the starting bytes
             // in all lanes, where the words hold the whole k-mer already.
             bool const whole = !SimdArchWithLaneShifts<Simd> && i == 0;

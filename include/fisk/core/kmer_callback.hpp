@@ -387,7 +387,7 @@ inline std::size_t store_valid_lanes(
 ) noexcept {
     using K = typename V::kmer_type;
     std::size_t count = 0;
-    for_each_valid_lane(0, kmers, valid, [&](K const& kmer) {
+    for_each_valid_lane(0, kmers, valid, [&](K const& kmer) FISK_ALWAYS_INLINE_LAMBDA {
         out[count++] = kmer;
     });
     return count;
