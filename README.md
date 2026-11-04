@@ -205,7 +205,7 @@ This will produce performance measurements for all implemented benchmarks on the
 
  - `kmer_extract_<input>_<check>`: k-mers
  - `spaced_kmer_extract_<input>_<check>_single` and `…_multi`: spaced k-mers, one mask or several
- - `spaced_kmer_extract_packed_<check>_spans`: spaced k-mers, one mask per span from 1 to 128
+ - `spaced_kmer_extract_<input>_<check>_spans`: spaced k-mers, one mask per span from 1 to 128
  - `sequence_pack_<check>`: sequence packing
 
 with `<input>` being `ascii` or `packed`, and `<check>` being `checked` or `unchecked`.

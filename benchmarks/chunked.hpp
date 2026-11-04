@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/kmer_spaced.hpp"
@@ -39,14 +41,14 @@ using ChunkedWordEncoder = fisk::WordEncoderButterfly<E, L>;
 #endif
 
 // The scratch of the chunked loops, without and with validity, and the masks and kernels of the
-// spaced ones.
+// spaced ones, of the default maximum span unless given.
 template <fisk::Layout L>
 using ChunkedScratch = fisk::PackedSequence<fisk::Encoding::kACGT, L>;
 template <fisk::Layout L>
 using ChunkedCheckedScratch = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, L>;
-template <fisk::Layout L>
-using PextMask = fisk::SpacedKmerMask<L, fisk::BitExtractMask>;
-template <fisk::Layout L>
-using ButterflyMask = fisk::SpacedKmerMask<L, fisk::BitExtractButterflyMask>;
-template <fisk::Layout L, typename Simd>
-using ButterflyKernel = fisk::SpacedKmerMask<L, fisk::BitExtractKernelButterfly<Simd>>;
+template <fisk::Layout L, std::size_t MaxSpan = 64>
+using PextMask = fisk::SpacedKmerMask<L, fisk::BitExtractMask, MaxSpan>;
+template <fisk::Layout L, std::size_t MaxSpan = 64>
+using ButterflyMask = fisk::SpacedKmerMask<L, fisk::BitExtractButterflyMask, MaxSpan>;
+template <fisk::Layout L, typename Simd, std::size_t MaxSpan = 64>
+using ButterflyKernel = fisk::SpacedKmerMask<L, fisk::BitExtractKernelButterfly<Simd>, MaxSpan>;

@@ -236,6 +236,23 @@ for suite in "sequence_pack_unchecked" "sequence_pack_checked"; do
 done
 
 # ------------------------------------------------------------
+# Spaced k-mers over the span of the mask, one panel per CPU
+# ------------------------------------------------------------
+
+# Not in the generic SUMMARIES loop above: a line plot over the spans of the span sweep suites,
+# with one line per variant, instead of bars per platform. Suites without result files yet are
+# skipped.
+echo "Plotting spaced k-mers over the span"
+for suite in \
+  spaced_kmer_extract_ascii_unchecked_spans spaced_kmer_extract_ascii_checked_spans \
+  spaced_kmer_extract_packed_unchecked_spans spaced_kmer_extract_packed_checked_spans
+do
+  build_file_args "${suite}.csv" || continue
+  plot_modes supp,full "${OUT}/${suite}_per_cpu" \
+    python ./plot/plot_spaced_spans.py "${args[@]}"
+done
+
+# ------------------------------------------------------------
 # Vectors vs. scalars, one panel per CPU
 # ------------------------------------------------------------
 

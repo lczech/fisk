@@ -190,6 +190,18 @@ for EXT in png svg ; do
     done
 
 
+    # Kmer Spaced, over the span of the mask, from ASCII and from packed sequences
+
+    for SUITE in \
+      spaced_kmer_extract_ascii_unchecked_spans spaced_kmer_extract_ascii_checked_spans \
+      spaced_kmer_extract_packed_unchecked_spans spaced_kmer_extract_packed_checked_spans
+    do
+      CSV="${DIR}/${SUITE}.csv"
+      plot_modes "$CSV" supp,full "${DIR}/${SUITE}" \
+        python ./plot/plot_spaced_spans.py --file "$CSV" "${US[@]}"
+    done
+
+
     # Checked vs. Unchecked
 
     # The unchecked suites that have a checked counterpart with the same techniques, as

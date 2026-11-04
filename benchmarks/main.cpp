@@ -41,6 +41,8 @@
 #include "spaced_kmer_extract_packed_checked_multi/bench.hpp"
 #include "spaced_kmer_extract_packed_unchecked_spans/bench.hpp"
 #include "spaced_kmer_extract_packed_checked_spans/bench.hpp"
+#include "spaced_kmer_extract_ascii_unchecked_spans/bench.hpp"
+#include "spaced_kmer_extract_ascii_checked_spans/bench.hpp"
 #include "kmer_clark/bench.hpp"
 #include "bit_extract_blocks/bench.hpp"
 #include "bit_extract_weights/bench.hpp"
@@ -365,6 +367,18 @@ int main(int argc, char **argv)
     {
         auto os = get_ofstream(out_dir, "spaced_kmer_extract_packed_checked_spans.csv" );
         bench_spaced_kmer_extract_packed_checked_spans( sequences, os );
+    }
+
+    // Spaced k-mers from ASCII without checks, chunked, one mask per span
+    {
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_ascii_unchecked_spans.csv" );
+        bench_spaced_kmer_extract_ascii_unchecked_spans( sequences, os );
+    }
+
+    // Spaced k-mers from ASCII with checks, chunked, one mask per span
+    {
+        auto os = get_ofstream(out_dir, "spaced_kmer_extract_ascii_checked_spans.csv" );
+        bench_spaced_kmer_extract_ascii_checked_spans( sequences, os );
     }
 
     // Clark
