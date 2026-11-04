@@ -29,6 +29,10 @@ Usage examples:
 
   python plot_bars_per_cpu.py --glob "artifacts/*/pext.csv" --suite PEXT
 
+  # Bars of the mask sets up to span 32, and a marker on each bar for the sets above:
+  python plot_bars_per_cpu.py --glob "results/*/spaced_kmer_extract_packed_checked_multi.csv" \
+      --marker-case "span>32" --marker-label "span 45 (2 pieces)"
+
   # Restrict to rows whose "case" column (e.g. "layout=msb;k=17") matches given fields:
   python plot_bars_per_cpu.py --glob "results/*/kmer_extract_packed_unchecked.csv" \
       --case-filter "layout=msb" --case-filter "k<=29" --mode main \
@@ -47,6 +51,7 @@ import os, sys, re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 import pandas as pd
 import matplotlib as mpl
@@ -272,6 +277,15 @@ def main(argv=None) -> None:
         help="Value for a 'case' field in rows that lack it, e.g. 'layout=msb', applied before "
              "--case-filter. Can be given multiple times.",
     )
+    ap.add_argument(
+        "--marker-case", default=None,
+        help="Show the rows whose 'case' matches this filter, e.g. 'span>32', as a marker on each "
+             "bar instead of in its mean. Files without the field have no markers.",
+    )
+    ap.add_argument(
+        "--marker-label", default=None,
+        help="Legend label of the markers (default: the --marker-case filter).",
+    )
     add_mode_arg(ap)
     ap.add_argument(
         "--untight",
@@ -340,21 +354,33 @@ def main(argv=None) -> None:
     if df.empty:
         raise SystemExit(f"No rows left after --case-filter {args.case_filter}")
 
+    # The rows of --marker-case, taken out of the means of the bars, and shown as markers. Rows
+    # without the field of the filter, such as those of older result files, stay in the bars.
+    marker_df = df.iloc[0:0]
+    if args.marker_case:
+        key = re.match(r'^[A-Za-z_][A-Za-z0-9_]*', args.marker_case).group(0)
+        fields = parse_case_fields(df)
+        if key in fields.columns:
+            marked = apply_case_filters(df[fields[key].notna()], [args.marker_case]).index
+            marker_df = df.loc[marked]
+            df = df.drop(index=marked)
+
     # Aggregate: mean over cases for each (benchmark, platform, compiler), in ns/op space --
     # converting to the display unit happens after, on the aggregated means only. Converting each
     # row to throughput first and then averaging would be a different, non-equivalent statistic
     # (see convert_for_display()'s docstring).
-    agg = (
-        df.groupby(["benchmark", "platform", "compiler"], as_index=False)["ns_per_op"]
-          .mean()
-          .rename(columns={"ns_per_op": "mean_ns_per_op"})
-    )
-    agg["display_value"] = convert_for_display(agg["mean_ns_per_op"], args.unit)
+    def aggregate(rows):
+        agg = (
+            rows.groupby(["benchmark", "platform", "compiler"], as_index=False)["ns_per_op"]
+                .mean()
+                .rename(columns={"ns_per_op": "mean_ns_per_op"})
+        )
+        agg["display_value"] = convert_for_display(agg["mean_ns_per_op"], args.unit)
+        agg["series"] = agg["platform"] + " | " + agg["compiler"]
+        # Pivot for plotting: rows=benchmark, columns=series
+        return agg.pivot(index="benchmark", columns="series", values="display_value")
 
-    agg["series"] = agg["platform"] + " | " + agg["compiler"]
-
-    # Pivot for plotting: rows=benchmark, columns=series
-    pivot = agg.pivot(index="benchmark", columns="series", values="display_value")
+    pivot = aggregate(df)
 
     # Stable benchmark order
     order = args.benchmark or BENCHMARK_ORDER
@@ -367,6 +393,9 @@ def main(argv=None) -> None:
     series = sorted(list(pivot.columns), key=series_sort_key)
     pivot = pivot.reindex(columns=series)
     series = pivot.columns.tolist()
+    markers = None
+    if len(marker_df):
+        markers = aggregate(marker_df).reindex(index=benchmarks, columns=series)
 
     # --------------------------------------
     #      Generate the plot
@@ -376,7 +405,10 @@ def main(argv=None) -> None:
     # sets a shared ceiling across a family of separate per-CPU/per-suite invocations (driven from
     # the shell wrapper scripts), which is when the truncation ("torn bar") mechanism below can
     # actually fire; by default nothing exceeds its own auto-computed ceiling so it stays dormant.
-    default_y_min, default_y_max = compute_axis_limits(pivot.values.flatten(), args.scale)
+    values = pivot.values.flatten()
+    if markers is not None:
+        values = np.concatenate([values, markers.values.flatten()])
+    default_y_min, default_y_max = compute_axis_limits(values, args.scale)
     YMIN = args.y_min if args.y_min is not None else default_y_min
     if args.y_max is not None:
         YLIM = args.y_max
@@ -439,6 +471,11 @@ def main(argv=None) -> None:
             edgecolor="white",
             linewidth=0.0,
         )
+        if markers is not None:
+            ax.scatter(
+                xpos, [min(v, YMAX) for v in markers[s].values], marker="D", s=18,
+                color=color_for_platform(platform), edgecolor="black", linewidth=0.6, zorder=6,
+            )
 
         # Mark truncated bars and annotate true values. The cut geometry below (depth, slope,
         # amplitude) is expressed as a fraction of YMAX rather than fixed absolute numbers, so it
@@ -559,6 +596,12 @@ def main(argv=None) -> None:
     ax.grid(axis="y", linestyle="--", alpha=0.3)
 
     handles, leg_labels = ax.get_legend_handles_labels()
+    if markers is not None:
+        handles.append(Line2D(
+            [], [], linestyle="none", marker="D", markersize=5, color="0.7",
+            markeredgecolor="black", markeredgewidth=0.6,
+        ))
+        leg_labels.append(args.marker_label or args.marker_case)
     if not args.no_legend:
         columns = 2 if len(leg_labels) > 5 else 3
         placement = {"loc": "upper right"}

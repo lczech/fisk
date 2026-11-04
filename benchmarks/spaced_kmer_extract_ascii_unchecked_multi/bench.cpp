@@ -268,7 +268,8 @@ void bench_spaced_kmer_extract_ascii_unchecked_multi(
                 return kmer_count * mask_count;
             });
 
-        std::string const case_label = "mask_set=" + std::to_string(m);
+        std::string const case_label = "mask_set=" + std::to_string(m)
+            + ";span=" + std::to_string(multi_masks[m][0].size());
         bench_spaced_kmer_extract_ascii_unchecked_multi_layout_<Layout::kMSB>(
             suite, sequences, multi_masks[m], sink_buffer, csv_os, suite_title, case_label
         );

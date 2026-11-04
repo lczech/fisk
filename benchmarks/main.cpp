@@ -196,11 +196,12 @@ int main(int argc, char **argv)
             "W14L31.txt",
             "W18L31.txt",
             "W22L31.txt",
-            "W26L31.txt"
+            "W26L31.txt",
+            "W32L45.txt"
         };
 
-        // By default, we test single masks with the `default`,
-        // and multi across all masks with k<=32.
+        // By default, we test single masks with the `default`, and multi across all mask sets,
+        // one of which has a span above 32.
         std::cout << "No masks provided, using defaults\n";
         auto bin_path = parent_directory(argv[0]) / "../masks/";
         single_masks = load_lines( (bin_path / single_mask_file).string() );

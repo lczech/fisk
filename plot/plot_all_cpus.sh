@@ -192,6 +192,11 @@ for entry in "${SUMMARIES[@]}"; do
       --case-filter "encoding=acgt" --case-filter "layout=msb"
     )
   fi
+  # The mask sets of the multi-mask suites with spans above 32 take more pieces, and hence more
+  # time; they are markers on the bars, which are the means over the other sets.
+  if [[ "$name" == spaced_kmer_extract_*_multi ]]; then
+    case_args=( --marker-case "span>32" --marker-label "mask sets with span > 32" )
+  fi
 
   plot_modes "$modes" "${OUT}/${name}_per_cpu" \
     python ./plot/plot_bars_per_cpu.py "${args[@]}" ${case_args[@]+"${case_args[@]}"}

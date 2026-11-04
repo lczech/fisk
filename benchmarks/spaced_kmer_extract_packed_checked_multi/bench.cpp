@@ -419,7 +419,8 @@ void bench_spaced_kmer_extract_packed_checked_multi(
             std::cout << "\rmask set ";
             std::cout << std::setw(2) << (m + 1) << " / " << multi_masks.size() << "\n";
         }
-        std::string const case_label = "mask_set=" + std::to_string(m);
+        std::string const case_label = "mask_set=" + std::to_string(m)
+            + ";span=" + std::to_string(multi_masks[m][0].size());
         bench_spaced_kmer_extract_packed_checked_multi_layout_<Layout::kMSB>(
             packed_msb, multi_masks[m], sink_buffer, csv_os, suite_title, case_label,
             rounds, repeats
