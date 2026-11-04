@@ -161,7 +161,7 @@ TEST(SpacedKmerExtractor, Masks)
     AsciiCheckedSpacedExtractor extractor(masks);
     ASSERT_EQ(extractor.masks().size(), kMaxTestMasks);
     for (std::size_t i = 0; i < kMaxTestMasks; ++i) {
-        EXPECT_EQ(extractor.masks()[i].mask, masks[i].mask);
+        EXPECT_EQ(extractor.masks().get<BitExtractMask>()[i].mask, masks[i].mask);
     }
     for (auto const& seq : seqs) {
         SpacedKmerRecorder result;

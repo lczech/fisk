@@ -258,24 +258,23 @@ struct ExtractorTuneChecksum
  * @brief The shared logic of KmerExtractor and SpacedKmerExtractor: the candidate algorithms, the
  * choice between them, and running the chosen one.
  *
- * Each candidate is a struct with
+ * Each candidate is an empty struct with
  *
  *   - `static std::string name()`, its name in the naming scheme of the extraction functions, such
  *     as "chunked_simd_avx2" for for_each_kmer_ascii_checked_chunked_simd<SimdAVX2>(),
  *   - `static bool available()`, whether it can run in this build on this CPU,
- *   - a constructor from the `Settings`, which prepares its data, such as the kernels of masks,
  *   - `template <typename Cb> static constexpr bool takes_vectors`, whether it hands vectors to a
  *     callback of type `Cb`, rather than single k-mers,
- *   - `void run(Seq const& seq, Cb& callback) const`, the extraction.
+ *   - `void run(Settings const& settings, Seq const& seq, Cb& callback) const`, the extraction,
+ *     with the data that it needs from the `settings`, such as the prepared masks.
  *
  * The chosen candidate is held in a std::variant, which for_each() visits. There are two of them,
  * as the estimate depends on the callback: callbacks that take vectors prefer a candidate that
- * hands out vectors, callbacks of single k-mers one that is fastest for them. As candidates prepare
- * their data on construction, both estimates are built up front: `kmer_single_plan_` for callbacks
- * of single k-mers, and `kmer_vector_plan_` for callbacks that take vectors. for_each() picks one
- * by the type of the callback, at compile time, see plan_of_callback_(). Either can hold any
- * candidate, scalar or SIMD. Once tune() measured or set_algorithm() set a candidate, both hold
- * that one, for all callbacks.
+ * hands out vectors, callbacks of single k-mers one that is fastest for them: `kmer_single_plan_`
+ * for callbacks of single k-mers, and `kmer_vector_plan_` for callbacks that take vectors.
+ * for_each() picks one by the type of the callback, at compile time, see plan_of_callback_().
+ * Either can hold any candidate, scalar or SIMD. Once tune() measured or set_algorithm() set a
+ * candidate, both hold that one, for all callbacks.
  */
 template <typename Settings, typename Seq, typename Candidates>
 class ExtractorPlan;
@@ -318,7 +317,7 @@ public:
     {
         std::visit(
             [&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
-                candidate.run(seq, callback);
+                candidate.run(settings_, seq, callback);
             },
             plan_of_callback_<Callback>()
         );
@@ -414,13 +413,13 @@ public:
             if (!Candidate::available()) {
                 return;
             }
-            Plan plan(std::in_place_index<I>, settings_);
+            Plan plan(std::in_place_index<I>);
             auto const& candidate = std::get<I>(plan);
 
             // Checksum, which is also the warmup.
             ExtractorTuneChecksum checksum;
             for (auto const& seq : samples) {
-                candidate.run(seq, checksum);
+                candidate.run(settings_, seq, checksum);
             }
             if (!reference) {
                 reference = checksum.sum;
@@ -436,7 +435,7 @@ public:
             for (std::size_t r = 0; r < std::max<std::size_t>(options.repeats, 1); ++r) {
                 auto const start = clock::now();
                 for (auto const& seq : samples) {
-                    candidate.run(seq, callback);
+                    candidate.run(settings_, seq, callback);
                 }
                 candidate_time = std::min<clock::duration>(candidate_time, clock::now() - start);
             }
@@ -482,7 +481,7 @@ private:
                 [&] {
                     using Candidate = std::variant_alternative_t<I, Plan>;
                     if (!result && Candidate::name() == name && Candidate::available()) {
-                        result.emplace(std::in_place_index<I>, settings_);
+                        result.emplace(std::in_place_index<I>);
                     }
                 }(),
                 ...

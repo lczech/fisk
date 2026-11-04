@@ -66,12 +66,6 @@ inline constexpr bool kmer_extractor_takes_vectors_ = (C == InputCheck::kChecked
 template <InputCheck C, Encoding E, Layout L>
 struct KmerCandidateAsciiChunkedScalar
 {
-    std::size_t k;
-
-    explicit KmerCandidateAsciiChunkedScalar(KmerExtractorSettings const& settings)
-        : k(settings.k)
-    {}
-
     static std::string name() { return "chunked_scalar"; }
     static bool available() { return true; }
 
@@ -79,13 +73,15 @@ struct KmerCandidateAsciiChunkedScalar
     static constexpr bool takes_vectors = false;
 
     template <typename Callback>
-    FISK_ALWAYS_INLINE void run(std::string_view seq, Callback& callback) const
+    FISK_ALWAYS_INLINE void run(
+        KmerExtractorSettings const& settings, std::string_view seq, Callback& callback
+    ) const
     {
         ExtractorWordEncoder<E, L> const encoder{};
         if constexpr (C == InputCheck::kChecked) {
-            for_each_kmer_ascii_checked_chunked_scalar(seq, k, encoder, callback);
+            for_each_kmer_ascii_checked_chunked_scalar(seq, settings.k, encoder, callback);
         } else {
-            for_each_kmer_ascii_unchecked_chunked_scalar(seq, k, encoder, callback);
+            for_each_kmer_ascii_unchecked_chunked_scalar(seq, settings.k, encoder, callback);
         }
     }
 };
@@ -93,12 +89,6 @@ struct KmerCandidateAsciiChunkedScalar
 template <InputCheck C, Encoding E, Layout L, typename Simd>
 struct KmerCandidateAsciiChunkedSimd
 {
-    std::size_t k;
-
-    explicit KmerCandidateAsciiChunkedSimd(KmerExtractorSettings const& settings)
-        : k(settings.k)
-    {}
-
     static std::string name() { return "chunked_simd_" + simd_arch_name_<Simd>(); }
     static bool available() { return simd_arch_enabled_<Simd>(); }
 
@@ -106,14 +96,20 @@ struct KmerCandidateAsciiChunkedSimd
     static constexpr bool takes_vectors = kmer_extractor_takes_vectors_<Callback, C, E, L, Simd>;
 
     template <typename Callback>
-    FISK_ALWAYS_INLINE void run(std::string_view seq, Callback& callback) const
+    FISK_ALWAYS_INLINE void run(
+        KmerExtractorSettings const& settings, std::string_view seq, Callback& callback
+    ) const
     {
         ExtractorWordEncoder<E, L> const encoder{};
         auto vector_callback = kmer_extractor_vector_callback_(callback);
         if constexpr (C == InputCheck::kChecked) {
-            for_each_kmer_ascii_checked_chunked_simd<Simd>(seq, k, encoder, vector_callback);
+            for_each_kmer_ascii_checked_chunked_simd<Simd>(
+                seq, settings.k, encoder, vector_callback
+            );
         } else {
-            for_each_kmer_ascii_unchecked_chunked_simd<Simd>(seq, k, encoder, vector_callback);
+            for_each_kmer_ascii_unchecked_chunked_simd<Simd>(
+                seq, settings.k, encoder, vector_callback
+            );
         }
     }
 };
@@ -125,12 +121,6 @@ struct KmerCandidateAsciiChunkedSimd
 template <InputCheck C, Encoding E, Layout L>
 struct KmerCandidatePackedBytewiseScalar
 {
-    std::size_t k;
-
-    explicit KmerCandidatePackedBytewiseScalar(KmerExtractorSettings const& settings)
-        : k(settings.k)
-    {}
-
     static std::string name() { return "bytewise_scalar"; }
     static bool available() { return true; }
 
@@ -138,12 +128,14 @@ struct KmerCandidatePackedBytewiseScalar
     static constexpr bool takes_vectors = false;
 
     template <typename Seq, typename Callback>
-    FISK_ALWAYS_INLINE void run(Seq const& seq, Callback& callback) const
+    FISK_ALWAYS_INLINE void run(
+        KmerExtractorSettings const& settings, Seq const& seq, Callback& callback
+    ) const
     {
         if constexpr (C == InputCheck::kChecked) {
-            for_each_kmer_packed_checked_bytewise_scalar(seq, k, callback);
+            for_each_kmer_packed_checked_bytewise_scalar(seq, settings.k, callback);
         } else {
-            for_each_kmer_packed_unchecked_bytewise_scalar(seq, k, callback);
+            for_each_kmer_packed_unchecked_bytewise_scalar(seq, settings.k, callback);
         }
     }
 };
@@ -151,12 +143,6 @@ struct KmerCandidatePackedBytewiseScalar
 template <InputCheck C, Encoding E, Layout L, typename Simd>
 struct KmerCandidatePackedBytewiseSimd
 {
-    std::size_t k;
-
-    explicit KmerCandidatePackedBytewiseSimd(KmerExtractorSettings const& settings)
-        : k(settings.k)
-    {}
-
     static std::string name() { return "bytewise_simd_" + simd_arch_name_<Simd>(); }
     static bool available() { return simd_arch_enabled_<Simd>(); }
 
@@ -164,13 +150,15 @@ struct KmerCandidatePackedBytewiseSimd
     static constexpr bool takes_vectors = kmer_extractor_takes_vectors_<Callback, C, E, L, Simd>;
 
     template <typename Seq, typename Callback>
-    FISK_ALWAYS_INLINE void run(Seq const& seq, Callback& callback) const
+    FISK_ALWAYS_INLINE void run(
+        KmerExtractorSettings const& settings, Seq const& seq, Callback& callback
+    ) const
     {
         auto vector_callback = kmer_extractor_vector_callback_(callback);
         if constexpr (C == InputCheck::kChecked) {
-            for_each_kmer_packed_checked_bytewise_simd<Simd>(seq, k, vector_callback);
+            for_each_kmer_packed_checked_bytewise_simd<Simd>(seq, settings.k, vector_callback);
         } else {
-            for_each_kmer_packed_unchecked_bytewise_simd<Simd>(seq, k, vector_callback);
+            for_each_kmer_packed_unchecked_bytewise_simd<Simd>(seq, settings.k, vector_callback);
         }
     }
 };
