@@ -10,13 +10,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Put final binaries in bin/
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
-
-# Ensure a default build type if none is given
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-endif()
+# Put final binaries in bin/ of the fisk source tree
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 # Whether fisk is the top-level project (as opposed to being pulled in via
 # add_subdirectory()/FetchContent() by another project). Equivalent to CMake
@@ -26,6 +21,18 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 else()
     set(FISK_IS_TOP_LEVEL_DEFAULT OFF)
 endif()
+
+# Ensure a default build type if none is given. Only for the top-level project, as the cache entry
+# would otherwise also set the build type of the project that pulls fisk in.
+if(FISK_IS_TOP_LEVEL_DEFAULT AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+# The benchmarks and tests are only built by default when fisk is the top-level project (i.e. not
+# when pulled in as a dependency by another project), but can be forced either way via
+# -DFISK_BUILD_BENCHMARKS= and -DFISK_BUILD_TESTS=.
+option(FISK_BUILD_BENCHMARKS "Build the fisk benchmark suite" ${FISK_IS_TOP_LEVEL_DEFAULT})
+option(FISK_BUILD_TESTS "Build the fisk test suite" ${FISK_IS_TOP_LEVEL_DEFAULT})
 
 # ==================================================================================================
 #     Library
@@ -81,35 +88,39 @@ include(CheckCXXCompilerFlag)
 # under -Werror (e.g. Clang's AVX10 promotion warning). Checked once here and applied only where
 # it actually works, falling back to no flag (i.e. whatever ISA the compiler defaults to) rather
 # than failing the whole build on hosts where it doesn't.
-check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+# Only checked when the benchmarks or tests are built; the library itself does not use these flags.
+if(FISK_BUILD_BENCHMARKS OR FISK_BUILD_TESTS)
+    check_cxx_compiler_flag("-march=native" FISK_COMPILER_SUPPORTS_MARCH_NATIVE)
 
-# The AVX10 case above needs its own separate handling: the trivial program the check above
-# compiles doesn't reach whatever code path trips the "invalid feature combination" diagnostic,
-# so COMPILER_SUPPORTS_MARCH_NATIVE alone doesn't catch it; it only shows up compiling the real
-# sources. Silence just this one diagnostic (rather than weakening -Werror overall) where the
-# compiler recognizes it at all.
-check_cxx_compiler_flag(
-    "-Wno-error=invalid-feature-combination" COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION
-)
+    # The AVX10 case above needs its own separate handling: the trivial program the check above
+    # compiles doesn't reach whatever code path trips the "invalid feature combination"
+    # diagnostic, so FISK_COMPILER_SUPPORTS_MARCH_NATIVE alone doesn't catch it; it only shows up
+    # compiling the real sources. Silence just this one diagnostic (rather than weakening -Werror
+    # overall) where the compiler recognizes it at all.
+    check_cxx_compiler_flag(
+        "-Wno-error=invalid-feature-combination"
+        FISK_COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION
+    )
+endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    check_cxx_compiler_flag("/arch:AVX2"   COMPILER_SUPPORTS_AVX2)
-    check_cxx_compiler_flag("/arch:AVX512" COMPILER_SUPPORTS_AVX512)
-    set(COMPILER_SUPPORTS_BMI2 ${COMPILER_SUPPORTS_AVX2})
-    set(COMPILER_SUPPORTS_SSE2 TRUE)
-    set(COMPILER_SUPPORTS_SSSE3 TRUE)
-    set(COMPILER_SUPPORTS_SSE41 TRUE)
-    set(COMPILER_SUPPORTS_PCLMUL TRUE)
-    set(COMPILER_SUPPORTS_AVX512BW ${COMPILER_SUPPORTS_AVX512})
+    check_cxx_compiler_flag("/arch:AVX2"   FISK_COMPILER_SUPPORTS_AVX2)
+    check_cxx_compiler_flag("/arch:AVX512" FISK_COMPILER_SUPPORTS_AVX512)
+    set(FISK_COMPILER_SUPPORTS_BMI2 ${FISK_COMPILER_SUPPORTS_AVX2})
+    set(FISK_COMPILER_SUPPORTS_SSE2 TRUE)
+    set(FISK_COMPILER_SUPPORTS_SSSE3 TRUE)
+    set(FISK_COMPILER_SUPPORTS_SSE41 TRUE)
+    set(FISK_COMPILER_SUPPORTS_PCLMUL TRUE)
+    set(FISK_COMPILER_SUPPORTS_AVX512BW ${FISK_COMPILER_SUPPORTS_AVX512})
 else()
-    check_cxx_compiler_flag("-mbmi2"     COMPILER_SUPPORTS_BMI2)
-    check_cxx_compiler_flag("-mpclmul"   COMPILER_SUPPORTS_PCLMUL)
-    check_cxx_compiler_flag("-msse2"     COMPILER_SUPPORTS_SSE2)
-    check_cxx_compiler_flag("-mssse3"    COMPILER_SUPPORTS_SSSE3)
-    check_cxx_compiler_flag("-msse4.1"   COMPILER_SUPPORTS_SSE41)
-    check_cxx_compiler_flag("-mavx2"     COMPILER_SUPPORTS_AVX2)
-    check_cxx_compiler_flag("-mavx512f"  COMPILER_SUPPORTS_AVX512)
-    check_cxx_compiler_flag("-mavx512bw" COMPILER_SUPPORTS_AVX512BW)
+    check_cxx_compiler_flag("-mbmi2"     FISK_COMPILER_SUPPORTS_BMI2)
+    check_cxx_compiler_flag("-mpclmul"   FISK_COMPILER_SUPPORTS_PCLMUL)
+    check_cxx_compiler_flag("-msse2"     FISK_COMPILER_SUPPORTS_SSE2)
+    check_cxx_compiler_flag("-mssse3"    FISK_COMPILER_SUPPORTS_SSSE3)
+    check_cxx_compiler_flag("-msse4.1"   FISK_COMPILER_SUPPORTS_SSE41)
+    check_cxx_compiler_flag("-mavx2"     FISK_COMPILER_SUPPORTS_AVX2)
+    check_cxx_compiler_flag("-mavx512f"  FISK_COMPILER_SUPPORTS_AVX512)
+    check_cxx_compiler_flag("-mavx512bw" FISK_COMPILER_SUPPORTS_AVX512BW)
 endif()
 
 option(FISK_ENABLE_BMI2   "Force-enable fisk's BMI2-accelerated code paths (PEXT); only safe if the deployment target actually has BMI2" OFF)
@@ -121,7 +132,7 @@ option(FISK_ENABLE_AVX2   "Force-enable fisk's AVX2-accelerated code paths; only
 option(FISK_ENABLE_AVX512 "Force-enable fisk's AVX512-accelerated code paths; only safe if the deployment target actually has AVX512" OFF)
 option(FISK_ENABLE_NEON   "Force-enable fisk's Neon-accelerated code paths (ARM64); only safe if the deployment target actually has Neon" OFF)
 
-if (FISK_ENABLE_BMI2 AND COMPILER_SUPPORTS_BMI2)
+if (FISK_ENABLE_BMI2 AND FISK_COMPILER_SUPPORTS_BMI2)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk INTERFACE "/arch:AVX2")
     else()
@@ -130,35 +141,35 @@ if (FISK_ENABLE_BMI2 AND COMPILER_SUPPORTS_BMI2)
     target_compile_definitions(fisk INTERFACE FISK_HAS_BMI2=1)
 endif()
 
-if (FISK_ENABLE_PCLMUL AND COMPILER_SUPPORTS_PCLMUL)
+if (FISK_ENABLE_PCLMUL AND FISK_COMPILER_SUPPORTS_PCLMUL)
     if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk INTERFACE "-mpclmul")
     endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_CLMUL=1)
 endif()
 
-if (FISK_ENABLE_SSE2 AND COMPILER_SUPPORTS_SSE2)
+if (FISK_ENABLE_SSE2 AND FISK_COMPILER_SUPPORTS_SSE2)
     if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk INTERFACE "-msse2")
     endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_SSE2=1)
 endif()
 
-if (FISK_ENABLE_SSSE3 AND COMPILER_SUPPORTS_SSSE3)
+if (FISK_ENABLE_SSSE3 AND FISK_COMPILER_SUPPORTS_SSSE3)
     if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk INTERFACE "-mssse3")
     endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_SSSE3=1)
 endif()
 
-if (FISK_ENABLE_SSE41 AND COMPILER_SUPPORTS_SSE41)
+if (FISK_ENABLE_SSE41 AND FISK_COMPILER_SUPPORTS_SSE41)
     if (NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk INTERFACE "-msse4.1")
     endif()
     target_compile_definitions(fisk INTERFACE FISK_HAS_SSE41=1)
 endif()
 
-if (FISK_ENABLE_AVX2 AND COMPILER_SUPPORTS_AVX2)
+if (FISK_ENABLE_AVX2 AND FISK_COMPILER_SUPPORTS_AVX2)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk INTERFACE "/arch:AVX2")
     else()
@@ -172,7 +183,7 @@ endif()
 # present on essentially all mainstream AVX512 hardware since Skylake-X/Ice Lake -- only the
 # earliest, now-obsolete Xeon Phi "Knights Landing" parts are F-only -- so this is folded into the
 # single FISK_ENABLE_AVX512 option rather than a separate opt-in tier.
-if (FISK_ENABLE_AVX512 AND COMPILER_SUPPORTS_AVX512 AND COMPILER_SUPPORTS_AVX512BW)
+if (FISK_ENABLE_AVX512 AND FISK_COMPILER_SUPPORTS_AVX512 AND FISK_COMPILER_SUPPORTS_AVX512BW)
     if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
         target_compile_options(fisk INTERFACE "/arch:AVX512")
     else()
@@ -191,10 +202,6 @@ endif()
 # ==================================================================================================
 #     Benchmarks
 # ==================================================================================================
-
-# Only built by default when fisk is the top-level project (i.e. not when pulled in as a
-# dependency by another project), but can be forced either way via -DFISK_BUILD_BENCHMARKS=.
-option(FISK_BUILD_BENCHMARKS "Build the fisk benchmark suite" ${FISK_IS_TOP_LEVEL_DEFAULT})
 
 if(FISK_BUILD_BENCHMARKS)
     # Each benchmarked implementation variant lives in its own translation unit (var_*.cpp under
@@ -232,7 +239,7 @@ if(FISK_BUILD_BENCHMARKS)
         target_compile_options(fisk_benchmarks PRIVATE
             $<$<CONFIG:Release>:-O3>
         )
-        if (COMPILER_SUPPORTS_MARCH_NATIVE)
+        if (FISK_COMPILER_SUPPORTS_MARCH_NATIVE)
             target_compile_options(fisk_benchmarks PRIVATE
                 $<$<CONFIG:Release>:-march=native>
             )
@@ -251,8 +258,8 @@ if(FISK_BUILD_BENCHMARKS)
 
             # Clang only supports -falign-loops since version 14; older ones warn and ignore it,
             # which -Werror turns into a hard error. Loop alignment is skipped there.
-            check_cxx_compiler_flag("-falign-loops=64" COMPILER_SUPPORTS_ALIGN_LOOPS)
-            if (COMPILER_SUPPORTS_ALIGN_LOOPS)
+            check_cxx_compiler_flag("-falign-loops=64" FISK_COMPILER_SUPPORTS_ALIGN_LOOPS)
+            if (FISK_COMPILER_SUPPORTS_ALIGN_LOOPS)
                 target_compile_options(fisk_benchmarks PRIVATE
                     -falign-loops=64
                 )
@@ -271,7 +278,7 @@ if(FISK_BUILD_BENCHMARKS)
             -Wdouble-promotion
             -Werror
         )
-        if (COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION)
+        if (FISK_COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION)
             target_compile_options(fisk_benchmarks PRIVATE
                 -Wno-error=invalid-feature-combination
             )
@@ -313,10 +320,6 @@ endif()
 #     Tests
 # ==================================================================================================
 
-# Only built by default when fisk is the top-level project, same rationale as
-# FISK_BUILD_BENCHMARKS above, and can likewise be forced either way via -DFISK_BUILD_TESTS=.
-option(FISK_BUILD_TESTS "Build the fisk test suite" ${FISK_IS_TOP_LEVEL_DEFAULT})
-
 if(FISK_BUILD_TESTS)
     enable_testing()
 
@@ -338,8 +341,8 @@ if(FISK_BUILD_TESTS)
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
         # Activate whatever ISA extensions this build machine actually has, for the test
         # suite only, so that the library itself stays portable. Skipped where unsupported
-        # (see COMPILER_SUPPORTS_MARCH_NATIVE above) rather than failing the build.
-        if (COMPILER_SUPPORTS_MARCH_NATIVE)
+        # (see FISK_COMPILER_SUPPORTS_MARCH_NATIVE above) rather than failing the build.
+        if (FISK_COMPILER_SUPPORTS_MARCH_NATIVE)
             target_compile_options(fisk_tests PRIVATE
                 -march=native
             )
@@ -364,7 +367,7 @@ if(FISK_BUILD_TESTS)
             -Wdouble-promotion
             -Werror
         )
-        if (COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION)
+        if (FISK_COMPILER_SUPPORTS_NO_ERROR_INVALID_FEATURE_COMBINATION)
             target_compile_options(fisk_tests PRIVATE
                 -Wno-error=invalid-feature-combination
             )
