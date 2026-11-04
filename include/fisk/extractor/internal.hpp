@@ -98,8 +98,9 @@ using CandidateSimdArchs = TypeList<>;
 #endif
 
 /**
- * @brief The SIMD archs of the estimate, see ExtractorPreference: AVX2, also next to AVX512, or
- * Neon, else none, so that the estimate is a scalar loop.
+ * @brief The SIMD archs of the estimate of the k-mers, see ExtractorPreference: AVX2, also next to
+ * AVX512, or Neon, else none, so that the estimate is a scalar loop. The SSE2 loops of the k-mers
+ * are not faster than the scalar ones.
  */
 #if defined(FISK_HAS_AVX2)
 using PreferredSimdArchs = TypeList<SimdAVX2>;
@@ -107,6 +108,21 @@ using PreferredSimdArchs = TypeList<SimdAVX2>;
 using PreferredSimdArchs = TypeList<SimdNEON>;
 #else
 using PreferredSimdArchs = TypeList<>;
+#endif
+
+/**
+ * @brief The SIMD archs of the estimate of the spaced k-mers: AVX2, also next to AVX512, else SSE2,
+ * whose butterfly kernel is faster than the scalar butterfly, else Neon, else none. Neon comes
+ * after the x86 archs, as a build has either of them.
+ */
+#if defined(FISK_HAS_AVX2)
+using PreferredSpacedSimdArchs = TypeList<SimdAVX2>;
+#elif defined(FISK_HAS_SSE2)
+using PreferredSpacedSimdArchs = TypeList<SimdSSE2>;
+#elif defined(FISK_HAS_NEON)
+using PreferredSpacedSimdArchs = TypeList<SimdNEON>;
+#else
+using PreferredSpacedSimdArchs = TypeList<>;
 #endif
 
 // The input check in the names of the candidates.
