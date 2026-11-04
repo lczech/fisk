@@ -318,47 +318,34 @@ struct SpacedKmerCandidatePackedBytewiseSimd
 // -------------------------------------------------------------------------------------------------
 
 // The candidates of a SpacedKmerExtractor: PEXT, where compiled, and the butterfly bit
-// extraction, in the scalar loops and as kernels of the SIMD loops, each for up to `MaxMasks`
-// masks; see spaced_kmer_extractor_preference_() for the estimate among them.
-template <InputFormat I, InputCheck C, Encoding E, Layout L, std::size_t MaxMasks>
-struct SpacedKmerExtractorCandidates
+// extraction, in the scalar loops and as kernels of the SIMD loops of the `Simds`, a TypeList, each
+// for up to `MaxMasks` masks; see spaced_kmer_extractor_preference_() for the estimate among them.
+template <
+    InputFormat I, InputCheck C, Encoding E, Layout L, std::size_t MaxMasks,
+    typename Simds = CandidateSimdArchs
+>
+struct SpacedKmerExtractorCandidates;
+
+template <
+    InputFormat I, InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename... Simd
+>
+struct SpacedKmerExtractorCandidates<I, C, E, L, MaxMasks, TypeList<Simd...>>
 {
-    template <typename Simd>
-    using AsciiChunkedButterfly = SpacedKmerCandidateAsciiChunkedSimd<
-        C, E, L, MaxMasks, BitExtractKernelButterfly<Simd>
-    >;
-    template <typename Simd>
-    using PackedBytewiseButterfly = SpacedKmerCandidatePackedBytewiseSimd<
-        C, E, L, MaxMasks, BitExtractKernelButterfly<Simd>
+    using Ascii = TypeList<
+        #if defined(FISK_HAS_BMI2)
+        SpacedKmerCandidateAsciiChunkedScalar<C, E, L, MaxMasks, BitExtractMask>,
+        #endif
+        SpacedKmerCandidateAsciiChunkedScalar<C, E, L, MaxMasks, BitExtractButterflyMask>,
+        SpacedKmerCandidateAsciiChunkedSimd<C, E, L, MaxMasks, BitExtractKernelButterfly<Simd>>...
     >;
 
-    #if defined(FISK_HAS_BMI2)
-    using AsciiPext = TypeList<
-        SpacedKmerCandidateAsciiChunkedScalar<C, E, L, MaxMasks, BitExtractMask>
-    >;
-    using PackedPext = TypeList<
+    using Packed = TypeList<
+        #if defined(FISK_HAS_BMI2)
         SpacedKmerCandidatePackedBytewiseScalar<C, E, L, MaxMasks, BitExtractMask>,
-        SpacedKmerCandidatePackedBytewiseSimd<C, E, L, MaxMasks, BitExtractKernelPext>
-    >;
-    #else
-    using AsciiPext = TypeList<>;
-    using PackedPext = TypeList<>;
-    #endif
-
-    using Ascii = type_list_concat_t<
-        AsciiPext,
-        TypeList<
-            SpacedKmerCandidateAsciiChunkedScalar<C, E, L, MaxMasks, BitExtractButterflyMask>
-        >,
-        type_list_map_t<AsciiChunkedButterfly, ExtractorSimdArchs>
-    >;
-
-    using Packed = type_list_concat_t<
-        PackedPext,
-        TypeList<
-            SpacedKmerCandidatePackedBytewiseScalar<C, E, L, MaxMasks, BitExtractButterflyMask>
-        >,
-        type_list_map_t<PackedBytewiseButterfly, ExtractorSimdArchs>
+        SpacedKmerCandidatePackedBytewiseSimd<C, E, L, MaxMasks, BitExtractKernelPext>,
+        #endif
+        SpacedKmerCandidatePackedBytewiseScalar<C, E, L, MaxMasks, BitExtractButterflyMask>,
+        SpacedKmerCandidatePackedBytewiseSimd<C, E, L, MaxMasks, BitExtractKernelButterfly<Simd>>...
     >;
 
     using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;

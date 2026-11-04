@@ -180,24 +180,24 @@ struct KmerCandidatePackedBytewiseSimd
 // -------------------------------------------------------------------------------------------------
 
 // The candidates of a KmerExtractor: the loops that are the fastest on some hardware, in the
-// benchmarks, see kmer_extractor_preference_() for the estimate among them.
-template <InputFormat I, InputCheck C, Encoding E, Layout L>
-struct KmerExtractorCandidates
+// benchmarks, see kmer_extractor_preference_() for the estimate among them. The SIMD loops are
+// those of the `Simds`, a TypeList.
+template <
+    InputFormat I, InputCheck C, Encoding E, Layout L, typename Simds = CandidateSimdArchs
+>
+struct KmerExtractorCandidates;
+
+template <InputFormat I, InputCheck C, Encoding E, Layout L, typename... Simd>
+struct KmerExtractorCandidates<I, C, E, L, TypeList<Simd...>>
 {
-    template <typename Simd>
-    using AsciiChunkedSimd = KmerCandidateAsciiChunkedSimd<C, E, L, Simd>;
-
-    template <typename Simd>
-    using PackedBytewiseSimd = KmerCandidatePackedBytewiseSimd<C, E, L, Simd>;
-
-    using Ascii = type_list_concat_t<
-        TypeList<KmerCandidateAsciiChunkedScalar<C, E, L>>,
-        type_list_map_t<AsciiChunkedSimd, ExtractorSimdArchs>
+    using Ascii = TypeList<
+        KmerCandidateAsciiChunkedScalar<C, E, L>,
+        KmerCandidateAsciiChunkedSimd<C, E, L, Simd>...
     >;
 
-    using Packed = type_list_concat_t<
-        TypeList<KmerCandidatePackedBytewiseScalar<C, E, L>>,
-        type_list_map_t<PackedBytewiseSimd, ExtractorSimdArchs>
+    using Packed = TypeList<
+        KmerCandidatePackedBytewiseScalar<C, E, L>,
+        KmerCandidatePackedBytewiseSimd<C, E, L, Simd>...
     >;
 
     using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;

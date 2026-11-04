@@ -79,54 +79,22 @@ template <typename... Ts>
 struct TypeList
 {};
 
-// Concatenation of TypeLists.
-template <typename... Lists>
-struct type_list_concat_;
-
-template <typename... Ts>
-struct type_list_concat_<TypeList<Ts...>>
-{
-    using type = TypeList<Ts...>;
-};
-
-template <typename... Ts, typename... Us, typename... Rest>
-struct type_list_concat_<TypeList<Ts...>, TypeList<Us...>, Rest...>
-{
-    using type = typename type_list_concat_<TypeList<Ts..., Us...>, Rest...>::type;
-};
-
-template <typename... Lists>
-using type_list_concat_t = typename type_list_concat_<Lists...>::type;
-
-// The list of `F<T>` for each `T` of a TypeList.
-template <template <typename> class F, typename List>
-struct type_list_map_;
-
-template <template <typename> class F, typename... Ts>
-struct type_list_map_<F, TypeList<Ts...>>
-{
-    using type = TypeList<F<Ts>...>;
-};
-
-template <template <typename> class F, typename List>
-using type_list_map_t = typename type_list_map_<F, List>::type;
-
 /**
  * @brief The SIMD archs of the candidates that use SIMD: the best one compiled, and AVX2 next to
  * AVX512, as AVX512 is not faster on all CPUs that have it. SSE2 only when it is the best one.
  */
 #if defined(FISK_HAS_AVX512) && defined(FISK_HAS_AVX2)
-using ExtractorSimdArchs = TypeList<SimdAVX512, SimdAVX2>;
+using CandidateSimdArchs = TypeList<SimdAVX512, SimdAVX2>;
 #elif defined(FISK_HAS_AVX512)
-using ExtractorSimdArchs = TypeList<SimdAVX512>;
+using CandidateSimdArchs = TypeList<SimdAVX512>;
 #elif defined(FISK_HAS_AVX2)
-using ExtractorSimdArchs = TypeList<SimdAVX2>;
+using CandidateSimdArchs = TypeList<SimdAVX2>;
 #elif defined(FISK_HAS_NEON)
-using ExtractorSimdArchs = TypeList<SimdNEON>;
+using CandidateSimdArchs = TypeList<SimdNEON>;
 #elif defined(FISK_HAS_SSE2)
-using ExtractorSimdArchs = TypeList<SimdSSE2>;
+using CandidateSimdArchs = TypeList<SimdSSE2>;
 #else
-using ExtractorSimdArchs = TypeList<>;
+using CandidateSimdArchs = TypeList<>;
 #endif
 
 // The name of a SIMD arch in the names of the candidates.
