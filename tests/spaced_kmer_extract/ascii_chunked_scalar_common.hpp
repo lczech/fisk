@@ -92,22 +92,23 @@ inline void check_chunked()
     }
 }
 
-// Checks that spans outside of [1, MaxSpan] and sets of masks with different spans are rejected,
-// with a scratch and with the thread-local buffer, through the single-mask overload and a set of
-// masks, also for sequences shorter than the span; with spans above 32 among the different ones.
+// The checks of check_spaced_ascii_chunked_error_contract() (spaced_kmer_extract/common.hpp), with
+// the bit extraction of the bit loop.
 template <bool Checked, std::size_t MaxSpan>
 inline void check_chunked_error_contract()
 {
     constexpr fisk::Encoding E = fisk::Encoding::kACGT;
     constexpr fisk::Layout L = fisk::Layout::kMSB;
-    using Mask = fisk::SpacedKmerMask<L, fisk::BitExtractMask, MaxSpan>;
     using Scratch = std::conditional_t<
         Checked, fisk::PackedSequenceWithValidity<E, L>, fisk::PackedSequence<E, L>
     >;
     fisk::WordEncoderButterfly<E, L> const encoder;
     Scratch scratch;
     auto const noop = [](std::size_t, std::size_t, auto const&) {};
-    auto const expect_throw = [&](std::string const& seq, auto const& mask_or_masks) {
+    auto const as_is = [](auto masks) { return masks; };
+    check_spaced_ascii_chunked_error_contract<MaxSpan>(as_is, [&](
+        std::string const& seq, auto const& mask_or_masks
+    ) {
         if constexpr (Checked) {
             EXPECT_THROW(
                 fisk::for_each_spaced_kmer_ascii_checked_chunked_scalar<7>(
@@ -135,23 +136,5 @@ inline void check_chunked_error_contract()
                 std::invalid_argument
             );
         }
-    };
-    for (std::string const& seq : {std::string{}, std::string(2 * MaxSpan + 1, 'T')}) {
-        // A mask with an invalid span, which make_spaced_kmer_mask() would reject.
-        for (std::size_t const span_k : {std::size_t{0}, MaxSpan + 1}) {
-            Mask mask;
-            mask.mask_pieces[0] = fisk::BitExtractMask(3);
-            mask.span_k = static_cast<std::uint16_t>(span_k);
-            expect_throw(seq, mask);
-            expect_throw(seq, std::span<Mask const, 1>(&mask, 1));
-        }
-        std::string const span_40 = std::string("1").append(38, '0').append("1");
-        std::string const span_41 = std::string("1").append(39, '0').append("1");
-        for (auto const& mask_strings : std::vector<std::vector<std::string>>{
-            {"101", "1001"}, {span_40, span_41}
-        }) {
-            auto const mixed = fisk::make_spaced_kmer_masks<L, MaxSpan>(mask_strings);
-            expect_throw(seq, std::span<Mask const, 2>(mixed.data(), 2));
-        }
-    }
+    });
 }

@@ -4,13 +4,17 @@
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
+#include <span>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
+#include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/core/cast.hpp"
 #include "fisk/core/types.hpp"
+#include "fisk/spaced_kmer_extract/mask.hpp"
 #include "fisk/util/random.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
@@ -253,9 +257,9 @@ inline std::vector<std::vector<std::string>> const& chunked_mask_sets()
     return sets;
 }
 
-// For spans above 32, around the boundaries of the pieces of the masks, see SpacedKmerMask, a
-// single random mask and a set of three, which keep the first and the last position, and at most 32
-// positions.
+// For spans above 32, around the boundaries of the pieces of the masks, see SpacedKmerMask, and the
+// span 128, with five pieces: a single random mask and a set of three, which keep the first and the
+// last position, and at most 32 positions.
 inline std::vector<std::vector<std::string>> const& chunked_wide_mask_sets()
 {
     static std::vector<std::vector<std::string>> const sets = [] {
@@ -271,7 +275,7 @@ inline std::vector<std::vector<std::string>> const& chunked_wide_mask_sets()
             return mask;
         };
         std::vector<std::vector<std::string>> out;
-        for (std::size_t span_k : {33u, 57u, 58u, 85u, 100u}) {
+        for (std::size_t span_k : {33u, 57u, 58u, 85u, 100u, 128u}) {
             out.push_back({ random_mask(span_k) });
             out.push_back({ random_mask(span_k), random_mask(span_k), random_mask(span_k) });
         }
@@ -443,4 +447,40 @@ inline void check_spaced_ascii_chunked_all(
     check_spaced_ascii_chunked<Encoding::kACTG, Layout::kLSB, Checked, ByPosition>(
         extract, mask_sets
     );
+}
+
+// Checks that the chunked loops reject spans outside of [1, MaxSpan] and sets of masks with
+// different spans, through the overload for a single mask and for a set of masks, also for
+// sequences shorter than the span; with spans above 32 among the different ones. The masks are
+// those of BitExtractMask in kMSB, as `convert(masks)` turns a std::vector of them into a
+// std::vector of the masks or kernels of the loops. `expect_throw(seq, mask_or_masks)` runs the
+// loops on them, with a scratch and with the thread-local buffer, and expects each to throw
+// std::invalid_argument.
+template <std::size_t MaxSpan, typename Convert, typename ExpectThrow>
+inline void check_spaced_ascii_chunked_error_contract(
+    Convert const& convert, ExpectThrow const& expect_throw
+) {
+    constexpr fisk::Layout L = fisk::Layout::kMSB;
+    using SourceMask = fisk::SpacedKmerMask<L, fisk::BitExtractMask, MaxSpan>;
+    for (std::string const& seq : {std::string{}, std::string(2 * MaxSpan + 1, 'T')}) {
+        // A mask with an invalid span, which make_spaced_kmer_mask() would reject.
+        for (std::size_t const span_k : {std::size_t{0}, MaxSpan + 1}) {
+            SourceMask source;
+            source.mask_pieces[0] = fisk::BitExtractMask(3);
+            source.span_k = static_cast<std::uint16_t>(span_k);
+            auto const masks = convert(std::vector<SourceMask>{source});
+            using Mask = typename std::remove_cvref_t<decltype(masks)>::value_type;
+            expect_throw(seq, masks.front());
+            expect_throw(seq, std::span<Mask const, 1>(masks.data(), 1));
+        }
+        std::string const span_40 = std::string("1").append(38, '0').append("1");
+        std::string const span_41 = std::string("1").append(39, '0').append("1");
+        for (auto const& mask_strings : std::vector<std::vector<std::string>>{
+            {"101", "1001"}, {span_40, span_41}
+        }) {
+            auto const mixed = convert(fisk::make_spaced_kmer_masks<L, MaxSpan>(mask_strings));
+            using Mask = typename std::remove_cvref_t<decltype(mixed)>::value_type;
+            expect_throw(seq, std::span<Mask const, 2>(mixed.data(), 2));
+        }
+    }
 }
