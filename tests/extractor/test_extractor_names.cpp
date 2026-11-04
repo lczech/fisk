@@ -3,6 +3,7 @@
 #include <span>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -46,7 +47,8 @@ constexpr auto kUnchecked = InputCheck::kUnchecked;
 // extractor, set to each name, gives the same k-mers as the function of that name.
 
 // An algorithm of a table: its name, and a call of it with a sequence and a callback, as a lambda
-// that takes the SIMD arch as a template argument, for SIMD algorithms that stand for one per arch.
+// that takes the SIMD arch as a std::type_identity, for SIMD algorithms that stand for one per
+// arch.
 template <bool Simd, typename Call>
 struct TestAlgorithm
 {
@@ -60,13 +62,20 @@ TestAlgorithm<Simd, Call> make_test_algorithm(std::string name, Call call)
     return { std::move(name), std::move(call) };
 }
 
+// The call of an algorithm, for the SIMD arch of the `simd` tag, which the scalar ones do not use.
+#define FISK_TEST_ALGORITHM_CALL_(function, template_args, call_args)                         \
+    [&](auto simd, auto const& seq, auto& callback) {                                          \
+        using Simd [[maybe_unused]] = typename decltype(simd)::type;                           \
+        function template_args call_args;                                                      \
+    }
+
 // An algorithm: `function`, called with the `template_args` and the `call_args`, which can use the
 // `seq` and the `callback` of the test. Its name is the name of `function`, followed by the
 // `suffix` of its template arguments, as the extractors name it.
 #define FISK_TEST_ALGORITHM(function, template_args, suffix, call_args)                       \
     make_test_algorithm<false>(                                                                \
         std::string(#function) + suffix,                                                       \
-        [&]<typename Simd>(auto const& seq, auto& callback) { function template_args call_args; } \
+        FISK_TEST_ALGORITHM_CALL_(function, template_args, call_args)                          \
     )
 
 // A SIMD algorithm, as FISK_TEST_ALGORITHM, for each SIMD arch of the candidates: `Simd` in the
@@ -74,7 +83,7 @@ TestAlgorithm<Simd, Call> make_test_algorithm(std::string name, Call call)
 #define FISK_TEST_SIMD_ALGORITHM(function, template_args, suffix, call_args)                  \
     make_test_algorithm<true>(                                                                 \
         std::string(#function) + suffix,                                                       \
-        [&]<typename Simd>(auto const& seq, auto& callback) { function template_args call_args; } \
+        FISK_TEST_ALGORITHM_CALL_(function, template_args, call_args)                          \
     )
 
 // Call `f(name, call)` for the `algorithm`, with the name and the call for the SIMD arch `Arch`.
@@ -82,7 +91,7 @@ template <typename Arch, typename Algorithm, typename F>
 void call_test_algorithm(std::string const& name, Algorithm const& algorithm, F& f)
 {
     f(name, [&](auto const& seq, auto& callback) {
-        algorithm.call.template operator()<Arch>(seq, callback);
+        algorithm.call(std::type_identity<Arch>{}, seq, callback);
     });
 }
 

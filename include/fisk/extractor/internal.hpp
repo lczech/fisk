@@ -520,11 +520,11 @@ public:
         std::optional<Plan> best;
         auto best_time = clock::duration::max();
 
-        auto const measure_one = [&]<typename Candidate>() {
+        auto const measure_one = [&](auto const& candidate) {
+            using Candidate = std::remove_cvref_t<decltype(candidate)>;
             if (!Candidate::available()) {
                 return;
             }
-            Candidate const candidate{};
 
             // Checksum, which is also the warmup.
             ExtractorTuneChecksum checksum;
@@ -554,7 +554,7 @@ public:
                 best = candidate;
             }
         };
-        (measure_one.template operator()<Candidates>(), ...);
+        (measure_one(Candidates{}), ...);
 
         // The scalar candidates are always available.
         if (!best) {
