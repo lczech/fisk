@@ -47,6 +47,39 @@ By default, `fisk::fisk` does not force any instruction-set-specific flags onto 
 When fisk is built standalone (i.e., not pulled in via `add_subdirectory()`/`FetchContent()` from another project), the benchmark suite and test suite below are built by default; set `-DFISK_BUILD_BENCHMARKS=OFF` and/or `-DFISK_BUILD_TESTS=OFF` to skip them.
 
 
+## Quick start
+
+`for_each_kmer()` calls back with each k-mer of a sequence, with the algorithm that is likely the fastest by what your build and CPU support:
+
+```cpp
+#include "fisk/extractor/for_each.hpp"
+
+using namespace fisk;
+
+for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
+    seq, 31, [&](std::size_t pos, KmerAcgtMsb kmer) {
+        // ...
+    }
+);
+```
+
+`for_each_spaced_kmer()` does the same for a set of spaced k-mer masks, prepared once as `SpacedKmerMasks`, and calls back as `callback(pos, mask_idx, spaced_kmer)`:
+
+```cpp
+SpacedKmerMasks<Layout::kMSB> const masks({
+    "1101101101101101101101101101101",
+    "1011011011011011011011011011011"
+});
+for_each_spaced_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
+    seq, masks, [&](std::size_t pos, std::size_t mask_idx, SpacedKmerAcgtMsb kmer) {
+        // ...
+    }
+);
+```
+
+The input is a `std::string_view` (or anything that converts to one, such as a `std::string`), or a packed sequence, whose type then gives the template arguments. The algorithm is the estimate of the extractors below, and `for_each_kmer_algorithm_name()` and `for_each_spaced_kmer_algorithm_name()` name it. To measure the fastest algorithm on your hardware and data instead, use the extractors; to call one algorithm directly, see the [k-mer extraction functions](#k-mer-extraction-functions).
+
+
 ## Tuned extraction
 
 The extractors choose the fastest of the [k-mer extraction functions](#k-mer-extraction-functions) on the hardware, and run it with your callback:

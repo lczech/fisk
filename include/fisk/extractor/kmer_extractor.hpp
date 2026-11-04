@@ -31,12 +31,23 @@ namespace fisk {
 // the k-mer extraction functions, and is named after it, followed by the SIMD arch.
 
 /**
- * @brief The settings of a KmerExtractor, which its candidates are constructed from.
+ * @brief The settings of a KmerExtractor, which its candidates run with.
  */
 struct KmerExtractorSettings
 {
     std::size_t k = 0;
 };
+
+// The settings for k-mers of size `k`, for KmerExtractor and for_each_kmer().
+inline KmerExtractorSettings make_kmer_extractor_settings_(std::size_t k)
+{
+    if (k == 0 || k > 32) {
+        throw std::invalid_argument(
+            "k-mer extraction: k = " + std::to_string(k) + " not in [1, 32]"
+        );
+    }
+    return {k};
+}
 
 // The callback that a SIMD candidate hands its vectors to: the vectors as they are, if `callback`
 // takes them, else their valid k-mers one by one.
@@ -300,7 +311,7 @@ public:
      * @throws std::invalid_argument if `k` is not in [1, 32].
      */
     explicit KmerExtractor(std::size_t k)
-        : plan_(make_settings_(k))
+        : plan_(make_kmer_extractor_settings_(k))
     {}
 
     /**
@@ -426,16 +437,6 @@ public:
     }
 
 private:
-
-    static KmerExtractorSettings make_settings_(std::size_t k)
-    {
-        if (k == 0 || k > 32) {
-            throw std::invalid_argument(
-                "KmerExtractor: k = " + std::to_string(k) + " not in [1, 32]"
-            );
-        }
-        return {k};
-    }
 
     using Plan = ExtractorPlan<
         KmerExtractorSettings, sequence_type,

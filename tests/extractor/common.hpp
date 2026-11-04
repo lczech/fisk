@@ -56,6 +56,33 @@ inline auto extractor_test_input(std::string const& seq)
     }
 }
 
+// The k-mers that an extractor is expected to hand out.
+template <typename Extractor>
+inline std::vector<ExpectedKmer> extractor_test_expected(std::string const& seq, std::size_t k)
+{
+    constexpr auto E = Extractor::encoding;
+    constexpr auto L = Extractor::layout;
+    if constexpr (Extractor::input_check == fisk::InputCheck::kChecked) {
+        return oracle_kmers_skipping_invalid<E, L>(seq, k);
+    } else {
+        return oracle_kmers_all_windows<E, L>(seq, k);
+    }
+}
+
+// A callback of single k-mers that records them.
+struct KmerRecorder
+{
+    std::vector<std::size_t> positions;
+    std::vector<std::uint64_t> values;
+
+    template <typename K>
+    void operator()(std::size_t pos, K const& kmer)
+    {
+        positions.push_back(pos);
+        values.push_back(fisk::kmer_value(kmer));
+    }
+};
+
 // A callback of single spaced k-mers that records them.
 struct SpacedKmerRecorder
 {
