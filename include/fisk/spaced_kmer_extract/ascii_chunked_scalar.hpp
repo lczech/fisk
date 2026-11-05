@@ -90,12 +90,13 @@ inline void for_each_spaced_kmer_ascii_chunked_scalar_(
  * nucleotides. See above for the scratch and the chunk size.
  *
  * @param seq       Input sequence.
- * @param mask      Spaced k-mer mask, in the representation that `bit_ext` expects, see
+ * @param mask      Spaced k-mer mask, in the form that `bit_ext` expects, see
  *                  for_each_spaced_kmer_packed_unchecked_bytewise_scalar(). Its span must be in
  *                  [1, Mask::max_span].
  * @param encoder   Word encoder selecting the Encoding and Layout, e.g. WordEncoderButterfly
  *                  or WordEncoderPext (sequence_pack/word_encoder.hpp).
- * @param bit_ext   Bit extraction functor, called as bit_ext(word, mask).
+ * @param bit_ext   Bit extraction functor, called as bit_ext(word, piece) with the bit extraction
+ *                  mask of each piece of `mask`.
  * @param scratch   Reusable temporary packed storage for this call.
  * @param callback  Callback functor, called as callback(pos, mask_idx, spaced_kmer), or as
  *                  callback(pos, spaced_kmer) or callback(spaced_kmer). See

@@ -24,8 +24,9 @@ namespace fisk {
 // =================================================================================================
 
 // The SIMD counterparts of the functions in ascii_chunked_scalar.hpp: each chunk is packed into the
-// scratch, and its spaced k-mers are extracted with the SIMD bit extraction kernels of
-// packed_bytewise_simd.hpp, whose arch is that of the kernels. The kernels need to have the Layout
+// scratch, and its spaced k-mers are extracted with the spaced k-mer masks in the form of a bit
+// extraction kernel, the "kernels" of packed_bytewise_simd.hpp, whose arch is that of the kernels.
+// The kernels need to have the Layout
 // of the encoder, and the encoder is independent of their arch. The callback forms are those of
 // for_each_spaced_kmer_packed_unchecked_bytewise_simd() and
 // for_each_spaced_kmer_packed_checked_bytewise_simd(), with `pos` the start position of the

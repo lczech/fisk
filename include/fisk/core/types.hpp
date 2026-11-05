@@ -625,10 +625,10 @@ inline constexpr std::size_t spaced_kmer_mask_tail_span(std::size_t span_k) noex
  * The span is at most `MaxSpan`, and the weight, i.e., the number of kept positions, at most 32. A
  * span of up to 32 is one piece. A longer span is cut into leading pieces of 28 positions and a
  * tail of the remaining 1 to 29, see spaced_kmer_mask_piece_count() and
- * spaced_kmer_mask_tail_span(). Each piece is a mask of its own, in the format of a mask of its
- * span, and the spaced k-mer is the OR of the bits extracted with each piece, each shifted to its
- * place by its `mask_shifts`, so that the first kept position is in the highest bits for kMSB, and
- * in the lowest bits for kLSB, as for a single piece.
+ * spaced_kmer_mask_tail_span(). Each piece has a bit extraction mask of its own, in the format of a
+ * spaced k-mer mask of its span, and the spaced k-mer is the OR of the bits extracted with each
+ * piece, each shifted to its place by its `mask_shifts`, so that the first kept position is in the
+ * highest bits for kMSB, and in the lowest bits for kLSB, as for a single piece.
  *
  * Create via make_spaced_kmer_mask() and the related functions, which take care of this.
  */
@@ -653,7 +653,7 @@ struct SpacedKmerMask
     // Declared so that this is not an aggregate, as setting the members by hand is not safe.
     SpacedKmerMask() = default;
 
-    // Per piece, in the order of the span: the bit extraction mask of the piece.
+    // Per piece, in the order of the span: the piece in the form `BitExtractForm`.
     std::array<BitExtractForm, max_pieces> mask_pieces{};
 
     // Per piece: the positions of the piece that the mask keeps, in the order of the sequence for

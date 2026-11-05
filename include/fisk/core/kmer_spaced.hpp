@@ -24,11 +24,11 @@ namespace fisk {
 // -------------------------------------------------------------------------------------------------
 
 /**
- * @brief Get the raw two-bit mask of piece @p piece of a spaced k-mer mask, in whichever
- * representation it is.
+ * @brief Get the raw two-bit mask of piece @p piece of a spaced k-mer mask, in whichever form it
+ * is, see SpacedKmerMask.
  *
- * `.mask` is the raw mask for BitExtractMask and the tables, and the mask or table of a SIMD
- * kernel.
+ * `.mask` is the raw two-bit mask for the bit extraction masks, such as BitExtractMask and
+ * BitExtractButterflyMask, and the bit extraction mask of a SIMD kernel, which holds it in turn.
  */
 template <SpacedKmerMaskType Mask>
 inline std::uint64_t spaced_kmer_mask_bits_(Mask const& mask, std::size_t piece = 0) noexcept
@@ -61,10 +61,10 @@ inline constexpr std::size_t spaced_kmer_mask_piece_span_(
  * @brief Take a spaced k-mer mask string and turn it into a list of the positions of its '1's.
  *
  * The first and last position must be kept, and at most 32 positions. The span is not limited
- * here; the masks of the extraction limit it, see SpacedKmerMask.
+ * here; the spaced k-mer masks of the extraction limit it, see SpacedKmerMask.
  *
  * This is the position-list counterpart to make_spaced_kmer_mask() in spaced_kmer_extract/mask.hpp,
- * which instead packs the same mask into a single 2-bit-per-position bitmask.
+ * which instead packs the same mask into the two-bit masks of its pieces.
  */
 inline std::vector<std::size_t> spaced_kmer_mask_positions(std::string const& mask)
 {
@@ -117,7 +117,7 @@ inline std::size_t spaced_kmer_weight( std::string const& mask )
 }
 
 /**
- * @brief Get the weight of a spaced k-mer mask, in any of its representations.
+ * @brief Get the weight of a spaced k-mer mask, in any of its forms, see SpacedKmerMask.
  */
 template <SpacedKmerMaskType Mask>
 inline std::size_t spaced_kmer_weight(Mask const& mask)
@@ -300,7 +300,7 @@ template <SpacedKmerType K = SpacedKmerAcgtMsb>
 /**
  * @brief Build the spaced k-mer that a spaced k-mer mask selects from a window of nucleotides.
  *
- * Same as above, but for a mask in any of its representations, see SpacedKmerMask. The Layout is
+ * Same as above, but for a SpacedKmerMask in any of its forms. The Layout is
  * taken from the mask, so that the result is of the same type, and has the same value, as the
  * spaced k-mer that extraction with this mask and an encoder of Encoding `E` emits for the window.
  */
@@ -334,7 +334,7 @@ template <SpacedKmerType K>
 
 /**
  * @brief Get the string representation of a spaced k-mer over the full span of its mask, for a
- * mask in any of its representations, see SpacedKmerMask.
+ * SpacedKmerMask in any of its forms.
  */
 template <SpacedKmerType K, SpacedKmerMaskType Mask>
 [[nodiscard]] inline std::string spaced_kmer_decode(K const& kmer, Mask const& mask)

@@ -34,13 +34,14 @@ namespace fisk {
 // the pieces of its mask, see SpacedKmerMask (core/types.hpp): piece `j` of the span that starts at
 // base `local` of byte `b` starts at base `local` of byte `b + 7 * j`, so that each piece is taken
 // from the word of the 8 bytes loaded there, as a window whose lowest bits hold the piece, as for
-// the rolling window of for_each_spaced_kmer_ascii_checked_rolling_scalar(). The masks of the
-// pieces are hence used as they are. The leading pieces of 28 bases are within their word for all
-// four bases of the byte, and so is a tail of up to 29. A span of 30 to 32 is one piece, which can
-// reach past its word, and takes the bases after it from the next bytes. Above each piece, the
-// window still holds the neighboring bases. They need no clearing, as the bit extraction only takes
-// the bits of the mask, see `bit_ext` below. The spaced k-mer is the OR of the bits extracted from
-// each piece, each shifted to its place by the mask shift of the piece.
+// the rolling window of for_each_spaced_kmer_ascii_checked_rolling_scalar(). The bit extraction
+// masks of the pieces are hence used as they are. The leading pieces of 28 bases are within their
+// word for all four bases of the byte, and so is a tail of up to 29. A span of 30 to 32 is one
+// piece, which can reach past its word, and takes the bases after it from the next bytes. Above
+// each piece, the window still holds the neighboring bases. They need no clearing, as the bit
+// extraction only takes the bits of the bit extraction mask of the piece, see `bit_ext` below. The
+// spaced k-mer is the OR of the bits extracted from each piece, each shifted to its place by the
+// mask shift of the piece.
 //
 // For kMSB, each load needs a byte swap, see load_packed_word_() (kmer_extract/internal.hpp),
 // which on Intel competes with PEXT for the same port. A step hence covers 8 bytes with one load
@@ -422,11 +423,12 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
  * @tparam Callback Callback function called with each extracted spaced k-mer.
  *
  * @param seq       Input sequence.
- * @param mask      Spaced k-mer mask, in the representation that `bit_ext` expects, such as
+ * @param mask      Spaced k-mer mask, in the form that `bit_ext` expects, such as
  *                  BitExtractMask, BitExtractBlockShiftMask, or BitExtractButterflyMask.
  *                  Its span must be in [1, Mask::max_span].
- * @param bit_ext   Bit extraction functor, called as bit_ext(word, mask). It must ignore all bits
- *                  of `word` outside of the mask, as PEXT and all fisk bit extraction functions do.
+ * @param bit_ext   Bit extraction functor, called as bit_ext(word, piece) with the bit extraction
+ *                  mask of each piece of `mask`. It must ignore all bits of `word` outside of that
+ *                  bit extraction mask, as PEXT and all fisk bit extraction functions do.
  * @param callback  Callback functor, called as callback(pos, mask_idx, spaced_kmer), or as
  *                  callback(pos, spaced_kmer) or callback(spaced_kmer). `pos` is the start
  *                  position of the spaced k-mer's span in `seq`. See invoke_spaced_kmer_callback().

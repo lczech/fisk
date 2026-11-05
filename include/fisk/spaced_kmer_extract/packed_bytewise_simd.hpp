@@ -26,16 +26,19 @@ namespace fisk {
 // =================================================================================================
 
 // The SIMD counterpart of for_each_spaced_kmer_packed_unchecked_bytewise_scalar()
-// (packed_bytewise_scalar.hpp), for the bit extraction kernels of a SIMD arch
-// (bit_extract/simd.hpp), such as BitExtractKernelButterfly<SimdAVX2>, created via
-// make_spaced_kmer_kernel(). The loop below holds the windows of consecutive spans in the lanes of
-// its vectors, as the k-mer extraction from packed sequences holds its k-mers, see
-// kmer_extract/packed_bytewise_simd.hpp, and each kernel extracts its spaced k-mers from all of
-// them at once. As in the scalar extraction, a span is taken in the pieces of its mask, see
-// SpacedKmerMask (core/types.hpp): piece `j` of the spans in a vector is taken from the words
-// loaded `7 * j` bytes after those of the first piece, and the spaced k-mer is the OR of the bits
-// extracted from each piece, shifted to its place by the mask shift of the piece. The windows still
-// hold the neighboring bases above each piece, which the bit extraction does not take.
+// (packed_bytewise_scalar.hpp), for spaced k-mer masks in the form of a bit extraction kernel of a
+// SIMD arch (bit_extract/simd.hpp), such as BitExtractKernelButterfly<SimdAVX2>, created via
+// make_spaced_kmer_kernel(). Here, and in ascii_chunked_simd.hpp and ascii_rolling_simd.hpp, a
+// "kernel" of the extraction is such a spaced k-mer mask, the KernelMask of the functions, which
+// holds the bit extraction kernel of each of its pieces. The loop below holds the windows of
+// consecutive spans in the lanes of its vectors, as the k-mer extraction from packed sequences
+// holds its k-mers, see kmer_extract/packed_bytewise_simd.hpp, and each kernel extracts its spaced
+// k-mers from all of them at once. As in the scalar extraction, a span is taken in the pieces of
+// its mask, see SpacedKmerMask (core/types.hpp): piece `j` of the spans in a vector is taken from
+// the words loaded `7 * j` bytes after those of the first piece, and the spaced k-mer is the OR of
+// the bits extracted from each piece, shifted to its place by the mask shift of the piece. The
+// windows still hold the neighboring bases above each piece, which the bit extraction does not
+// take.
 //
 // The callback is called with vectors, as `callback(pos, mask_idx, spaced_kmers, valid_count)`,
 // or, for a single kernel, also as `callback(pos, spaced_kmers, valid_count)`: lane `j` of the

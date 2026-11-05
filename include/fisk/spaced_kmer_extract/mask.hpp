@@ -16,22 +16,24 @@
 namespace fisk {
 
 // =================================================================================================
-//     Bit Extraction Mask
+//     Spaced K-mer Masks
 // =================================================================================================
 
-// The spaced k-mer masks in the representations of the bit extraction algorithms, for the
-// spaced k-mer extraction. The masks as strings and bits, and the spaced k-mers that they select,
-// are in core/kmer_spaced.hpp.
+// The spaced k-mer masks in the forms of the bit extraction algorithms, see SpacedKmerMask, for the
+// spaced k-mer extraction: in the bit extraction mask of an algorithm for the scalar loops, or in a
+// bit extraction kernel of a SIMD arch for the SIMD loops. The spaced k-mer masks as strings and
+// bits, and the spaced k-mers that they select, are in core/kmer_spaced.hpp.
 
 // -------------------------------------------------------------------------------------------------
 //     Mask Sets
 // -------------------------------------------------------------------------------------------------
 
-// The default largest number of masks that a std::vector of masks is dispatched for, as a std::span
-// of that compile-time size, see dispatch_static_span() (util/static_span.hpp). Each size up to it
-// instantiates the function called on the span once, so the default is kept small; code that needs
-// more masks passes a larger bound as the template parameter, or raises this default. The CMake
-// cache variable of the same name sets it for all code that uses the fisk target alike.
+// The default largest number of spaced k-mer masks that a std::vector of them is dispatched for, as
+// a std::span of that compile-time size, see dispatch_static_span() (util/static_span.hpp). Each
+// size up to it instantiates the function called on the span once, so the default is kept small;
+// code that needs more masks passes a larger bound as the template parameter, or raises this
+// default. The CMake cache variable of the same name sets it for all code that uses the fisk target
+// alike.
 #ifndef FISK_DEFAULT_MAX_MASKS
 #define FISK_DEFAULT_MAX_MASKS 4
 #endif
@@ -83,9 +85,9 @@ inline std::vector<SpacedKmerMask<L, BitExtractForm, MaxSpan>> convert_spaced_km
  * must be in [1, MaxSpan]. Throws otherwise.
  *
  * The span is cut into pieces, see SpacedKmerMask. In each piece, the first position is in the
- * highest bits of its mask for kMSB, and in the lowest bits for kLSB, matching the window of the
- * extraction in that Layout. As bit extraction keeps the order of the bits, the kept bases then
- * end up in that Layout as well.
+ * highest bits of its bit extraction mask for kMSB, and in the lowest bits for kLSB, matching the
+ * window of the extraction in that Layout. As bit extraction keeps the order of the bits, the kept
+ * bases then end up in that Layout as well.
  */
 template <Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
 inline SpacedKmerMask<L, BitExtractMask, MaxSpan> make_spaced_kmer_mask(std::string const& mask)
@@ -166,7 +168,8 @@ inline std::vector<SpacedKmerMask<L, BitExtractMask, MaxSpan>> make_spaced_kmer_
 }
 
 /**
- * @brief Create the butterfly mask of a spaced k-mer mask, see make_bit_extract_butterfly_mask().
+ * @brief Convert a spaced k-mer mask into the form of the butterfly, BitExtractButterflyMask, see
+ * make_bit_extract_butterfly_mask().
  */
 template <Layout L, std::size_t MaxSpan>
 inline SpacedKmerMask<L, BitExtractButterflyMask, MaxSpan> make_spaced_kmer_butterfly_mask(
@@ -178,7 +181,7 @@ inline SpacedKmerMask<L, BitExtractButterflyMask, MaxSpan> make_spaced_kmer_butt
 }
 
 /**
- * @brief Create the butterfly mask of a spaced k-mer mask given as a string, see
+ * @brief Create a spaced k-mer mask in the form of the butterfly from a string, see
  * make_spaced_kmer_mask().
  */
 template <Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
@@ -189,7 +192,7 @@ inline SpacedKmerMask<L, BitExtractButterflyMask, MaxSpan> make_spaced_kmer_butt
 }
 
 /**
- * @brief Create the butterfly masks of a set of spaced k-mer masks.
+ * @brief Convert a set of spaced k-mer masks into the form of the butterfly.
  */
 template <Layout L, std::size_t MaxSpan>
 inline std::vector<SpacedKmerMask<L, BitExtractButterflyMask, MaxSpan>>
@@ -202,8 +205,8 @@ make_spaced_kmer_butterfly_masks(
 }
 
 /**
- * @brief Create the block shift mask of a spaced k-mer mask, see
- * make_bit_extract_block_shift_mask().
+ * @brief Convert a spaced k-mer mask into the form of the block shift, BitExtractBlockShiftMask,
+ * see make_bit_extract_block_shift_mask().
  */
 template <Layout L, std::size_t MaxSpan>
 inline SpacedKmerMask<L, BitExtractBlockShiftMask, MaxSpan> make_spaced_kmer_block_shift_mask(
@@ -215,7 +218,7 @@ inline SpacedKmerMask<L, BitExtractBlockShiftMask, MaxSpan> make_spaced_kmer_blo
 }
 
 /**
- * @brief Create the block shift mask of a spaced k-mer mask given as a string, see
+ * @brief Create a spaced k-mer mask in the form of the block shift from a string, see
  * make_spaced_kmer_mask().
  */
 template <Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
@@ -226,7 +229,7 @@ inline SpacedKmerMask<L, BitExtractBlockShiftMask, MaxSpan> make_spaced_kmer_blo
 }
 
 /**
- * @brief Create the block shift masks of a set of spaced k-mer masks.
+ * @brief Convert a set of spaced k-mer masks into the form of the block shift.
  */
 template <Layout L, std::size_t MaxSpan>
 inline std::vector<SpacedKmerMask<L, BitExtractBlockShiftMask, MaxSpan>>
@@ -243,7 +246,7 @@ make_spaced_kmer_block_shift_masks(
 // -------------------------------------------------------------------------------------------------
 
 /**
- * @brief Create a bit extraction kernel of a spaced k-mer mask, such as
+ * @brief Convert a spaced k-mer mask into the form of a bit extraction kernel, such as
  * BitExtractKernelButterfly<SimdAVX2>, for the SIMD spaced k-mer extraction, see
  * ascii_rolling_simd.hpp and packed_bytewise_simd.hpp.
  */
@@ -258,7 +261,7 @@ inline SpacedKmerMask<L, Kernel, MaxSpan> make_spaced_kmer_kernel(
 }
 
 /**
- * @brief Create a bit extraction kernel of a spaced k-mer mask given as a string, see
+ * @brief Create a spaced k-mer mask in the form of a bit extraction kernel from a string, see
  * make_spaced_kmer_mask().
  */
 template <typename Kernel, Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
@@ -269,8 +272,8 @@ inline SpacedKmerMask<L, Kernel, MaxSpan> make_spaced_kmer_kernel(std::string co
 }
 
 /**
- * @brief Create the bit extraction kernels of a set of spaced k-mer masks, for instance to be
- * handed on to the SIMD extraction as a span of fixed size via dispatch_static_span().
+ * @brief Convert a set of spaced k-mer masks into the form of a bit extraction kernel, for instance
+ * to be handed on to the SIMD extraction as a span of fixed size via dispatch_static_span().
  */
 template <typename Kernel, Layout L, std::size_t MaxSpan>
     requires BitExtractKernel<Kernel>

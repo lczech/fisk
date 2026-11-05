@@ -254,7 +254,7 @@ Overview of the library headers (in `include/fisk/`), and their most important f
  - `bit_extract/selector.hpp`: Helper that runs a quick benchmark to find the most performant bit extraction algorithm for a given mask.
  - `sequence_pack/`: Packing of ASCII sequences into a compact 2-bit-per-base `PackedSequence`, 8 characters at a time via a word encoder. `pack_sequence_unchecked()` takes the input as valid, while `pack_sequence_checked()` also records one validity bit per nucleotide, in a `PackedSequenceWithValidity`. The word encoders are in `word_encoder.hpp`: the `WordEncoder` family, using the same PEXT/butterfly building blocks as bit extraction, the simple `WordEncoderFold`, or the fastest `WordEncoderDirect` and `WordEncoderDirectDouble`. All are templated on the SIMD arch, to pack several words at once (e.g., `WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdAVX2>`).
  - `extractor/`: `KmerExtractor` and `SpacedKmerExtractor`, which choose the fastest extraction function, see [Tuned extraction](#tuned-extraction).
- - `kmer_extract/` and `spaced_kmer_extract/`: The extraction of k-mers and of spaced k-mers, see below. `spaced_kmer_extract/mask.hpp` has the masks: they are created from a string of 1s and 0s via `make_spaced_kmer_mask()` and the related functions for the bit extraction tables (`make_spaced_kmer_butterfly_mask()`, etc.) and SIMD kernels (`make_spaced_kmer_kernel()`), for spaced k-mers in either `Layout` (e.g., `make_spaced_kmer_mask<Layout::kLSB>()`).
+ - `kmer_extract/` and `spaced_kmer_extract/`: The extraction of k-mers and of spaced k-mers, see below. `spaced_kmer_extract/mask.hpp` has the spaced k-mer masks: they are created from a string of 1s and 0s via `make_spaced_kmer_mask()`, and converted into the forms of the bit extraction algorithms via the related functions (`make_spaced_kmer_butterfly_mask()`, etc., and `make_spaced_kmer_kernel()` for the SIMD kernels), see [Spaced k-mer masks](#spaced-k-mer-masks), for spaced k-mers in either `Layout` (e.g., `make_spaced_kmer_mask<Layout::kLSB>()`).
 
 ### K-mer extraction functions
 
@@ -266,7 +266,7 @@ for_each_<kmer|spaced_kmer>_<ascii|packed>_<checked|unchecked>_<algorithm>_<tech
 
 For example, `for_each_kmer_packed_checked_bytewise_scalar()` extracts the valid k-mers of a `PackedSequenceWithValidity`, one at a time. The parts are:
 
- - What: `kmer` for contiguous k-mers (`Kmer`), `spaced_kmer` for spaced k-mers (`SpacedKmer`), which take a mask, or a set of masks of the same span, with a bit extraction function (scalar) or kernel (SIMD), see `bit_extract/`.
+ - What: `kmer` for contiguous k-mers (`Kmer`), `spaced_kmer` for spaced k-mers (`SpacedKmer`), which take a spaced k-mer mask, or a set of them of the same span, in the form of a bit extraction mask with a bit extraction function (scalar) or of a bit extraction kernel (SIMD), see [Spaced k-mer masks](#spaced-k-mer-masks).
  - Input: `ascii` for a sequence of characters (`std::string_view`), `packed` for a `PackedSequence` or `PackedSequenceWithValidity`.
  - Check: `checked` emits only the (spaced) k-mers whose nucleotides are valid: from ASCII, the characters `ACGTacgt`; from a `PackedSequenceWithValidity`, by its validity bits. A spaced k-mer is valid if the positions that its mask keeps are valid; invalid characters, such as `N`, at the positions that the mask skips do not matter. `unchecked` takes the input as valid and is faster: an invalid character is encoded as one of the four nucleotides, changing every k-mer that overlaps it. The unchecked functions on packed input also take a `PackedSequenceWithValidity`, and ignore its validity bits.
  - Algorithm: `rolling` shifts each nucleotide into the k-mer of the previous position; `reextract` builds each k-mer anew from its characters, for comparison only; `bytewise` reads the packed sequence one byte at a time, with one word load for the four k-mers that start in that byte, and is the fastest scalar algorithm; `chunked` packs the ASCII input chunk by chunk into a buffer, and extracts from there with the `bytewise` algorithm; the buffer is given by the caller, or else is a thread-local one, and the chunk size is a template parameter (`kDefaultAsciiChunkSize` by default).
@@ -284,6 +284,25 @@ These combinations exist, as `<algorithm>_<technique>`:
 | `packed_unchecked` | `bytewise_scalar`, `rolling_scalar`, `bytewise_simd` | `bytewise_scalar`, `bytewise_simd` |
 
 Each `<input>_<algorithm>_<technique>` has its own header in `kmer_extract/` or `spaced_kmer_extract/`, with its checked and unchecked functions, e.g. `kmer_extract/packed_bytewise_scalar.hpp`. The internals that several of them share are in an `internal.hpp` in each directory, and the chunking that all `chunked` ones share in `kmer_extract/ascii_chunked.hpp`.
+
+#### Spaced k-mer masks
+
+A spaced k-mer mask says which positions of a window of `span` nucleotides a spaced k-mer keeps, and is given as a string such as `"1101101"`. Bit extraction then gathers the bits of the kept positions. It has two axes: the algorithm (PEXT, butterfly, block shift, and others, see `bit_extract/`), and whether it runs as a plain scalar function on one word or on a SIMD arch, on all lanes of a vector at once. "Mask" has three meanings here, which the documentation names in full where they could be confused:
+
+ - Spaced k-mer mask: `SpacedKmerMask<L, BitExtractForm, MaxSpan>`, the positions that a spaced k-mer keeps, with its span and Layout, and each of its pieces (see below) in one form.
+ - Bit extraction mask: the data that one bit extraction algorithm needs for a mask, prepared once, such as `BitExtractButterflyMask` with the tables of the butterfly. Several algorithms can share one: PEXT, the bit loop, split32 and the byte lookup all take `BitExtractMask`.
+ - `BitExtractMask`: the plain bit extraction mask, the bits of the kept positions themselves.
+
+A bit extraction kernel, such as `BitExtractKernelButterfly<SimdAVX2>`, is one algorithm for one SIMD arch, and holds its bit extraction mask in vectors. The form of a spaced k-mer mask is either of the two: a bit extraction mask, for the scalar functions, or a kernel, for the SIMD functions. These forms exist:
+
+| Algorithm | Scalar functions | Kernels |
+|---|---|---|
+| PEXT | `BitExtractMask` | `BitExtractKernelPext`, on the scalar arch only, as PEXT has no SIMD form |
+| Butterfly | `BitExtractButterflyMask` | `BitExtractKernelButterfly<Simd>`, on all SIMD archs |
+| Block shift | `BitExtractBlockShiftMask` | `BitExtractKernelBlockShift<Simd>`, on all SIMD archs |
+| Bit loop, split32, byte lookup | `BitExtractMask` | none |
+
+`make_spaced_kmer_mask()` creates a spaced k-mer mask in the form `BitExtractMask`, and `make_spaced_kmer_butterfly_mask()`, `make_spaced_kmer_block_shift_mask()` and `make_spaced_kmer_kernel()` convert it into the other forms. A `std::vector` or `std::span` of `SpacedKmerMask` holds its masks in one form, for the extraction functions below; `SpacedKmerMaskForms` holds a set of masks in all forms that the extractors use, as they choose their algorithm at runtime, see [Tuned extraction](#tuned-extraction).
 
 The spaced k-mer functions take a set of masks as a `std::span` of compile-time size, so that their loops over the masks are unrolled; an array is handed on as `std::span{array}`. `dispatch_static_span()` (`util/static_span.hpp`) hands on a `std::vector` of masks, as made by `make_spaced_kmer_masks()`, as such a span of its size, which can be up to `kDefaultMaxMasks` (4 by default, see the CMake option `FISK_DEFAULT_MAX_MASKS` above):
 

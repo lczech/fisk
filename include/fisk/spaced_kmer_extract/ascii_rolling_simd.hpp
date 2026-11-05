@@ -125,7 +125,8 @@ inline void for_each_lane_ct_(F&& f)
 
 /**
  * @brief Iterate a sequence, extract all spaced k-mers from it with SIMD bit extraction, and call a
- * callback on vectors of them, for a set of kernels.
+ * callback on vectors of them, for a set of kernels: spaced k-mer masks in the form of a bit
+ * extraction kernel, see packed_bytewise_simd.hpp.
  *
  * The callback is called as `callback(pos, mask_idx, spaced_kmers, valid_lanes)`, or, for a single
  * kernel, also as `callback(pos, spaced_kmers, valid_lanes)`: lane `j` of the SpacedKmerVector

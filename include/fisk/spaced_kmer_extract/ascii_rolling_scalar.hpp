@@ -139,12 +139,13 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
  * @tparam Callback Callback function called with each extracted spaced k-mer.
  *
  * @param seq       Input sequence.
- * @param mask      Spaced k-mer mask, in the representation that `bit_ext` expects, such as
+ * @param mask      Spaced k-mer mask, in the form that `bit_ext` expects, such as
  *                  BitExtractMask, BitExtractBlockShiftMask, or BitExtractButterflyMask.
  *                  Its span must be in [1, 32].
  * @param enc       Encoder functor.
- * @param bit_ext   Bit extraction functor, called as bit_ext(word, mask). It must ignore all bits
- *                  of `word` outside of the mask, as PEXT and all fisk bit extraction functions do.
+ * @param bit_ext   Bit extraction functor, called as bit_ext(word, piece) with the bit extraction
+ *                  mask of each piece of `mask`. It must ignore all bits of `word` outside of that
+ *                  bit extraction mask, as PEXT and all fisk bit extraction functions do.
  * @param callback  Callback functor, called as callback(pos, mask_idx, spaced_kmer), or as
  *                  callback(pos, spaced_kmer) or callback(spaced_kmer). `pos` is the start index
  *                  of the spaced k-mer's span (into `seq`). See invoke_spaced_kmer_callback().

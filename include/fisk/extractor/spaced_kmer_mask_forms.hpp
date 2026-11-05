@@ -24,9 +24,9 @@ namespace fisk {
 
 /**
  * @brief The masks of a SpacedKmerMaskForms, as a std::tuple of one std::array of
- * `MaxMasks` masks of a span up to `MaxSpan` per form: the masks as given, for PEXT, the PEXT
- * kernels, where BMI2 is compiled, the butterfly masks, and the butterfly kernels of the `Simds`,
- * a TypeList.
+ * `MaxMasks` spaced k-mer masks of a span up to `MaxSpan` per form: the masks as given, in the
+ * form BitExtractMask, for PEXT, in the form of the PEXT kernel, where BMI2 is compiled, of the
+ * butterfly, BitExtractButterflyMask, and of the butterfly kernels of the `Simds`, a TypeList.
  */
 template <
     Layout L, std::size_t MaxMasks, std::size_t MaxSpan, typename Simds = CandidateSimdArchs
