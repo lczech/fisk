@@ -21,7 +21,7 @@
 #include "fisk/core/types.hpp"
 #include "fisk/extractor/common.hpp"
 #include "fisk/extractor/internal.hpp"
-#include "fisk/extractor/spaced_kmer_masks.hpp"
+#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
 #include "fisk/spaced_kmer_extract/ascii_chunked_scalar.hpp"
 #include "fisk/spaced_kmer_extract/ascii_chunked_simd.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
@@ -44,7 +44,7 @@ namespace fisk {
 
 // The bit extraction of the spaced k-mer masks of the form `BitExtractForm`, a bit extraction mask
 // for the scalar loops, or a kernel for the SIMD loops: its name and availability. The masks in
-// these forms are in SpacedKmerMasks.
+// these forms are in SpacedKmerMaskForms.
 
 template <typename BitExtractForm>
 struct is_bit_extract_kernel_butterfly_ : std::false_type {};
@@ -182,13 +182,13 @@ struct SpacedKmerCandidateAsciiChunkedScalar
 
     template <std::size_t MaxSpan, typename Callback>
     FISK_ALWAYS_INLINE void run(
-        SpacedKmerMasks<L, MaxMasks, MaxSpan> const& masks, std::string_view seq,
+        SpacedKmerMaskForms<L, MaxMasks, MaxSpan> const& mask_forms, std::string_view seq,
         Callback& callback
     ) const
     {
         ExtractorWordEncoder<E, L> const encoder{};
         auto const bit_extract = spaced_kmer_extractor_bit_extract_<BitExtractForm>();
-        dispatch_static_span<MaxMasks>(masks.template get<BitExtractForm>(), [&](auto span) {
+        dispatch_static_span<MaxMasks>(mask_forms.template get<BitExtractForm>(), [&](auto span) {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_ascii_checked_chunked_scalar(
                     seq, span, encoder, bit_extract, callback
@@ -220,13 +220,13 @@ struct SpacedKmerCandidateAsciiChunkedSimd
 
     template <std::size_t MaxSpan, typename Callback>
     FISK_ALWAYS_INLINE void run(
-        SpacedKmerMasks<L, MaxMasks, MaxSpan> const& masks, std::string_view seq,
+        SpacedKmerMaskForms<L, MaxMasks, MaxSpan> const& mask_forms, std::string_view seq,
         Callback& callback
     ) const
     {
         ExtractorWordEncoder<E, L> const encoder{};
         auto vector_callback = spaced_kmer_extractor_vector_callback_(callback);
-        dispatch_static_span<MaxMasks>(masks.template get<Kernel>(), [&](auto span) {
+        dispatch_static_span<MaxMasks>(mask_forms.template get<Kernel>(), [&](auto span) {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_ascii_checked_chunked_simd(
                     seq, span, encoder, vector_callback
@@ -266,11 +266,12 @@ struct SpacedKmerCandidatePackedBytewiseScalar
 
     template <std::size_t MaxSpan, typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
-        SpacedKmerMasks<L, MaxMasks, MaxSpan> const& masks, Seq const& seq, Callback& callback
+        SpacedKmerMaskForms<L, MaxMasks, MaxSpan> const& mask_forms, Seq const& seq,
+        Callback& callback
     ) const
     {
         auto const bit_extract = spaced_kmer_extractor_bit_extract_<BitExtractForm>();
-        dispatch_static_span<MaxMasks>(masks.template get<BitExtractForm>(), [&](auto span) {
+        dispatch_static_span<MaxMasks>(mask_forms.template get<BitExtractForm>(), [&](auto span) {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_packed_checked_bytewise_scalar(
                     seq, span, bit_extract, callback
@@ -302,11 +303,12 @@ struct SpacedKmerCandidatePackedBytewiseSimd
 
     template <std::size_t MaxSpan, typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
-        SpacedKmerMasks<L, MaxMasks, MaxSpan> const& masks, Seq const& seq, Callback& callback
+        SpacedKmerMaskForms<L, MaxMasks, MaxSpan> const& mask_forms, Seq const& seq,
+        Callback& callback
     ) const
     {
         auto vector_callback = spaced_kmer_extractor_vector_callback_(callback);
-        dispatch_static_span<MaxMasks>(masks.template get<Kernel>(), [&](auto span) {
+        dispatch_static_span<MaxMasks>(mask_forms.template get<Kernel>(), [&](auto span) {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_packed_checked_bytewise_simd(seq, span, vector_callback);
             } else {
@@ -445,7 +447,7 @@ struct SpacedKmerExtractorPreference<I, C, E, L, MaxMasks, TypeList<Simd...>>
  * @tparam E Encoding of the spaced k-mers.
  * @tparam L Layout of the spaced k-mers.
  * @tparam MaxMasks The largest number of masks that the extractor takes.
- * @tparam MaxSpan The largest span of the masks that the extractor takes, see SpacedKmerMasks.
+ * @tparam MaxSpan The largest span of the masks that the extractor takes, see SpacedKmerMaskForms.
  */
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L,
@@ -458,7 +460,7 @@ public:
     using sequence_type = ExtractorSequence<I, C, E, L>;
     using kmer_type = SpacedKmer<E, L>;
     using mask_type = SpacedKmerMask<L, BitExtractMask, MaxSpan>;
-    using masks_type = SpacedKmerMasks<L, MaxMasks, MaxSpan>;
+    using mask_forms_type = SpacedKmerMaskForms<L, MaxMasks, MaxSpan>;
 
     static constexpr InputFormat input_format = I;
     static constexpr InputCheck input_check = C;
@@ -479,7 +481,7 @@ public:
      * a mask is invalid or of a span above `MaxSpan`, or the masks differ in span.
      */
     explicit SpacedKmerExtractor(std::vector<std::string> const& masks)
-        : SpacedKmerExtractor(masks_type(masks))
+        : SpacedKmerExtractor(mask_forms_type(masks))
     {}
 
     /**
@@ -487,22 +489,24 @@ public:
      * make_spaced_kmer_masks().
      */
     explicit SpacedKmerExtractor(std::span<mask_type const> masks)
-        : SpacedKmerExtractor(masks_type(masks))
+        : SpacedKmerExtractor(mask_forms_type(masks))
     {}
 
     /**
-     * @brief Set up the extractor for a prepared set of masks, of the Layout, MaxMasks and MaxSpan
-     * of the extractor.
+     * @brief Set up the extractor for a set of masks prepared in all forms, of the Layout,
+     * MaxMasks and MaxSpan of the extractor.
      */
     template <Layout MasksLayout, std::size_t MasksMaxMasks, std::size_t MasksMaxSpan>
-    explicit SpacedKmerExtractor(SpacedKmerMasks<MasksLayout, MasksMaxMasks, MasksMaxSpan> masks)
-        : plan_(own_masks_(std::move(masks)))
+    explicit SpacedKmerExtractor(
+        SpacedKmerMaskForms<MasksLayout, MasksMaxMasks, MasksMaxSpan> mask_forms
+    )
+        : plan_(own_mask_forms_(std::move(mask_forms)))
     {}
 
     /**
-     * @brief The masks.
+     * @brief The masks, in all forms.
      */
-    masks_type const& masks() const noexcept
+    mask_forms_type const& mask_forms() const noexcept
     {
         return plan_.settings();
     }
@@ -615,29 +619,30 @@ public:
 
 private:
 
-    // The `masks`, which have to be of the Layout, MaxMasks and MaxSpan of the extractor. The
+    // The `mask_forms`, which have to be of the Layout, MaxMasks and MaxSpan of the extractor. The
     // constructor takes others as well, so that they fail here, with a message, instead of leaving
     // no constructor to match.
     template <Layout MasksLayout, std::size_t MasksMaxMasks, std::size_t MasksMaxSpan>
-    static masks_type own_masks_(SpacedKmerMasks<MasksLayout, MasksMaxMasks, MasksMaxSpan> masks)
-    {
+    static mask_forms_type own_mask_forms_(
+        SpacedKmerMaskForms<MasksLayout, MasksMaxMasks, MasksMaxSpan> mask_forms
+    ) {
         static_assert(
             MasksLayout == L,
             "The masks are for another Layout than the extractor. Make them with the Layout, "
-            "MaxMasks and MaxSpan of the extractor, as SpacedKmerMasks<L, MaxMasks, MaxSpan>."
+            "MaxMasks and MaxSpan of the extractor, as SpacedKmerMaskForms<L, MaxMasks, MaxSpan>."
         );
         static_assert(
             MasksMaxMasks == MaxMasks,
             "The masks are for another MaxMasks than the extractor. Make them with the Layout, "
-            "MaxMasks and MaxSpan of the extractor, as SpacedKmerMasks<L, MaxMasks, MaxSpan>."
+            "MaxMasks and MaxSpan of the extractor, as SpacedKmerMaskForms<L, MaxMasks, MaxSpan>."
         );
         static_assert(
             MasksMaxSpan == MaxSpan,
             "The masks are for another MaxSpan than the extractor. Make them with the Layout, "
-            "MaxMasks and MaxSpan of the extractor, as SpacedKmerMasks<L, MaxMasks, MaxSpan>."
+            "MaxMasks and MaxSpan of the extractor, as SpacedKmerMaskForms<L, MaxMasks, MaxSpan>."
         );
         if constexpr (MasksLayout == L && MasksMaxMasks == MaxMasks && MasksMaxSpan == MaxSpan) {
-            return masks;
+            return mask_forms;
         } else {
             // Not reached, as the checks above fail to compile.
             throw std::logic_error(
@@ -647,7 +652,7 @@ private:
     }
 
     using Plan = ExtractorPlan<
-        masks_type, sequence_type,
+        mask_forms_type, sequence_type,
         typename SpacedKmerExtractorCandidates<I, C, E, L, MaxMasks>::type,
         typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type
     >;

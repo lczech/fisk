@@ -13,7 +13,7 @@
 #include "fisk/extractor/internal.hpp"
 #include "fisk/extractor/kmer_extractor.hpp"
 #include "fisk/extractor/spaced_kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_masks.hpp"
+#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
 #include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
 #include "fisk/kmer_extract/ascii_chunked_simd.hpp"
 #include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
@@ -247,12 +247,12 @@ TEST(ExtractorNames, KmerPackedUnchecked)
 
 constexpr std::size_t kTableMasks = 2;
 
-using TableMasks = SpacedKmerMasks<kMsb, kTableMasks>;
+using TableMaskForms = SpacedKmerMaskForms<kMsb, kTableMasks>;
 
 // The masks in the form `BitExtractForm`, as the std::span of fixed size that the functions take.
 template <typename BitExtractForm>
 std::span<SpacedKmerMask<kMsb, BitExtractForm> const, kTableMasks> fixed_masks(
-    TableMasks const& masks
+    TableMaskForms const& masks
 ) {
     return std::span<SpacedKmerMask<kMsb, BitExtractForm> const, kTableMasks>(
         masks.get<BitExtractForm>().data(), kTableMasks
@@ -280,7 +280,7 @@ struct SpacedTableRecorder
     }
 };
 
-TableMasks const table_masks({"1101101", "1011011"});
+TableMaskForms const table_masks({"1101101", "1011011"});
 
 TEST(ExtractorNames, SpacedAsciiChecked)
 {

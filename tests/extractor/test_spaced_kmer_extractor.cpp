@@ -51,7 +51,7 @@ TEST(SpacedKmerExtractor, MaxSpan)
 {
     using Masks = std::vector<std::string>;
     using NarrowExtractor = SpacedKmerExtractor<InputFormat::kAscii, kChecked, kAcgt, kMsb, 1, 32>;
-    EXPECT_EQ(NarrowExtractor(Masks{std::string(32, '1')}).masks().size(), 1u);
+    EXPECT_EQ(NarrowExtractor(Masks{std::string(32, '1')}).mask_forms().size(), 1u);
     EXPECT_THROW(NarrowExtractor(random_masks(1, 33, 5)), std::invalid_argument);
 
     using WideExtractor = SpacedKmerExtractor<InputFormat::kAscii, kChecked, kAcgt, kMsb, 1, 128>;
@@ -199,10 +199,10 @@ TEST(SpacedKmerExtractor, Masks)
     auto const strings = random_masks(kMaxTestMasks, 13, 5);
     auto const masks = make_spaced_kmer_masks<kMsb>(strings);
     AsciiCheckedSpacedExtractor extractor(masks);
-    ASSERT_EQ(extractor.masks().size(), kMaxTestMasks);
+    ASSERT_EQ(extractor.mask_forms().size(), kMaxTestMasks);
     for (std::size_t i = 0; i < kMaxTestMasks; ++i) {
         EXPECT_EQ(
-            extractor.masks().get<BitExtractMask>()[i].mask_pieces[0].mask,
+            extractor.mask_forms().get<BitExtractMask>()[i].mask_pieces[0].mask,
             masks[i].mask_pieces[0].mask
         );
     }

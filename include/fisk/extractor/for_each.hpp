@@ -10,7 +10,7 @@
 #include "fisk/extractor/internal.hpp"
 #include "fisk/extractor/kmer_extractor.hpp"
 #include "fisk/extractor/spaced_kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_masks.hpp"
+#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
 
 namespace fisk {
 
@@ -174,8 +174,8 @@ inline constexpr void for_each_spaced_kmer_layout_assert_()
 {
     static_assert(
         MasksLayout == L,
-        "The masks are for another Layout than the spaced k-mers. Make them as SpacedKmerMasks<L> "
-        "with the Layout of the extraction."
+        "The masks are for another Layout than the spaced k-mers. Make them as "
+        "SpacedKmerMaskForms<L> with the Layout of the extraction."
     );
 }
 
@@ -184,13 +184,14 @@ template <
     std::size_t MaxSpan, typename Seq, typename Callback
 >
 FISK_ALWAYS_INLINE inline void for_each_spaced_kmer_estimate_(
-    Seq const& seq, SpacedKmerMasks<MasksLayout, MaxMasks, MaxSpan> const& masks, Callback& callback
+    Seq const& seq, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms,
+    Callback& callback
 ) {
     for_each_spaced_kmer_layout_assert_<L, MasksLayout>();
     if constexpr (MasksLayout == L) {
         using Preference = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type;
         visit_estimate<Preference, Callback>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
-            candidate.run(masks, seq, callback);
+            candidate.run(mask_forms, seq, callback);
         });
     }
 }
@@ -213,19 +214,22 @@ inline std::string for_each_spaced_kmer_estimate_name_()
 }
 
 /**
- * @brief Call `callback` with each spaced k-mer of `seq` for each of the `masks`, with the
- * algorithm that SpacedKmerExtractor estimates to be the fastest on this hardware, without tuning.
+ * @brief Call `callback` with each spaced k-mer of `seq` for each of the masks of `mask_forms`,
+ * with the algorithm that SpacedKmerExtractor estimates to be the fastest on this hardware, without
+ * tuning.
  *
- * As for_each_kmer(), for a prepared set of masks instead of a k-mer size. The set is prepared
- * once, and can then be used for as many sequences as needed:
+ * As for_each_kmer(), for a set of spaced k-mer masks instead of a k-mer size, prepared in all
+ * forms of the algorithms, see SpacedKmerMaskForms. The set is prepared once, and can then be used
+ * for as many sequences as needed:
  *
  *     using namespace fisk;
- *     SpacedKmerMasks<Layout::kMSB> const masks({
+ *     SpacedKmerMaskForms<Layout::kMSB> const mask_forms({
  *         "1101101101101101101101101101101",
  *         "1011011011011011011011011011011"
  *     });
  *     for_each_spaced_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
- *         seq, masks, [&](std::size_t pos, std::size_t mask_idx, SpacedKmerAcgtMsb kmer) { ... }
+ *         seq, mask_forms,
+ *         [&](std::size_t pos, std::size_t mask_idx, SpacedKmerAcgtMsb kmer) { ... }
  *     );
  *
  * for_each_spaced_kmer_algorithm_name() names the algorithm. To measure the fastest algorithm
@@ -248,16 +252,16 @@ template <
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline void for_each_spaced_kmer(
-    std::string_view seq, SpacedKmerMasks<MasksLayout, MaxMasks, MaxSpan> const& masks,
+    std::string_view seq, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms,
     Callback&& callback
 ) {
-    for_each_spaced_kmer_estimate_<InputFormat::kAscii, C, E, L>(seq, masks, callback);
+    for_each_spaced_kmer_estimate_<InputFormat::kAscii, C, E, L>(seq, mask_forms, callback);
 }
 
 /**
  * @brief Call `callback` with each spaced k-mer of a PackedSequence.
  *
- * @see for_each_spaced_kmer(std::string_view, SpacedKmerMasks const&, Callback&&) for ASCII
+ * @see for_each_spaced_kmer(std::string_view, SpacedKmerMaskForms const&, Callback&&) for ASCII
  * input.
  */
 template <
@@ -266,19 +270,19 @@ template <
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline void for_each_spaced_kmer(
-    PackedSequence<E, L> const& seq, SpacedKmerMasks<MasksLayout, MaxMasks, MaxSpan> const& masks,
-    Callback&& callback
+    PackedSequence<E, L> const& seq,
+    SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms, Callback&& callback
 ) {
     for_each_packed_unchecked_assert_<C>();
     for_each_spaced_kmer_estimate_<InputFormat::kPacked, InputCheck::kUnchecked, E, L>(
-        seq, masks, callback
+        seq, mask_forms, callback
     );
 }
 
 /**
  * @brief Call `callback` with each valid spaced k-mer of a PackedSequenceWithValidity.
  *
- * @see for_each_spaced_kmer(std::string_view, SpacedKmerMasks const&, Callback&&) for ASCII
+ * @see for_each_spaced_kmer(std::string_view, SpacedKmerMaskForms const&, Callback&&) for ASCII
  * input.
  */
 template <
@@ -288,11 +292,11 @@ template <
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline void for_each_spaced_kmer(
     PackedSequenceWithValidity<E, L> const& seq,
-    SpacedKmerMasks<MasksLayout, MaxMasks, MaxSpan> const& masks, Callback&& callback
+    SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms, Callback&& callback
 ) {
     for_each_packed_checked_assert_<C>();
     for_each_spaced_kmer_estimate_<InputFormat::kPacked, InputCheck::kChecked, E, L>(
-        seq, masks, callback
+        seq, mask_forms, callback
     );
 }
 
@@ -307,7 +311,7 @@ template <
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
-    std::string_view, SpacedKmerMasks<MasksLayout, MaxMasks, MaxSpan> const&, Callback&&
+    std::string_view, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&, Callback&&
 ) {
     return for_each_spaced_kmer_estimate_name_<
         InputFormat::kAscii, C, E, L, MasksLayout, MaxMasks, std::remove_reference_t<Callback>
@@ -320,7 +324,8 @@ template <
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
-    PackedSequence<E, L> const&, SpacedKmerMasks<MasksLayout, MaxMasks, MaxSpan> const&, Callback&&
+    PackedSequence<E, L> const&, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&,
+    Callback&&
 ) {
     for_each_packed_unchecked_assert_<C>();
     return for_each_spaced_kmer_estimate_name_<
@@ -335,8 +340,8 @@ template <
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
-    PackedSequenceWithValidity<E, L> const&, SpacedKmerMasks<MasksLayout, MaxMasks, MaxSpan> const&,
-    Callback&&
+    PackedSequenceWithValidity<E, L> const&,
+    SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&, Callback&&
 ) {
     for_each_packed_checked_assert_<C>();
     return for_each_spaced_kmer_estimate_name_<

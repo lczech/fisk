@@ -101,7 +101,7 @@ inline SpacedKmerMask<L, BitExtractMask, MaxSpan> make_spaced_kmer_mask(std::str
         throw std::invalid_argument(
             "Invalid spaced k-mer mask of span " + std::to_string(span_k) + " above the "
             "compile-time maximum span " + std::to_string(MaxSpan) + ". Raise the template "
-            "parameter MaxSpan of the mask, of SpacedKmerMasks and SpacedKmerExtractor, or its "
+            "parameter MaxSpan of the mask, of SpacedKmerMaskForms and SpacedKmerExtractor, or its "
             "default, the CMake option or macro FISK_DEFAULT_MAX_SPAN."
         );
     }

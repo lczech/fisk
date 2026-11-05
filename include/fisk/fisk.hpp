@@ -55,6 +55,6 @@
 
 // Extractors
 #include "fisk/extractor/kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_masks.hpp"
+#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
 #include "fisk/extractor/spaced_kmer_extractor.hpp"
 #include "fisk/extractor/for_each.hpp"

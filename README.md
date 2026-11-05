@@ -75,15 +75,15 @@ for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
 );
 ```
 
-`for_each_spaced_kmer()` does the same for a set of spaced k-mer masks, prepared once as `SpacedKmerMasks`, and calls back as `callback(pos, mask_idx, spaced_kmer)`:
+`for_each_spaced_kmer()` does the same for a set of spaced k-mer masks, prepared once in all forms of its algorithms as `SpacedKmerMaskForms`, and calls back as `callback(pos, mask_idx, spaced_kmer)`:
 
 ```cpp
-SpacedKmerMasks<Layout::kMSB> const masks({
+SpacedKmerMaskForms<Layout::kMSB> const mask_forms({
     "1101101101101101101101101101101",
     "1011011011011011011011011011011"
 });
 for_each_spaced_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
-    seq, masks, [&](std::size_t pos, std::size_t mask_idx, SpacedKmerAcgtMsb kmer) {
+    seq, mask_forms, [&](std::size_t pos, std::size_t mask_idx, SpacedKmerAcgtMsb kmer) {
         // ...
     }
 );
@@ -136,7 +136,7 @@ Extractor extractor({
 });
 ```
 
-Its template parameter `MaxMasks` is the largest number of masks it takes, `FISK_DEFAULT_MAX_MASKS` (4) by default. Each number of masks up to it compiles the extraction once, so a small `MaxMasks` shortens the compile time a lot, see below. More masks throw `std::invalid_argument` when the extractor is constructed; if the users of your program choose the masks, set `MaxMasks` to the most that it accepts. The last template parameter, `MaxSpan`, is the largest span of the masks, `FISK_DEFAULT_MAX_SPAN` (64) by default. All algorithms of the extractors take spans above 32, see [K-mer extraction functions](#k-mer-extraction-functions); a `MaxSpan` of 32, for masks that are not wider, shortens the compile time. `SpacedKmerMasks` takes the same two parameters, and the extractor takes prepared masks of its own `MaxMasks` and `MaxSpan`.
+Its template parameter `MaxMasks` is the largest number of masks it takes, `FISK_DEFAULT_MAX_MASKS` (4) by default. Each number of masks up to it compiles the extraction once, so a small `MaxMasks` shortens the compile time a lot, see below. More masks throw `std::invalid_argument` when the extractor is constructed; if the users of your program choose the masks, set `MaxMasks` to the most that it accepts. The last template parameter, `MaxSpan`, is the largest span of the masks, `FISK_DEFAULT_MAX_SPAN` (64) by default. All algorithms of the extractors take spans above 32, see [K-mer extraction functions](#k-mer-extraction-functions); a `MaxSpan` of 32, for masks that are not wider, shortens the compile time. `SpacedKmerMaskForms` takes the same two parameters, and the extractor takes prepared masks of its own `MaxMasks` and `MaxSpan`.
 
 The other template parameters set, in this order, the input format (`InputFormat::kAscii` for a `std::string_view`, `InputFormat::kPacked` for a `PackedSequence`, or a `PackedSequenceWithValidity` when checked), whether the input is checked for invalid characters (`InputCheck`, see the check in [K-mer extraction functions](#k-mer-extraction-functions)), and the `Encoding` and `Layout` of the k-mers.
 

@@ -6,7 +6,7 @@
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/extractor/spaced_kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_masks.hpp"
+#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "extractor/common.hpp"
 #include "oracle.hpp"
@@ -18,7 +18,7 @@ constexpr auto kAcgt = Encoding::kACGT;
 constexpr auto kMsb = Layout::kMSB;
 constexpr auto kChecked = InputCheck::kChecked;
 
-using TestMasks = SpacedKmerMasks<kMsb, kMaxTestMasks>;
+using TestMaskForms = SpacedKmerMaskForms<kMsb, kMaxTestMasks>;
 
 // =================================================================================================
 //     Forms
@@ -29,7 +29,7 @@ using TestMasks = SpacedKmerMasks<kMsb, kMaxTestMasks>;
 static void check_forms(std::size_t span)
 {
     auto const raw = make_spaced_kmer_masks<kMsb>(random_masks(kMaxTestMasks - 1, span, 7));
-    TestMasks const masks(raw);
+    TestMaskForms const masks(raw);
     ASSERT_EQ(masks.size(), raw.size());
 
     auto const check_common = [&](auto const& forms) {
@@ -92,7 +92,7 @@ static void check_forms(std::size_t span)
 }
 
 // One piece, and three, the most of the default MaxSpan.
-TEST(SpacedKmerMasks, Forms)
+TEST(SpacedKmerMaskForms, Forms)
 {
     check_forms(13);
     check_forms(64);
@@ -103,13 +103,13 @@ TEST(SpacedKmerMasks, Forms)
 // =================================================================================================
 
 // An extractor of a prepared set extracts the same as one of the strings of the masks.
-TEST(SpacedKmerMasks, Extractor)
+TEST(SpacedKmerMaskForms, Extractor)
 {
     using Extractor = SpacedKmerExtractor<
         InputFormat::kAscii, kChecked, kAcgt, kMsb, kMaxTestMasks
     >;
     auto const strings = random_masks(kMaxTestMasks, 11, 3);
-    Extractor const from_masks(TestMasks{strings});
+    Extractor const from_masks(TestMaskForms{strings});
     Extractor const from_strings(strings);
     for (auto const& seq : extractor_test_sequences<kChecked>()) {
         SpacedKmerRecorder expected;
@@ -124,18 +124,18 @@ TEST(SpacedKmerMasks, Extractor)
 //     Errors
 // =================================================================================================
 
-TEST(SpacedKmerMasks, Errors)
+TEST(SpacedKmerMaskForms, Errors)
 {
     using Masks = std::vector<std::string>;
-    EXPECT_THROW(TestMasks(Masks{}), std::invalid_argument);
-    EXPECT_THROW(TestMasks(Masks{"1101", "11011"}), std::invalid_argument);
-    EXPECT_THROW(TestMasks(Masks{"0110"}), std::invalid_argument);
-    EXPECT_THROW(TestMasks(random_masks(kMaxTestMasks + 1, 11, 3)), std::invalid_argument);
+    EXPECT_THROW(TestMaskForms(Masks{}), std::invalid_argument);
+    EXPECT_THROW(TestMaskForms(Masks{"1101", "11011"}), std::invalid_argument);
+    EXPECT_THROW(TestMaskForms(Masks{"0110"}), std::invalid_argument);
+    EXPECT_THROW(TestMaskForms(random_masks(kMaxTestMasks + 1, 11, 3)), std::invalid_argument);
 
     // Too many masks: the message says that the maximum is a compile-time one, and how to raise it.
     std::string message;
     try {
-        TestMasks masks(random_masks(kMaxTestMasks + 1, 11, 3));
+        TestMaskForms masks(random_masks(kMaxTestMasks + 1, 11, 3));
     } catch (std::invalid_argument const& error) {
         message = error.what();
     }
@@ -144,23 +144,23 @@ TEST(SpacedKmerMasks, Errors)
 }
 
 // Masks above 32: up to MaxSpan, with at most 32 kept positions, and all of one span.
-TEST(SpacedKmerMasks, WideErrors)
+TEST(SpacedKmerMaskForms, WideErrors)
 {
     using Masks = std::vector<std::string>;
     auto const mask = [](std::size_t span) {
         return std::string("1").append(span - 2, '0').append("1");
     };
-    EXPECT_EQ(TestMasks(Masks{mask(kDefaultMaxSpan)}).size(), 1u);
-    EXPECT_THROW(TestMasks(Masks{mask(kDefaultMaxSpan + 1)}), std::invalid_argument);
-    EXPECT_THROW(TestMasks(Masks{std::string(40, '1')}), std::invalid_argument);
-    EXPECT_THROW(TestMasks(Masks{"11", mask(45)}), std::invalid_argument);
-    EXPECT_THROW(TestMasks(Masks{mask(45), mask(46)}), std::invalid_argument);
+    EXPECT_EQ(TestMaskForms(Masks{mask(kDefaultMaxSpan)}).size(), 1u);
+    EXPECT_THROW(TestMaskForms(Masks{mask(kDefaultMaxSpan + 1)}), std::invalid_argument);
+    EXPECT_THROW(TestMaskForms(Masks{std::string(40, '1')}), std::invalid_argument);
+    EXPECT_THROW(TestMaskForms(Masks{"11", mask(45)}), std::invalid_argument);
+    EXPECT_THROW(TestMaskForms(Masks{mask(45), mask(46)}), std::invalid_argument);
 
     // A span above MaxSpan: the message says that the maximum is a compile-time one, and how to
     // raise it.
     std::string message;
     try {
-        TestMasks masks(Masks{mask(kDefaultMaxSpan + 1)});
+        TestMaskForms masks(Masks{mask(kDefaultMaxSpan + 1)});
     } catch (std::invalid_argument const& error) {
         message = error.what();
     }
@@ -169,12 +169,12 @@ TEST(SpacedKmerMasks, WideErrors)
     EXPECT_TRUE(message.find("FISK_DEFAULT_MAX_SPAN") != std::string::npos);
 
     // Other maximum spans than the default.
-    using NarrowMasks = SpacedKmerMasks<kMsb, 1, 32>;
-    EXPECT_EQ(NarrowMasks(Masks{mask(32)}).size(), 1u);
-    EXPECT_THROW(NarrowMasks(Masks{mask(33)}), std::invalid_argument);
-    using WideMasks = SpacedKmerMasks<kMsb, 1, 128>;
-    WideMasks const wide(Masks{mask(128)});
+    using NarrowMaskForms = SpacedKmerMaskForms<kMsb, 1, 32>;
+    EXPECT_EQ(NarrowMaskForms(Masks{mask(32)}).size(), 1u);
+    EXPECT_THROW(NarrowMaskForms(Masks{mask(33)}), std::invalid_argument);
+    using WideMaskForms = SpacedKmerMaskForms<kMsb, 1, 128>;
+    WideMaskForms const wide(Masks{mask(128)});
     EXPECT_EQ(wide.get<BitExtractMask>()[0].span_k, 128u);
-    EXPECT_EQ(WideMasks::mask_type::max_pieces, 5u);
-    EXPECT_THROW(WideMasks(Masks{mask(129)}), std::invalid_argument);
+    EXPECT_EQ(WideMaskForms::mask_type::max_pieces, 5u);
+    EXPECT_THROW(WideMaskForms(Masks{mask(129)}), std::invalid_argument);
 }

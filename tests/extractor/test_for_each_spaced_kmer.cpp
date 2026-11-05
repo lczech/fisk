@@ -6,7 +6,7 @@
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/extractor/for_each.hpp"
 #include "fisk/extractor/spaced_kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_masks.hpp"
+#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
 #include "extractor/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
@@ -43,17 +43,17 @@ static void check_for_each_spaced_kmer()
     }
 
     for (auto const& strings : mask_sets) {
-        SpacedKmerMasks<L, kMaxTestMasks> const masks(strings);
-        Extractor const extractor(masks);
+        SpacedKmerMaskForms<L, kMaxTestMasks> const mask_forms(strings);
+        Extractor const extractor(mask_forms);
         for (auto const& seq : seqs) {
             auto const expected = by_mask(oracle_spaced_events<E, L>(seq, strings));
             auto const input = extractor_test_input<Extractor>(seq);
 
             SpacedKmerRecorder single;
-            for_each_spaced_kmer<C, E, L>(input, masks, single);
+            for_each_spaced_kmer<C, E, L>(input, mask_forms, single);
             check_spaced_events(by_mask(single.events), expected);
             auto const single_name =
-                for_each_spaced_kmer_algorithm_name<C, E, L>(input, masks, single);
+                for_each_spaced_kmer_algorithm_name<C, E, L>(input, mask_forms, single);
             EXPECT_EQ(single_name, extractor.algorithm_name(single));
 
             SpacedKmerRecorder unpacked;
@@ -71,9 +71,9 @@ static void check_for_each_spaced_kmer()
                     );
                 }
             };
-            for_each_spaced_kmer<C, E, L>(input, masks, both);
+            for_each_spaced_kmer<C, E, L>(input, mask_forms, both);
             check_spaced_events(by_mask(unpacked.events), expected);
-            auto const name = for_each_spaced_kmer_algorithm_name<C, E, L>(input, masks, both);
+            auto const name = for_each_spaced_kmer_algorithm_name<C, E, L>(input, mask_forms, both);
             EXPECT_EQ(name, extractor.algorithm_name(both));
             bool const simd = name.find("simd") != std::string::npos;
             EXPECT_TRUE(simd ? (vectors > 0 || expected.empty()) : vectors == 0);
@@ -81,10 +81,10 @@ static void check_for_each_spaced_kmer()
             // Packed input gives the template arguments by its type.
             if constexpr (I == kPacked) {
                 SpacedKmerRecorder deduced;
-                for_each_spaced_kmer(input, masks, deduced);
+                for_each_spaced_kmer(input, mask_forms, deduced);
                 check_spaced_events(deduced.events, single.events);
                 EXPECT_EQ(
-                    for_each_spaced_kmer_algorithm_name(input, masks, deduced),
+                    for_each_spaced_kmer_algorithm_name(input, mask_forms, deduced),
                     extractor.algorithm_name()
                 );
             }
