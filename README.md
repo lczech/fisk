@@ -42,7 +42,19 @@ target_link_libraries(your_target PRIVATE fisk::fisk)
 
 Both approaches add `include/` to your target include path. `#include "fisk/fisk.hpp"` for the whole library, or include just the headers you need (e.g., `fisk/spaced_kmer_extract/packed_bytewise_scalar.hpp`). See [Implementation](#implementation) below for an overview of what is where.
 
-By default, `fisk::fisk` does not force any instruction-set-specific flags onto consumers. To enable the accelerated code paths (PEXT/BMI2, SIMD, ...), turn on the relevant option before linking against it: `FISK_ENABLE_BMI2`, `FISK_ENABLE_SSE2`, `FISK_ENABLE_SSSE3`, `FISK_ENABLE_SSE41`, `FISK_ENABLE_AVX2`, `FISK_ENABLE_AVX512`, `FISK_ENABLE_NEON`. Each only takes effect if the compiler and target actually support it, so enabling several at once is safe. The selector functions (e.g., `bit_extract_selector()`) can be used to pick the fastest one available at runtime. `FISK_DEFAULT_MAX_MASKS` (default 4) is the default largest number of spaced k-mer masks in a `std::vector` that can be handed on to the extraction, see [K-mer extraction functions](#k-mer-extraction-functions); each count up to it compiles the extraction once. Code that needs more masks passes a larger bound as template parameter, or raises this default.
+By default, `fisk::fisk` adds no instruction set flags, and a program built with it runs on any CPU of its architecture, using SSE2 on x86-64 and Neon on arm64. The faster code paths need instruction sets beyond that, which are turned on via options, set before fisk is added:
+
+```cmake
+set(FISK_ENABLE_AVX2 ON)
+set(FISK_ENABLE_BMI2 ON)
+FetchContent_MakeAvailable(fisk)  # or add_subdirectory(path/to/fisk)
+```
+
+or on the command line, e.g., `-DFISK_ENABLE_AVX2=ON`. The options are `FISK_ENABLE_BMI2` (for PEXT), `FISK_ENABLE_SSE2`, `FISK_ENABLE_SSSE3`, `FISK_ENABLE_SSE41`, `FISK_ENABLE_AVX2`, `FISK_ENABLE_AVX512`, and `FISK_ENABLE_NEON`; each takes effect if the compiler supports it. Compiler flags such as `-march=x86-64-v3` (which includes AVX2 and BMI2) turn on the respective code paths as well.
+
+Each option adds its compiler flag to all targets that link against `fisk::fisk`, so that the compiler may use these instructions anywhere in their code, and the program then crashes on CPUs without them. Hence, choose the options for the oldest CPU that the program needs to run on. For instance, AVX2 and BMI2 are available on most x86-64 CPUs since about 2015, while AVX-512 is not; `-march=native` only fits programs that run where they are built. Of the instruction sets that are compiled in, fisk checks at runtime which ones the CPU has, and picks the algorithm accordingly, see [Tuned extraction](#tuned-extraction).
+
+`FISK_DEFAULT_MAX_MASKS` (default 4) is the default largest number of spaced k-mer masks in a `std::vector` that can be handed on to the extraction, see [K-mer extraction functions](#k-mer-extraction-functions); each count up to it compiles the extraction once. Code that needs more masks passes a larger bound as template parameter, or raises this default.
 
 When fisk is built standalone (i.e., not pulled in via `add_subdirectory()`/`FetchContent()` from another project), the benchmark suite and test suite below are built by default; set `-DFISK_BUILD_BENCHMARKS=OFF` and/or `-DFISK_BUILD_TESTS=OFF` to skip them.
 
