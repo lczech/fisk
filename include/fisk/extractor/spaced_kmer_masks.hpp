@@ -24,17 +24,20 @@ namespace fisk {
 
 /**
  * @brief The forms of the masks of a SpacedKmerMasks, as a std::tuple of one std::array of
- * `MaxMasks` masks per form: the masks as given, for PEXT, the PEXT kernels, where BMI2 is
- * compiled, the butterfly masks, and the butterfly kernels of the `Simds`, a TypeList.
+ * `MaxMasks` masks of a span up to `MaxSpan` per form: the masks as given, for PEXT, the PEXT
+ * kernels, where BMI2 is compiled, the butterfly masks, and the butterfly kernels of the `Simds`,
+ * a TypeList.
  */
-template <Layout L, std::size_t MaxMasks, typename Simds = CandidateSimdArchs>
+template <
+    Layout L, std::size_t MaxMasks, std::size_t MaxSpan, typename Simds = CandidateSimdArchs
+>
 struct SpacedKmerMaskForms;
 
-template <Layout L, std::size_t MaxMasks, typename... Simd>
-struct SpacedKmerMaskForms<L, MaxMasks, TypeList<Simd...>>
+template <Layout L, std::size_t MaxMasks, std::size_t MaxSpan, typename... Simd>
+struct SpacedKmerMaskForms<L, MaxMasks, MaxSpan, TypeList<Simd...>>
 {
     template <typename M>
-    using MaskForms = std::array<SpacedKmerMask<L, M>, MaxMasks>;
+    using MaskForms = std::array<SpacedKmerMask<L, M, MaxSpan>, MaxMasks>;
 
     using type = std::tuple<
         MaskForms<BitExtractMask>,
@@ -71,23 +74,30 @@ struct SpacedKmerMaskForms<L, MaxMasks, TypeList<Simd...>>
  * @tparam MaxMasks The largest number of masks of the set. The extraction compiles its loops for
  *         each number of masks up to it, so that a smaller `MaxMasks`, such as the number of masks
  *         that are used, shortens the compile time.
+ * @tparam MaxSpan The largest span of the masks, see SpacedKmerMask. Spans above 32 are cut into
+ *         pieces, and the extraction compiles its loops for each number of pieces that a mask of
+ *         this span can have, see kDefaultMaxCompiledPieces, so that a smaller `MaxSpan`, such
+ *         as 32 for masks that are not wider, shortens the compile time.
  */
-template <Layout L, std::size_t MaxMasks = kDefaultMaxMasks>
+template <
+    Layout L, std::size_t MaxMasks = kDefaultMaxMasks, std::size_t MaxSpan = kDefaultMaxSpan
+>
 class SpacedKmerMasks
 {
     static_assert(MaxMasks >= 1, "SpacedKmerMasks needs MaxMasks >= 1.");
 
-    using Forms = typename SpacedKmerMaskForms<L, MaxMasks>::type;
+    using Forms = typename SpacedKmerMaskForms<L, MaxMasks, MaxSpan>::type;
 
     template <typename M>
-    using MaskForms = typename SpacedKmerMaskForms<L, MaxMasks>::template MaskForms<M>;
+    using MaskForms = typename SpacedKmerMaskForms<L, MaxMasks, MaxSpan>::template MaskForms<M>;
 
 public:
 
-    using mask_type = SpacedKmerMask<L, BitExtractMask>;
+    using mask_type = SpacedKmerMask<L, BitExtractMask, MaxSpan>;
 
     static constexpr Layout layout = L;
     static constexpr std::size_t max_masks = MaxMasks;
+    static constexpr std::size_t max_span = MaxSpan;
 
     // -------------------------------------------------------------------------
     //     Constructors
@@ -97,10 +107,10 @@ public:
      * @brief Prepare a set of masks, given as strings of `0` and `1`, see make_spaced_kmer_mask().
      *
      * @throws std::invalid_argument if the set is empty, has more than `MaxMasks` masks,
-     * a mask is invalid, or the masks differ in span.
+     * a mask is invalid or of a span above `MaxSpan`, or the masks differ in span.
      */
     explicit SpacedKmerMasks(std::vector<std::string> const& masks)
-        : SpacedKmerMasks(make_spaced_kmer_masks<L>(masks))
+        : SpacedKmerMasks(make_spaced_kmer_masks<L, MaxSpan>(masks))
     {}
 
     /**
@@ -129,7 +139,7 @@ public:
      * @brief The masks in the form `M`, such as BitExtractButterflyMask.
      */
     template <typename M>
-    std::span<SpacedKmerMask<L, M> const> get() const noexcept
+    std::span<SpacedKmerMask<L, M, MaxSpan> const> get() const noexcept
     {
         static_assert(
             has_form_<M>(),
@@ -175,7 +185,7 @@ private:
     // Fill the `forms` of one type with the `masks` in that form.
     template <typename M>
     static void prepare_(
-        std::span<mask_type const> masks, std::array<SpacedKmerMask<L, M>, MaxMasks>& forms
+        std::span<mask_type const> masks, MaskForms<M>& forms
     ) {
         for (std::size_t i = 0; i < masks.size(); ++i) {
             if constexpr (std::same_as<M, BitExtractMask>) {

@@ -65,6 +65,11 @@ target_compile_definitions(fisk INTERFACE
     FISK_DEFAULT_MAX_COMPILED_PIECES=${FISK_DEFAULT_MAX_COMPILED_PIECES}
 )
 
+# The default largest span of a spaced k-mer mask, see core/types.hpp. Defined for the target, so
+# that all code using it sees one value.
+set(FISK_DEFAULT_MAX_SPAN 64 CACHE STRING "Default largest span of a spaced k-mer mask")
+target_compile_definitions(fisk INTERFACE FISK_DEFAULT_MAX_SPAN=${FISK_DEFAULT_MAX_SPAN})
+
 # ==================================================================================================
 #     Detect Instruction Sets
 # ==================================================================================================

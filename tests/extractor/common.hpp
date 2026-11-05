@@ -29,13 +29,22 @@ inline std::vector<std::string> extractor_test_sequences()
     fisk::Splitmix64 rng(4711);
     std::vector<std::string> seqs;
     std::initializer_list<std::size_t> const lengths = {
-        0, 1, 14, 15, 16, 31, 32, 33, 100, 1000, fisk::kDefaultAsciiChunkSize + 77
+        0, 1, 14, 15, 16, 31, 32, 33, 56, 57, 58, 63, 64, 65, 100, 1000,
+        fisk::kDefaultAsciiChunkSize + 77
     };
     for (std::size_t len : lengths) {
         auto seq = random_sequence(rng, len, "ACGT");
         if (C == fisk::InputCheck::kChecked) {
             inject_invalid(seq, rng, 0.01, "N");
         }
+        seqs.push_back(std::move(seq));
+    }
+
+    // A single invalid character, which for the sparse masks of extractor_wide_mask_sets() is at
+    // skipped positions of most windows that contain it.
+    if (C == fisk::InputCheck::kChecked) {
+        auto seq = random_sequence(rng, 130, "ACGT");
+        seq[70] = 'N';
         seqs.push_back(std::move(seq));
     }
     return seqs;
@@ -103,7 +112,8 @@ inline std::vector<SpacedEvent> by_mask(std::vector<SpacedEvent> events)
     return events;
 }
 
-// Random masks of a span, each with its first and last position kept.
+// Random masks of a span, each with its first and last position kept. Up to span 32, each position
+// is kept with a chance of one half; above, at most 32 random positions are kept.
 inline std::vector<std::string> random_masks(
     std::size_t count, std::size_t span, std::uint64_t seed
 ) {
@@ -111,12 +121,33 @@ inline std::vector<std::string> random_masks(
     std::vector<std::string> masks;
     for (std::size_t i = 0; i < count; ++i) {
         std::string mask(span, '0');
-        for (auto& c : mask) {
-            c = (rng.get_uint64() & 1u) ? '1' : '0';
+        if (span <= 32) {
+            for (auto& c : mask) {
+                c = (rng.get_uint64() & 1u) ? '1' : '0';
+            }
+        } else {
+            std::size_t const weight = 2 + rng.get_uint64() % 29;
+            for (std::size_t j = 0; j < weight; ++j) {
+                mask[rng.get_uint64() % span] = '1';
+            }
         }
         mask.front() = '1';
         mask.back() = '1';
         masks.push_back(std::move(mask));
     }
     return masks;
+}
+
+// Sets of masks with spans around the boundaries of the pieces, see SpacedKmerMask: one piece up to
+// span 32, two up to 57, and three from 58 on, which the extraction loops run in their loop over
+// the pieces at runtime, see kDefaultMaxCompiledPieces. Each set has kMaxTestMasks masks, and the
+// last one is a single mask of span 64 with no kept position in its middle piece.
+inline std::vector<std::vector<std::string>> extractor_wide_mask_sets()
+{
+    std::vector<std::vector<std::string>> sets;
+    for (std::size_t span : {32u, 33u, 57u, 58u, 64u}) {
+        sets.push_back(random_masks(kMaxTestMasks, span, span));
+    }
+    sets.push_back({ std::string("1").append(62, '0').append("1") });
+    return sets;
 }

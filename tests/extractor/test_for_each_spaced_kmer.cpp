@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fisk/core/kmer_callback.hpp"
@@ -26,16 +27,20 @@ constexpr auto kUnchecked = InputCheck::kUnchecked;
 // =================================================================================================
 
 // for_each_spaced_kmer() extracts all spaced k-mers of each mask, for sets of one and of the most
-// masks, as for_each_kmer(), see test_for_each_kmer.cpp.
+// masks, and for the wide sets of extractor_wide_mask_sets(), as for_each_kmer(), see
+// test_for_each_kmer.cpp.
 template <InputFormat I, InputCheck C, Encoding E, Layout L>
 static void check_for_each_spaced_kmer()
 {
     using Extractor = SpacedKmerExtractor<I, C, E, L, kMaxTestMasks>;
     auto const seqs = extractor_test_sequences<C>();
-    std::vector<std::vector<std::string>> const mask_sets = {
+    std::vector<std::vector<std::string>> mask_sets = {
         {"1101101"},
         random_masks(kMaxTestMasks, 11, 1),
     };
+    for (auto& set : extractor_wide_mask_sets()) {
+        mask_sets.push_back(std::move(set));
+    }
 
     for (auto const& strings : mask_sets) {
         SpacedKmerMasks<L, kMaxTestMasks> const masks(strings);

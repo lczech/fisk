@@ -42,6 +42,36 @@ TEST(SpacedKmerExtractor, DefaultMaxMasks)
 }
 
 // =================================================================================================
+//     Maximum Span
+// =================================================================================================
+
+// Other maximum spans than the default: 32, which takes no wider masks, and 128, with every
+// algorithm, for masks of four and five pieces, the most of that span.
+TEST(SpacedKmerExtractor, MaxSpan)
+{
+    using Masks = std::vector<std::string>;
+    using NarrowExtractor = SpacedKmerExtractor<InputFormat::kAscii, kChecked, kAcgt, kMsb, 1, 32>;
+    EXPECT_EQ(NarrowExtractor(Masks{std::string(32, '1')}).masks().size(), 1u);
+    EXPECT_THROW(NarrowExtractor(random_masks(1, 33, 5)), std::invalid_argument);
+
+    using WideExtractor = SpacedKmerExtractor<InputFormat::kAscii, kChecked, kAcgt, kMsb, 1, 128>;
+    auto const seqs = extractor_test_sequences<kChecked>();
+    for (std::size_t span : {85u, 128u}) {
+        auto const masks = random_masks(1, span, span);
+        WideExtractor extractor(masks);
+        for (auto const& name : extractor.algorithm_names()) {
+            extractor.set_algorithm(name);
+            for (auto const& seq : seqs) {
+                SpacedKmerRecorder result;
+                extractor.for_each(seq, result);
+                check_spaced_events(result.events, oracle_spaced_events<kAcgt, kMsb>(seq, masks));
+            }
+        }
+    }
+    EXPECT_THROW(WideExtractor(random_masks(1, 129, 5)), std::invalid_argument);
+}
+
+// =================================================================================================
 //     Estimate and Tuning
 // =================================================================================================
 
@@ -209,6 +239,12 @@ TEST(SpacedKmerExtractor, Errors)
     }
     EXPECT_TRUE(message.find("compile-time maximum is 3") != std::string::npos);
     EXPECT_TRUE(message.find("MaxMasks") != std::string::npos);
+
+    // A span above the default MaxSpan.
+    EXPECT_THROW(
+        AsciiCheckedSpacedExtractor(random_masks(1, kDefaultMaxSpan + 1, 3)),
+        std::invalid_argument
+    );
 
     AsciiCheckedSpacedExtractor extractor({"1101101"});
     EXPECT_THROW(extractor.set_algorithm("unknown"), std::invalid_argument);

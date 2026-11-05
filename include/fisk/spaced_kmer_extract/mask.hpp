@@ -87,7 +87,7 @@ inline std::vector<SpacedKmerMask<L, M, MaxSpan>> convert_spaced_kmer_masks_(
  * extraction in that Layout. As bit extraction keeps the order of the bits, the kept bases then
  * end up in that Layout as well.
  */
-template <Layout L = Layout::kMSB, std::size_t MaxSpan = 64>
+template <Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
 inline SpacedKmerMask<L, BitExtractMask, MaxSpan> make_spaced_kmer_mask(std::string const& mask)
 {
     static_assert(
@@ -98,7 +98,12 @@ inline SpacedKmerMask<L, BitExtractMask, MaxSpan> make_spaced_kmer_mask(std::str
         throw std::invalid_argument("Invalid spaced k-mer mask of size 0");
     }
     if (span_k > MaxSpan) {
-        throw std::invalid_argument("Invalid spaced k-mer mask with a span above its maximum span");
+        throw std::invalid_argument(
+            "Invalid spaced k-mer mask of span " + std::to_string(span_k) + " above the "
+            "compile-time maximum span " + std::to_string(MaxSpan) + ". Raise the template "
+            "parameter MaxSpan of the mask, of SpacedKmerMasks and SpacedKmerExtractor, or its "
+            "default, the CMake option or macro FISK_DEFAULT_MAX_SPAN."
+        );
     }
     if (mask.front() != '1' || mask.back() != '1') {
         throw std::invalid_argument(
@@ -148,7 +153,7 @@ inline SpacedKmerMask<L, BitExtractMask, MaxSpan> make_spaced_kmer_mask(std::str
 /**
  * @brief Create a set of spaced k-mer masks, see make_spaced_kmer_mask().
  */
-template <Layout L = Layout::kMSB, std::size_t MaxSpan = 64>
+template <Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
 inline std::vector<SpacedKmerMask<L, BitExtractMask, MaxSpan>> make_spaced_kmer_masks(
     std::vector<std::string> const& masks
 ) {
@@ -176,7 +181,7 @@ inline SpacedKmerMask<L, BitExtractButterflyMask, MaxSpan> make_spaced_kmer_butt
  * @brief Create the butterfly mask of a spaced k-mer mask given as a string, see
  * make_spaced_kmer_mask().
  */
-template <Layout L = Layout::kMSB, std::size_t MaxSpan = 64>
+template <Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
 inline SpacedKmerMask<L, BitExtractButterflyMask, MaxSpan> make_spaced_kmer_butterfly_mask(
     std::string const& mask
 ) {
@@ -213,7 +218,7 @@ inline SpacedKmerMask<L, BitExtractBlockShiftMask, MaxSpan> make_spaced_kmer_blo
  * @brief Create the block shift mask of a spaced k-mer mask given as a string, see
  * make_spaced_kmer_mask().
  */
-template <Layout L = Layout::kMSB, std::size_t MaxSpan = 64>
+template <Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
 inline SpacedKmerMask<L, BitExtractBlockShiftMask, MaxSpan> make_spaced_kmer_block_shift_mask(
     std::string const& mask
 ) {
@@ -256,7 +261,7 @@ inline SpacedKmerMask<L, Kernel, MaxSpan> make_spaced_kmer_kernel(
  * @brief Create a bit extraction kernel of a spaced k-mer mask given as a string, see
  * make_spaced_kmer_mask().
  */
-template <typename Kernel, Layout L = Layout::kMSB, std::size_t MaxSpan = 64>
+template <typename Kernel, Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
     requires BitExtractKernel<Kernel>
 inline SpacedKmerMask<L, Kernel, MaxSpan> make_spaced_kmer_kernel(std::string const& mask)
 {

@@ -28,15 +28,22 @@ inline constexpr std::size_t kDefaultMaxCompiledPieces = FISK_DEFAULT_MAX_COMPIL
 
 /**
  * @brief Check that a span is in [1, MaxSpan], and return it.
+ *
+ * The default, 32, is the largest span of the rolling loops; the others pass the maximum span of
+ * their mask type.
  */
 template <std::size_t MaxSpan = 32>
 inline std::size_t check_spaced_kmer_span_(std::size_t span_k)
 {
     if (span_k == 0 || span_k > MaxSpan) {
-        throw std::invalid_argument(
-            "Invalid call to spaced k-mer extraction with a mask span not in [1, "
-            + std::to_string(MaxSpan) + "]"
-        );
+        std::string message =
+            "Invalid call to spaced k-mer extraction with a mask span of " +
+            std::to_string(span_k) + ", not in [1, " + std::to_string(MaxSpan) + "]";
+        if (MaxSpan == 32 && span_k > 32) {
+            message += ". The rolling loops take spans up to 32; the chunked loops from ASCII and "
+                "the bytewise loops from packed sequences take wider masks.";
+        }
+        throw std::invalid_argument(message);
     }
     return span_k;
 }

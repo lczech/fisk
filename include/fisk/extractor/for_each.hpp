@@ -181,10 +181,10 @@ inline constexpr void for_each_spaced_kmer_layout_assert_()
 
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L, Layout ML, std::size_t MaxMasks,
-    typename Seq, typename Callback
+    std::size_t MaxSpan, typename Seq, typename Callback
 >
 FISK_ALWAYS_INLINE inline void for_each_spaced_kmer_estimate_(
-    Seq const& seq, SpacedKmerMasks<ML, MaxMasks> const& masks, Callback& callback
+    Seq const& seq, SpacedKmerMasks<ML, MaxMasks, MaxSpan> const& masks, Callback& callback
 ) {
     for_each_spaced_kmer_layout_assert_<L, ML>();
     if constexpr (ML == L) {
@@ -243,11 +243,13 @@ inline std::string for_each_spaced_kmer_estimate_name_()
  * @tparam L Layout of the spaced k-mers, and of the masks.
  */
 template <
-    InputCheck C, Encoding E, Layout L, Layout ML, std::size_t MaxMasks, typename Callback
+    InputCheck C, Encoding E, Layout L, Layout ML, std::size_t MaxMasks, std::size_t MaxSpan,
+    typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline void for_each_spaced_kmer(
-    std::string_view seq, SpacedKmerMasks<ML, MaxMasks> const& masks, Callback&& callback
+    std::string_view seq, SpacedKmerMasks<ML, MaxMasks, MaxSpan> const& masks,
+    Callback&& callback
 ) {
     for_each_spaced_kmer_estimate_<InputFormat::kAscii, C, E, L>(seq, masks, callback);
 }
@@ -260,11 +262,11 @@ inline void for_each_spaced_kmer(
  */
 template <
     InputCheck C = InputCheck::kUnchecked, Encoding E, Layout L, Layout ML, std::size_t MaxMasks,
-    typename Callback
+    std::size_t MaxSpan, typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline void for_each_spaced_kmer(
-    PackedSequence<E, L> const& seq, SpacedKmerMasks<ML, MaxMasks> const& masks,
+    PackedSequence<E, L> const& seq, SpacedKmerMasks<ML, MaxMasks, MaxSpan> const& masks,
     Callback&& callback
 ) {
     for_each_packed_unchecked_assert_<C>();
@@ -281,12 +283,12 @@ inline void for_each_spaced_kmer(
  */
 template <
     InputCheck C = InputCheck::kChecked, Encoding E, Layout L, Layout ML, std::size_t MaxMasks,
-    typename Callback
+    std::size_t MaxSpan, typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline void for_each_spaced_kmer(
-    PackedSequenceWithValidity<E, L> const& seq, SpacedKmerMasks<ML, MaxMasks> const& masks,
-    Callback&& callback
+    PackedSequenceWithValidity<E, L> const& seq,
+    SpacedKmerMasks<ML, MaxMasks, MaxSpan> const& masks, Callback&& callback
 ) {
     for_each_packed_checked_assert_<C>();
     for_each_spaced_kmer_estimate_<InputFormat::kPacked, InputCheck::kChecked, E, L>(
@@ -300,11 +302,12 @@ inline void for_each_spaced_kmer(
  * extraction, as in SpacedKmerExtractor::algorithm_name().
  */
 template <
-    InputCheck C, Encoding E, Layout L, Layout ML, std::size_t MaxMasks, typename Callback
+    InputCheck C, Encoding E, Layout L, Layout ML, std::size_t MaxMasks, std::size_t MaxSpan,
+    typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
-    std::string_view, SpacedKmerMasks<ML, MaxMasks> const&, Callback&&
+    std::string_view, SpacedKmerMasks<ML, MaxMasks, MaxSpan> const&, Callback&&
 ) {
     return for_each_spaced_kmer_estimate_name_<
         InputFormat::kAscii, C, E, L, ML, MaxMasks, std::remove_reference_t<Callback>
@@ -313,11 +316,11 @@ inline std::string for_each_spaced_kmer_algorithm_name(
 
 template <
     InputCheck C = InputCheck::kUnchecked, Encoding E, Layout L, Layout ML, std::size_t MaxMasks,
-    typename Callback
+    std::size_t MaxSpan, typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
-    PackedSequence<E, L> const&, SpacedKmerMasks<ML, MaxMasks> const&, Callback&&
+    PackedSequence<E, L> const&, SpacedKmerMasks<ML, MaxMasks, MaxSpan> const&, Callback&&
 ) {
     for_each_packed_unchecked_assert_<C>();
     return for_each_spaced_kmer_estimate_name_<
@@ -328,11 +331,12 @@ inline std::string for_each_spaced_kmer_algorithm_name(
 
 template <
     InputCheck C = InputCheck::kChecked, Encoding E, Layout L, Layout ML, std::size_t MaxMasks,
-    typename Callback
+    std::size_t MaxSpan, typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
-    PackedSequenceWithValidity<E, L> const&, SpacedKmerMasks<ML, MaxMasks> const&, Callback&&
+    PackedSequenceWithValidity<E, L> const&, SpacedKmerMasks<ML, MaxMasks, MaxSpan> const&,
+    Callback&&
 ) {
     for_each_packed_checked_assert_<C>();
     return for_each_spaced_kmer_estimate_name_<

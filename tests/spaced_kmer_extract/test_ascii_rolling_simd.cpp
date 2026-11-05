@@ -263,6 +263,26 @@ TEST(SpacedKmerExtractAsciiRollingSimd, InvalidSpan)
     });
 }
 
+// A valid mask of a span above 32, which the rolling loops do not take: the message points to the
+// loops that do.
+TEST(SpacedKmerExtractAsciiRollingSimd, WideSpan)
+{
+    auto const kernel = make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>(
+        std::string("1").append(43, '0').append("1")
+    );
+    std::string message;
+    try {
+        for_each_spaced_kmer_ascii_checked_rolling_simd(
+            std::string(50, 'A'), kernel, CharEncoderTable<Encoding::kACGT>{},
+            [](std::size_t, auto, auto) {}
+        );
+    } catch (std::invalid_argument const& error) {
+        message = error.what();
+    }
+    EXPECT_TRUE(message.find("span of 45") != std::string::npos);
+    EXPECT_TRUE(message.find("rolling loops take spans up to 32") != std::string::npos);
+}
+
 // All kernels of one extraction share one rolling window, and hence need the same span.
 TEST(SpacedKmerExtractAsciiRollingSimd, MixedSpans)
 {

@@ -583,6 +583,18 @@ concept SpacedKmerType = KmerType<K> && std::same_as<K, SpacedKmer<K::encoding, 
 //     Spaced K-mer Mask
 // =================================================================================================
 
+// The default largest span of a spaced k-mer mask, see SpacedKmerMask. Masks of a span above 32 are
+// cut into pieces, and the extraction loops have a copy for each number of pieces up to
+// kDefaultMaxCompiledPieces (spaced_kmer_extract/internal.hpp), and a loop over the pieces at
+// runtime for more, so that a smaller maximum span shortens the compile time; code that needs wider
+// masks passes a larger bound as the template parameter, or raises this default. The CMake cache
+// variable of the same name sets it for all code that uses the fisk target alike.
+#ifndef FISK_DEFAULT_MAX_SPAN
+#define FISK_DEFAULT_MAX_SPAN 64
+#endif
+
+inline constexpr std::size_t kDefaultMaxSpan = FISK_DEFAULT_MAX_SPAN;
+
 /**
  * @brief The number of pieces of a spaced k-mer mask of span @p span_k, see SpacedKmerMask.
  */
@@ -625,7 +637,7 @@ inline constexpr std::size_t spaced_kmer_mask_tail_span(std::size_t span_k) noex
     #pragma warning(push)
     #pragma warning(disable: 4324)
 #endif
-template <Layout L, typename M, std::size_t MaxSpan = 64>
+template <Layout L, typename M, std::size_t MaxSpan = kDefaultMaxSpan>
 struct SpacedKmerMask
 {
     static_assert(MaxSpan >= 1 && MaxSpan <= 0xFFFF, "MaxSpan must be in [1, 65535]");

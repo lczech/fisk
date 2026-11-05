@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fisk/core/kmer_callback.hpp"
@@ -14,8 +15,9 @@
 //     Spaced K-mer Extractor Checks
 // =================================================================================================
 
-// Every algorithm of the extractor, for sets of one and three masks, run with a callback of single
-// spaced k-mers, and with one that also takes vectors. The extractor takes up to kMaxTestMasks
+// Every algorithm of the extractor, for sets of one and three masks, and for the wide sets of
+// extractor_wide_mask_sets(), run with a callback of single spaced k-mers, and with one that also
+// takes vectors. The extractor takes up to kMaxTestMasks
 // masks, which keeps the compile time down; the largest sets are checked on their own, see
 // test_spaced_kmer_extractor.cpp.
 template <fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layout L>
@@ -24,10 +26,13 @@ inline void check_spaced_kmer_extractor_algorithms()
     using namespace fisk;
     using Extractor = SpacedKmerExtractor<I, C, E, L, kMaxTestMasks>;
     auto const seqs = extractor_test_sequences<C>();
-    std::vector<std::vector<std::string>> const mask_sets = {
+    std::vector<std::vector<std::string>> mask_sets = {
         {"1101101"},
         random_masks(kMaxTestMasks, 11, 1),
     };
+    for (auto& set : extractor_wide_mask_sets()) {
+        mask_sets.push_back(std::move(set));
+    }
 
     for (auto const& masks : mask_sets) {
         Extractor extractor(masks);
