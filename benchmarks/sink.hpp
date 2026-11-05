@@ -58,6 +58,12 @@
 
 inline constexpr char const* kSinkName = "sum";
 
+// The vector accumulators below follow the scalar one, so that MSVC pads the struct to their
+// alignment, and warns about that (C4324). The padding is intended.
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable: 4324)
+#endif
 struct Sink
 {
     std::uint64_t acc = 0;
@@ -138,6 +144,9 @@ struct Sink
         return s;
     }
 };
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 
 inline Sink make_sink(std::vector<std::uint64_t>&)
 {
