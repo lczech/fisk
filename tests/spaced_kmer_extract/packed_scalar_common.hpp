@@ -31,8 +31,8 @@
 // test_packed_bytewise_scalar_wide_unchecked.cpp and _wide_checked.cpp for spans above 32, so that
 // each compiles with less memory.
 
-template <fisk::Layout L, typename M>
-using NarrowSpacedKmerMask = fisk::SpacedKmerMask<L, M, kNarrowMaxSpan>;
+template <fisk::Layout L, typename BitExtractForm>
+using NarrowSpacedKmerMask = fisk::SpacedKmerMask<L, BitExtractForm, kNarrowMaxSpan>;
 
 // For every span in [1, 32], a single random mask, and a set of three random masks, plus masks
 // that keep all positions, or only the first and the last.

@@ -288,8 +288,8 @@ TEST(SpacedKmerExtractAsciiRollingSimd, MixedSpans)
 {
     std::string const seq = "ACGTACGTACGT";
 
-    using Kernel = SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdScalar>>;
-    std::array<Kernel, 2> const kernels{{
+    using KernelMask = SpacedKmerMask<Layout::kMSB, BitExtractKernelButterfly<SimdScalar>>;
+    std::array<KernelMask, 2> const kernels{{
         make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("101"),
         make_spaced_kmer_kernel<BitExtractKernelButterfly<SimdScalar>>("10001")
     }};

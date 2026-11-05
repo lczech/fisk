@@ -42,76 +42,83 @@ namespace fisk {
 //     Bit Extraction
 // -------------------------------------------------------------------------------------------------
 
-// The bit extraction of the masks of type `M`, for the scalar loops, and of the kernels, for the
-// SIMD loops: their name and availability. The masks in these forms are in SpacedKmerMasks.
+// The bit extraction of the spaced k-mer masks of the form `BitExtractForm`, a bit extraction mask
+// for the scalar loops, or a kernel for the SIMD loops: its name and availability. The masks in
+// these forms are in SpacedKmerMasks.
 
-template <typename M>
+template <typename BitExtractForm>
 struct is_bit_extract_kernel_butterfly_ : std::false_type {};
 
 template <typename Simd>
 struct is_bit_extract_kernel_butterfly_<BitExtractKernelButterfly<Simd>> : std::true_type {};
 
-template <typename M>
+template <typename BitExtractForm>
 inline std::string spaced_kmer_extractor_bit_extract_name_()
 {
-    if constexpr (is_bit_extract_kernel_butterfly_<M>::value) {
-        return "butterfly_" + simd_arch_name_<typename M::simd_arch>();
-    } else if constexpr (std::same_as<M, BitExtractButterflyMask>) {
+    if constexpr (is_bit_extract_kernel_butterfly_<BitExtractForm>::value) {
+        return "butterfly_" + simd_arch_name_<typename BitExtractForm::simd_arch>();
+    } else if constexpr (std::same_as<BitExtractForm, BitExtractButterflyMask>) {
         return "butterfly";
     }
     #if defined(FISK_HAS_BMI2)
-    else if constexpr (std::same_as<M, BitExtractMask> || std::same_as<M, BitExtractKernelPext>) {
+    else if constexpr (
+        std::same_as<BitExtractForm, BitExtractMask> ||
+        std::same_as<BitExtractForm, BitExtractKernelPext>
+    ) {
         return "pext";
     }
     #endif
     else {
-        static_assert(dependent_false_v<sizeof(M)>, "Unhandled bit extraction");
+        static_assert(dependent_false_v<sizeof(BitExtractForm)>, "Unhandled bit extraction");
     }
 }
 
-template <typename M>
+template <typename BitExtractForm>
 inline bool spaced_kmer_extractor_bit_extract_available_()
 {
-    if constexpr (std::same_as<M, BitExtractButterflyMask>) {
+    if constexpr (std::same_as<BitExtractForm, BitExtractButterflyMask>) {
         return true;
-    } else if constexpr (std::same_as<M, BitExtractMask>) {
+    } else if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
         return bmi2_enabled();
-    } else if constexpr (std::same_as<typename M::simd_arch, SimdScalar>) {
+    } else if constexpr (std::same_as<typename BitExtractForm::simd_arch, SimdScalar>) {
         // BitExtractKernelPext, the only kernel of the scalar arch here.
         return bmi2_enabled();
     } else {
-        return simd_arch_enabled_<typename M::simd_arch>();
+        return simd_arch_enabled_<typename BitExtractForm::simd_arch>();
     }
 }
 
-// Whether the estimate may run the bit extraction of the masks of type `M`, see
+// Whether the estimate may run the bit extraction of the masks of the form `BitExtractForm`, see
 // extractor_candidate_preferred_(): PEXT only where it is likely fast, as it is slow on some CPUs,
 // see pext_likely_fast(); tune() measures it wherever it is available.
-template <typename M>
+template <typename BitExtractForm>
 inline bool spaced_kmer_extractor_bit_extract_preferred_()
 {
     #if defined(FISK_HAS_BMI2)
-    if constexpr (std::same_as<M, BitExtractMask> || std::same_as<M, BitExtractKernelPext>) {
+    if constexpr (
+        std::same_as<BitExtractForm, BitExtractMask> ||
+        std::same_as<BitExtractForm, BitExtractKernelPext>
+    ) {
         return pext_likely_fast();
     }
     #endif
-    return spaced_kmer_extractor_bit_extract_available_<M>();
+    return spaced_kmer_extractor_bit_extract_available_<BitExtractForm>();
 }
 
-// The scalar bit extraction of the masks of type `M`.
-template <typename M>
+// The scalar bit extraction of the masks of the form `BitExtractForm`.
+template <typename BitExtractForm>
 FISK_ALWAYS_INLINE inline auto spaced_kmer_extractor_bit_extract_()
 {
-    if constexpr (std::same_as<M, BitExtractButterflyMask>) {
+    if constexpr (std::same_as<BitExtractForm, BitExtractButterflyMask>) {
         return bit_extract_butterfly;
     }
     #if defined(FISK_HAS_BMI2)
-    else if constexpr (std::same_as<M, BitExtractMask>) {
+    else if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
         return bit_extract_pext;
     }
     #endif
     else {
-        static_assert(dependent_false_v<sizeof(M)>, "Unhandled scalar bit extraction");
+        static_assert(dependent_false_v<sizeof(BitExtractForm)>, "Unhandled scalar bit extraction");
     }
 }
 
@@ -153,16 +160,22 @@ inline constexpr bool spaced_kmer_extractor_takes_vectors_ = (C == InputCheck::k
 //     ASCII
 // -------------------------------------------------------------------------------------------------
 
-template <InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename M>
+template <InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename BitExtractForm>
 struct SpacedKmerCandidateAsciiChunkedScalar
 {
     static std::string name()
     {
         return "for_each_spaced_kmer_ascii_" + input_check_name_(C) + "_chunked_scalar_" +
-            spaced_kmer_extractor_bit_extract_name_<M>();
+            spaced_kmer_extractor_bit_extract_name_<BitExtractForm>();
     }
-    static bool available() { return spaced_kmer_extractor_bit_extract_available_<M>(); }
-    static bool preferred() { return spaced_kmer_extractor_bit_extract_preferred_<M>(); }
+    static bool available()
+    {
+        return spaced_kmer_extractor_bit_extract_available_<BitExtractForm>();
+    }
+    static bool preferred()
+    {
+        return spaced_kmer_extractor_bit_extract_preferred_<BitExtractForm>();
+    }
 
     template <typename Callback>
     static constexpr bool takes_vectors = false;
@@ -174,8 +187,8 @@ struct SpacedKmerCandidateAsciiChunkedScalar
     ) const
     {
         ExtractorWordEncoder<E, L> const encoder{};
-        auto const bit_extract = spaced_kmer_extractor_bit_extract_<M>();
-        dispatch_static_span<MaxMasks>(masks.template get<M>(), [&](auto span) {
+        auto const bit_extract = spaced_kmer_extractor_bit_extract_<BitExtractForm>();
+        dispatch_static_span<MaxMasks>(masks.template get<BitExtractForm>(), [&](auto span) {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_ascii_checked_chunked_scalar(
                     seq, span, encoder, bit_extract, callback
@@ -231,16 +244,22 @@ struct SpacedKmerCandidateAsciiChunkedSimd
 //     Packed
 // -------------------------------------------------------------------------------------------------
 
-template <InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename M>
+template <InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename BitExtractForm>
 struct SpacedKmerCandidatePackedBytewiseScalar
 {
     static std::string name()
     {
         return "for_each_spaced_kmer_packed_" + input_check_name_(C) + "_bytewise_scalar_" +
-            spaced_kmer_extractor_bit_extract_name_<M>();
+            spaced_kmer_extractor_bit_extract_name_<BitExtractForm>();
     }
-    static bool available() { return spaced_kmer_extractor_bit_extract_available_<M>(); }
-    static bool preferred() { return spaced_kmer_extractor_bit_extract_preferred_<M>(); }
+    static bool available()
+    {
+        return spaced_kmer_extractor_bit_extract_available_<BitExtractForm>();
+    }
+    static bool preferred()
+    {
+        return spaced_kmer_extractor_bit_extract_preferred_<BitExtractForm>();
+    }
 
     template <typename Callback>
     static constexpr bool takes_vectors = false;
@@ -250,8 +269,8 @@ struct SpacedKmerCandidatePackedBytewiseScalar
         SpacedKmerMasks<L, MaxMasks, MaxSpan> const& masks, Seq const& seq, Callback& callback
     ) const
     {
-        auto const bit_extract = spaced_kmer_extractor_bit_extract_<M>();
-        dispatch_static_span<MaxMasks>(masks.template get<M>(), [&](auto span) {
+        auto const bit_extract = spaced_kmer_extractor_bit_extract_<BitExtractForm>();
+        dispatch_static_span<MaxMasks>(masks.template get<BitExtractForm>(), [&](auto span) {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_packed_checked_bytewise_scalar(
                     seq, span, bit_extract, callback
@@ -475,8 +494,8 @@ public:
      * @brief Set up the extractor for a prepared set of masks, of the Layout, MaxMasks and MaxSpan
      * of the extractor.
      */
-    template <Layout ML, std::size_t M, std::size_t S>
-    explicit SpacedKmerExtractor(SpacedKmerMasks<ML, M, S> masks)
+    template <Layout MasksLayout, std::size_t MasksMaxMasks, std::size_t MasksMaxSpan>
+    explicit SpacedKmerExtractor(SpacedKmerMasks<MasksLayout, MasksMaxMasks, MasksMaxSpan> masks)
         : plan_(own_masks_(std::move(masks)))
     {}
 
@@ -599,25 +618,25 @@ private:
     // The `masks`, which have to be of the Layout, MaxMasks and MaxSpan of the extractor. The
     // constructor takes others as well, so that they fail here, with a message, instead of leaving
     // no constructor to match.
-    template <Layout ML, std::size_t M, std::size_t S>
-    static masks_type own_masks_(SpacedKmerMasks<ML, M, S> masks)
+    template <Layout MasksLayout, std::size_t MasksMaxMasks, std::size_t MasksMaxSpan>
+    static masks_type own_masks_(SpacedKmerMasks<MasksLayout, MasksMaxMasks, MasksMaxSpan> masks)
     {
         static_assert(
-            ML == L,
+            MasksLayout == L,
             "The masks are for another Layout than the extractor. Make them with the Layout, "
             "MaxMasks and MaxSpan of the extractor, as SpacedKmerMasks<L, MaxMasks, MaxSpan>."
         );
         static_assert(
-            M == MaxMasks,
+            MasksMaxMasks == MaxMasks,
             "The masks are for another MaxMasks than the extractor. Make them with the Layout, "
             "MaxMasks and MaxSpan of the extractor, as SpacedKmerMasks<L, MaxMasks, MaxSpan>."
         );
         static_assert(
-            S == MaxSpan,
+            MasksMaxSpan == MaxSpan,
             "The masks are for another MaxSpan than the extractor. Make them with the Layout, "
             "MaxMasks and MaxSpan of the extractor, as SpacedKmerMasks<L, MaxMasks, MaxSpan>."
         );
-        if constexpr (ML == L && M == MaxMasks && S == MaxSpan) {
+        if constexpr (MasksLayout == L && MasksMaxMasks == MaxMasks && MasksMaxSpan == MaxSpan) {
             return masks;
         } else {
             // Not reached, as the checks above fail to compile.

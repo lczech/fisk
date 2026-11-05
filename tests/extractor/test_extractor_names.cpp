@@ -249,12 +249,13 @@ constexpr std::size_t kTableMasks = 2;
 
 using TableMasks = SpacedKmerMasks<kMsb, kTableMasks>;
 
-// The masks in the form `M`, as the std::span of fixed size that the functions take.
-template <typename M>
-std::span<SpacedKmerMask<kMsb, M> const, kTableMasks> fixed_masks(TableMasks const& masks)
-{
-    return std::span<SpacedKmerMask<kMsb, M> const, kTableMasks>(
-        masks.get<M>().data(), kTableMasks
+// The masks in the form `BitExtractForm`, as the std::span of fixed size that the functions take.
+template <typename BitExtractForm>
+std::span<SpacedKmerMask<kMsb, BitExtractForm> const, kTableMasks> fixed_masks(
+    TableMasks const& masks
+) {
+    return std::span<SpacedKmerMask<kMsb, BitExtractForm> const, kTableMasks>(
+        masks.get<BitExtractForm>().data(), kTableMasks
     );
 }
 

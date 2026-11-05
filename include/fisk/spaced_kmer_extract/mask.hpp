@@ -42,14 +42,14 @@ inline constexpr std::size_t kDefaultMaxMasks = FISK_DEFAULT_MAX_MASKS;
 //     Helper Functions
 // -------------------------------------------------------------------------------------------------
 
-// Convert the bits of each piece of a spaced k-mer mask into another representation `M` via
+// Convert the bits of each piece of a spaced k-mer mask into another form `BitExtractForm` via
 // `make`, keeping the Layout, span, and the other members. The bits are already arranged for the
 // Layout, and are hence used as they are. The pieces beyond the piece count are empty, and stay so.
-template <typename M, Layout L, std::size_t MaxSpan, typename Make>
-inline SpacedKmerMask<L, M, MaxSpan> convert_spaced_kmer_mask_(
+template <typename BitExtractForm, Layout L, std::size_t MaxSpan, typename Make>
+inline SpacedKmerMask<L, BitExtractForm, MaxSpan> convert_spaced_kmer_mask_(
     SpacedKmerMask<L, BitExtractMask, MaxSpan> const& mask, Make&& make
 ) {
-    SpacedKmerMask<L, M, MaxSpan> result;
+    SpacedKmerMask<L, BitExtractForm, MaxSpan> result;
     for (std::size_t j = 0; j < result.max_pieces; ++j) {
         result.mask_pieces[j] = make(mask.mask_pieces[j].mask);
     }
@@ -59,14 +59,14 @@ inline SpacedKmerMask<L, M, MaxSpan> convert_spaced_kmer_mask_(
     return result;
 }
 
-template <typename M, Layout L, std::size_t MaxSpan, typename Make>
-inline std::vector<SpacedKmerMask<L, M, MaxSpan>> convert_spaced_kmer_masks_(
+template <typename BitExtractForm, Layout L, std::size_t MaxSpan, typename Make>
+inline std::vector<SpacedKmerMask<L, BitExtractForm, MaxSpan>> convert_spaced_kmer_masks_(
     std::vector<SpacedKmerMask<L, BitExtractMask, MaxSpan>> const& masks, Make&& make
 ) {
-    std::vector<SpacedKmerMask<L, M, MaxSpan>> result;
+    std::vector<SpacedKmerMask<L, BitExtractForm, MaxSpan>> result;
     result.reserve(masks.size());
     for (auto const& mask : masks) {
-        result.push_back(convert_spaced_kmer_mask_<M>(mask, make));
+        result.push_back(convert_spaced_kmer_mask_<BitExtractForm>(mask, make));
     }
     return result;
 }

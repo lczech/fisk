@@ -73,10 +73,10 @@ inline void spaced_kmer_ascii_rolling_simd_shift_in_(
     }
 }
 
-// Shift the next `count` characters of `data`, at most the lanes of the kernel of `Kernel`, into
-// the rolling k-mer and its valid bits, and keep each intermediate state in its lane, for the SIMD
-// extraction below. The lanes from `count` on hold zero, and are not valid.
-template<typename Kernel, typename Enc>
+// Shift the next `count` characters of `data`, at most the lanes of the kernel of `KernelMask`,
+// into the rolling k-mer and its valid bits, and keep each intermediate state in its lane, for the
+// SIMD extraction below. The lanes from `count` on hold zero, and are not valid.
+template<typename KernelMask, typename Enc>
 FISK_ALWAYS_INLINE
 inline void spaced_kmer_ascii_rolling_simd_fill_lanes_(
     char const* data,
@@ -85,13 +85,13 @@ inline void spaced_kmer_ascii_rolling_simd_fill_lanes_(
     std::size_t top_shift,
     std::uint64_t& rolling_kmer,
     std::uint64_t& rolling_valid_pos,
-    std::array<std::uint64_t, Kernel::bit_extract_type::lanes>& lane_kmers,
-    std::uint64_t (&lane_valids)[Kernel::bit_extract_type::lanes]
+    std::array<std::uint64_t, KernelMask::bit_extract_form::lanes>& lane_kmers,
+    std::uint64_t (&lane_valids)[KernelMask::bit_extract_form::lanes]
 ) {
     FISK_PRAGMA_UNROLL_16
-    for (std::size_t lane = 0; lane < Kernel::bit_extract_type::lanes; ++lane) {
+    for (std::size_t lane = 0; lane < KernelMask::bit_extract_form::lanes; ++lane) {
         if (lane < count) {
-            spaced_kmer_ascii_rolling_simd_shift_in_<Kernel::layout>(
+            spaced_kmer_ascii_rolling_simd_shift_in_<KernelMask::layout>(
                 data[lane], enc, top_shift, rolling_kmer, rolling_valid_pos
             );
             lane_kmers[lane]  = rolling_kmer;
@@ -137,29 +137,29 @@ inline void for_each_lane_ct_(F&& f)
  * per mask, but not across masks. For single spaced k-mers, use for_each_valid_lane() in the
  * callback.
  *
- * @tparam Kernel    Bit extraction kernel of a SIMD arch, see BitExtractKernel, tagged as spaced
- *                   k-mer mask, see make_spaced_kmer_kernel(), and possibly const. Its Layout is
- *                   the Layout of the emitted spaced k-mers. The spans of all kernels must be the
- *                   same, and in [1, 32].
+ * @tparam KernelMask Spaced k-mer mask with a bit extraction kernel of a SIMD arch as its form,
+ *                   see BitExtractKernel and make_spaced_kmer_kernel(), and possibly const. Its
+ *                   Layout is the Layout of the emitted spaced k-mers. The spans of all kernels
+ *                   must be the same, and in [1, 32].
  * @tparam NMasks    Number of kernels, fixed at compile time; see dispatch_static_span() for a
  *                   std::vector of kernels.
  * @tparam Enc       Encoder functor, returns 0..3 for valid bases, >=4 for invalid.
  * @tparam Callback  Callback function, called with vectors of spaced k-mers, see above.
  */
-template<typename Kernel, std::size_t NMasks, typename Enc, typename Callback>
-    requires SpacedKmerMaskType<std::remove_const_t<Kernel>> && (NMasks != std::dynamic_extent)
+template<typename KernelMask, std::size_t NMasks, typename Enc, typename Callback>
+    requires SpacedKmerMaskType<std::remove_const_t<KernelMask>> && (NMasks != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     std::string_view seq,
-    std::span<Kernel, NMasks> kernels,
+    std::span<KernelMask, NMasks> kernels,
     Enc&& enc,
     Callback&& callback
 ) {
     static_assert(NMasks > 0, "Need at least one kernel.");
-    using Simd = typename Kernel::bit_extract_type::simd_arch;
+    using Simd = typename KernelMask::bit_extract_form::simd_arch;
     constexpr Encoding E = std::remove_cvref_t<Enc>::encoding;
-    constexpr Layout L = Kernel::layout;
-    constexpr std::size_t lanes = Kernel::bit_extract_type::lanes;
+    constexpr Layout L = KernelMask::layout;
+    constexpr std::size_t lanes = KernelMask::bit_extract_form::lanes;
 
     // Input boundary checks. The masks must not have bits above the span, see
     // spaced_kmer_ascii_rolling_simd_shift_in_().
@@ -187,18 +187,18 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     }
 
     // The lane k-mers and their valid bits. The lane k-mers are held in registers, see
-    // Kernel::bit_extract_type::from_values().
+    // KernelMask::bit_extract_form::from_values().
     std::array<std::uint64_t, lanes> lane_kmers;
     std::uint64_t lane_valids[lanes];
 
     // Emit the spaced k-mers of all masks for the lanes of the `count` characters at `i`. A lane
     // is valid for a mask if its valid bits cover all bits of the mask.
     auto const emit = [&](std::size_t count) FISK_ALWAYS_INLINE_LAMBDA {
-        spaced_kmer_ascii_rolling_simd_fill_lanes_<Kernel>(
+        spaced_kmer_ascii_rolling_simd_fill_lanes_<KernelMask>(
             data + i, count, enc, top_shift, rolling_kmer, rolling_valid_pos, lane_kmers,
             lane_valids
         );
-        auto const x = Kernel::bit_extract_type::from_values(lane_kmers);
+        auto const x = KernelMask::bit_extract_form::from_values(lane_kmers);
         std::size_t const pos = i + 1 - span_k;
         FISK_PRAGMA_UNROLL_16
         for (std::size_t m = 0; m < NMasks; ++m) {
@@ -234,18 +234,18 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
  * Same as the overload above, for a single kernel, with `mask_idx` always 0. The callback can also
  * be called without it, as callback(pos, spaced_kmers, valid_lanes).
  */
-template<typename Kernel, typename Enc, typename Callback>
-    requires SpacedKmerMaskType<Kernel>
+template<typename KernelMask, typename Enc, typename Callback>
+    requires SpacedKmerMaskType<KernelMask>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     std::string_view seq,
-    Kernel const& kernel,
+    KernelMask const& kernel,
     Enc&& enc,
     Callback&& callback
 ) {
     // A copy of the kernel of the caller, so that the loop can keep its values in registers: with
     // a reference, it would have to reload them after each store, which might change them.
-    std::array<Kernel, 1> const kernels{{kernel}};
+    std::array<KernelMask, 1> const kernels{{kernel}};
     for_each_spaced_kmer_ascii_checked_rolling_simd(
         seq, std::span{kernels}, std::forward<Enc>(enc), std::forward<Callback>(callback)
     );

@@ -42,16 +42,16 @@ namespace fisk {
 // for_each_spaced_kmer_ascii_chunked_scalar_() (ascii_chunked_scalar.hpp).
 template <
     std::size_t ChunkSize, std::size_t MaxCompiledPieces, WordEncoder Encoder,
-    PackedSequenceType PackedSequenceChunk, typename Kernel, std::size_t N, typename Callback
+    PackedSequenceType PackedSequenceChunk, typename KernelMask, std::size_t N, typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_chunked_simd_(
-    std::string_view seq, std::span<Kernel, N> kernels, Encoder const& encoder,
+    std::string_view seq, std::span<KernelMask, N> kernels, Encoder const& encoder,
     PackedSequenceChunk& scratch, Callback& callback
 ) {
     static_assert(N > 0, "Need at least one kernel.");
     for_each_ascii_chunk_<ChunkSize>(
-        seq, common_spaced_kmer_span_<std::remove_const_t<Kernel>::max_span>(kernels), encoder,
+        seq, common_spaced_kmer_span_<std::remove_const_t<KernelMask>::max_span>(kernels), encoder,
         scratch, callback,
         [&](auto const& chunk, auto const& chunk_func) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (PackedSequenceWithValidityType<PackedSequenceChunk>) {
@@ -83,23 +83,24 @@ inline void for_each_spaced_kmer_ascii_chunked_simd_(
  * `ACGT` (upper or lower case); any other character is silently encoded as one of the four
  * nucleotides.
  *
- * @tparam Kernel   Bit extraction kernel of a SIMD arch, tagged as spaced k-mer mask with the
- *                  Layout of the encoder, see make_spaced_kmer_kernel(), and possibly const. The
- *                  spans of all kernels must be the same, and in [1, Kernel::max_span].
+ * @tparam KernelMask Spaced k-mer mask with a bit extraction kernel of a SIMD arch as its form,
+ *                  see BitExtractKernel and make_spaced_kmer_kernel(), with the Layout of the
+ *                  encoder, and possibly const. The spans of all kernels must be the same, and in
+ *                  [1, KernelMask::max_span].
  * @tparam N        Number of kernels, fixed at compile time; see dispatch_static_span() for a
  *                  std::vector of kernels.
  */
 template <
     std::size_t ChunkSize = kDefaultAsciiChunkSize,
-    std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces, WordEncoder Encoder, typename Kernel,
-    std::size_t N, typename Callback
+    std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces, WordEncoder Encoder,
+    typename KernelMask, std::size_t N, typename Callback
 >
-    requires SpacedKmerMaskType<std::remove_const_t<Kernel>>
-        && BitExtractKernel<typename Kernel::bit_extract_type>
-        && (Kernel::layout == Encoder::layout) && (N != std::dynamic_extent)
+    requires SpacedKmerMaskType<std::remove_const_t<KernelMask>>
+        && BitExtractKernel<typename KernelMask::bit_extract_form>
+        && (KernelMask::layout == Encoder::layout) && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_unchecked_chunked_simd(
-    std::string_view seq, std::span<Kernel, N> kernels, Encoder const& encoder,
+    std::string_view seq, std::span<KernelMask, N> kernels, Encoder const& encoder,
     PackedSequence<Encoder::encoding, Encoder::layout>& scratch, Callback&& callback
 ) {
     for_each_spaced_kmer_ascii_chunked_simd_<ChunkSize, MaxCompiledPieces>(
@@ -135,15 +136,15 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_simd(
  */
 template <
     std::size_t ChunkSize = kDefaultAsciiChunkSize,
-    std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces, WordEncoder Encoder, typename Kernel,
-    std::size_t N, typename Callback
+    std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces, WordEncoder Encoder,
+    typename KernelMask, std::size_t N, typename Callback
 >
-    requires SpacedKmerMaskType<std::remove_const_t<Kernel>>
-        && BitExtractKernel<typename Kernel::bit_extract_type>
-        && (Kernel::layout == Encoder::layout) && (N != std::dynamic_extent)
+    requires SpacedKmerMaskType<std::remove_const_t<KernelMask>>
+        && BitExtractKernel<typename KernelMask::bit_extract_form>
+        && (KernelMask::layout == Encoder::layout) && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_unchecked_chunked_simd(
-    std::string_view seq, std::span<Kernel, N> kernels, Encoder const& encoder,
+    std::string_view seq, std::span<KernelMask, N> kernels, Encoder const& encoder,
     Callback&& callback
 ) {
     for_each_spaced_kmer_ascii_unchecked_chunked_simd<ChunkSize, MaxCompiledPieces>(
@@ -190,15 +191,15 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_simd(
  */
 template <
     std::size_t ChunkSize = kDefaultAsciiChunkSize,
-    std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces, WordEncoder Encoder, typename Kernel,
-    std::size_t N, typename Callback
+    std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces, WordEncoder Encoder,
+    typename KernelMask, std::size_t N, typename Callback
 >
-    requires SpacedKmerMaskType<std::remove_const_t<Kernel>>
-        && BitExtractKernel<typename Kernel::bit_extract_type>
-        && (Kernel::layout == Encoder::layout) && (N != std::dynamic_extent)
+    requires SpacedKmerMaskType<std::remove_const_t<KernelMask>>
+        && BitExtractKernel<typename KernelMask::bit_extract_form>
+        && (KernelMask::layout == Encoder::layout) && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_checked_chunked_simd(
-    std::string_view seq, std::span<Kernel, N> kernels, Encoder const& encoder,
+    std::string_view seq, std::span<KernelMask, N> kernels, Encoder const& encoder,
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& scratch, Callback&& callback
 ) {
     for_each_spaced_kmer_ascii_chunked_simd_<ChunkSize, MaxCompiledPieces>(
@@ -234,15 +235,15 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_simd(
  */
 template <
     std::size_t ChunkSize = kDefaultAsciiChunkSize,
-    std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces, WordEncoder Encoder, typename Kernel,
-    std::size_t N, typename Callback
+    std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces, WordEncoder Encoder,
+    typename KernelMask, std::size_t N, typename Callback
 >
-    requires SpacedKmerMaskType<std::remove_const_t<Kernel>>
-        && BitExtractKernel<typename Kernel::bit_extract_type>
-        && (Kernel::layout == Encoder::layout) && (N != std::dynamic_extent)
+    requires SpacedKmerMaskType<std::remove_const_t<KernelMask>>
+        && BitExtractKernel<typename KernelMask::bit_extract_form>
+        && (KernelMask::layout == Encoder::layout) && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_ascii_checked_chunked_simd(
-    std::string_view seq, std::span<Kernel, N> kernels, Encoder const& encoder,
+    std::string_view seq, std::span<KernelMask, N> kernels, Encoder const& encoder,
     Callback&& callback
 ) {
     for_each_spaced_kmer_ascii_checked_chunked_simd<ChunkSize, MaxCompiledPieces>(

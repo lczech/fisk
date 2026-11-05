@@ -90,8 +90,8 @@ static void check_extraction()
 // =================================================================================================
 
 // The kernels need to have the Layout of the sequence.
-template <typename Seq, typename Kernel>
-concept CanExtractPackedSimd = requires(Seq const& seq, Kernel const& kernel) {
+template <typename Seq, typename KernelMask>
+concept CanExtractPackedSimd = requires(Seq const& seq, KernelMask const& kernel) {
     for_each_spaced_kmer_packed_unchecked_bytewise_simd(seq, kernel, NoopSpacedVectorCallback{});
 };
 
@@ -121,8 +121,8 @@ static_assert(CanExtractPackedSimd<
 #endif
 
 // The same for the checked extraction, which also needs the validity bits.
-template <typename Seq, typename Kernel>
-concept CanExtractPackedCheckedSimd = requires(Seq const& seq, Kernel const& kernel) {
+template <typename Seq, typename KernelMask>
+concept CanExtractPackedCheckedSimd = requires(Seq const& seq, KernelMask const& kernel) {
     for_each_spaced_kmer_packed_checked_bytewise_simd(seq, kernel, NoopSpacedValidLanesCallback{});
 };
 

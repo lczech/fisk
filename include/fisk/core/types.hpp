@@ -613,11 +613,12 @@ inline constexpr std::size_t spaced_kmer_mask_tail_span(std::size_t span_k) noex
 }
 
 /**
- * @brief A spaced k-mer mask in the representation `M` of some bit extraction algorithm, tagged
- * with the Layout of the spaced k-mers that it extracts, and with its span.
+ * @brief A spaced k-mer mask with its pieces in the form `BitExtractForm` of some bit extraction
+ * algorithm, tagged with the Layout of the spaced k-mers that it extracts, and with its span.
  *
- * `M` is a bit extraction mask, table, or SIMD kernel, such as BitExtractMask,
- * BitExtractButterflyMask, or BitExtractKernelButterfly<SimdAVX2>. The spaced k-mer extraction
+ * The form is a bit extraction mask, for the scalar loops, such as BitExtractMask or
+ * BitExtractButterflyMask, or a bit extraction kernel of a SIMD arch, for the SIMD loops, such as
+ * BitExtractKernelButterfly<SimdAVX2>, see BitExtractKernel. The spaced k-mer extraction
  * functions only accept masks tagged this way, and use the tag as the Layout of the window and of
  * the emitted spaced k-mers. Hence, the bits of the mask have to be arranged for that Layout.
  *
@@ -631,13 +632,13 @@ inline constexpr std::size_t spaced_kmer_mask_tail_span(std::size_t span_k) noex
  *
  * Create via make_spaced_kmer_mask() and the related functions, which take care of this.
  */
-// For a SIMD kernel as `M`, MSVC pads the members below to the alignment of its vectors, and warns
-// about that (C4324). The padding is intended.
+// For a SIMD kernel as `BitExtractForm`, MSVC pads the members below to the alignment of its
+// vectors, and warns about that (C4324). The padding is intended.
 #if defined(_MSC_VER)
     #pragma warning(push)
     #pragma warning(disable: 4324)
 #endif
-template <Layout L, typename M, std::size_t MaxSpan = kDefaultMaxSpan>
+template <Layout L, typename BitExtractForm, std::size_t MaxSpan = kDefaultMaxSpan>
 struct SpacedKmerMask
 {
     static_assert(MaxSpan >= 1 && MaxSpan <= 0xFFFF, "MaxSpan must be in [1, 65535]");
@@ -646,14 +647,14 @@ struct SpacedKmerMask
     static constexpr std::size_t max_span = MaxSpan;
     static constexpr std::size_t max_pieces = spaced_kmer_mask_piece_count(MaxSpan);
 
-    // The representation of the bit extraction of each piece, such as BitExtractMask.
-    using bit_extract_type = M;
+    // The form of each piece, such as BitExtractMask.
+    using bit_extract_form = BitExtractForm;
 
     // Declared so that this is not an aggregate, as setting the members by hand is not safe.
     SpacedKmerMask() = default;
 
     // Per piece, in the order of the span: the bit extraction mask of the piece.
-    std::array<M, max_pieces> mask_pieces{};
+    std::array<BitExtractForm, max_pieces> mask_pieces{};
 
     // Per piece: the positions of the piece that the mask keeps, in the order of the sequence for
     // both layouts: bit `i` is set if position `i` of the piece is kept. This is the order of the
@@ -674,8 +675,8 @@ struct SpacedKmerMask
 template <typename T>
 struct is_spaced_kmer_mask_ : std::false_type {};
 
-template <Layout L, typename M, std::size_t MaxSpan>
-struct is_spaced_kmer_mask_<SpacedKmerMask<L, M, MaxSpan>> : std::true_type {};
+template <Layout L, typename BitExtractForm, std::size_t MaxSpan>
+struct is_spaced_kmer_mask_<SpacedKmerMask<L, BitExtractForm, MaxSpan>> : std::true_type {};
 
 /**
  * @brief A spaced k-mer mask, i.e., a SpacedKmerMask, and not an untagged bit extraction mask.

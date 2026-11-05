@@ -36,8 +36,8 @@ struct SpacedKmerMaskForms;
 template <Layout L, std::size_t MaxMasks, std::size_t MaxSpan, typename... Simd>
 struct SpacedKmerMaskForms<L, MaxMasks, MaxSpan, TypeList<Simd...>>
 {
-    template <typename M>
-    using MaskForms = std::array<SpacedKmerMask<L, M, MaxSpan>, MaxMasks>;
+    template <typename BitExtractForm>
+    using MaskForms = std::array<SpacedKmerMask<L, BitExtractForm, MaxSpan>, MaxMasks>;
 
     using type = std::tuple<
         MaskForms<BitExtractMask>,
@@ -88,8 +88,9 @@ class SpacedKmerMasks
 
     using Forms = typename SpacedKmerMaskForms<L, MaxMasks, MaxSpan>::type;
 
-    template <typename M>
-    using MaskForms = typename SpacedKmerMaskForms<L, MaxMasks, MaxSpan>::template MaskForms<M>;
+    template <typename BitExtractForm>
+    using MaskForms =
+        typename SpacedKmerMaskForms<L, MaxMasks, MaxSpan>::template MaskForms<BitExtractForm>;
 
 public:
 
@@ -136,26 +137,26 @@ public:
     }
 
     /**
-     * @brief The masks in the form `M`, such as BitExtractButterflyMask.
+     * @brief The masks in the form `BitExtractForm`, such as BitExtractButterflyMask.
      */
-    template <typename M>
-    std::span<SpacedKmerMask<L, M, MaxSpan> const> get() const noexcept
+    template <typename BitExtractForm>
+    std::span<SpacedKmerMask<L, BitExtractForm, MaxSpan> const> get() const noexcept
     {
         static_assert(
-            has_form_<M>(),
+            has_form_<BitExtractForm>(),
             "SpacedKmerMasks does not hold the masks in this form; make them with the functions "
             "of spaced_kmer_extract/mask.hpp, such as make_spaced_kmer_kernels()."
         );
-        return { std::get<MaskForms<M>>(forms_).data(), size_ };
+        return { std::get<MaskForms<BitExtractForm>>(forms_).data(), size_ };
     }
 
 private:
 
-    template <typename M>
+    template <typename BitExtractForm>
     static constexpr bool has_form_()
     {
         return []<typename... F>(std::tuple<F...> const*) {
-            return (std::same_as<F, MaskForms<M>> || ...);
+            return (std::same_as<F, MaskForms<BitExtractForm>> || ...);
         }(static_cast<Forms const*>(nullptr));
     }
 
@@ -183,17 +184,17 @@ private:
     }
 
     // Fill the `forms` of one type with the `masks` in that form.
-    template <typename M>
+    template <typename BitExtractForm>
     static void prepare_(
-        std::span<mask_type const> masks, MaskForms<M>& forms
+        std::span<mask_type const> masks, MaskForms<BitExtractForm>& forms
     ) {
         for (std::size_t i = 0; i < masks.size(); ++i) {
-            if constexpr (std::same_as<M, BitExtractMask>) {
+            if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
                 forms[i] = masks[i];
-            } else if constexpr (std::same_as<M, BitExtractButterflyMask>) {
+            } else if constexpr (std::same_as<BitExtractForm, BitExtractButterflyMask>) {
                 forms[i] = make_spaced_kmer_butterfly_mask(masks[i]);
             } else {
-                forms[i] = make_spaced_kmer_kernel<M>(masks[i]);
+                forms[i] = make_spaced_kmer_kernel<BitExtractForm>(masks[i]);
             }
         }
     }
