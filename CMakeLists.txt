@@ -287,15 +287,6 @@ if(FISK_BUILD_BENCHMARKS)
         target_compile_options(fisk_benchmarks PRIVATE
             /W4
             /WX
-            # C4714: function marked as [[msvc::forceinline]]/__forceinline not inlined. Some of
-            # the for_each_kmer_*() loops (see FISK_ALWAYS_INLINE_FOR_EACH, util/intrinsics.hpp)
-            # are large enough that compilers may decline to inline them; MSVC declining should
-            # stay a silent no-op rather than fail the /WX build.
-            /wd4714
-            # C4324: struct padded due to an alignas specifier. Expected and harmless for the
-            # SIMD kernel structs (bit_extract/simd.hpp), which need natural alignment for their
-            # vector register members. GCC/Clang don't warn on this at all.
-            /wd4324
             # C4146/C4334: unary minus on an unsigned type, and a 32-bit shift result implicitly
             # widened to 64 bits. Both fire in benchmarks/external/zp7.hpp, vendored third-party
             # code (see the file's header comment) reproduced as-is; the patterns are intentional
@@ -379,9 +370,7 @@ if(FISK_BUILD_TESTS)
             /UNDEBUG
             /W4
             /WX
-            # See the matching /wd4714, /wd4324 and /bigobj on fisk_benchmarks above for why.
-            /wd4714
-            /wd4324
+            # See the matching /bigobj on fisk_benchmarks above for why.
             /bigobj
             # C4127: conditional expression is constant. Fires on the EXPECT_*() macros when they
             # check a template parameter, which is intended in the tests.

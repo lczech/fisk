@@ -82,9 +82,14 @@
 // a single place to pick up something more (e.g. [[gnu::flatten]]) later, if ever needed. It can
 // be defined before, for instance as empty, which the test suite does: inlining these loops into
 // each of their many instantiations there only costs compile time, and does not change what the
-// tests check.
+// tests check. MSVC is left to its own inlining decisions here, as it warns (C4714) about each
+// forced inline that it declines, which these large loops can be.
 #ifndef FISK_ALWAYS_INLINE_FOR_EACH
-    #define FISK_ALWAYS_INLINE_FOR_EACH FISK_ALWAYS_INLINE
+    #if defined(_MSC_VER)
+        #define FISK_ALWAYS_INLINE_FOR_EACH
+    #else
+        #define FISK_ALWAYS_INLINE_FOR_EACH FISK_ALWAYS_INLINE
+    #endif
 #endif
 
 // For lambdas, placed after the parameter list: `[&](int x) FISK_ALWAYS_INLINE_LAMBDA { ... }`.

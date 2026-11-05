@@ -592,6 +592,12 @@ concept SpacedKmerType = KmerType<K> && std::same_as<K, SpacedKmer<K::encoding, 
  *
  * Create via make_spaced_kmer_mask() and the related functions, which take care of this.
  */
+// For a SIMD kernel as `M`, MSVC pads the members below to the alignment of its vectors, and warns
+// about that (C4324). The padding is intended.
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable: 4324)
+#endif
 template <Layout L, typename M>
 struct SpacedKmerMask : M
 {
@@ -612,6 +618,9 @@ struct SpacedKmerMask : M
     // the validity bits from `pos` on have all bits of this mask set.
     std::uint64_t validity_mask = 0;
 };
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 
 template <typename T>
 struct is_spaced_kmer_mask_ : std::false_type {};

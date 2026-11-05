@@ -103,6 +103,13 @@ struct BitExtractKernelPext
 
 #endif
 
+// The kernels below hold SIMD vectors after their scalar mask, so that MSVC pads them to the
+// alignment of the vectors, and warns about that (C4324). The padding is intended.
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable: 4324)
+#endif
+
 // =================================================================================================
 //     Butterfly Kernel
 // =================================================================================================
@@ -310,5 +317,9 @@ private:
         );
     }
 };
+
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 
 } // namespace fisk
