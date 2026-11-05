@@ -85,7 +85,7 @@ jobs:
             export CC="${{ matrix.cc }}"
             export CXX="${{ matrix.cxx }}"
           fi
-          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_TESTS=OFF
 
       - name: Build
         id: build
@@ -103,10 +103,6 @@ jobs:
             grep -E 'error( [A-Z]+[0-9]+)?:' build.log | awk '!seen[$0]++' || true
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Run tests
-        run: |
-          ctest --test-dir build --output-on-failure
 
       - name: Run benchmarks
         run: |

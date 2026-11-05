@@ -151,8 +151,9 @@ jobs:
           curl -sSL "${SDE_URL}" | tar -xJ -C "${RUNNER_TEMP}/sde" --strip-components=1
           echo "SDE_PATH=${RUNNER_TEMP}/sde" >> "${GITHUB_ENV}"
 
-      # The sanitizer and emulator entries only build the tests. The sanitizers use a Debug build
-      # with -O1, for usable stack traces at a bearable speed, and fail on the first report.
+      # Only the tests are built here; the benchmarks are built by the Benchmark workflow. The
+      # sanitizers use a Debug build with -O1, for usable stack traces at a bearable speed, and fail
+      # on the first report.
       - name: Configure CMake
         run: |
           if [[ "${{ matrix.sanitize }}" == "true" ]]; then
@@ -163,7 +164,7 @@ jobs:
             cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_BENCHMARKS=OFF \
               -DFISK_ENABLE_AVX512=ON
           else
-            cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}"
+            cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_BENCHMARKS=OFF
           fi
 
       # The sanitizer builds compile with fewer jobs, as their test files need several GB each,
