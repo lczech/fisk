@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -237,7 +238,7 @@ struct SpacedEvent
 // which a selected base is not a nucleotide are skipped.
 template <fisk::Encoding E, fisk::Layout L>
 inline std::vector<SpacedEvent> oracle_spaced_events(
-    std::string const& seq, std::vector<std::string> const& masks
+    std::string const& seq, std::span<std::string const> masks
 ) {
     std::vector<SpacedEvent> out;
     if (masks.empty() || seq.size() < masks.front().size()) {

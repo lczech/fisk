@@ -42,10 +42,9 @@ template <Encoding E, Layout L, std::size_t N>
 static void check_all_checked_kernels(std::array<std::string, N> const& mask_strings)
 {
     WordEncoderButterfly<E, L> const encoder;
-    std::vector<std::string> const mask_vector(mask_strings.begin(), mask_strings.end());
     for (auto const& seq : packed_checked_test_sequences()) {
         auto const packed = pack_sequence_checked(seq, encoder);
-        auto const expected = oracle_spaced_events<E, L>(seq, mask_vector);
+        auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
         auto const check_arch = [&]<typename Simd>() {
             check_checked_kernel<BitExtractKernelButterfly<Simd>>(mask_strings, packed, expected);
             check_checked_kernel<BitExtractKernelBlockShift<Simd>>(mask_strings, packed, expected);
