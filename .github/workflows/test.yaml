@@ -119,6 +119,8 @@ jobs:
 
           # The runners may not have AVX512, so this entry enables the AVX512 code paths via
           # FISK_ENABLE_AVX512, and runs the tests under the Intel Software Development Emulator.
+          # It compiles for the emulated CPU instead of -march=native: on a runner with an AMD
+          # CPU, the compiler may use instructions that the emulated Intel CPU does not have.
           - { os: ubuntu-26.04, compiler: llvm-20, sde: true }
 
     runs-on: ${{ matrix.os }}
@@ -162,7 +164,8 @@ jobs:
               -DCMAKE_EXE_LINKER_FLAGS="${SANITIZE_FLAGS}"
           elif [[ "${{ matrix.sde }}" == "true" ]]; then
             cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_BENCHMARKS=OFF \
-              -DFISK_ENABLE_AVX512=ON
+              -DFISK_ENABLE_AVX512=ON -DFISK_COMPILER_SUPPORTS_MARCH_NATIVE=OFF \
+              -DCMAKE_CXX_FLAGS="-march=sapphirerapids"
           else
             cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_BENCHMARKS=OFF
           fi
