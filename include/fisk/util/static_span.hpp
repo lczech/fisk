@@ -7,6 +7,8 @@
 #include <string>
 #include <type_traits>
 
+#include "fisk/util/intrinsics.hpp"
+
 namespace fisk {
 
 // =================================================================================================
@@ -29,6 +31,26 @@ inline decltype(auto) dispatch_static_span_(T* data, std::size_t n, F& f)
 }
 
 /**
+ * @brief Throw for a range of `n` elements not in [1, max_n], for dispatch_static_span().
+ *
+ * Kept out of line and cold, so that building the message adds no code to the callers, into which
+ * dispatch_static_span() and the loops that `f` runs are inlined.
+ */
+FISK_NOINLINE_COLD
+inline void throw_invalid_static_span_size_(std::size_t n, std::size_t max_n)
+{
+    if (n == 0) {
+        throw std::invalid_argument("dispatch_static_span(): the range is empty");
+    }
+    throw std::invalid_argument(
+        "dispatch_static_span(): " + std::to_string(n) + " elements, but the compile-time "
+        "maximum is " + std::to_string(max_n) + ". Raise the template parameter MaxN of the "
+        "call; for sets of spaced k-mer masks, this is usually kDefaultMaxMasks, set by the "
+        "CMake option or macro FISK_DEFAULT_MAX_MASKS."
+    );
+}
+
+/**
  * @brief Call a function with a span of compile-time size over the elements of a contiguous range.
  *
  * The `range` (e.g., a std::vector, a std::array, or a std::span) holds `n` elements, with `n`
@@ -48,16 +70,8 @@ inline decltype(auto) dispatch_static_span(Range const& range, F&& f)
     using T = std::remove_reference_t<decltype(*std::data(range))> const;
 
     std::size_t const n = std::size(range);
-    if (n == 0) {
-        throw std::invalid_argument("dispatch_static_span(): the range is empty");
-    }
-    if (n > MaxN) {
-        throw std::invalid_argument(
-            "dispatch_static_span(): " + std::to_string(n) + " elements, but the compile-time "
-            "maximum is " + std::to_string(MaxN) + ". Raise the template parameter MaxN of the "
-            "call; for sets of spaced k-mer masks, this is usually kDefaultMaxMasks, set by the "
-            "CMake option or macro FISK_DEFAULT_MAX_MASKS."
-        );
+    if (n == 0 || n > MaxN) {
+        throw_invalid_static_span_size_(n, MaxN);
     }
     return dispatch_static_span_<T, 1, MaxN>(std::data(range), n, f);
 }
