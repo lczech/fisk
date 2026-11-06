@@ -210,9 +210,13 @@ inline void check_wide_extraction()
 
         auto const check = [&](std::string const& seq, auto const& packed) {
             auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
-            auto const extract = [&]<std::size_t MaxCompiledPieces>(
-                auto const& mask_or_masks, auto const& bit_ext, auto const& callback
+            // MaxCompiledPieces as a std::integral_constant, as Clang 13 fails on nested lambdas
+            // with template parameters.
+            auto const extract = [&](
+                auto max_compiled_pieces, auto const& mask_or_masks, auto const& bit_ext,
+                auto const& callback
             ) {
+                constexpr std::size_t MaxCompiledPieces = decltype(max_compiled_pieces)::value;
                 if constexpr (Checked) {
                     fisk::for_each_spaced_kmer_packed_checked_bytewise_scalar<MaxCompiledPieces>(
                         packed, mask_or_masks, bit_ext, callback
@@ -226,7 +230,8 @@ inline void check_wide_extraction()
             auto const run = [&](auto const& masks, auto const& bit_ext) {
                 check_callback_forms<L>(
                     masks, expected, [&](auto const& mask_or_masks, auto const& callback) {
-                        extract.template operator()<fisk::kDefaultMaxCompiledPieces>(
+                        extract(
+                            std::integral_constant<std::size_t, fisk::kDefaultMaxCompiledPieces>{},
                             mask_or_masks, bit_ext, callback
                         );
                     }
@@ -243,7 +248,7 @@ inline void check_wide_extraction()
             #endif
 
             // The single mask itself, or the set of three masks as a span of that size.
-            auto const check_cap = [&]<std::size_t MaxCompiledPieces>() {
+            auto const check_cap = [&](auto max_compiled_pieces) {
                 std::vector<SpacedEvent> events;
                 auto const collect = [&](
                     std::size_t pos, std::size_t mask_idx, auto const& spaced_kmer
@@ -251,19 +256,18 @@ inline void check_wide_extraction()
                     events.push_back({pos, mask_idx, fisk::kmer_value(spaced_kmer)});
                 };
                 if (direct_masks.size() == 1) {
-                    extract.template operator()<MaxCompiledPieces>(
-                        direct_masks.front(), bit_loop, collect
-                    );
+                    extract(max_compiled_pieces, direct_masks.front(), bit_loop, collect);
                 } else {
                     using Mask = typename decltype(direct_masks)::value_type;
-                    extract.template operator()<MaxCompiledPieces>(
-                        std::span<Mask const, 3>(direct_masks.data(), 3), bit_loop, collect
+                    extract(
+                        max_compiled_pieces, std::span<Mask const, 3>(direct_masks.data(), 3),
+                        bit_loop, collect
                     );
                 }
                 check_spaced_events(events, expected);
             };
-            check_cap.template operator()<1>();
-            check_cap.template operator()<5>();
+            check_cap(std::integral_constant<std::size_t, 1>{});
+            check_cap(std::integral_constant<std::size_t, 5>{});
         };
         if constexpr (Checked) {
             for (auto const& seq : packed_checked_test_sequences()) {

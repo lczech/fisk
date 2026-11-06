@@ -195,14 +195,17 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
             };
 
             // The window of the tail at base `Local` of the byte, computed where it is used, so
-            // that the bit extraction has the registers for its tables.
+            // that the bit extraction has the registers for its tables. The base is passed as a
+            // std::integral_constant, not as a template parameter, as Clang 13 fails on lambdas
+            // with template parameters here.
             std::uint64_t const tail_word = word_(lead);
             [[maybe_unused]] std::uint64_t next = 0;
             if constexpr (Tail != 0) {
                 next = L == Layout::kMSB
                     ? std::uint64_t{codes[at + 8]} : load_packed_word_<L>(codes + at + 1);
             }
-            auto const tail_window_ = [&]<unsigned Local>() FISK_ALWAYS_INLINE_LAMBDA {
+            auto const tail_window_ = [&](auto local) FISK_ALWAYS_INLINE_LAMBDA {
+                constexpr unsigned Local = decltype(local)::value;
                 if constexpr (Tail != 0) {
                     return spaced_kmer_packed_bytewise_full_width_window_<L, Tail, Local>(
                         tail_word, next
@@ -302,7 +305,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
             [&]<unsigned... Locals>(
                 std::integer_sequence<unsigned, Locals...>
             ) FISK_ALWAYS_INLINE_LAMBDA {
-                (emit_(Locals, Count == 1 ? tail_window_.template operator()<Locals>() : 0), ...);
+                (emit_(Locals, Count == 1 ? tail_window_(std::integral_constant<unsigned, Locals>{}) : 0), ...);
             }(std::make_integer_sequence<unsigned, 4>{});
         }
     };

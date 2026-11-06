@@ -8,6 +8,7 @@
 #include <span>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -181,6 +182,12 @@ inline void check_simd_error_contract()
 //     Spans above 32
 // =================================================================================================
 
+// Compile-time arguments for the lambdas of check_simd_wide_extraction().
+template <typename T>
+inline constexpr std::type_identity<T> type_c{};
+template <std::size_t V>
+inline constexpr std::integral_constant<std::size_t, V> size_c{};
+
 // Checks kernels with spans above 32, see wide_test_mask_sets(), unchecked or checked, against the
 // oracle: the butterfly kernel of every arch of the build and the PEXT kernel, with the default
 // `MaxCompiledPieces`, through the overload for a set of kernels and, for a single kernel, also the
@@ -206,8 +213,11 @@ inline void check_simd_wide_extraction()
             auto const expected = oracle_spaced_events<E, L>(seq, mask_strings);
             std::size_t const positions = seq.size() < span_k ? 0 : seq.size() - span_k + 1;
 
-            // The events of `extract`, which calls back with vectors of `mask_count` kernels.
-            auto const collect = [&]<typename Simd>(std::size_t mask_count, auto const& extract) {
+            // The events of `extract`, which calls back with vectors of `mask_count` kernels. The
+            // lambdas here take their compile-time arguments as std::type_identity and
+            // std::integral_constant, as Clang 13 fails on nested lambdas with template parameters.
+            auto const collect = [&](auto simd, std::size_t mask_count, auto const& extract) {
+                using Simd = typename decltype(simd)::type;
                 if constexpr (Checked) {
                     return collect_valid_lanes_events<Simd, E, L, false, true>(
                         mask_count, positions, extract
@@ -216,9 +226,10 @@ inline void check_simd_wide_extraction()
                     return collect_vector_events<Simd, E, L>(mask_count, extract);
                 }
             };
-            auto const run = [&]<std::size_t MaxCompiledPieces>(
-                auto const& kernel_or_kernels, auto const& callback
+            auto const run = [&](
+                auto max_compiled_pieces, auto const& kernel_or_kernels, auto const& callback
             ) {
+                constexpr std::size_t MaxCompiledPieces = decltype(max_compiled_pieces)::value;
                 if constexpr (Checked) {
                     fisk::for_each_spaced_kmer_packed_checked_bytewise_simd<MaxCompiledPieces>(
                         packed, kernel_or_kernels, callback
@@ -231,47 +242,47 @@ inline void check_simd_wide_extraction()
             };
 
             // The single kernel, also as itself, or the set of three kernels.
-            auto const check = [&]<
-                typename Kernel, std::size_t MaxCompiledPieces, std::size_t N
-            >() {
-                using Simd = typename Kernel::simd_arch;
+            auto const check = [&](auto kernel, auto max_compiled_pieces, auto n) {
+                using Kernel = typename decltype(kernel)::type;
+                constexpr std::size_t N = decltype(n)::value;
+                std::type_identity<typename Kernel::simd_arch> const simd;
                 std::array<std::string, N> masks;
                 std::copy(mask_strings.begin(), mask_strings.end(), masks.begin());
                 auto const kernels = make_kernels<Kernel, L, 128>(masks);
-                check_spaced_events(collect.template operator()<Simd>(N, [&](auto const& cb) {
-                    run.template operator()<MaxCompiledPieces>(std::span{kernels}, cb);
+                check_spaced_events(collect(simd, N, [&](auto const& cb) {
+                    run(max_compiled_pieces, std::span{kernels}, cb);
                 }), expected);
                 if constexpr (N == 1) {
-                    check_spaced_events(collect.template operator()<Simd>(1, [&](auto const& cb) {
-                        run.template operator()<MaxCompiledPieces>(kernels[0], cb);
+                    check_spaced_events(collect(simd, 1, [&](auto const& cb) {
+                        run(max_compiled_pieces, kernels[0], cb);
                     }), expected);
                 }
             };
-            auto const check_sizes = [&]<typename Kernel, std::size_t MaxCompiledPieces>() {
+            auto const check_sizes = [&](auto kernel, auto max_compiled_pieces) {
                 if (mask_strings.size() == 1) {
-                    check.template operator()<Kernel, MaxCompiledPieces, 1>();
+                    check(kernel, max_compiled_pieces, size_c<1>);
                 } else {
-                    check.template operator()<Kernel, MaxCompiledPieces, 3>();
+                    check(kernel, max_compiled_pieces, size_c<3>);
                 }
             };
             constexpr std::size_t D = fisk::kDefaultMaxCompiledPieces;
-            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdScalar>, D>();
-            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdScalar>, 1>();
-            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdScalar>, 5>();
+            check_sizes(type_c<fisk::BitExtractKernelButterfly<fisk::SimdScalar>>, size_c<D>);
+            check_sizes(type_c<fisk::BitExtractKernelButterfly<fisk::SimdScalar>>, size_c<1>);
+            check_sizes(type_c<fisk::BitExtractKernelButterfly<fisk::SimdScalar>>, size_c<5>);
             #if defined(FISK_HAS_SSE2)
-            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdSSE2>, D>();
+            check_sizes(type_c<fisk::BitExtractKernelButterfly<fisk::SimdSSE2>>, size_c<D>);
             #endif
             #if defined(FISK_HAS_AVX2)
-            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdAVX2>, D>();
+            check_sizes(type_c<fisk::BitExtractKernelButterfly<fisk::SimdAVX2>>, size_c<D>);
             #endif
             #if defined(FISK_HAS_AVX512)
-            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdAVX512>, D>();
+            check_sizes(type_c<fisk::BitExtractKernelButterfly<fisk::SimdAVX512>>, size_c<D>);
             #endif
             #if defined(FISK_HAS_NEON)
-            check_sizes.template operator()<fisk::BitExtractKernelButterfly<fisk::SimdNEON>, D>();
+            check_sizes(type_c<fisk::BitExtractKernelButterfly<fisk::SimdNEON>>, size_c<D>);
             #endif
             #if defined(FISK_HAS_BMI2)
-            check_sizes.template operator()<fisk::BitExtractKernelPext, D>();
+            check_sizes(type_c<fisk::BitExtractKernelPext>, size_c<D>);
             #endif
         }
     }
