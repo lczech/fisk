@@ -193,7 +193,7 @@ The script builds and runs the benchmarks with GCC and Clang on Linux, as far as
 We provide these results for all hardware architectures tested in `results`. We also added
 the results of our [DuoHash benchmark](https://github.com/lczech/DuoHash) there, as `results/<CPU>/<Compiler>_<version>/DuoHash.csv`.
 
-To create the plots from the manuscript, run `./plot/plot_all.sh`. This requires some standard Python packages to be installed; a conda env file with these packages is provided in `plot/conda-env.yaml`.
+To create the plots from the manuscript, run `./plot/plot_all.sh`; see [plot/README.md](plot/README.md) for its requirements and the plots it makes.
 
 
 ## Tests

@@ -48,9 +48,12 @@ bin/
 # Earlier results, moved aside by scripts/run_benchmarks.sh
 results/_archive/
 
-# Plots in other formats
-results/*/*.svg
-results/*/*.png
+# Plots, which plot/plot_all.sh makes from the result CSVs, see plot/README.md
+results/**/*.png
+results/**/*.svg
+results/**/*.pdf
+results/Summaries/
+results/Collect/
 
 # Plotting related
 plot/__pycache__/
