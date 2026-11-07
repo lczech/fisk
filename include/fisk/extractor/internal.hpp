@@ -1,10 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -524,29 +526,43 @@ public:
 
     /**
      * @brief Time each available candidate on the `samples` with the `callback`, and use the
-     * fastest. Before that, each candidate runs once with a checksum, which has to match between
-     * all of them.
+     * fastest.
+     *
+     * Each candidate first runs once with a checksum, which has to match between all of them, and
+     * which is also its warmup. Then it repeats its passes over the samples until they take the
+     * sample time of the `options`, which sets its number of passes per timed run. The timed runs
+     * take turns between the candidates, so that changes of the clock speed of the CPU affect all
+     * of them alike; the fastest run per pass of each candidate counts.
      */
     template <typename Samples, typename Callback>
     void measure(Samples const& samples, TuneOptions const& options, Callback& callback)
     {
         using clock = std::chrono::steady_clock;
+        constexpr std::size_t n = sizeof...(Candidates);
+        auto const sample_time = std::chrono::duration<double>(options.sample_seconds);
         std::optional<std::uint64_t> reference;
         std::string reference_name;
-        std::optional<Plan> best;
-        auto best_time = clock::duration::max();
 
-        auto const measure_one = [&](auto const& candidate) {
+        // Per candidate: its passes per timed run, 0 if it is not available, and its fastest time
+        // per pass, in seconds.
+        std::array<std::size_t, n> passes{};
+        std::array<double, n> pass_time;
+        pass_time.fill(std::numeric_limits<double>::infinity());
+
+        auto const run_pass = [&](auto const& candidate, auto& cb) {
+            for (auto const& seq : samples) {
+                candidate.run(settings_, seq, cb);
+            }
+        };
+
+        auto const prepare_one = [&](auto const& candidate, std::size_t i) {
             using Candidate = std::remove_cvref_t<decltype(candidate)>;
             if (!Candidate::available()) {
                 return;
             }
 
-            // Checksum, which is also the warmup.
             ExtractorTuneChecksum checksum;
-            for (auto const& seq : samples) {
-                candidate.run(settings_, seq, checksum);
-            }
+            run_pass(candidate, checksum);
             if (!reference) {
                 reference = checksum.sum;
                 reference_name = Candidate::name();
@@ -557,20 +573,47 @@ public:
                 );
             }
 
-            auto candidate_time = clock::duration::max();
-            for (std::size_t r = 0; r < std::max<std::size_t>(options.repeats, 1); ++r) {
-                auto const start = clock::now();
-                for (auto const& seq : samples) {
-                    candidate.run(settings_, seq, callback);
-                }
-                candidate_time = std::min<clock::duration>(candidate_time, clock::now() - start);
-            }
-            if (candidate_time < best_time) {
-                best_time = candidate_time;
-                best = candidate;
-            }
+            // At least one pass, also for samples that take no time, such as empty ones.
+            auto const start = clock::now();
+            do {
+                run_pass(candidate, callback);
+                ++passes[i];
+            } while (clock::now() - start < sample_time);
         };
-        (measure_one(Candidates{}), ...);
+
+        auto const time_one = [&](auto const& candidate, std::size_t i) {
+            if (passes[i] == 0) {
+                return;
+            }
+            auto const start = clock::now();
+            for (std::size_t p = 0; p < passes[i]; ++p) {
+                run_pass(candidate, callback);
+            }
+            std::chrono::duration<double> const elapsed = clock::now() - start;
+            pass_time[i] = std::min(pass_time[i], elapsed.count() / static_cast<double>(passes[i]));
+        };
+
+        // Each fold runs the lambda for each candidate, with its index.
+        std::size_t i = 0;
+        ((prepare_one(Candidates{}, i), ++i), ...);
+        for (std::size_t r = 0; r < std::max<std::size_t>(options.repeats, 1); ++r) {
+            i = 0;
+            ((time_one(Candidates{}, i), ++i), ...);
+        }
+
+        std::optional<Plan> best;
+        double best_time = std::numeric_limits<double>::infinity();
+        i = 0;
+        (
+            [&] {
+                if (passes[i] > 0 && (!best || pass_time[i] < best_time)) {
+                    best_time = pass_time[i];
+                    best = Candidates{};
+                }
+                ++i;
+            }(),
+            ...
+        );
 
         // The scalar candidates are always available.
         if (!best) {

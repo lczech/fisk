@@ -54,9 +54,16 @@ struct TuneOptions
     double invalid_rate = 0.001;
 
     /**
-     * @brief The number of timed runs of each algorithm, of which the fastest counts.
+     * @brief The time of each timed run of an algorithm, in seconds: its number of passes over the
+     * sample, at least one, is set so that a run takes this long.
      */
-    std::size_t repeats = 3;
+    double sample_seconds = 0.002;
+
+    /**
+     * @brief The number of timed runs of each algorithm, which take turns with those of the
+     * others; the fastest counts.
+     */
+    std::size_t repeats = 5;
 };
 
 // =================================================================================================

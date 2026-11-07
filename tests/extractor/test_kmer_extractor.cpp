@@ -187,6 +187,12 @@ TEST(KmerExtractor, TuneEdgeCases)
     extractor.tune(options);
     EXPECT_TRUE(valid(extractor));
 
+    // No sample time: a single pass per timed run.
+    options.sample_seconds = 0.0;
+    options.repeats = 1;
+    extractor.tune(options);
+    EXPECT_TRUE(valid(extractor));
+
     // Samples without k-mers: empty, or all sequences shorter than k.
     options = TuneOptions{};
     extractor.tune(std::vector<std::string>{}, options);

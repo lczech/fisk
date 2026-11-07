@@ -185,6 +185,12 @@ TEST(SpacedKmerExtractor, TuneEdgeCases)
     EXPECT_TRUE(valid());
     extractor.tune(std::vector<std::string>{"", "ACGT", "ACGTACGT"}, options);
     EXPECT_TRUE(valid());
+
+    // No sample time: a single pass per timed run.
+    options.sample_seconds = 0.0;
+    options.repeats = 1;
+    extractor.tune(options);
+    EXPECT_TRUE(valid());
 }
 
 // =================================================================================================
