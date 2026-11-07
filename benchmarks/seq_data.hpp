@@ -1,12 +1,14 @@
 #pragma once
 
+#include <array>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <string>
-#include <cctype>
-#include <stdexcept>
 #include <random>
-#include <array>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 /**
@@ -76,28 +78,32 @@ inline std::vector<std::string> load_fasta_clean(std::string const& path)
 /**
  * @brief Generate a string of random `ACGT` letters of a given length @p len,
  * and a probability @p n_prob in [0.0, 1.0] of generating invalid `N` bases.
+ *
+ * The same @p seed gives the same string on every platform: the bases and the `N`s are taken from
+ * the raw output of the engine, which the standard specifies, instead of from the std
+ * distributions, whose algorithms differ between standard libraries.
  */
-inline std::string random_acgt(std::size_t len, double n_prob = 0.0)
+inline std::string random_acgt(std::size_t len, double n_prob, std::uint64_t seed)
 {
-    // Draw from ACGT
-    static thread_local std::mt19937_64 rng{std::random_device{}()};
-    static constexpr std::array<char, 4> bases{'A','C','G','T'};
-    std::uniform_int_distribution<size_t> base_dist(0, 3);
-
-    // Add random invalid N characters
     if( !std::isfinite(n_prob) || n_prob < 0.0 || n_prob > 1.0 ) {
         throw std::invalid_argument("Invalid probability not in [0.0, 1.0]");
     }
-    std::bernoulli_distribution n_dist(n_prob);
+    std::mt19937_64 rng{seed};
+    static constexpr std::array<char, 4> bases{'A','C','G','T'};
+
+    // An N if the upper 53 bits of a draw are below n_prob * 2^53, which is exact for any double
+    // in [0.0, 1.0]; else the base from the lowest two bits.
+    auto const n_threshold = static_cast<std::uint64_t>(std::ldexp(n_prob, 53));
 
     // Fill the result string
     std::string s;
     s.resize(len);
     for(std::size_t i = 0; i < len; ++i) {
-        if( n_dist(rng) ) {
+        std::uint64_t const r = rng();
+        if( (r >> 11) < n_threshold ) {
             s[i] = 'N';
         } else {
-            s[i] = bases[base_dist(rng)];
+            s[i] = bases[static_cast<std::size_t>(r & 3u)];
         }
     }
     return s;

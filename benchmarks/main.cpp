@@ -49,6 +49,7 @@
 #include "char_encoder/bench.hpp"
 #include "sequence_pack_unchecked/bench.hpp"
 #include "sequence_pack_checked/bench.hpp"
+#include "microbench.hpp"
 #include "utils.hpp"
 #include "seq_data.hpp"
 #include "fisk/util/cpu_runtime.hpp"
@@ -65,6 +66,14 @@ struct Options
 
     // Probability to randomly generate an N base instead of ACGT
     std::string n_prob = "0.001";
+
+    // Seed of the random input, fixed so that every machine measures the same input
+    std::string seed = "42";
+
+    // Timing settings, see MicrobenchSettings
+    std::string sample_ms = "10";
+    std::string warmup_ms = "1";
+    std::string repeats = "5";
 
     // Value of k for the k-mers
     std::string k;
@@ -105,6 +114,31 @@ int main(int argc, char **argv)
     );
 
     parser.add_option(
+        "--seed", "-s",
+        "Seed of the random input sequence (default: 42)",
+        opts.seed
+    );
+
+    parser.add_option(
+        "--sample-ms", "",
+        "Time of each measurement in milliseconds, as whole passes over the input (default: 10)",
+        opts.sample_ms
+    );
+
+    parser.add_option(
+        "--warmup-ms", "",
+        "Minimum warm-up before each measurement in milliseconds (default: 1)",
+        opts.warmup_ms
+    );
+
+    parser.add_option(
+        "--repeats", "",
+        "Number of measurements per benchmark; the CSVs report their minimum, median, and mean "
+        "(default: 5)",
+        opts.repeats
+    );
+
+    parser.add_option(
         "--k", "-k",
         "Value of k to use for the k-mers",
         opts.k
@@ -135,8 +169,23 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // Timing settings for all suites.
+    microbench_settings.sample_seconds = std::stod(opts.sample_ms) / 1000.0;
+    microbench_settings.warmup_seconds = std::stod(opts.warmup_ms) / 1000.0;
+    microbench_settings.repeats = std::stoul(opts.repeats);
+    if(
+        !(microbench_settings.sample_seconds > 0.0) || !(microbench_settings.warmup_seconds >= 0.0)
+        || microbench_settings.repeats == 0
+    ) {
+        throw std::invalid_argument(
+            "Options --sample-ms and --repeats have to be > 0, and --warmup-ms >= 0."
+        );
+    }
+
     // Get the sequence to process, either random, or from fasta.
+    // The input description goes into sys_info.txt along with the timing settings.
     std::vector<std::string> sequences;
+    std::string input_info;
     if (opts.input_file.size() && opts.input_length.size()) {
         throw std::invalid_argument(
             "Options --input-length and --input-fasta are mutually exclusive."
@@ -150,21 +199,30 @@ int main(int argc, char **argv)
             sum += seq.size();
         }
         std::cout << "Input file with " << sequences.size() << " sequences";
-        std::cout << "and " << sum << " total nucleotides\n";
+        std::cout << " and " << sum << " total nucleotides\n";
+        input_info = "file " + opts.input_file + ", " + std::to_string(sequences.size())
+            + " sequences, " + std::to_string(sum) + " nucleotides";
     } else {
+        // By default 256 Ki bases, which fit the L2 cache of the CPUs we benchmark, so that
+        // the measurements show the algorithms rather than memory throughput.
         size_t inp_len = 0;
         if(opts.input_length.size()) {
             inp_len = std::stoul(opts.input_length);
         } else {
             std::cout << "No input provided, using default\n";
-            size_t const default_len = (1u << 20);
+            size_t const default_len = (1u << 18);
             inp_len = default_len;
         }
         auto const n_prob = std::stod(opts.n_prob);
+        auto const seed = std::stoull(opts.seed);
         std::cout << "Generating input sequence of length " << inp_len;
-        std::cout << " with N probability " << n_prob << "\n";
-        sequences = std::vector<std::string>{ random_acgt( inp_len, n_prob )};
+        std::cout << " with N probability " << n_prob << " and seed " << seed << "\n";
+        sequences = std::vector<std::string>{ random_acgt( inp_len, n_prob, seed )};
+        input_info = "random, length " + std::to_string(inp_len) + ", N probability "
+            + opts.n_prob + ", seed " + std::to_string(seed);
     }
+    std::cout << "Measuring " << opts.sample_ms << " ms per sample after at least "
+        << opts.warmup_ms << " ms of warm-up, " << opts.repeats << " repeats\n";
 
     // Get the value for k.
     size_t k = 0;
@@ -234,6 +292,11 @@ int main(int argc, char **argv)
         auto os_info = get_ofstream(out_dir, "sys_info.txt" );
         info_print_system(os_info);
         info_print_benchmark_build(os_info);
+        os_info << "Benchmark run:\n";
+        os_info << "  input      : " << input_info << "\n";
+        os_info << "  sample     : " << opts.sample_ms << " ms\n";
+        os_info << "  warm-up    : " << opts.warmup_ms << " ms\n";
+        os_info << "  repeats    : " << opts.repeats << "\n";
     }
 
     // Run the benchmarks
