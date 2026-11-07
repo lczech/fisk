@@ -5,8 +5,9 @@ set -uo pipefail
 #   Fisk source packager
 # ==============================================================================
 #
-# Zips up everything needed to compile fisk (library headers, benchmarks,
-# tests, mask files, and the cmake/make setup) into fisk.zip at the repo
+# Zips up everything needed to compile fisk and run its benchmarks (library
+# headers, benchmarks, tests, mask files, scripts, and the cmake/make setup)
+# into fisk.zip at the repo
 # root, wrapped in a top-level fisk/ folder. Intended for scp'ing to a
 # cluster to build and run there; grabs whatever is currently on disk,
 # including uncommitted local changes.
@@ -44,7 +45,7 @@ PKG_DIR="${STAGE_DIR}/fisk"
 mkdir -p "${PKG_DIR}"
 
 cp CMakeLists.txt Makefile README.md LICENSE "${PKG_DIR}/"
-cp -r include benchmarks tests masks "${PKG_DIR}/"
+cp -r include benchmarks tests masks scripts "${PKG_DIR}/"
 
 # ------------------------------------------------------------------------
 #   Zip it up

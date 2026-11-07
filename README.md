@@ -180,42 +180,15 @@ The vector forms are those of the extraction functions: with a count of valid la
 
 ## Reproducing the benchmarks
 
-To build and run the benchmark suite that produced the results in the manuscript, simply call
+To build and run the benchmarks that produced the results in the manuscript, call
 
 ```
-make
+scripts/run_benchmarks.sh
 ```
 
-to build the benchmark program, and
+This needs CMake (3.20 or later) and a C++20 compiler; on macOS, the Xcode command line tools, and CMake, e.g. from Homebrew. For stable timings, run it on mains power, with other programs closed.
 
-```
-./bin/fisk_benchmarks
-```
-
-to run it.
-
-<!--
-With thread pinning:
-```
-taskset -c 2 ./bin/fisk_benchmarks
-```
--->
-
-This will produce performance measurements for all implemented benchmarks on the given hardware, measuring time per operation, such as per extracted k-mer, with one CSV file per benchmark suite. The suites of the k-mer extraction and the sequence packing are named after the functions they test (see [K-mer extraction functions](#k-mer-extraction-functions) below), and their variants complete that name: for instance, the variant `rolling_scalar_ifs` of the suite `kmer_extract_ascii_checked` is `for_each_kmer_ascii_checked_rolling_scalar()` with the `CharEncoderIfs` encoder. The Encoding and Layout are in the `case` column of the tables.
-
- - `kmer_extract_<input>_<check>`: k-mers
- - `spaced_kmer_extract_<input>_<check>_single` and `…_multi`: spaced k-mers, one mask or several
- - `spaced_kmer_extract_<input>_<check>_spans`: spaced k-mers, one mask per span from 1 to 128
- - `sequence_pack_<check>`: sequence packing
-
-with `<input>` being `ascii` or `packed`, and `<check>` being `checked` or `unchecked`.
-
-Furthermore:
-
- - `bit_extract_weights`: Performance of bit extracting, for different weights of the mask.
- - `bit_extract_blocks`: Performance of bit extracting, for masks with different numbers of blocks of consecutive 1s.
- - `char_encoder`: Per-character encoding, from ASCII to 2-bit codes.
- - `kmer_clark`: Small test to examine bottlenecks in the CLARK-S implementation.
+The script builds and runs the benchmarks with GCC and Clang on Linux, as far as they are installed, or with Apple Clang on macOS, each in three modes of handling the results (`sum`, `barrier`, `write`). The results go to `results/<CPU>, <Compiler> <version>/<mode>/`, with one CSV file per benchmark suite, giving the time per operation, such as per extracted k-mer. `scripts/run_benchmarks.sh --help` lists its options, and [benchmarks/README.md](benchmarks/README.md) describes the suites and the measurements.
 
 We provide these results for all hardware architectures tested in `results`. We also added
 the results of our [DuoHash benchmark](https://github.com/lczech/DuoHash) there, called `DuoHash.csv`.

@@ -2,24 +2,25 @@
 set -uo pipefail
 
 # ==============================================================================
-#   Fisk benchmark runner for the rubus cluster
+#   Fisk benchmark submission for the rubus cluster
 # ==============================================================================
 #
-# Runs the fisk benchmarks across all combinations of CPU arch x compiler:
-#   - AMD EPYC 9684X    x  Clang 17 / GCC 15
-#   - Intel Xeon 8568Y  x  Clang 17 / GCC 15
+# Runs scripts/run_benchmarks.sh, with all benchmark sink modes, on its own exclusive node for
+# each combination of CPU arch x compiler:
+#   - AMD EPYC 9684X    x  Clang / GCC 15
+#   - Intel Xeon 8568Y  x  Clang / GCC 15
 #
 # Usage:
 #   Run from a working directory that already contains a `fisk/` subdirectory
 #   with exactly the source tree to build - either a fresh `git clone`, or an
-#   unzipped dev copy built from `git ls-files`.
+#   unzipped copy made by scripts/make_fisk_zip.sh.
 #
-#     ./run_rubus_benchmarks.sh
+#     ./fisk/scripts/submit_rubus_benchmarks.sh
 #
-# On completion, results land in ./results/<CPU>, <Compiler>/ (matching the
-# fisk repo existing results/ naming convention), logs in ./logs/. Rerunning
-# archives any previous results/logs for a combo under a timestamped
-# subdirectory instead of overwriting them.
+# The jobs are submitted with srun, all four at once, and the script waits for them. Results land
+# in ./results/<CPU>, <Compiler> <version>/<mode>/, as with run_benchmarks.sh, which moves earlier
+# results of the same label and mode to ./results/_archive/; logs in ./logs/, where earlier logs
+# are archived as well.
 
 # ------------------------------------------------------------------------
 #   Config
@@ -28,6 +29,9 @@ set -uo pipefail
 ACCOUNT="spear"
 QOS="normal"
 TIME_LIMIT="2:00:00"
+
+# CPUs per job: all of them build, and the benchmarks run pinned to one.
+CPUS_PER_TASK=16
 
 # Node constraints, per CPU arch. "std" excludes the gpu/hgx nodes.
 declare -A CONSTRAINT=(
@@ -41,20 +45,11 @@ declare -A MODULE=(
   [gcc]="GCC/15.2.0"
 )
 
-# CC / CXX to export, per compiler.
-declare -A CC_BIN=(  [clang]="clang"   [gcc]="gcc" )
-declare -A CXX_BIN=( [clang]="clang++" [gcc]="g++" )
-
-# Human-readable labels, per arch/compiler - combined below into the same
-# "<CPU>, <Compiler>" directory names already used under the fisk repo's
-# results/, so plot_all_cpus.sh picks these up with no renaming needed.
+# CPU names for the "<CPU>, <Compiler> <version>" directory names under results/, as the CPU
+# model strings of these nodes are not the usual names. run_benchmarks.sh adds the compiler.
 declare -A CPU_LABEL=(
   [epyc]="AMD EPYC 9684X"
   [xeon]="Intel Xeon Platinum 8568Y"
-)
-declare -A COMPILER_LABEL=(
-  [clang]="Clang 17"
-  [gcc]="GCC 15"
 )
 
 # The four combos to run. Each gets its own --exclusive node, so all four
@@ -77,51 +72,44 @@ if [[ ! -d "fisk" ]]; then
 fi
 
 TIMESTAMP="$(date +%Y-%m-%d-%H-%M-%S)"
-mkdir -p results logs
+RESULTS_ROOT="$(pwd)/results"
+mkdir -p "$RESULTS_ROOT" logs
 
 STATUS_DIR="$(mktemp -d)"
 trap 'rm -rf "$STATUS_DIR"' EXIT
 
 # ------------------------------------------------------------------------
-#   One combo: fresh copy, build, run, archive-then-write results/logs.
+#   One combo: fresh copy, then build and run all modes on one node.
 # ------------------------------------------------------------------------
 
 run_combo() {
   local arch="$1" compiler="$2"
   local slug="${arch}-${compiler}"
-  local label="${CPU_LABEL[$arch]}, ${COMPILER_LABEL[$compiler]}"
   local constraint="${CONSTRAINT[$arch]}"
   local module="${MODULE[$compiler]}"
-  local cc="${CC_BIN[$compiler]}"
-  local cxx="${CXX_BIN[$compiler]}"
+  local cpu_label="${CPU_LABEL[$arch]}"
   local workdir="fisk-${slug}"
-  local resultdir="results/${label}"
   local logfile="logs/${slug}.log"
 
-  # Archive any previous results/log for this combo instead of overwriting.
-  if [[ -d "$resultdir" ]]; then
-    mkdir -p "results/_archive/${TIMESTAMP}"
-    mv "$resultdir" "results/_archive/${TIMESTAMP}/${label}"
-  fi
+  # Archive any previous log for this combo instead of overwriting.
   if [[ -f "$logfile" ]]; then
     mkdir -p "logs/_archive/${TIMESTAMP}"
     mv "$logfile" "logs/_archive/${TIMESTAMP}/${slug}.log"
   fi
-  mkdir -p "$resultdir"
 
   # Fresh working copy, built fresh on the node it will run on.
   rm -rf "$workdir"
   cp -r fisk "$workdir"
 
   {
-    echo "=== ${label} ==="
+    echo "=== ${slug} ==="
     echo "Start: $(date -Iseconds)"
   } > "$logfile"
 
   srun \
     --job-name="fisk-${slug}" \
     --exclusive \
-    --nodes=1 --ntasks=1 --cpus-per-task=1 \
+    --nodes=1 --ntasks=1 --cpus-per-task="${CPUS_PER_TASK}" \
     --constraint="${constraint}" \
     --account="${ACCOUNT}" \
     --qos="${QOS}" \
@@ -129,11 +117,9 @@ run_combo() {
     bash -lc "
       set -e
       module load '${module}'
-      export CC='${cc}'
-      export CXX='${cxx}'
       cd '${workdir}'
-      make -j 16
-      ./bin/fisk_benchmarks --output-dir '../${resultdir}'
+      scripts/run_benchmarks.sh --compilers '${compiler}' --cpu-label '${cpu_label}' \
+        --jobs '${CPUS_PER_TASK}' --results-dir '${RESULTS_ROOT}'
     " >> "$logfile" 2>&1
   local rc=$?
 
@@ -173,12 +159,11 @@ for combo in "${COMBOS[@]}"; do
   arch="${combo%%:*}"
   compiler="${combo##*:}"
   slug="${arch}-${compiler}"
-  label="${CPU_LABEL[$arch]}, ${COMPILER_LABEL[$compiler]}"
   rc="$(cat "${STATUS_DIR}/${slug}" 2>/dev/null || echo "?")"
   if [[ "$rc" == "0" ]]; then
-    printf "  %-45s OK      logs/%s.log\n" "$label" "${slug}.log"
+    printf "  %-45s OK      logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}.log"
   else
-    printf "  %-45s FAILED  logs/%s.log\n" "$label" "${slug}.log"
+    printf "  %-45s FAILED  logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}.log"
     overall_rc=1
   fi
 done
