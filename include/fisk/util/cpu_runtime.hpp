@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <ostream>
@@ -173,6 +174,118 @@ inline void info_print_cpu(std::ostream& os)
     os << "  vendor  : " << info_cpu_vendor() << "\n";
     os << "  model   : " << info_cpu_model() << "\n";
     os << "  family  : 0x" << std::hex << info_cpu_family() << std::dec << "\n";
+}
+
+// =================================================================================================
+//     Cache Info
+// =================================================================================================
+
+/**
+ * @brief Sizes of the data caches of the CPU, in bytes; 0 for a level that the CPU does not have,
+ * or that is not known.
+ */
+struct CacheSizes
+{
+    std::size_t l1d = 0;
+    std::size_t l2 = 0;
+    std::size_t l3 = 0;
+};
+
+/**
+ * @brief The data cache sizes of the CPU, see CacheSizes.
+ *
+ * On x86, from the cache parameters of CPUID (leaf 4 on Intel, leaf 0x8000001D on AMD and Hygon),
+ * which describe the core that runs the call: on CPUs with performance and efficiency cores, these
+ * differ. On ARM, from sysctl, for the performance cores of Apple Silicon.
+ */
+inline CacheSizes info_cache_sizes()
+{
+    CacheSizes sizes;
+
+    #if defined(PLATFORM_ARM64)
+
+        auto const read = [](char const* name, char const* fallback) -> std::size_t {
+            for (char const* key : {name, fallback}) {
+                std::uint64_t value = 0;
+                size_t size = sizeof(value);
+                if (sysctlbyname(key, &value, &size, nullptr, 0) == 0 && value > 0) {
+                    return static_cast<std::size_t>(value);
+                }
+            }
+            return 0;
+        };
+        sizes.l1d = read("hw.perflevel0.l1dcachesize", "hw.l1dcachesize");
+        sizes.l2  = read("hw.perflevel0.l2cachesize",  "hw.l2cachesize");
+        sizes.l3  = read("hw.perflevel0.l3cachesize",  "hw.l3cachesize");
+
+    #elif defined(SYSTEM_X86_64_GNU_CLANG) || defined(_MSC_VER)
+
+        std::uint32_t regs[4]{};
+        auto const cpuid = [&](std::uint32_t leaf, std::uint32_t subleaf) {
+            #if defined(SYSTEM_X86_64_GNU_CLANG)
+                __cpuid_count(leaf, subleaf, regs[0], regs[1], regs[2], regs[3]);
+            #else
+                int r[4];
+                __cpuidex(r, static_cast<int>(leaf), static_cast<int>(subleaf));
+                for (int i = 0; i < 4; ++i) {
+                    regs[i] = static_cast<std::uint32_t>(r[i]);
+                }
+            #endif
+        };
+
+        auto const vendor = info_cpu_vendor();
+        std::uint32_t const leaf =
+            (vendor == "AuthenticAMD" || vendor == "HygonGenuine") ? 0x8000001Du : 4u;
+
+        // The largest leaf of the range of the cache leaf, as the cache leaf needs to exist.
+        cpuid(leaf & 0x80000000u, 0);
+        if (regs[0] < leaf) {
+            return sizes;
+        }
+
+        // One subleaf per cache, until one of type 0.
+        for (std::uint32_t i = 0; i < 16; ++i) {
+            cpuid(leaf, i);
+            std::uint32_t const type = regs[0] & 0x1Fu;
+            if (type == 0) {
+                break;
+            }
+            if (type == 2) {
+                continue; // instruction cache
+            }
+            std::size_t const ways       = ((regs[1] >> 22) & 0x3FFu) + 1;
+            std::size_t const partitions = ((regs[1] >> 12) & 0x3FFu) + 1;
+            std::size_t const line_size  = (regs[1] & 0xFFFu) + 1;
+            std::size_t const sets       = static_cast<std::size_t>(regs[2]) + 1;
+            std::size_t const size = ways * partitions * line_size * sets;
+            switch ((regs[0] >> 5) & 0x7u) {
+                case 1: sizes.l1d = size; break;
+                case 2: sizes.l2  = size; break;
+                case 3: sizes.l3  = size; break;
+                default: break;
+            }
+        }
+
+    #endif
+
+    return sizes;
+}
+
+inline void info_print_caches(std::ostream& os)
+{
+    auto const sizes = info_cache_sizes();
+    auto const print = [&](char const* name, std::size_t bytes) {
+        os << "  " << name << " : ";
+        if (bytes == 0) {
+            os << "unknown\n";
+        } else {
+            os << bytes / 1024 << " KiB\n";
+        }
+    };
+    os << "Caches:\n";
+    print("L1d    ", sizes.l1d);
+    print("L2     ", sizes.l2);
+    print("L3     ", sizes.l3);
 }
 
 // =================================================================================================
@@ -620,11 +733,13 @@ inline void info_print_intrinsics(std::ostream& os)
     print_one_feature("Neon",   compiled_neon(),   cpu_neon());
 }
 
-// Print the platform, CPU, compiler, and the instruction sets as compiled and as present on the CPU.
+// Print the platform, CPU, caches, compiler, and the instruction sets as compiled and as present on
+// the CPU.
 inline void info_print_system(std::ostream& os)
 {
     info_print_platform(os);
     info_print_cpu(os);
+    info_print_caches(os);
     info_print_compiler(os);
     info_print_intrinsics(os);
 }

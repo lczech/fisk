@@ -85,3 +85,15 @@ TEST(UtilCpuRuntime, PextLikelyFast)
     // The check of this CPU needs PEXT to be usable here.
     EXPECT_TRUE(!pext_likely_fast() || bmi2_enabled());
 }
+
+TEST(UtilCpuRuntime, CacheSizes)
+{
+    // Unknown sizes are 0. Known ones are at least 1 KiB, and grow with the level: each level is
+    // larger than the one before, where both are known.
+    auto const sizes = info_cache_sizes();
+    for (auto const size : {sizes.l1d, sizes.l2, sizes.l3}) {
+        EXPECT_TRUE(size == 0 || size >= 1024);
+    }
+    EXPECT_TRUE(sizes.l1d == 0 || sizes.l2 == 0 || sizes.l1d < sizes.l2);
+    EXPECT_TRUE(sizes.l2 == 0 || sizes.l3 == 0 || sizes.l2 < sizes.l3);
+}

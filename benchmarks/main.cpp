@@ -292,6 +292,7 @@ int main(int argc, char **argv)
         auto os_info = get_ofstream(out_dir, "sys_info.txt" );
         info_print_system(os_info);
         info_print_benchmark_build(os_info);
+        info_print_power(os_info);
         os_info << "Benchmark run:\n";
         os_info << "  input      : " << input_info << "\n";
         os_info << "  sample     : " << opts.sample_ms << " ms\n";

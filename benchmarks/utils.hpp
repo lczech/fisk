@@ -6,6 +6,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include "sink.hpp"
@@ -14,6 +15,10 @@
     #include <io.h>  // _isatty, _fileno
 #else
     #include <unistd.h>  // isatty, fileno
+#endif
+
+#if defined(__linux__)
+    #include <sched.h>  // sched_getcpu
 #endif
 
 // =================================================================================================
@@ -137,4 +142,62 @@ inline void info_print_benchmark_build(std::ostream& os)
     os << "  code align : compiler default\n";
     #endif
     os << "  sink mode  : " << kSinkName << "\n";
+}
+
+// =================================================================================================
+//     Power Info
+// =================================================================================================
+
+/**
+ * @brief Print the power settings of Linux that set the clock speed of the CPU that runs the
+ * benchmark, such as its frequency governor and turbo, and whether mains power is connected.
+ * Settings that the system does not have are left out; on other systems, the whole section.
+ */
+inline void info_print_power(std::ostream& os)
+{
+    #if defined(__linux__)
+        auto const read = [](std::filesystem::path const& path) {
+            std::ifstream in(path);
+            std::string line;
+            std::getline(in, line);
+            return line;
+        };
+        auto const print = [&](char const* name, std::string const& value) {
+            if (!value.empty()) {
+                os << "  " << name << " : " << value << "\n";
+            }
+        };
+
+        int const cpu = sched_getcpu();
+        std::filesystem::path const cpufreq =
+            "/sys/devices/system/cpu/cpu" + std::to_string(cpu < 0 ? 0 : cpu) + "/cpufreq";
+        os << "Power:\n";
+        os << "  cpu        : " << cpu << "\n";
+        print("driver    ", read(cpufreq / "scaling_driver"));
+        print("governor  ", read(cpufreq / "scaling_governor"));
+        print("energy    ", read(cpufreq / "energy_performance_preference"));
+
+        // Turbo is off with intel_pstate/no_turbo 1, else with cpufreq/boost 0.
+        std::string turbo;
+        auto const no_turbo = read("/sys/devices/system/cpu/intel_pstate/no_turbo");
+        auto const boost = read("/sys/devices/system/cpu/cpufreq/boost");
+        if (!no_turbo.empty()) {
+            turbo = no_turbo == "1" ? "off" : "on";
+        } else if (!boost.empty()) {
+            turbo = boost == "1" ? "on" : "off";
+        }
+        print("turbo     ", turbo);
+        print("profile   ", read("/sys/firmware/acpi/platform_profile"));
+
+        // The power supplies of type Mains, such as the AC adapter of a laptop.
+        std::error_code ec;
+        std::filesystem::path const supplies = "/sys/class/power_supply";
+        for (auto const& entry : std::filesystem::directory_iterator(supplies, ec)) {
+            if (read(entry.path() / "type") == "Mains") {
+                print("mains     ", read(entry.path() / "online") == "1" ? "online" : "offline");
+            }
+        }
+    #else
+        (void)os;
+    #endif
 }
