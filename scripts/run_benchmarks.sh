@@ -14,6 +14,10 @@
 # Each build writes its benchmark program to bin/ under a name of its own, such as
 # bin/fisk_benchmarks_gcc_15_sum, the same as its build folder build-bench/gcc_15_sum/.
 #
+# After the modes of each compiler, this runs the example on the human genome GRCh38 with that
+# compiler, see example/README.md, into results/<CPU>/<Compiler>_<version>/human_genome.csv. The
+# first run downloads the genome into example/data/ (0.9 GB, 3.1 GB unpacked).
+#
 # Requires CMake (3.20 or later) and a C++20 compiler. Written for bash 3.2, which macOS ships.
 
 set -uo pipefail
@@ -36,6 +40,10 @@ Options:
                       available memory.
   --cpu-label <name>  CPU name for the results folder. Default: the CPU model, shortened.
   --results-dir <dir> Folder for the results. Default: results/ in the repository.
+  --genome-file <path>
+                      A copy of the human genome to use instead of the download, see
+                      example/run_human_genome.sh.
+  --skip-genome       Do not run the example on the human genome.
   -h, --help          Show this help.
 
 Everything after -- is passed to fisk_benchmarks, e.g. -- -k 31 --sample-ms 5.
@@ -53,11 +61,13 @@ CPU=""
 JOBS=""
 CPU_LABEL=""
 RESULTS_ROOT=""
+GENOME_FILE=""
+SKIP_GENOME=0
 BENCH_ARGS=()
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --compilers|--modes|--cpu|--jobs|--cpu-label|--results-dir)
+        --compilers|--modes|--cpu|--jobs|--cpu-label|--results-dir|--genome-file)
             if [ $# -lt 2 ]; then
                 echo "Error: option '$1' needs a value" >&2
                 exit 1
@@ -71,6 +81,8 @@ while [ $# -gt 0 ]; do
         --jobs)      JOBS="$2"; shift 2 ;;
         --cpu-label) CPU_LABEL="$2"; shift 2 ;;
         --results-dir) RESULTS_ROOT="$2"; shift 2 ;;
+        --genome-file) GENOME_FILE="$2"; shift 2 ;;
+        --skip-genome) SKIP_GENOME=1; shift ;;
         -h|--help)   usage; exit 0 ;;
         --)          shift; BENCH_ARGS=("$@"); break ;;
         *)           echo "Error: unknown option '$1'" >&2; usage >&2; exit 1 ;;
@@ -284,8 +296,9 @@ for compiler in $COMPILERS; do
             echo "Moved previous results to ${archive_dir}/${mode}"
         fi
         mkdir -p "$result_dir"
-        ${PIN[@]+"${PIN[@]}"} "${REPO_ROOT}/bin/fisk_benchmarks_${build_name}" --output-dir "$result_dir" \
-            ${BENCH_ARGS[@]+"${BENCH_ARGS[@]}"} 2>&1 | tee "${result_dir}/log.txt"
+        ${PIN[@]+"${PIN[@]}"} "${REPO_ROOT}/bin/fisk_benchmarks_${build_name}" \
+            --output-dir "$result_dir" ${BENCH_ARGS[@]+"${BENCH_ARGS[@]}"} 2>&1 \
+            | tee "${result_dir}/log.txt"
         rc=${PIPESTATUS[0]}
         echo "End:   $(date +%Y-%m-%dT%H:%M:%S)"
         if [ "$rc" -eq 0 ]; then
@@ -296,6 +309,33 @@ for compiler in $COMPILERS; do
             FAILED=1
         fi
     done
+
+    # The example on the human genome, once per compiler, as it does not depend on the mode.
+    if [ "$SKIP_GENOME" -eq 0 ]; then
+        echo
+        echo "=== ${label}, human genome ==="
+        genome_csv="${RESULTS_ROOT}/${result_name}/human_genome.csv"
+        if [ -f "$genome_csv" ]; then
+            archive_dir="${RESULTS_ROOT}/_archive/${TIMESTAMP}/${result_name}"
+            mkdir -p "$archive_dir"
+            mv "$genome_csv" "$archive_dir/"
+        fi
+        genome_args=( --compiler "$cxx" --output "$genome_csv" )
+        if [ ${#PIN[@]} -gt 0 ]; then
+            genome_args+=( --cpu "$pin_cpu" )
+        fi
+        if [ -n "$GENOME_FILE" ]; then
+            genome_args+=( --genome-file "$GENOME_FILE" )
+        fi
+        if "${REPO_ROOT}/example/run_human_genome.sh" "${genome_args[@]}"; then
+            cat "$genome_csv"
+            SUMMARY="${SUMMARY}  ${label}, human genome: OK\n"
+        else
+            echo "Run failed: ${label}, human genome" >&2
+            SUMMARY="${SUMMARY}  ${label}, human genome: failed\n"
+            FAILED=1
+        fi
+    fi
 done
 
 echo

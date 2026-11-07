@@ -188,7 +188,7 @@ scripts/run_benchmarks.sh
 
 This needs CMake (3.20 or later) and a C++20 compiler; on macOS, the Xcode command line tools, and CMake, e.g. from Homebrew. For stable timings, run it on mains power, with other programs closed.
 
-The script builds and runs the benchmarks with GCC and Clang on Linux, as far as they are installed, or with Apple Clang on macOS, each in three modes of handling the results (`sum`, `barrier`, `write`). The results go to `results/<CPU>/<Compiler>_<version>/<mode>/`, such as `results/Intel_Core_7_240H/GCC_15/sum/`, with one CSV file per benchmark suite, giving the time per operation, such as per extracted k-mer. `scripts/run_benchmarks.sh --help` lists its options, and [benchmarks/README.md](benchmarks/README.md) describes the suites and the measurements.
+The script builds and runs the benchmarks with GCC and Clang on Linux, as far as they are installed, or with Apple Clang on macOS, each in three modes of handling the results (`sum`, `barrier`, `write`). The results go to `results/<CPU>/<Compiler>_<version>/<mode>/`, such as `results/Intel_Core_7_240H/GCC_15/sum/`, with one CSV file per benchmark suite, giving the time per operation, such as per extracted k-mer. With each compiler, it also runs the [example](example/README.md) on the human genome, which it downloads once (0.9 GB) into `example/data/`; `--skip-genome` leaves that out. `scripts/run_benchmarks.sh --help` lists its options, and [benchmarks/README.md](benchmarks/README.md) describes the suites and the measurements.
 
 We provide these results for all hardware architectures tested in `results`. We also added
 the results of our [DuoHash benchmark](https://github.com/lczech/DuoHash) there, as `results/<CPU>/<Compiler>_<version>/DuoHash.csv`.

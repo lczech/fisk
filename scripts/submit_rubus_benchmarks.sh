@@ -33,6 +33,11 @@ TIME_LIMIT="2:00:00"
 # CPUs per job: all of them build, and the benchmarks run pinned to one.
 CPUS_PER_TASK=16
 
+# A copy of the human genome for the example, which run_benchmarks.sh runs on it, see
+# example/run_human_genome.sh: used instead of the download where it exists, e.g.
+# "$(pwd)/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz".
+GENOME_FILE=""
+
 # Node constraints, per CPU arch. "std" excludes the gpu/hgx nodes.
 declare -A CONSTRAINT=(
   [epyc]="std,epyc,znver4"
@@ -90,6 +95,10 @@ run_combo() {
   local cpu_label="${CPU_LABEL[$arch]}"
   local workdir="fisk-${slug}"
   local logfile="logs/${slug}.log"
+  local genome_arg=""
+  if [[ -n "$GENOME_FILE" && -f "$GENOME_FILE" ]]; then
+    genome_arg="--genome-file '${GENOME_FILE}'"
+  fi
 
   # Archive any previous log for this combo instead of overwriting.
   if [[ -f "$logfile" ]]; then
@@ -119,7 +128,7 @@ run_combo() {
       module load '${module}'
       cd '${workdir}'
       scripts/run_benchmarks.sh --compilers '${compiler}' --cpu-label '${cpu_label}' \
-        --jobs '${CPUS_PER_TASK}' --results-dir '${RESULTS_ROOT}'
+        --jobs '${CPUS_PER_TASK}' --results-dir '${RESULTS_ROOT}' ${genome_arg}
     " >> "$logfile" 2>&1
   local rc=$?
 
