@@ -18,9 +18,9 @@ set -uo pipefail
 #     ./fisk/scripts/submit_rubus_benchmarks.sh
 #
 # The jobs are submitted with srun, all four at once, and the script waits for them. Results land
-# in ./results/<CPU>, <Compiler> <version>/<mode>/, as with run_benchmarks.sh, which moves earlier
-# results of the same label and mode to ./results/_archive/; logs in ./logs/, where earlier logs
-# are archived as well.
+# in ./results/<CPU>/<Compiler>_<version>/<mode>/, as with run_benchmarks.sh, which moves earlier
+# results of the same CPU, compiler and mode to ./results/_archive/; logs in ./logs/, where
+# earlier logs are archived as well.
 
 # ------------------------------------------------------------------------
 #   Config
@@ -45,8 +45,8 @@ declare -A MODULE=(
   [gcc]="GCC/15.2.0"
 )
 
-# CPU names for the "<CPU>, <Compiler> <version>" directory names under results/, as the CPU
-# model strings of these nodes are not the usual names. run_benchmarks.sh adds the compiler.
+# CPU names for the results/<CPU>/ folders, as the CPU model strings of these nodes are not the
+# usual names; run_benchmarks.sh replaces the spaces by underscores.
 declare -A CPU_LABEL=(
   [epyc]="AMD EPYC 9684X"
   [xeon]="Intel Xeon Platinum 8568Y"

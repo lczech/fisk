@@ -6,9 +6,10 @@
 # Without options, this runs everything that is usual on the machine: GCC and Clang on Linux, as
 # far as they are installed, and Apple Clang on macOS, each in all three modes. Each mode is built
 # in its own folder in build-bench/, and then run on one CPU core, pinned via taskset on Linux.
-# The results go to results/<CPU>, <Compiler> <version>/<mode>/, with one CSV per suite, the
-# system and benchmark settings in sys_info.txt, and the output in log.txt. Existing results of
-# the same label and mode are moved to results/_archive/<date>/ first.
+# The results go to results/<CPU>/<Compiler>_<version>/<mode>/, e.g.
+# results/Intel_Core_7_240H/GCC_15/sum/, with one CSV per suite, the system and benchmark settings
+# in sys_info.txt, and the output in log.txt; names have underscores instead of spaces. Existing
+# results of the same CPU, compiler and mode are moved to results/_archive/<date>/ first.
 #
 # Each build writes its benchmark program to bin/ under a name of its own, such as
 # bin/fisk_benchmarks_gcc_15_sum, the same as its build folder build-bench/gcc_15_sum/.
@@ -248,6 +249,8 @@ for compiler in $COMPILERS; do
     clabel="$(compiler_label "$cxx")"
     label="${CPU_LABEL}, ${clabel}"
     slug="$(echo "$clabel" | tr 'A-Z ' 'a-z_')"
+    # The results folder, e.g. Intel_Core_7_240H/GCC_15.
+    result_name="$(echo "$CPU_LABEL" | tr ' ' '_')/$(echo "$clabel" | tr ' ' '_')"
 
     for mode in $MODES; do
         echo
@@ -255,7 +258,7 @@ for compiler in $COMPILERS; do
         echo "Start: $(date +%Y-%m-%dT%H:%M:%S)"
         build_name="${slug}_${mode}"
         build_dir="${REPO_ROOT}/build-bench/${build_name}"
-        result_dir="${RESULTS_ROOT}/${label}/${mode}"
+        result_dir="${RESULTS_ROOT}/${result_name}/${mode}"
         mode_define="FISK_BENCHMARK_SINK_$(echo "$mode" | tr 'a-z' 'A-Z')"
 
         # Build
@@ -275,7 +278,7 @@ for compiler in $COMPILERS; do
 
         # Run
         if [ -d "$result_dir" ]; then
-            archive_dir="${RESULTS_ROOT}/_archive/${TIMESTAMP}/${label}"
+            archive_dir="${RESULTS_ROOT}/_archive/${TIMESTAMP}/${result_name}"
             mkdir -p "$archive_dir"
             mv "$result_dir" "$archive_dir/"
             echo "Moved previous results to ${archive_dir}/${mode}"
