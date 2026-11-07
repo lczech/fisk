@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
+        config:
           # Linux: GCC
           - os: ubuntu-latest
             compiler: gcc
@@ -30,13 +30,15 @@ jobs:
           # Windows: MSVC
           - os: windows-latest
             compiler: msvc
+        # The benchmark sink modes, see benchmarks/sink.hpp, each in a job of its own.
+        sink: [ sum, barrier, write ]
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.config.os }}
 
     env:
       BUILD_TYPE: Release
       # Directory inside the repo where the binary will write CSVs / plots
-      OUTPUT_DIR: artifacts/${{ matrix.os }}-${{ matrix.compiler }}
+      OUTPUT_DIR: artifacts/${{ matrix.config.os }}-${{ matrix.config.compiler }}-${{ matrix.sink }}
 
     defaults:
       run:
@@ -71,7 +73,7 @@ jobs:
       # Studio developer environment (vcvarsall) set up first, so it gets its own setup step
       # instead of using the system-installed compiler the other rows rely on.
       - name: Setup C++ (Windows MSVC)
-        if: matrix.compiler == 'msvc'
+        if: matrix.config.compiler == 'msvc'
         uses: aminya/setup-cpp@v1
         with:
           compiler: msvc
@@ -81,11 +83,13 @@ jobs:
 
       - name: Configure CMake
         run: |
-          if [[ "${{ matrix.compiler }}" != "msvc" ]]; then
-            export CC="${{ matrix.cc }}"
-            export CXX="${{ matrix.cxx }}"
+          if [[ "${{ matrix.config.compiler }}" != "msvc" ]]; then
+            export CC="${{ matrix.config.cc }}"
+            export CXX="${{ matrix.config.cxx }}"
           fi
-          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_TESTS=OFF
+          SINK_MODE="FISK_BENCHMARK_SINK_$(echo "${{ matrix.sink }}" | tr 'a-z' 'A-Z')"
+          cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_TESTS=OFF \
+            -DFISK_BENCHMARK_SINK_MODE="${SINK_MODE}"
 
       - name: Build
         id: build
@@ -117,5 +121,5 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: benchmarks-${{ matrix.os }}-${{ matrix.compiler }}
+          name: benchmarks-${{ matrix.config.os }}-${{ matrix.config.compiler }}-${{ matrix.sink }}
           path: ${{ env.OUTPUT_DIR }}
