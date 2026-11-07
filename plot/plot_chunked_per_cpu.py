@@ -128,7 +128,7 @@ def main():
         help="Output image path (if omitted, show interactively).",
     )
     ap.add_argument("--title", default=None, help="Figure title override.")
-    # Accepted for plot_modes() in plot_all_cpus.sh; the fastest variants do not depend on it.
+    # Accepted for plot_modes() in plot_summaries.sh; the fastest variants do not depend on it.
     add_mode_arg(ap)
     add_unit_scale_args(ap)
     args = ap.parse_args()
@@ -145,7 +145,7 @@ def main():
 
     # plot_axis_grid() takes the label of each panel from the directory of its first path.
     paths = [os.path.join(d, INPUTS[0][1] + ".csv") for d in dirs]
-    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
     plot_axis_grid(
         paths,
         lambda path, unit: load_pivot(os.path.dirname(path), unit),

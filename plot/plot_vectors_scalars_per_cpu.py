@@ -12,19 +12,18 @@ or, where a suite names them without a suffix (such as "bytewise_simd_avx2" in
 kmer_extract_packed_checked), the same name without "_scalars". Techniques with only one of the two
 forms are dropped.
 
-The panel label is taken from the last path component of the directory containing each CSV, as in
-plot_bars_per_cpu.py, e.g.
-"results/AMD EPYC 9684X, Clang 17/spaced_kmer_extract_ascii_checked_multi.csv" ->
-"AMD EPYC 9684X, Clang 17".
+The panel label is the CPU and compiler of each CSV, e.g.
+"results/AMD_EPYC_9684X/Clang_17/sum/spaced_kmer_extract_ascii_checked_multi.csv" ->
+"AMD EPYC 9684X, Clang 17", see platform_from_csv_path() in plot_common.py.
 
 Usage examples:
   python plot/plot_vectors_scalars_per_cpu.py \
-      --glob "results/*/spaced_kmer_extract_ascii_checked_multi.csv" \
+      --glob "results/*/*/sum/spaced_kmer_extract_ascii_checked_multi.csv" \
       --out \
         results/Summaries/spaced_kmer_extract_ascii_checked_multi_vectors_scalars_per_cpu.png
 
   python plot/plot_vectors_scalars_per_cpu.py \
-      --file "results/AMD Ryzen 7 Pro 4750U, GCC 14/spaced_kmer_extract_ascii_checked_single.csv" \
+      --file results/AMD_Ryzen_7_Pro_4750U/GCC_14/sum/spaced_kmer_extract_ascii_checked_single.csv \
       --unit ns
 
 If --out is omitted, shows interactively.
@@ -130,7 +129,7 @@ def main():
         "--glob", action="append", default=[],
         help=(
             'Glob pattern for input CSVs (repeatable), e.g. '
-            '"results/*/spaced_kmer_extract_ascii_checked_multi.csv".'
+            '"results/*/*/sum/spaced_kmer_extract_ascii_checked_multi.csv".'
         ),
     )
     ap.add_argument(
@@ -162,7 +161,7 @@ def main():
         warn("Nothing to plot: no input file has techniques with both vectors and scalars")
         return
 
-    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
     plot_axis_grid(
         usable, lambda path, unit: load_technique_form_pivot(path, unit, args.mode),
         FORM_LABELS, FORM_COLORS,

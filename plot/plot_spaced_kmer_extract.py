@@ -175,7 +175,7 @@ def main():
     suite = args.suite
     base_title = args.title or (suite if suite else cpu)
 
-    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
 
     # See plot_vectors_scalars_per_cpu.py for the vectors and single k-mers side by side.
     make_grouped_bar_plot_impl_first(

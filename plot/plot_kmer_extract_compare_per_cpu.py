@@ -12,7 +12,7 @@ mask of the spaced suites.
 
 Usage example:
   python plot/plot_kmer_extract_compare_per_cpu.py \
-      --glob "results/*/kmer_extract_packed_unchecked.csv" \
+      --glob "results/*/*/sum/kmer_extract_packed_unchecked.csv" \
       --name kmer_extract_packed_unchecked --out-dir results/Summaries
 """
 
@@ -30,6 +30,7 @@ sys.path.insert(0, '.')
 from plot_common import (
     BENCHMARK_COLORS,
     BENCHMARK_ORDER,
+    SINKS,
     add_mode_arg,
     filter_mode,
     label_for_mode,
@@ -51,13 +52,13 @@ DEFAULT_KS = [29, 32]
 
 def load_all(csv_paths: List[str], ks: List[int]) -> pd.DataFrame:
     """
-    Load each given kmer_extract_packed_unchecked.csv, tag each row with its platform (the parent
-    directory name, e.g. "AMD EPYC 9684X, Clang 17"), and concatenate into one long-format
-    DataFrame. Takes
-    an explicit file list (built by the caller, e.g. from plot_all_cpus.sh's curated CPUS array via
-    --file, same as plot_bars_per_cpu.py) rather than globbing a results directory itself, so the
-    set of platforms shown here always matches the rest of the cross-CPU plots -- not a second,
-    independently-curated selection. Keeps the rows with k in `ks`.
+    Load each given kmer_extract_packed_unchecked.csv, tag each row with its platform (the CPU and
+    compiler, e.g. "AMD EPYC 9684X, Clang 17", see platform_from_csv_path()), and concatenate into
+    one long-format DataFrame. Takes an explicit file list (built by the caller, e.g. from
+    plot_summaries.sh's curated CPUS array via --file, same as plot_bars_per_cpu.py) rather than
+    globbing a results directory itself, so the set of platforms shown here always matches the rest
+    of the cross-CPU plots -- not a second, independently-curated selection. Keeps the rows with k
+    in `ks`.
     """
     frames = []
     for csv_path in csv_paths:
@@ -288,6 +289,11 @@ def main():
     )
     add_mode_arg(parser)
     parser.add_argument(
+        "--sink", choices=SINKS, default=None,
+        help="Benchmark sink mode of the results, added to the end of the output file names "
+             "(default: none).",
+    )
+    parser.add_argument(
         "--show-heatmaps",
         action="store_true",
         help="Also produce the per-(layout,k) relative-performance heatmaps (off by default -- "
@@ -309,18 +315,17 @@ def main():
         warn(f"Nothing to plot: no rows with k in {args.k} of mode {args.mode} in {files}")
         return
 
+    end = f"{args.mode}_{args.sink}" if args.sink else args.mode
     for point in case_points(df):
         tag = point_label(df, point, sep="_").replace("=", "")
         if args.show_heatmaps:
-            out = os.path.join(out_dir, f"{args.name}_heatmap_{tag}_{args.mode}.png")
+            out = os.path.join(out_dir, f"{args.name}_heatmap_{tag}_{end}.png")
             plot_heatmap(df, point, out, args.mode)
         plot_grouped_bars(
-            df, point, os.path.join(out_dir, f"{args.name}_bars_{tag}_{args.mode}.png"), args.mode
+            df, point, os.path.join(out_dir, f"{args.name}_bars_{tag}_{end}.png"), args.mode
         )
 
-    plot_platform_summary(
-        df, os.path.join(out_dir, f"{args.name}_platform_summary_{args.mode}.png")
-    )
+    plot_platform_summary(df, os.path.join(out_dir, f"{args.name}_platform_summary_{end}.png"))
 
 
 if __name__ == "__main__":

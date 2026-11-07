@@ -12,9 +12,9 @@ bar chart:
 - hatch: compiler
 - y-axis: mean ns/op across cases
 
-Platform label is taken from the last path component of the directory containing the CSV.
+Platform label is the CPU and compiler of the CSV, see platform_from_csv_path() in plot_common.py.
 Example:
-    results/AMD EPYC 9684X, Clang 17/pext.csv
+    results/AMD_EPYC_9684X/Clang_17/sum/bit_extract_weights.csv
 -> raw label "AMD EPYC 9684X, Clang 17"
 
 The platform and compiler are then inferred by case-insensitive substring matching
@@ -22,19 +22,20 @@ against PLATFORM_ORDER and COMPILER_ORDER.
 
 Usage examples:
   python plot_bars_per_cpu.py \
-      --file "results/AMD EPYC 9684X, Clang 17/pext.csv" \
-      --file "results/AMD EPYC 9684X, GCC 13/pext.csv" \
-      --suite PEXT \
+      --file results/AMD_EPYC_9684X/Clang_17/sum/bit_extract_weights.csv \
+      --file results/AMD_EPYC_9684X/GCC_15/sum/bit_extract_weights.csv \
+      --suite bit_extract_weights \
       --out pext_platforms.png
 
   python plot_bars_per_cpu.py --glob "artifacts/*/pext.csv" --suite PEXT
 
   # Bars of the mask sets up to span 32, and a marker on each bar for the sets above:
-  python plot_bars_per_cpu.py --glob "results/*/spaced_kmer_extract_packed_checked_multi.csv" \
+  python plot_bars_per_cpu.py \
+      --glob "results/*/*/sum/spaced_kmer_extract_packed_checked_multi.csv" \
       --marker-case "span>32" --marker-label "span 45 (2 pieces)"
 
   # Restrict to rows whose "case" column (e.g. "layout=msb;k=17") matches given fields:
-  python plot_bars_per_cpu.py --glob "results/*/kmer_extract_packed_unchecked.csv" \
+  python plot_bars_per_cpu.py --glob "results/*/*/sum/kmer_extract_packed_unchecked.csv" \
       --case-filter "layout=msb" --case-filter "k<=29" --mode main \
       --out kmer_extract_packed_msb_narrow_width.png
 
@@ -70,7 +71,7 @@ TITLE_FROM_FILENAME = {
     "bit_extract_weights.csv": "Bit extract with different mask weights",
     "bit_extract_blocks.csv":  "Bit extract with different block sizes in the mask",
     "char_encoder.csv":        "Character encoding to two-bit codes",
-    # The checked and unchecked extraction from ASCII are plotted together, see plot_all_cpus.sh.
+    # The checked and unchecked extraction from ASCII are plotted together, see plot_summaries.sh.
     "kmer_extract_ascii_checked.csv":
         "Extraction from sequence to two-bit coded k-mers",
     "kmer_extract_ascii_unchecked.csv":
@@ -627,7 +628,7 @@ def main(argv=None) -> None:
         fig.tight_layout(pad=0.1, w_pad=0.1, h_pad=0.1)
 
     if args.out:
-        out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+        out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
 
         # print best implementation for each arch
         # print(title)

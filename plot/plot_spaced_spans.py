@@ -10,13 +10,13 @@ pieces of a mask grows, see SpacedKmerMask (include/fisk/core/types.hpp): from o
 span 32 to five pieces up to span 128. One CSV gives a single panel, several give a grid, with one
 shared y-range.
 
-The panel label is the last path component of the directory of each CSV, as in
-plot_bars_per_cpu.py, e.g. "results/AMD EPYC 9684X, Clang 17".
+The panel label is the CPU and compiler of each CSV, e.g. "AMD EPYC 9684X, Clang 17" for
+results/AMD_EPYC_9684X/Clang_17/sum/, see platform_from_csv_path() in plot_common.py.
 
 Usage example:
   python plot/plot_spaced_spans.py \
-      --file "results/AMD EPYC 9684X, Clang 17/spaced_kmer_extract_packed_checked_spans.csv" \
-      --file "results/AMD Ryzen 7 Pro 4750U, GCC 14/spaced_kmer_extract_packed_checked_spans.csv" \
+      --file results/AMD_EPYC_9684X/Clang_17/sum/spaced_kmer_extract_packed_checked_spans.csv \
+      --file results/AMD_Ryzen_7_Pro_4750U/GCC_14/sum/spaced_kmer_extract_packed_checked_spans.csv \
       --out results/Summaries/spaced_kmer_extract_packed_checked_spans_per_cpu.png
 
 If --out is omitted, shows interactively.
@@ -153,7 +153,7 @@ def main():
     fig.legend(handles.values(), handles.keys(), loc="outside lower center", ncol=2 * ncols)
     fig.suptitle(args.title or suite)
 
-    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
     if out:
         fig.savefig(out, dpi=300, bbox_inches="tight")
         print(f"Wrote {out}")

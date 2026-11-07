@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Group matching plots by filename, naming copies after their CPU/compiler.
-# Example: CPU/kmer_extract_ops_log.png -> Collect/kmer_extract_ops_log/CPU.png.
+# Group matching plots by filename, naming copies after their CPU and compiler, so that one plot
+# can be compared across all of them.
+# Example: results/Intel_Core_7_240H/GCC_15/sum/kmer_extract_ascii_supp_sum_ops_log.png ->
+# results/Collect/kmer_extract_ascii_supp_sum_ops_log/Intel_Core_7_240H_GCC_15.png.
 cd "$(git rev-parse --show-toplevel)"
 source plot/log.sh
 
@@ -31,39 +33,29 @@ outdir="${indir}/Collect"
 shopt -s nullglob
 
 # --------------------------------------------------------------------
-# Discover sources and check destination names
+# Discover sources
 # --------------------------------------------------------------------
 
+# The runs, results/<CPU>/<Compiler>/<sink>/, and their labels <CPU>_<Compiler>. The plots of the
+# sinks of one CPU and compiler have the sink in their names, so they share the label.
 sources=()
 destinations=()
-cpu_dirs=()
-cpu_labels=()
+run_dirs=()
+run_labels=()
 
-for info in "$indir"/*/sys_info.txt; do
-    [[ -f "$info" ]] || continue
-    cpu_dir="${info%/*}"
-    case "${cpu_dir##*/}" in Collect|Summaries) continue ;; esac
-    cpu="${cpu_dir##*/}"
-    cpu="${cpu// /_}"
+for info in "$indir"/*/*/*/sys_info.txt; do
+    run_dir="${info%/sys_info.txt}"
+    compiler_dir="${run_dir%/*}"
+    label="${compiler_dir#"${indir}/"}"
+    label="${label/\//_}"
+    run_dirs+=("$run_dir")
+    run_labels+=("$label")
 
-    # Reject ambiguous CPU labels before overwriting any collected file.
-    for ((i = 0; i < ${#cpu_labels[@]}; ++i)); do
-        if [[ "${cpu_labels[i]}" == "$cpu" ]]; then
-            error "Conflicting CPU labels: ${cpu_dirs[i]} and $cpu_dir"
-            exit 1
-        fi
-    done
-    cpu_dirs+=("$cpu_dir")
-    cpu_labels+=("$cpu")
-
-    for file in "$cpu_dir"/*.png "$cpu_dir"/*.pdf "$cpu_dir"/*.svg; do
-        [[ -f "$file" ]] || continue
+    for file in "$run_dir"/*.png "$run_dir"/*.pdf "$run_dir"/*.svg; do
         fname="${file##*/}"
         [[ "$selection" == "--all" || "$fname" == "$selection" ]] || continue
-        destination="${outdir}/${fname%.*}/${cpu}.${fname##*.}"
-
         sources+=("$file")
-        destinations+=("$destination")
+        destinations+=("${outdir}/${fname%.*}/${label}.${fname##*.}")
     done
 done
 
@@ -78,15 +70,14 @@ done
 
 stale_count=0
 for file in "$outdir"/*/*.png "$outdir"/*/*.pdf "$outdir"/*/*.svg; do
-    [[ -f "$file" ]] || continue
     if [[ "$selection" != "--all" ]]; then
         [[ "${file%/*}" == "$outdir/${selection%.*}" && "${file##*.}" == "${selection##*.}" ]] || continue
     fi
     refreshed=false
     plot_dir="${file%/*}"
     fname="${plot_dir##*/}.${file##*.}"
-    for ((i = 0; i < ${#cpu_dirs[@]}; ++i)); do
-        if [[ "${file##*/}" == "${cpu_labels[i]}.${file##*.}" && -f "${cpu_dirs[i]}/$fname" ]]; then
+    for ((i = 0; i < ${#run_dirs[@]}; ++i)); do
+        if [[ "${file##*/}" == "${run_labels[i]}.${file##*.}" && -f "${run_dirs[i]}/$fname" ]]; then
             refreshed=true
             break
         fi

@@ -23,11 +23,22 @@ mpl.rcParams.update({
 })
 
 
+# The benchmark sink modes, which are the names of the result folders of each CPU and compiler, see
+# scripts/run_benchmarks.sh.
+SINKS = ("sum", "barrier", "write")
+
+
 def platform_from_csv_path(csv_path: str) -> str:
-    p = Path(csv_path)
-    # "last part of the directory path name"
-    # For ".../<CPU>/<file>.csv" this returns "<CPU>"
-    return p.parent.name
+    """The CPU and compiler of a result CSV, as a label, e.g. "Intel Core 7 240H, GCC 15" for
+    results/Intel_Core_7_240H/GCC_15/sum/<suite>.csv, as scripts/run_benchmarks.sh writes them, and
+    for results/Intel_Core_7_240H/GCC_15/DuoHash.csv, next to the sink folders. For other paths,
+    such as the flat folders of the CI, it is the name of the folder of the CSV."""
+    d = Path(csv_path).resolve().parent
+    if d.name in SINKS:
+        d = d.parent
+    elif not any((d / sink).is_dir() for sink in SINKS):
+        return d.name
+    return f"{d.parent.name}, {d.name}".replace("_", " ")
 
 
 # Canonical CPU-family / compiler orderings, shared by every cross-CPU plot script, so that
@@ -50,8 +61,8 @@ COMPILER_ORDER = [
 
 
 def infer_platform(raw_label: str) -> str:
-    """Case-insensitive substring match of `raw_label` (e.g. a results subdirectory name like
-    "AMD EPYC 9684X, Clang 17") against PLATFORM_ORDER, returning "Other" if none match."""
+    """Case-insensitive substring match of `raw_label` (e.g. a label of platform_from_csv_path()
+    like "AMD EPYC 9684X, Clang 17") against PLATFORM_ORDER, returning "Other" if none match."""
     s = raw_label.casefold()
     for plat in PLATFORM_ORDER:
         if plat.casefold() in s:
@@ -70,7 +81,7 @@ def infer_compiler(raw_label: str) -> str:
 
 
 def platform_compiler_sort_key(raw_label: str) -> tuple[int, int, str]:
-    """Sort key for a raw platform/compiler label (e.g. a results subdirectory name), ordering by
+    """Sort key for a raw platform/compiler label (e.g. of platform_from_csv_path()), ordering by
     PLATFORM_ORDER first, then COMPILER_ORDER, falling back to alphabetical for anything neither
     list recognizes. Used to keep platform axes in the same order across every cross-CPU chart,
     even in plots (like the packed k-mer comparison) that keep platform+compiler as one combined
@@ -1157,16 +1168,25 @@ def add_unit_scale_args(parser: argparse.ArgumentParser) -> None:
         help="Fixed y-axis lower limit, in the selected --unit (default: 0 for --scale linear, "
              "auto-scaled from the data for --scale log).",
     )
+    parser.add_argument(
+        "--sink", choices=SINKS, default=None,
+        help="Benchmark sink mode of the results, added to the output file name before the unit "
+             "and scale (default: none).",
+    )
 
 
-def apply_unit_scale_suffix(path: str | None, unit: str, scale: str) -> str | None:
-    """Insert an unconditional "_<unit>_<scale>" suffix before a path's extension (e.g.
-    "foo.png" -> "foo_ops_log.png"), so runs with different --unit/--scale never silently
-    overwrite each other's output. No-op for path=None (interactive display)."""
+def apply_unit_scale_suffix(
+    path: str | None, unit: str, scale: str, sink: str | None = None
+) -> str | None:
+    """Insert an unconditional "_<unit>_<scale>" suffix before a path's extension, preceded by the
+    sink if given (e.g. "foo.png" -> "foo_sum_ops_log.png"), so runs with different --unit/--scale
+    or sinks never silently overwrite each other's output. No-op for path=None (interactive
+    display)."""
     if path is None:
         return None
     root, ext = os.path.splitext(path)
-    return f"{root}_{unit}_{scale}{ext}"
+    sink_part = f"_{sink}" if sink else ""
+    return f"{root}{sink_part}_{unit}_{scale}{ext}"
 BENCHMARK_COLORS.update(PACKED_KMER_VARIANT_COLORS)
 
 

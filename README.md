@@ -188,12 +188,12 @@ scripts/run_benchmarks.sh
 
 This needs CMake (3.20 or later) and a C++20 compiler; on macOS, the Xcode command line tools, and CMake, e.g. from Homebrew. For stable timings, run it on mains power, with other programs closed.
 
-The script builds and runs the benchmarks with GCC and Clang on Linux, as far as they are installed, or with Apple Clang on macOS, each in three modes of handling the results (`sum`, `barrier`, `write`). The results go to `results/<CPU>, <Compiler> <version>/<mode>/`, with one CSV file per benchmark suite, giving the time per operation, such as per extracted k-mer. `scripts/run_benchmarks.sh --help` lists its options, and [benchmarks/README.md](benchmarks/README.md) describes the suites and the measurements.
+The script builds and runs the benchmarks with GCC and Clang on Linux, as far as they are installed, or with Apple Clang on macOS, each in three modes of handling the results (`sum`, `barrier`, `write`). The results go to `results/<CPU>/<Compiler>_<version>/<mode>/`, such as `results/Intel_Core_7_240H/GCC_15/sum/`, with one CSV file per benchmark suite, giving the time per operation, such as per extracted k-mer. `scripts/run_benchmarks.sh --help` lists its options, and [benchmarks/README.md](benchmarks/README.md) describes the suites and the measurements.
 
 We provide these results for all hardware architectures tested in `results`. We also added
-the results of our [DuoHash benchmark](https://github.com/lczech/DuoHash) there, called `DuoHash.csv`.
+the results of our [DuoHash benchmark](https://github.com/lczech/DuoHash) there, as `results/<CPU>/<Compiler>_<version>/DuoHash.csv`.
 
-To create the plots from the manuscript, run `./plot/plot_all_cpus.sh`. This requires some standard Python packages to be installed; a conda env file with these packages is provided in `plot/conda-env.yaml`.
+To create the plots from the manuscript, run `./plot/plot_all.sh`. This requires some standard Python packages to be installed; a conda env file with these packages is provided in `plot/conda-env.yaml`.
 
 
 ## Tests

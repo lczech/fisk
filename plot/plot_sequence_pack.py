@@ -8,9 +8,9 @@ has none.
 Use --summary for the existing CPU/compiler grouped-bar style across CSV files.
 
 Examples:
-  python plot/plot_sequence_pack.py results/sequence_pack_unchecked.csv --out-dir results
-  python plot/plot_sequence_pack.py results/sequence_pack_checked.csv --out-dir results
-  python plot/plot_sequence_pack.py --glob 'results/*/sequence_pack_unchecked.csv' --summary \
+  python plot/plot_sequence_pack.py results/AMD_EPYC_9684X/Clang_17/sum/sequence_pack_checked.csv \
+      --out-dir results/AMD_EPYC_9684X/Clang_17/sum
+  python plot/plot_sequence_pack.py --glob 'results/*/*/sum/sequence_pack_unchecked.csv' --summary \
       --out-dir results/Summaries
 """
 
@@ -145,6 +145,8 @@ def plot_views(files, suite, views, limits, args):
                 "--case-filter", f"layout={layout}", "--unit", args.unit, "--scale", args.scale,
                 "--y-min", str(y_min), "--y-max", str(y_max), "--title", title, "--out", out,
             ]
+            if args.sink:
+                argv.extend(["--sink", args.sink])
             for path in files:
                 argv.extend(["--file", path])
             for name in order:
@@ -153,7 +155,7 @@ def plot_views(files, suite, views, limits, args):
         else:
             title = f"{platform_from_csv_path(files[0])}\n{title}"
             make_impl_summary_plot(
-                rows, suite, title, apply_unit_scale_suffix(out, args.unit, args.scale),
+                rows, suite, title, apply_unit_scale_suffix(out, args.unit, args.scale, args.sink),
                 benchmark_order=order, benchmark_colors=SEQUENCE_PACK_COLORS,
                 unit=args.unit, scale=args.scale, y_min=y_min, y_max=y_max, show_range=False,
             )

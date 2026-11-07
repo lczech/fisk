@@ -14,12 +14,12 @@ normalize_spaced_layout(). Directories without both tables are left out.
 The `_vectors` techniques of the checked suites sum all lanes, valid or not, so for now their
 checked bars do not include the cost of using the valid lanes.
 
-The panel label is the last path component of each directory, as in plot_bars_per_cpu.py, e.g.
-"results/AMD EPYC 9684X, Clang 17".
+The panel label is the CPU and compiler of each directory, e.g. "AMD EPYC 9684X, Clang 17" for
+"results/AMD_EPYC_9684X/Clang_17/sum", see platform_from_csv_path() in plot_common.py.
 
 Usage example:
   python plot/plot_checked_vs_unchecked_per_cpu.py \
-      --dir "results/AMD EPYC 9684X, Clang 17" --dir "results/AMD Ryzen 7 Pro 4750U, GCC 14" \
+      --dir results/AMD_EPYC_9684X/Clang_17/sum --dir results/AMD_Ryzen_7_Pro_4750U/GCC_14/sum \
       --unchecked kmer_extract_packed_unchecked.csv --checked kmer_extract_packed_checked.csv \
       --out results/Summaries/kmer_extract_packed_checked_vs_unchecked_per_cpu.png
 
@@ -159,7 +159,7 @@ def main():
     name = os.path.splitext(os.path.basename(args.unchecked))[0].replace("_unchecked", "")
     title = args.title or f"{name}: checked vs. unchecked"
 
-    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
     plot_axis_grid(
         list(checked_of),
         lambda path, unit: load_pair_pivot(path, checked_of[path], unit, args.mode),

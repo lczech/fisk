@@ -115,7 +115,7 @@ jobs:
 
       - name: Run plotting script
         run: |
-          ./plot/plot_all_benchs.sh ${OUTPUT_DIR}
+          ./plot/plot_run.sh "${OUTPUT_DIR}"
 
       - name: Upload artifacts
         if: ${{ always() }}

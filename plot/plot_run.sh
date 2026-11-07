@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Make all plots for a single CPU.
-# Takes either the directory as input where our benchmark outputs are stored,
-# or defaults to "results", which is where they are writting to by fisk.
-
-# --------------------------------------------------------------------
-# Directory argument (default: results)
-# --------------------------------------------------------------------
+# Make all plots of one benchmark run, i.e., one CPU, compiler and sink mode, such as
+# results/Intel_Core_7_240H/GCC_15/sum/, into that folder, as PNG, SVG and PDF. When the folder is
+# named after its sink mode, as scripts/run_benchmarks.sh names them, the plot names contain it,
+# e.g. kmer_extract_ascii_supp_sum_ops_log.png. Without a folder, this plots every run in results/.
 
 # Change to top level of git repo.
 # This ensures that the script can be called from any directory.
@@ -18,7 +15,7 @@ source plot/log.sh
 export QT_QPA_PLATFORM=xcb
 
 usage() {
-  echo "Usage: $0 [results_dir]  (default: results)" >&2
+  echo "Usage: $0 [run_dir]  (default: every run in results/)" >&2
   exit 1
 }
 
@@ -26,15 +23,24 @@ if [[ $# -gt 1 ]]; then
   usage
 fi
 
-DIR="${1:-results}"
+# Without a folder: each run in results/<CPU>/<Compiler>/<sink>/, one after the other.
+if [[ $# -eq 0 ]]; then
+  [[ -d results ]] || { warn "No results found in results/"; exit 0; }
+  find results -mindepth 4 -maxdepth 4 -name sys_info.txt | sort | while read -r info; do
+    echo "Plotting ${info%/sys_info.txt}"
+    ./plot/plot_run.sh "${info%/sys_info.txt}"
+  done
+  exit 0
+fi
+
+DIR="${1%/}"
 [[ -d "$DIR" ]] || { error "Not a directory: $DIR"; exit 1; }
 
-DIR="${DIR%/}"
-NAME="$(basename "$DIR")"
-
-# OUTDIR="plots/${NAME}"
-OUTDIR="${DIR}"
-mkdir -p "$OUTDIR"
+# The sink mode, if the folder is named after it.
+SINK_ARGS=()
+case "$(basename "$DIR")" in
+  sum|barrier|write) SINK_ARGS=( --sink "$(basename "$DIR")" ) ;;
+esac
 
 # --------------------------------------------------------------------
 # Which --unit/--scale combinations to produce.
@@ -100,7 +106,7 @@ for EXT in png svg ; do
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
-    US=( --unit "$UNIT" --scale "$SCALE" )
+    US=( --unit "$UNIT" --scale "$SCALE" ${SINK_ARGS[@]+"${SINK_ARGS[@]}"} )
 
 
     # Bit Extract Implementations
@@ -149,7 +155,7 @@ for EXT in png svg ; do
 
     # --y-max is unit-scale-dependent (throughput inverts by a different ratio per series, so a
     # ceiling tuned for ns/op can't just be reused for ops/s) -- 0.7 for ns/op, matching the
-    # existing tuned value; 16 for ops, matching YLIM_PACKED_MAIN in plot_all_cpus.sh (checked
+    # existing tuned value; 16 for ops, matching YLIM_PACKED_MAIN in plot_summaries.sh (checked
     # against the real cross-CPU max throughput for this suite). The checked suite uses the same
     # limit, so that the two stay comparable. The full plots also show the slower rolling loop,
     # and are scaled to their data.
@@ -164,7 +170,7 @@ for EXT in png svg ; do
         python ./plot/plot_kmer_extract.py "$CSV" --layout-panels "${US[@]}"
 
       # The vectors and single k-mers of the SIMD extraction. The cross-CPU plots are in
-      # plot_all_cpus.sh.
+      # plot_summaries.sh.
       plot_modes "$CSV" full "${DIR}/${SUITE}_vectors_scalars" \
         python ./plot/plot_vectors_scalars_per_cpu.py --file "$CSV" "${US[@]}"
       plot_modes "$CSV" full "${DIR}/${SUITE}_bars" \
@@ -224,8 +230,21 @@ for EXT in png svg ; do
   done
 done
 
-# Wait for every backgrounded plot job to finish before returning -- callers
-# (e.g. plot_all_cpus.sh's per-directory loop, which converts the SVGs this
-# script just wrote to PDF) rely on all output files existing once this
-# script exits.
+# Wait for every backgrounded plot job to finish, so that all SVGs exist for the conversion below.
 wait
+
+# Convert the SVGs to PDF. Only the SVGs of the current COMBOS, matched by their "_<unit>_<scale>"
+# suffix, not a blind "*.svg" glob: a folder can still hold SVGs of a combo since commented out,
+# and reconverting those would only produce a changed but equal PDF (inkscape's output is not
+# byte-stable). Skipped without inkscape, as on the CI.
+if ! command -v inkscape > /dev/null 2>&1; then
+  warn "inkscape not found, skipping the PDFs"
+  exit 0
+fi
+echo "Converting SVG to PDF"
+for combo in "${COMBOS[@]}"; do
+  for svg in "$DIR"/*"_${combo%%:*}_${combo##*:}.svg"; do
+    [[ -e "$svg" ]] || continue
+    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+  done
+done

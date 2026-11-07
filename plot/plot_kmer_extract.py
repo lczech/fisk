@@ -10,12 +10,12 @@ extraction from packed sequences.
 
 Usage examples:
   python plot/plot_kmer_extract.py \
-      "results/AMD EPYC 9684X, Clang 17/kmer_extract_ascii_checked.csv" \
-      "results/AMD EPYC 9684X, Clang 17/kmer_extract_ascii_unchecked.csv" \
+      results/AMD_EPYC_9684X/Clang_17/sum/kmer_extract_ascii_checked.csv \
+      results/AMD_EPYC_9684X/Clang_17/sum/kmer_extract_ascii_unchecked.csv \
       --mode supp --out kmer_extract_ascii.png
 
   python plot/plot_kmer_extract.py --layout-panels --mode main \
-      "results/AMD EPYC 9684X, Clang 17/kmer_extract_packed_unchecked.csv"
+      results/AMD_EPYC_9684X/Clang_17/sum/kmer_extract_packed_unchecked.csv
 
 If --out is omitted, shows interactively.
 """
@@ -238,7 +238,7 @@ def main():
     else:
         fig = _plot_single_panel(df, plot_order, cpu, suite, args)
 
-    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
     if out:
         fig.savefig(out, dpi=300)
         print(f"Wrote {out}")

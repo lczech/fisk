@@ -218,7 +218,7 @@ def main():
     suite = args.suite
     title = args.title or (suite if suite else cpu)
 
-    outpath = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    outpath = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
     benchmarks_keep = benchmarks_for_mode(args.mode)
 
     make_impl_summary_plot(

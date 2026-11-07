@@ -100,7 +100,7 @@ def main():
 
     fig.tight_layout()
 
-    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
     if out:
         fig.savefig(out, dpi=300)
         print(f"Wrote {out}")

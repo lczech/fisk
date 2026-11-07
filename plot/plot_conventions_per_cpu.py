@@ -13,17 +13,17 @@ compare here; directories without any such technique (e.g. results from before t
 layout were recorded) are skipped. The spaced suites keep both layouts here, unlike in the other
 plots, see normalize_spaced_layout().
 
-The panel label is taken from the last path component of the directory containing each CSV, as in
-plot_bars_per_cpu.py, e.g. "results/AMD EPYC 9684X, Clang 17/kmer_extract_ascii_checked.csv" ->
-"AMD EPYC 9684X, Clang 17".
+The panel label is the CPU and compiler of each CSV, e.g.
+"results/AMD_EPYC_9684X/Clang_17/sum/kmer_extract_ascii_checked.csv" -> "AMD EPYC 9684X, Clang 17",
+see platform_from_csv_path() in plot_common.py.
 
 Usage examples:
   python plot/plot_conventions_per_cpu.py \
-      --glob "results/*/kmer_extract_ascii_*checked.csv" \
+      --glob "results/*/*/sum/kmer_extract_ascii_*checked.csv" \
       --out results/Summaries/kmer_extract_ascii_conventions_per_cpu.png
 
   python plot/plot_conventions_per_cpu.py \
-      --file "results/AMD Ryzen 7 Pro 4750U, GCC 14/sequence_pack_checked.csv" --unit ns
+      --file results/AMD_Ryzen_7_Pro_4750U/GCC_14/sum/sequence_pack_checked.csv --unit ns
 
 If --out is omitted, shows interactively.
 """
@@ -119,7 +119,8 @@ def main():
     )
     ap.add_argument(
         "--glob", action="append", default=[],
-        help='Glob pattern for input CSVs (repeatable), e.g. "results/*/kmer_extract_ascii_*.csv".',
+        help='Glob pattern for input CSVs (repeatable), e.g. '
+             '"results/*/*/sum/kmer_extract_ascii_*.csv".',
     )
     ap.add_argument(
         "--out", default=None,
@@ -172,7 +173,7 @@ def main():
         return
 
     _, labels, colors = combo_axes(fields)
-    out = apply_unit_scale_suffix(args.out, args.unit, args.scale)
+    out = apply_unit_scale_suffix(args.out, args.unit, args.scale, args.sink)
     plot_axis_grid(
         usable, load, labels, colors,
         "per " + " and ".join(fields),

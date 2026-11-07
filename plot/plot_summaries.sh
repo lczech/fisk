@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Make the plots across CPUs and compilers, for the results of one sink mode, into
+# results/Summaries/, with the sink in their names, e.g.
+# kmer_extract_ascii_per_cpu_supp_sum_ops_log.png. plot_all.sh runs this for each sink mode.
+
 # Change to top level of git repo.
 # This ensures that the script can be called from any directory.
 cd `git rev-parse --show-toplevel`
@@ -9,31 +13,45 @@ source plot/log.sh
 # Silence some warnings
 export QT_QPA_PLATFORM=xcb
 
+if [[ $# -ne 1 ]] || [[ ! "$1" =~ ^(sum|barrier|write)$ ]]; then
+  echo "Usage: $0 <sum|barrier|write>" >&2
+  exit 1
+fi
+SINK="$1"
+
 # ------------------------------------------------------------
 # Define explicit directories.
 # Leave empty to auto-scan.
 # ------------------------------------------------------------
 
-# Select which CPUs we want in the summary plots
+# Select which CPUs we want in the summary plots, as results/<CPU>/<Compiler>/, see
+# scripts/run_benchmarks.sh. The results of the sink mode are in its folder in there.
 ROOT="results"
 CPUS=(
-  # "AMD EPYC 7763, Clang 18"
-  # "AMD EPYC 7763, GCC 13"
-  "AMD EPYC 9684X, Clang 17"
-  "AMD EPYC 9684X, GCC 15"
-  "AMD Ryzen 7 Pro 4750U, Clang 17"
-  "AMD Ryzen 7 Pro 4750U, GCC 14"
-  "Intel Xeon Platinum 8568Y, Clang 17"
-  "Intel Xeon Platinum 8568Y, GCC 15"
-  # "Intel Core 7 240H, Clang 21"
-  # "Intel Core 7 240H, GCC 15"
+  # "AMD_EPYC_7763/Clang_18"
+  # "AMD_EPYC_7763/GCC_13"
+  "AMD_EPYC_9684X/Clang_17"
+  "AMD_EPYC_9684X/GCC_15"
+  "AMD_Ryzen_7_Pro_4750U/Clang_17"
+  "AMD_Ryzen_7_Pro_4750U/GCC_14"
+  "Intel_Xeon_Platinum_8568Y/Clang_17"
+  "Intel_Xeon_Platinum_8568Y/GCC_15"
+  # "Intel_Core_7_240H/Clang_21"
+  # "Intel_Core_7_240H/GCC_15"
   # Standing in for the Apple entry until M1 Pro measurements exist -- swap for
-  # "Apple M1 Pro, Clang 17" (currently has no kmer_extract_packed_unchecked.csv) once available.
-  "Apple M1, Clang 21"
+  # "Apple_M1_Pro/Clang_17" (currently has no kmer_extract_packed_unchecked.csv) once available.
+  "Apple_M1/Clang_21"
 )
 
+# The folder of the results in each of the CPUS. Empty for those that do not depend on the sink.
+RUN_SUBDIR="$SINK"
+
+# Auto-scan: every CPU and compiler with results of this sink mode.
 if ((${#CPUS[@]} == 0)); then
-  mapfile -t CPUS < <(find "$ROOT" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort)
+  while read -r info; do
+    run="${info#"${ROOT}/"}"
+    CPUS+=( "${run%/*/sys_info.txt}" )
+  done < <(find "$ROOT" -mindepth 4 -maxdepth 4 -path "*/${SINK}/sys_info.txt" | sort)
 fi
 if ((${#CPUS[@]} == 0)); then
   error "No benchmark directories found."
@@ -88,15 +106,15 @@ run_job() {
 }
 
 # Build the arguments --file A --file B for the given CSV names, one or more, which are searched
-# in the directories given above. Missing files are skipped so a benchmark collected on only some
-# CPUs can still be plotted. Without any file, it returns 1, and the caller skips the plots of
-# those CSVs.
+# in the directories given above, in their RUN_SUBDIR. Missing files are skipped so a benchmark
+# collected on only some CPUs can still be plotted. Without any file, it returns 1, and the caller
+# skips the plots of those CSVs.
 build_file_args() {
   args=()
   local csv_name
   for cpu in "${CPUS[@]}"; do
     for csv_name in "$@"; do
-      local f="${ROOT}/${cpu}/${csv_name}"
+      local f="${ROOT}/${cpu}${RUN_SUBDIR:+/${RUN_SUBDIR}}/${csv_name}"
       if [[ -f "$f" ]]; then
         args+=( --file "$f" )
       else
@@ -121,13 +139,14 @@ FORMATS=(
   "svg"
 )
 
-# Convert the SVGs of the given plots (paths without the "_<unit>_<scale>.svg" that the plotting
-# scripts append) to PDF, for each unit/scale combination; the ones not produced are skipped.
+# Convert the SVGs of the given plots (paths without the "_<sink>_<unit>_<scale>.svg" that the
+# plotting scripts append) to PDF, for each unit/scale combination; the ones not produced are
+# skipped.
 svgs_to_pdf() {
   local name combo svg
   for name in "$@"; do
     for combo in "${COMBOS[@]}"; do
-      svg="${name}_${combo%%:*}_${combo##*:}.svg"
+      svg="${name}_${SINK}_${combo%%:*}_${combo##*:}.svg"
       if [[ -f "$svg" ]]; then
         inkscape "$svg" --export-filename="${svg%.svg}.pdf"
       fi
@@ -136,8 +155,9 @@ svgs_to_pdf() {
 }
 
 # Run one plot in each of the given modes (comma-separated, see PLOT_MODES in plot_common.py), as
-# <out>_<mode>.<ext>, for each format and unit/scale combination, with --mode, --unit, --scale and
-# --out appended to the given command. Waits for all of them, and converts their SVGs to PDF.
+# <out>_<mode>.<ext>, for each format and unit/scale combination, with --mode, --unit, --scale,
+# --sink and --out appended to the given command. Waits for all of them, and converts their SVGs to
+# PDF.
 plot_modes() {
   local modes="$1" out="$2"; shift 2
   local mode ext combo
@@ -145,7 +165,7 @@ plot_modes() {
     for ext in "${FORMATS[@]}"; do
       for combo in "${COMBOS[@]}"; do
         run_job "$@" --mode "$mode" --unit "${combo%%:*}" --scale "${combo##*:}" \
-          --out "${out}_${mode}.${ext}"
+          --sink "$SINK" --out "${out}_${mode}.${ext}"
       done
     done
   done
@@ -203,11 +223,10 @@ for entry in "${SUMMARIES[@]}"; do
 done
 
 # Simple example for reference of what we are doing
-# ./plot/plot_bars_per_cpu.py \
-#     --file "results/AMD_Epyc_7763/kmer_extract_ascii_checked.csv" \
-#     --file "results/AMD_Ryzen_4750U/kmer_extract_ascii_checked.csv" \
-#     --file "results/Apple_M1/kmer_extract_ascii_checked.csv" \
-#     --file "results/Intel_Xeon_8568Y/kmer_extract_ascii_checked.csv"
+# ./plot/plot_bars_per_cpu.py --sink sum \
+#     --file "results/AMD_EPYC_9684X/GCC_15/sum/kmer_extract_ascii_checked.csv" \
+#     --file "results/Apple_M1/Clang_21/sum/kmer_extract_ascii_checked.csv" \
+#     --file "results/Intel_Xeon_Platinum_8568Y/GCC_15/sum/kmer_extract_ascii_checked.csv"
 
 # ------------------------------------------------------------
 # Sequence packing: separate encoding/layout views
@@ -224,7 +243,7 @@ for suite in "sequence_pack_unchecked" "sequence_pack_checked"; do
       SCALE="${combo##*:}"
 
       run_job python ./plot/plot_sequence_pack.py "${args[@]}" \
-        --summary --unit "$UNIT" --scale "$SCALE" --format "$EXT" --mode full \
+        --summary --unit "$UNIT" --scale "$SCALE" --sink "$SINK" --format "$EXT" --mode full \
         --out-dir "$OUT"
     done
   done
@@ -233,7 +252,8 @@ for suite in "sequence_pack_unchecked" "sequence_pack_checked"; do
   for combo in "${COMBOS[@]}"; do
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
-    for svg in "${OUT}/${suite}"_{overview,references}_*_per_cpu_full_"${UNIT}_${SCALE}".svg; do
+    for svg in "${OUT}/${suite}"_{overview,references}_*_per_cpu_full_"${SINK}_${UNIT}_${SCALE}".svg
+    do
       [[ -e "$svg" ]] || continue
       inkscape "$svg" --export-filename="${svg%.svg}.pdf"
     done
@@ -294,7 +314,7 @@ CHECKED_PAIRS=(
 
 dir_args=()
 for cpu in "${CPUS[@]}"; do
-  dir_args+=( --dir "${ROOT}/${cpu}" )
+  dir_args+=( --dir "${ROOT}/${cpu}/${RUN_SUBDIR}" )
 done
 
 echo "Plotting checked vs. unchecked comparison"
@@ -379,15 +399,15 @@ for suite in "kmer_extract_packed_unchecked" "kmer_extract_packed_checked"; do
     # Main: the scalar baseline and each ISA's dispatcher only, matching the per-CPU line plots'
     # main mode and the narrow-width/full-width tier plots below -- a summary, not full detail.
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-      --mode main --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_MAIN" \
+      --mode main --unit "$UNIT" --scale "$SCALE" --sink "$SINK" --y-max "$YLIM_PACKED_MAIN" \
       --out "${OUT}/${suite}_per_cpu_main.png"
     # Supplement: every variant of the family, including narrow-width/full-width/rolling, for
     # internal checking.
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-      --mode supp --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_SUPP" \
+      --mode supp --unit "$UNIT" --scale "$SCALE" --sink "$SINK" --y-max "$YLIM_PACKED_SUPP" \
       --out "${OUT}/${suite}_per_cpu_supp.png"
     run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
-      --mode full --unit "$UNIT" --scale "$SCALE" \
+      --mode full --unit "$UNIT" --scale "$SCALE" --sink "$SINK" \
       --out "${OUT}/${suite}_per_cpu_full.png"
   done
   wait
@@ -409,11 +429,11 @@ for suite in "kmer_extract_packed_unchecked" "kmer_extract_packed_checked"; do
       for tier in "narrow_width:k<=29" "full_width:k>=30"; do
         run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
           --case-filter "layout=${layout}" --case-filter "${tier#*:}" --case-filter "k<=32" \
-          --mode main --unit "$UNIT" --scale "$SCALE" --y-max "$YLIM_PACKED_MAIN" \
+          --mode main --unit "$UNIT" --scale "$SCALE" --sink "$SINK" --y-max "$YLIM_PACKED_MAIN" \
           --out "${OUT}/${suite}_per_cpu_${layout}_${tier%%:*}_main.png"
         run_job python ./plot/plot_bars_per_cpu.py "${args[@]}" \
           --case-filter "layout=${layout}" --case-filter "${tier#*:}" --case-filter "k<=32" \
-          --mode full --unit "$UNIT" --scale "$SCALE" \
+          --mode full --unit "$UNIT" --scale "$SCALE" --sink "$SINK" \
           --out "${OUT}/${suite}_per_cpu_${layout}_${tier%%:*}_full.png"
       done
     done
@@ -436,7 +456,7 @@ for entry in "${CONVENTIONS[@]}"; do
   # shellcheck disable=SC2086 # csvs is a list of names
   build_file_args $csvs || continue
   run_job python ./plot/plot_kmer_extract_compare_per_cpu.py "${args[@]}" \
-    --name "${name}_compare_per_cpu" --mode full --out-dir "$OUT"
+    --name "${name}_compare_per_cpu" --mode full --sink "$SINK" --out-dir "$OUT"
 done
 wait
 
@@ -464,7 +484,7 @@ if build_file_args "spaced_kmer_extract_ascii_checked_single.csv" \
     # Single mask spaced kmers
     run_job python ./plot/plot_bars_per_cpu.py "${args_single[@]}" \
       --mode main \
-      --unit "$UNIT" --scale "$SCALE" --y-max "$Y_LIM" \
+      --unit "$UNIT" --scale "$SCALE" --sink "$SINK" --y-max "$Y_LIM" \
       --no-legend \
       --title "(a) Extraction from sequence to spaced k-mers with a single mask" \
       --out "${OUT}/Fig2a.svg"
@@ -472,7 +492,7 @@ if build_file_args "spaced_kmer_extract_ascii_checked_single.csv" \
     # Multi mask spaced kmers
     run_job python ./plot/plot_bars_per_cpu.py "${args_multi[@]}" \
       --mode main \
-      --unit "$UNIT" --scale "$SCALE" --y-max "$Y_LIM" \
+      --unit "$UNIT" --scale "$SCALE" --sink "$SINK" --y-max "$Y_LIM" \
       --title "(b) Extraction from sequence to spaced k-mers with multiple masks" \
       --out "${OUT}/Fig2b.svg"
   done
@@ -482,10 +502,10 @@ if build_file_args "spaced_kmer_extract_ascii_checked_single.csv" \
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
 
-    svg="${OUT}/Fig2a_${UNIT}_${SCALE}.svg"
+    svg="${OUT}/Fig2a_${SINK}_${UNIT}_${SCALE}.svg"
     inkscape "$svg" --export-filename="${svg%.svg}.pdf"
 
-    svg="${OUT}/Fig2b_${UNIT}_${SCALE}.svg"
+    svg="${OUT}/Fig2b_${SINK}_${UNIT}_${SCALE}.svg"
     inkscape "$svg" --export-filename="${svg%.svg}.pdf"
   done
 fi
@@ -497,7 +517,10 @@ DUOHASH_SUITES=(
   "multi"
 )
 
-if build_file_args "DuoHash.csv"; then
+# DuoHash is an external benchmark, independent of the sink mode, with one DuoHash.csv per CPU and
+# compiler next to the sink folders; plotted once, with the sum mode.
+RUN_SUBDIR=""
+if [[ "$SINK" == "sum" ]] && build_file_args "DuoHash.csv"; then
   args_duohash=("${args[@]}")
 
   for suite in "${DUOHASH_SUITES[@]}"; do
@@ -514,7 +537,7 @@ if build_file_args "DuoHash.csv"; then
           --suite "${suite}" \
           --untight \
           --title "Spaced k-mer extraction, existing implementations, ${suite}" \
-          --out "${OUT}/DuoHash-${suite}_${mode}.svg"
+          --out "${OUT}/DuoHash_${suite}_${mode}.svg"
       done
     done
   done
@@ -525,46 +548,9 @@ if build_file_args "DuoHash.csv"; then
       UNIT="${combo%%:*}"
       SCALE="${combo##*:}"
       for mode in supp full; do
-        svg="${OUT}/DuoHash-${suite}_${mode}_${UNIT}_${SCALE}.svg"
+        svg="${OUT}/DuoHash_${suite}_${mode}_${UNIT}_${SCALE}.svg"
         inkscape "$svg" --export-filename="${svg%.svg}.pdf"
       done
     done
   done
 fi
-
-# ------------------------------------------------------------
-# Per-directory loop
-# ------------------------------------------------------------
-
-# Don't plot all individual directories again.
-# exit 0
-
-# Get ALL sub-directories of root that contain a `sys_info.txt` file.
-mapfile -t CPUS < <(find "$ROOT" -mindepth 1 -maxdepth 1 -type d -exec test -f "{}/sys_info.txt" \; -printf "%f\n" | sort)
-
-# Run the plotting scripts in all CPU directories.
-# This is for the indivdual plots per CPU.
-for cpu in "${CPUS[@]}"; do
-  echo
-  echo "Plotting ${cpu}"
-  ./plot/plot_all_benchs.sh "${ROOT}/${cpu}"
-
-  # This will generate individual plots for each benchmark in the CPU directory.
-  # Next, we use inkscape to convert all of them to PDF.
-  #
-  # Only the SVGs plot_all_benchs.sh's current COMBOS just (re)wrote -- matched by their
-  # "_<unit>_<scale>" suffix -- not a blind "*.svg" glob: a directory can still hold older SVGs
-  # from before this suffix existed (or from a combo since commented out), and those are never
-  # regenerated by the pipeline anymore, so reconverting them here would just re-encode an
-  # unrelated, unchanged file (inkscape's output isn't byte-stable across runs) and produce a
-  # spurious diff on a tracked PDF that this run never actually touched.
-  echo "Converting SVG to PDF"
-  for combo in "${COMBOS[@]}"; do
-    UNIT="${combo%%:*}"
-    SCALE="${combo##*:}"
-    for svg in "${ROOT}/${cpu}"/*"_${UNIT}_${SCALE}.svg"; do
-      [[ -e "$svg" ]] || continue
-      inkscape "$svg" --export-filename="${svg%.svg}.pdf"
-    done
-  done
-done
