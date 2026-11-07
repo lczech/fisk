@@ -31,10 +31,12 @@
 // consume() is part of the extraction loop, as with a small callback that the compiler inlines,
 // instead of a call per k-mer that depends on the inlining heuristics of the compiler.
 //
-// The buffer that Write touches (and that Sum/Barrier ignore) is sized to exactly match each
-// call's inner batch, so one pass through the batch fills it exactly once with no wraparound; the
-// caller's existing per-round clobber_memory() (see e.g. bit_extract_weights/var_*.cpp) already
-// makes every subsequent round's writes genuine, so consume() itself needs no barrier of its own.
+// The buffer that Write touches (and that Sum/Barrier ignore) comes from make_sink_buffer(): the
+// same small size for all suites, independent of the input, so that it stays in the L2 cache
+// along with the input, and the writes wrap around in it. The buffer is owned by the caller and
+// outlives each call, so the compiler has to keep the writes, and the caller's per-round
+// clobber_memory() (see e.g. bit_extract_weights/var_*.cpp) makes every round's writes genuine,
+// so consume() itself needs no barrier of its own.
 //
 // Overloaded for the SIMD register types too (guarded the same way as do_not_optimize()'s own
 // overloads), for extractors whose whole point is to hand the caller a register of several
@@ -273,20 +275,12 @@ struct Sink
 
     #endif
 
-    // Sums only the slots this call actually wrote (buf[0, idx) when idx never wrapped), not the
-    // whole buffer: a shared buffer generously sized relative to one call's touch count (as most
-    // callers do, rather than sizing it to fit exactly) would otherwise still hold an earlier
-    // call's leftover values past idx, and get summed right along with this call's real ones.
-    // Once idx passes buf.size(), every slot has been written by this call at least once, so the
-    // whole buffer is this call's own data again.
+    // No correctness value, as for Barrier: the buffer only keeps the last writes, which differ
+    // between the scalar variants and the vector ones that also write their padding lanes. Reading
+    // the buffer here would also add a pass over it to the timed call.
     std::uint64_t finalize() const noexcept
     {
-        std::size_t const n = idx < buf.size() ? idx : buf.size();
-        std::uint64_t s = 0;
-        for (std::size_t i = 0; i < n; ++i) {
-            s += buf[i];
-        }
-        return s;
+        return 0;
     }
 };
 
@@ -302,3 +296,19 @@ inline Sink make_sink(std::vector<std::uint64_t>& buf)
 #else
 #error "Unknown FISK_BENCHMARK_SINK_MODE"
 #endif
+
+// =================================================================================================
+//     Sink buffer
+// =================================================================================================
+
+/**
+ * @brief The buffer for make_sink(), the same for all suites: 64 KiB, which stays in the L2 cache
+ * along with the input, so that Write measures the stores rather than memory throughput.
+ *
+ * Its size is a power of two, so that the writes wrap around with a mask, and a multiple of every
+ * vector lane count, see Sink::consume().
+ */
+inline std::vector<std::uint64_t> make_sink_buffer()
+{
+    return std::vector<std::uint64_t>(std::size_t{1} << 13, 0);
+}

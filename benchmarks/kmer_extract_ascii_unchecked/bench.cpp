@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <bit>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -31,18 +30,8 @@ void bench_kmer_extract_ascii_unchecked(
     // Prepare csv output file with benchmark results
     write_csv_header(csv_os);
 
-    // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
-    // benchmarked (rounded up to a power of two) so that no call here ever wraps it. Different
-    // techniques here could in principle differ in how many k-mers they actually emit (e.g. one
-    // skipping windows a differently-behaved one still emits for), which would make a wrapped
-    // buffer's leftover contents depend on which technique last touched each slot; never wrapping
-    // sidesteps that regardless of whether it would in fact occur.
-    std::size_t max_seq_len = 0;
-    for (auto const& seq : sequences) {
-        max_seq_len = std::max(max_seq_len, seq.size());
-    }
-    // The chunked vector variants also write the lanes that pad their last vector, at most 8.
-    std::vector<std::uint64_t> sink_buffer(std::bit_ceil(max_seq_len + 8), 0);
+    // The buffer of the Write sink, see sink.hpp; Sum and Barrier ignore it.
+    auto sink_buffer = make_sink_buffer();
 
     // Each scratch buffer stays dedicated to one variant, so retained capacity from one benchmark
     // cannot affect another variant's setup.

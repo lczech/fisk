@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <bit>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -366,21 +365,8 @@ void bench_spaced_kmer_extract_packed_unchecked_multi(
         );
     }
 
-    // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
-    // benchmarked, times the largest mask set, rounded up to a power of two so that no call here
-    // ever wraps it, as in bench_spaced_kmer_extract_ascii_checked_multi(). The `_vectors` variants
-    // also write the zero lanes that pad the last vector of each mask, at most 8.
-    std::size_t max_seq_len = 0;
-    for (auto const& seq : sequences) {
-        max_seq_len = std::max(max_seq_len, seq.size());
-    }
-    std::size_t max_masks = 1;
-    for (auto const& masks : multi_masks) {
-        max_masks = std::max(max_masks, masks.size());
-    }
-    std::vector<std::uint64_t> sink_buffer(
-        std::bit_ceil((max_seq_len + 8) * max_masks), 0
-    );
+    // The buffer of the Write sink, see sink.hpp; Sum and Barrier ignore it.
+    auto sink_buffer = make_sink_buffer();
 
     // Run a benchmark for each mask set, in both Layouts
     for (std::size_t m = 0; m < multi_masks.size(); ++m) {

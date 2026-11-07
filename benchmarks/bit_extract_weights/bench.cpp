@@ -130,12 +130,8 @@ void bench_bit_extract_weights(std::ostream& csv_os)
             return make_inputs( n, w, seed );
         };
 
-        // Backing storage for the Write sink (see sink.hpp): sized to exactly one batch, so a
-        // single pass through it fills the buffer once with no wraparound. Shared across all
-        // implementations below -- they run sequentially, and each one's first round overwrites
-        // every slot before any implementation's finalize() ever reads it. Sum and Barrier ignore
-        // it (make_sink() takes it uniformly regardless of which Sink is active).
-        std::vector<std::uint64_t> sink_buffer( n, 0 );
+        // The buffer of the Write sink, see sink.hpp; Sum and Barrier ignore it.
+        auto sink_buffer = make_sink_buffer();
 
         // One call per timed round, with each implementation looping over the batch internally,
         // so the units per run are all extractions that one call performs.

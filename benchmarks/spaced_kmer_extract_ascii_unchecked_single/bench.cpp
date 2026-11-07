@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <bit>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -223,12 +222,8 @@ void bench_spaced_kmer_extract_ascii_unchecked_single(
 
     write_csv_header(csv_os);
 
-    // Backing storage for the Write sink (see sink.hpp), as in the checked suite.
-    std::size_t max_seq_len = 0;
-    for (auto const& seq : sequences) {
-        max_seq_len = std::max(max_seq_len, seq.size());
-    }
-    std::vector<std::uint64_t> sink_buffer(std::bit_ceil(max_seq_len + 8), 0);
+    // The buffer of the Write sink, see sink.hpp; Sum and Barrier ignore it.
+    auto sink_buffer = make_sink_buffer();
 
     for (std::size_t m = 0; m < masks.size(); ++m) {
         if (stdout_is_terminal()) {

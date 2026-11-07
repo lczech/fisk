@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <bit>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -43,21 +42,8 @@ void bench_kmer_extract_packed_checked(
         );
     }
 
-    // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
-    // benchmarked (rounded up to a power of two) so that no call here ever wraps it. That matters
-    // more here than in most suites: the SIMD variants write whole registers at a time (2/4/8
-    // k-mers per call) while the scalar loops write one, and a wrap's residual contents depend on
-    // that stride -- a register-width write and a scalar write that touched the same k-mers in a
-    // wrapped buffer can legitimately leave different values behind in the slots that were
-    // overwritten more than once, which would make finalize() disagree between them despite both
-    // being correct. Never wrapping sidesteps that entirely, rather than trying to reconcile it.
-    std::size_t max_seq_len = 0;
-    for (auto const& seq : sequences) {
-        max_seq_len = std::max(max_seq_len, seq.size());
-    }
-    std::vector<std::uint64_t> sink_buffer(
-        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
-    );
+    // The buffer of the Write sink, see sink.hpp; Sum and Barrier ignore it.
+    auto sink_buffer = make_sink_buffer();
 
     // The benches of one k on the sequences of one layout, in their own suite.run(), which
     // cross-validates the sinks of all benches within one call. The functions that emit single

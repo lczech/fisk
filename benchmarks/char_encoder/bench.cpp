@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <bit>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -15,19 +14,8 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
 
     write_csv_header(csv_os);
 
-    // Backing storage for the Write sink (see sink.hpp), sized to the longest sequence actually
-    // benchmarked (rounded up to a power of two) so that no call here ever wraps it. One call
-    // sweeps a whole sequence's worth of bases, and every technique here writes exactly one value
-    // per base, so this is also the exact touch count, not just a safe upper bound -- matching
-    // bit_extract's own exact-fit buffers in spirit, just sized from the actual input instead of
-    // a fixed batch constant.
-    std::size_t max_seq_len = 0;
-    for (auto const& seq : sequences) {
-        max_seq_len = std::max(max_seq_len, seq.size());
-    }
-    std::vector<std::uint64_t> sink_buffer(
-        std::bit_ceil(std::max<std::size_t>(max_seq_len, 1)), 0
-    );
+    // The buffer of the Write sink, see sink.hpp; Sum and Barrier ignore it.
+    auto sink_buffer = make_sink_buffer();
 
     // -----------------------------------------------------------------------
     //     encoding=acgt
