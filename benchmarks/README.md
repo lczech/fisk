@@ -39,5 +39,6 @@ Furthermore:
  - `bit_extract_blocks`: Performance of bit extracting, for masks with different numbers of blocks of consecutive 1s.
  - `char_encoder`: Per-character encoding, from ASCII to 2-bit codes.
  - `kmer_clark`: Small test to examine bottlenecks in the CLARK-S implementation.
+ - `extractor_scaling`: The tuned `KmerExtractor` (k = 31) and `SpacedKmerExtractor` (mask W22L31), checked and unchecked, over the length of the input, from 64 bases to 4 Gi bases (`--scaling-max-length`), to show where the caches and the memory set their speed. Each is tuned for its callback, of one k-mer at a time, or also of the vectors of the SIMD algorithms (`callback` in the `case` column), and named after the algorithm that `tune()` chose. Its input is in memory as a whole, 4 GiB by default.
 
 Each suite has a directory here, with its `bench.cpp` and one `var_*.cpp` per variant, each variant in its own translation unit, so that the code of one cannot change how the compiler builds another.

@@ -27,6 +27,7 @@
 #include <filesystem>
 
 #include "arg_parser.hpp"
+#include "extractor_scaling/bench.hpp"
 #include "kmer_extract_ascii_checked/bench.hpp"
 #include "kmer_extract_ascii_unchecked/bench.hpp"
 #include "kmer_extract_packed_unchecked/bench.hpp"
@@ -80,6 +81,9 @@ struct Options
 
     // File with masks
     std::string masks_file;
+
+    // Largest input length of the extractor scaling, 4 Gi bases
+    std::string scaling_max_length = "4294967296";
 
     // Output directory for benchmark results
     std::string output_dir = "results";
@@ -148,6 +152,13 @@ int main(int argc, char **argv)
         "--masks-file", "-m",
         "File path with masks, given as sequences of [01], one per line",
         opts.masks_file
+    );
+
+    parser.add_option(
+        "--scaling-max-length", "",
+        "Largest input length of the extractor scaling, a random sequence that is in memory as a "
+        "whole; 0 to skip it (default: 4294967296, i.e., 4 Gi bases)",
+        opts.scaling_max_length
     );
 
     parser.add_option(
@@ -298,6 +309,7 @@ int main(int argc, char **argv)
         os_info << "  sample     : " << opts.sample_ms << " ms\n";
         os_info << "  warm-up    : " << opts.warmup_ms << " ms\n";
         os_info << "  repeats    : " << opts.repeats << "\n";
+        os_info << "  scaling    : up to " << opts.scaling_max_length << " bases\n";
     }
 
     // Run the benchmarks
@@ -450,6 +462,15 @@ int main(int argc, char **argv)
     {
         auto os = get_ofstream(out_dir, "kmer_clark.csv" );
         bench_kmer_clark( sequences, os );
+    }
+
+    // The extractors over the input length, last, as its input takes the most memory
+    {
+        auto os = get_ofstream(out_dir, "extractor_scaling.csv" );
+        bench_extractor_scaling(
+            std::stoull(opts.scaling_max_length), std::stod(opts.n_prob), std::stoull(opts.seed),
+            os
+        );
     }
 
     return 0;
