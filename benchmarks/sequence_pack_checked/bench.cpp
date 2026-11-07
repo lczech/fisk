@@ -30,12 +30,8 @@ std::uint64_t pack_sequence_validity_sink(PackedSequenceWithValidity<E, L> const
 
 void bench_sequence_pack_checked(std::vector<std::string> const& sequences, std::ostream& csv_os)
 {
-    std::size_t const rounds  = 8;
-    std::size_t const repeats = 16;
-
     std::string const suite_title = "sequence_pack_checked";
     std::cout << "\n=== sequence pack with validity ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     write_csv_header(csv_os);
 
@@ -45,7 +41,7 @@ void bench_sequence_pack_checked(std::vector<std::string> const& sequences, std:
     {
         PackedSequenceWithValidity<Encoding::kACGT, Layout::kLSB> out;
         Microbench<std::string> suite(suite_title);
-        suite.rounds(rounds).repeats(repeats)
+        suite
             .units_fn([](std::string const& in) { return static_cast<double>(in.size()); })
             .finalize([&out]() { return pack_sequence_validity_sink(out); });
         auto results = suite.run(
@@ -216,7 +212,7 @@ void bench_sequence_pack_checked(std::vector<std::string> const& sequences, std:
     {
         PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB> out;
         Microbench<std::string> suite(suite_title);
-        suite.rounds(rounds).repeats(repeats)
+        suite
             .units_fn([](std::string const& in) { return static_cast<double>(in.size()); })
             .finalize([&out]() { return pack_sequence_validity_sink(out); });
         auto results = suite.run(
@@ -387,7 +383,7 @@ void bench_sequence_pack_checked(std::vector<std::string> const& sequences, std:
     {
         PackedSequenceWithValidity<Encoding::kACTG, Layout::kLSB> out;
         Microbench<std::string> suite(suite_title);
-        suite.rounds(rounds).repeats(repeats)
+        suite
             .units_fn([](std::string const& in) { return static_cast<double>(in.size()); })
             .finalize([&out]() { return pack_sequence_validity_sink(out); });
         auto results = suite.run(
@@ -558,7 +554,7 @@ void bench_sequence_pack_checked(std::vector<std::string> const& sequences, std:
     {
         PackedSequenceWithValidity<Encoding::kACTG, Layout::kMSB> out;
         Microbench<std::string> suite(suite_title);
-        suite.rounds(rounds).repeats(repeats)
+        suite
             .units_fn([](std::string const& in) { return static_cast<double>(in.size()); })
             .finalize([&out]() { return pack_sequence_validity_sink(out); });
         auto results = suite.run(

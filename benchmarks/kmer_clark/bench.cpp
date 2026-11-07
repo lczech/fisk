@@ -9,14 +9,11 @@ void bench_kmer_clark(
     std::vector<std::string> const& sequences,
     std::ostream& csv_os
 ) {
-    std::size_t const rounds = 4;
-    std::size_t const repeats = 16;
     size_t const k = 31;
 
     // User output
     std::string const suite_title = "kmer_clark";
     std::cout << "\n=== spaced k-mer clark ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     // Prepare csv output file with benchmark results
     write_csv_header(csv_os);
@@ -24,8 +21,6 @@ void bench_kmer_clark(
     // Prepare a benchmark with repititions
     Microbench<std::string> suite(suite_title);
     suite
-        .rounds(rounds)
-        .repeats(repeats)
         .units_fn([](std::string const& seq) {
             // 1 unit per original (unspaced) k-mer
             return static_cast<double>(seq.size() - k + 1);

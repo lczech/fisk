@@ -528,13 +528,9 @@ void bench_spaced_kmer_extract_ascii_checked_single(
     std::vector<std::string> const& masks,
     std::ostream& csv_os
 ) {
-    std::size_t const rounds = 1;
-    std::size_t const repeats = 8;
-
     // User output
     std::string const suite_title = "spaced_kmer_extract_ascii_checked_single";
     std::cout << "\n=== spaced k-mer extract single mask ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     write_csv_header(csv_os);
 
@@ -566,8 +562,6 @@ void bench_spaced_kmer_extract_ascii_checked_single(
         // Prepare a benchmark with repititions
         Microbench<std::string> suite(suite_title);
         suite
-            .rounds(rounds)
-            .repeats(repeats)
             .units_fn([k](std::string const& seq) {
                 // 1 unit per original (unspaced) k-mer
                 return static_cast<double>(seq.size() - k + 1);

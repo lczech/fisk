@@ -23,9 +23,7 @@ static void bench_spaced_kmer_extract_packed_unchecked_spans_layout_(
     std::size_t span,
     std::vector<std::uint64_t>& sink_buffer,
     std::ostream& csv_os,
-    std::string const& suite_title,
-    std::size_t rounds,
-    std::size_t repeats
+    std::string const& suite_title
 ) {
     using Packed = PackedSequence<Encoding::kACGT, L>;
     std::string const layout_case = std::string("layout=") + ((L == Layout::kMSB) ? "msb" : "lsb")
@@ -33,8 +31,6 @@ static void bench_spaced_kmer_extract_packed_unchecked_spans_layout_(
 
     Microbench<Packed> suite(suite_title);
     suite
-        .rounds(rounds)
-        .repeats(repeats)
         .units_fn([span](Packed const& seq) {
             // 1 unit per position at which a span starts
             return seq.length() >= span ? static_cast<double>(seq.length() - span + 1) : 0.0;
@@ -146,14 +142,10 @@ void bench_spaced_kmer_extract_packed_unchecked_spans(
     std::vector<std::string> const& sequences,
     std::ostream& csv_os
 ) {
-    std::size_t const rounds = 1;
-    std::size_t const repeats = 8;
-
     // User output
     std::string const suite_title = "spaced_kmer_extract_packed_unchecked_spans";
     std::cout << "\n=== spaced k-mer extract from packed sequences, spans 1 to "
         << kSpanSweepMaxSpan << " ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     write_csv_header(csv_os);
 
@@ -184,10 +176,10 @@ void bench_spaced_kmer_extract_packed_unchecked_spans(
             std::cout << "\rspan " << span << " / " << kSpanSweepMaxSpan << std::flush;
         }
         bench_spaced_kmer_extract_packed_unchecked_spans_layout_<Layout::kMSB>(
-            packed_msb, span, sink_buffer, csv_os, suite_title, rounds, repeats
+            packed_msb, span, sink_buffer, csv_os, suite_title
         );
         bench_spaced_kmer_extract_packed_unchecked_spans_layout_<Layout::kLSB>(
-            packed_lsb, span, sink_buffer, csv_os, suite_title, rounds, repeats
+            packed_lsb, span, sink_buffer, csv_os, suite_title
         );
     }
     if (stdout_is_terminal()) {

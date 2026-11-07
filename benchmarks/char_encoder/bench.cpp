@@ -9,13 +9,9 @@
 
 void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream& csv_os)
 {
-    std::size_t const rounds = 8;
-    std::size_t const repeats = 16;
-
     // User output
     std::string const suite_title = "char_encoder";
     std::cout << "\n=== char encoder ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     write_csv_header(csv_os);
 
@@ -39,8 +35,6 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
     {
         Microbench<std::string> suite(suite_title);
         suite
-            .rounds(rounds)
-            .repeats(repeats)
             .units_fn([](std::string const& in) {
                 // 1 unit per base
                 return static_cast<double>(in.size());
@@ -98,8 +92,6 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
     {
         Microbench<std::string> suite(suite_title);
         suite
-            .rounds(rounds)
-            .repeats(repeats)
             .units_fn([](std::string const& in) {
                 // 1 unit per base
                 return static_cast<double>(in.size());

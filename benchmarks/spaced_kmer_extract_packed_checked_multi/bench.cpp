@@ -23,9 +23,7 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
     std::vector<std::uint64_t>& sink_buffer,
     std::ostream& csv_os,
     std::string const& suite_title,
-    std::string const& case_label,
-    std::size_t rounds,
-    std::size_t repeats
+    std::string const& case_label
 ) {
     using Packed = PackedSequenceWithValidity<Encoding::kACGT, L>;
     // The Layout goes into the case, next to the mask, as for the other suites.
@@ -37,8 +35,6 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
     double const mask_count = static_cast<double>(masks.size());
     Microbench<Packed> suite(suite_title);
     suite
-        .rounds(rounds)
-        .repeats(repeats)
         .units_fn([k, mask_count](Packed const& seq) {
             // 1 unit per original (unspaced) k-mer and per mask
             return static_cast<double>(seq.length() - k + 1) * mask_count;
@@ -373,13 +369,9 @@ void bench_spaced_kmer_extract_packed_checked_multi(
         }
     }
 
-    std::size_t const rounds = 1;
-    std::size_t const repeats = 4;
-
     // User output
     std::string const suite_title = "spaced_kmer_extract_packed_checked_multi";
     std::cout << "\n=== spaced k-mer extract from packed sequences multi masks (checked) ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     write_csv_header(csv_os);
 
@@ -422,12 +414,10 @@ void bench_spaced_kmer_extract_packed_checked_multi(
         std::string const case_label = "mask_set=" + std::to_string(m)
             + ";span=" + std::to_string(multi_masks[m][0].size());
         bench_spaced_kmer_extract_packed_checked_multi_layout_<Layout::kMSB>(
-            packed_msb, multi_masks[m], sink_buffer, csv_os, suite_title, case_label,
-            rounds, repeats
+            packed_msb, multi_masks[m], sink_buffer, csv_os, suite_title, case_label
         );
         bench_spaced_kmer_extract_packed_checked_multi_layout_<Layout::kLSB>(
-            packed_lsb, multi_masks[m], sink_buffer, csv_os, suite_title, case_label,
-            rounds, repeats
+            packed_lsb, multi_masks[m], sink_buffer, csv_os, suite_title, case_label
         );
     }
     if (stdout_is_terminal()) {

@@ -22,9 +22,7 @@ static void bench_spaced_kmer_extract_packed_checked_single_layout_(
     std::vector<std::uint64_t>& sink_buffer,
     std::ostream& csv_os,
     std::string const& suite_title,
-    std::string const& case_label,
-    std::size_t rounds,
-    std::size_t repeats
+    std::string const& case_label
 ) {
     using Packed = PackedSequenceWithValidity<Encoding::kACGT, L>;
     // The Layout goes into the case, next to the mask, as for the other suites.
@@ -35,8 +33,6 @@ static void bench_spaced_kmer_extract_packed_checked_single_layout_(
     std::size_t const k = mask.size();
     Microbench<Packed> suite(suite_title);
     suite
-        .rounds(rounds)
-        .repeats(repeats)
         .units_fn([k](Packed const& seq) {
             // 1 unit per original (unspaced) k-mer
             return static_cast<double>(seq.length() - k + 1);
@@ -358,13 +354,9 @@ void bench_spaced_kmer_extract_packed_checked_single(
     std::vector<std::string> const& masks,
     std::ostream& csv_os
 ) {
-    std::size_t const rounds = 1;
-    std::size_t const repeats = 8;
-
     // User output
     std::string const suite_title = "spaced_kmer_extract_packed_checked_single";
     std::cout << "\n=== spaced k-mer extract from packed sequences single mask (checked) ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     write_csv_header(csv_os);
 
@@ -400,10 +392,10 @@ void bench_spaced_kmer_extract_packed_checked_single(
         }
         std::string const case_label = "mask=" + std::to_string(m);
         bench_spaced_kmer_extract_packed_checked_single_layout_<Layout::kMSB>(
-            packed_msb, masks[m], sink_buffer, csv_os, suite_title, case_label, rounds, repeats
+            packed_msb, masks[m], sink_buffer, csv_os, suite_title, case_label
         );
         bench_spaced_kmer_extract_packed_checked_single_layout_<Layout::kLSB>(
-            packed_lsb, masks[m], sink_buffer, csv_os, suite_title, case_label, rounds, repeats
+            packed_lsb, masks[m], sink_buffer, csv_os, suite_title, case_label
         );
     }
     if (stdout_is_terminal()) {

@@ -24,13 +24,9 @@ void bench_kmer_extract_ascii_unchecked(
         throw std::runtime_error( "Invalid k_min > k_max" );
     }
 
-    std::size_t const rounds = 2;
-    std::size_t const repeats = 8;
-
     // User output
     std::string const suite_title = "kmer_extract_ascii_unchecked";
     std::cout << "\n=== k-mer extract from ASCII, unchecked ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     // Prepare csv output file with benchmark results
     write_csv_header(csv_os);
@@ -119,8 +115,6 @@ void bench_kmer_extract_ascii_unchecked(
 
         Microbench<std::string> suite(suite_title);
         suite
-            .rounds(rounds)
-            .repeats(repeats)
             .units_fn([k](std::string const& seq) {
                 // 1 unit per k-mer
                 return static_cast<double>(seq.size() - k + 1);

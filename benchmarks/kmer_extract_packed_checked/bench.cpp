@@ -25,12 +25,8 @@ void bench_kmer_extract_packed_checked(
         throw std::runtime_error("Invalid k_min > k_max");
     }
 
-    std::size_t const rounds = 8;
-    std::size_t const repeats = 8;
-
     std::string const suite_title = "kmer_extract_packed_checked";
     std::cout << "\n=== k-mer extract (packed, checked) ===\n";
-    std::cout << "rounds=" << rounds << ", repeats=" << repeats << "\n";
 
     write_csv_header(csv_os);
 
@@ -73,7 +69,7 @@ void bench_kmer_extract_packed_checked(
         Benches const&... benches
     ) {
         Microbench<Seq> suite(suite_title);
-        suite.rounds(rounds).repeats(repeats).units_fn(
+        suite.units_fn(
             [k](Seq const& seq) { return static_cast<double>(seq.length() - k + 1); }
         );
         auto results = suite.run(packed, benches...);

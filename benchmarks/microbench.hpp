@@ -1,11 +1,14 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <numeric>
 #include <ostream>
 #include <stdexcept>
 #include <string>
@@ -14,8 +17,31 @@
 #include <vector>
 
 #include "fisk/util/intrinsics.hpp"
+#include "sink.hpp"
 
 using namespace fisk;
+
+// -----------------------------------------------------------------------------
+//     Settings
+// -----------------------------------------------------------------------------
+
+/**
+ * @brief The timing settings shared by all suites, set once from the command line in main().
+ *
+ * Each repeat times every variant of a case once, in turn, and the results are the statistics
+ * over the repeats. Each timing is a sample of whole passes over the inputs, as many as reach
+ * the sample time, counted per variant from its first warm-up. Every timing is preceded by a
+ * warm-up of whole passes that lasts at least the warm-up time, as the other variants of the
+ * repeat have run in between and replaced the caches and the branch history.
+ */
+struct MicrobenchSettings
+{
+    double sample_seconds = 0.010;
+    double warmup_seconds = 0.001;
+    std::size_t repeats = 5;
+};
+
+inline MicrobenchSettings microbench_settings;
 
 // -----------------------------------------------------------------------------
 //     Result and Bench
@@ -24,7 +50,18 @@ using namespace fisk;
 struct Result
 {
     std::string_view name;
+
+    // Statistics of the time per unit over the repeats. The minimum is the main value, as
+    // noise only adds time.
     double ns_per_op;
+    double ns_per_op_median;
+    double ns_per_op_mean;
+
+    // Passes over the inputs per sample, and number of samples.
+    std::size_t rounds;
+    std::size_t repeats;
+
+    // The sum of the results of one pass over the inputs, see require_same_sinks().
     std::uint64_t sink;
 };
 
@@ -72,7 +109,7 @@ inline void print(std::vector<Result> const& rs)
 
 inline void write_csv_header(std::ostream& os)
 {
-    os << "suite,case,benchmark,sink,ns_per_op\n";
+    os << "suite,case,benchmark,sink,ns_per_op,ns_per_op_median,ns_per_op_mean,rounds,repeats\n";
 }
 
 // sink_name identifies which Sink strategy (see sink.hpp) produced every row of this call: the
@@ -93,7 +130,11 @@ inline void write_csv_rows(
            << case_label << ","
            << r.name << ","
            << sink_name << ","
-           << r.ns_per_op
+           << r.ns_per_op << ","
+           << r.ns_per_op_median << ","
+           << r.ns_per_op_mean << ","
+           << r.rounds << ","
+           << r.repeats
            << "\n";
     }
 }
@@ -143,6 +184,9 @@ inline Bench<std::decay_t<F>> bench(std::string_view name, F&& fn)
 //     Microbench<Input>
 // -----------------------------------------------------------------------------
 
+/**
+ * @brief Times the variants of one case, see MicrobenchSettings for how.
+ */
 template <class Input>
 class Microbench
 {
@@ -160,18 +204,6 @@ public:
     // ------------------------------------------------------
     //     configuration (fluent)
     // ------------------------------------------------------
-
-    Microbench& rounds(std::size_t r) {
-        if (r == 0) throw std::runtime_error("rounds must be > 0");
-        rounds_ = r;
-        return *this;
-    }
-
-    Microbench& repeats(std::size_t r) {
-        if (r == 0) throw std::runtime_error("repeats must be > 0");
-        repeats_ = r;
-        return *this;
-    }
 
     // Default: 1 unit per input element (ns_per_op == ns per element)
     Microbench& units_per_element(double u) {
@@ -224,27 +256,7 @@ public:
         std::vector<Input> const& inputs,
         Benches const&... bs
     ) const {
-        if (repeats_ == 1) {
-            auto rs = run_once(inputs, bs...);
-            print_if_needed(rs, /*best_of=*/false);
-            return rs;
-        }
-
-        auto best = run_once(inputs, bs...);
-        for (std::size_t k = 1; k < repeats_; ++k) {
-            auto cur = run_once(inputs, bs...);
-            if (cur.size() != best.size()) {
-                throw std::runtime_error("Microbench::run: benchmark count changed across repeats");
-            }
-            for (std::size_t i = 0; i < cur.size(); ++i) {
-                if (cur[i].ns_per_op < best[i].ns_per_op) {
-                    best[i] = cur[i];
-                }
-            }
-        }
-        print_if_needed(best, /*best_of=*/true);
-        std::cout << "\nSink: " << best.front().sink << "\n";
-        return best;
+        return run_repeats_([&]() -> std::vector<Input> const& { return inputs; }, bs...);
     }
 
     // ------------------------------------------------------
@@ -256,32 +268,10 @@ public:
         MakeInputs make_inputs,
         Benches const&... bs
     ) const {
-        if (repeats_ == 0) {
-            throw std::runtime_error("Microbench::run: repeats must be > 0");
-        }
-
-        // First run: generate inputs and time once.
-        auto inputs0 = make_inputs();
-        auto best    = run_once(inputs0, bs...);
-
-        // Further repeats: new inputs each time; keep best ns/op.
-        for (std::size_t k = 1; k < repeats_; ++k) {
-            auto inputs = make_inputs();
-            auto cur    = run_once(inputs, bs...);
-
-            if (cur.size() != best.size()) {
-                throw std::runtime_error("Microbench::run: benchmark count changed");
-            }
-            for (std::size_t i = 0; i < cur.size(); ++i) {
-                if (cur[i].ns_per_op < best[i].ns_per_op) {
-                    best[i] = cur[i];
-                }
-            }
-        }
-
-        print_if_needed(best, /*best_of=*/true);
-        std::cout << "\nSink: " << best.front().sink << "\n";
-        return best;
+        std::vector<Input> inputs;
+        return run_repeats_(
+            [&]() -> std::vector<Input> const& { inputs = make_inputs(); return inputs; }, bs...
+        );
     }
 
 private:
@@ -289,6 +279,15 @@ private:
     // ------------------------------------------------------
     //     Internal functions
     // ------------------------------------------------------
+
+    // Per bench: the passes per sample (0 until counted in the first repeat), the time per unit
+    // of each repeat, and the sink of the last repeat.
+    struct State
+    {
+        std::size_t rounds = 0;
+        std::vector<double> ns_per_unit;
+        std::uint64_t sink = 0;
+    };
 
     // Sum of "work units" for a single pass over all inputs
     double compute_units_per_run(std::vector<Input> const& inputs) const {
@@ -307,66 +306,113 @@ private:
         return units_per_element_ * static_cast<double>(inputs.size());
     }
 
+    template <class NextInputs, class... Benches>
+    std::vector<Result> run_repeats_(
+        NextInputs next_inputs,
+        Benches const&... bs
+    ) const {
+        auto const& settings = microbench_settings;
+        if (settings.repeats == 0) {
+            throw std::runtime_error("Microbench::run: repeats must be > 0");
+        }
+
+        std::array<State, sizeof...(Benches)> states{};
+        for (std::size_t k = 0; k < settings.repeats; ++k) {
+            auto const& inputs = next_inputs();
+            double const units_per_run = compute_units_per_run(inputs);
+            std::size_t i = 0;
+            (run_one_(inputs, units_per_run, bs, states[i++]), ...);
+
+            // The sinks are compared per repeat, as generated inputs differ between repeats.
+            if (check_sinks_) {
+                std::vector<Result> sinks;
+                std::size_t j = 0;
+                ((sinks.push_back(Result{bs.name, 0.0, 0.0, 0.0, 0, 0, states[j++].sink})), ...);
+                require_same_sinks(sinks, /*fatal=*/true);
+            }
+        }
+
+        std::vector<Result> rs;
+        rs.reserve(sizeof...(Benches));
+        std::size_t i = 0;
+        (rs.push_back(make_result_(bs.name, states[i++])), ...);
+
+        print_if_needed(rs);
+        std::cout << "\nSink: " << rs.front().sink << "\n";
+        return rs;
+    }
+
     template <class F>
-    Result run_one(
+    void run_one_(
         std::vector<Input> const& inputs,
         double units_per_run,
-        Bench<F> const& b
+        Bench<F> const& b,
+        State& state
     ) const {
+        using clock = std::chrono::steady_clock;
+        auto const& settings = microbench_settings;
         std::uint64_t acc = 0;
 
-        // warm-up
-        for (auto const& in : inputs) {
-            acc += static_cast<std::uint64_t>(b.fn(in));
-        }
+        // Warm-up: whole passes until the warm-up time has passed. The sink is the sum of the
+        // first pass, so that it does not depend on the number of passes of the variant.
+        // Every pass runs on the same inputs, so without the memory barrier, the compiler could
+        // compute an inlined kernel once and reuse its results for the other passes.
+        std::size_t passes = 0;
+        double warmup_secs = 0.0;
+        auto const w0 = clock::now();
+        do {
+            clobber_memory(inputs.data());
+            std::uint64_t pass_acc = 0;
+            for (auto const& in : inputs) {
+                pass_acc += static_cast<std::uint64_t>(b.fn(in));
+            }
+            if (passes == 0) {
+                state.sink = pass_acc;
+            }
+            acc += pass_acc;
+            ++passes;
+            warmup_secs = std::chrono::duration<double>(clock::now() - w0).count();
+        } while (warmup_secs < settings.warmup_seconds);
         do_not_optimize(acc);
 
-        // Every round runs on the same inputs, so without the memory barrier, the compiler could
-        // compute an inlined kernel once and reuse its results for the other rounds.
-        auto t0 = std::chrono::steady_clock::now();
-        for (std::size_t r = 0; r < rounds_; ++r) {
+        // The first repeat sets the passes per sample from the time per pass of its warm-up.
+        if (state.rounds == 0) {
+            double const pass_secs = warmup_secs / static_cast<double>(passes);
+            state.rounds = static_cast<std::size_t>(
+                std::max(1.0, std::ceil(settings.sample_seconds / pass_secs))
+            );
+        }
+
+        auto const t0 = clock::now();
+        for (std::size_t r = 0; r < state.rounds; ++r) {
             clobber_memory(inputs.data());
             for (auto const& in : inputs) {
                 acc += static_cast<std::uint64_t>(b.fn(in));
             }
         }
-        auto t1 = std::chrono::steady_clock::now();
+        auto const t1 = clock::now();
         do_not_optimize(acc);
 
-        double secs        = std::chrono::duration<double>(t1 - t0).count();
-        double total_units = units_per_run * static_cast<double>(rounds_);
-        double ns_per_unit = (secs * 1e9) / total_units;
-
-        std::uint64_t const sink = finalize_ ? finalize_() : acc;
-        return Result{b.name, ns_per_unit, sink};
-    }
-
-    template <class... Benches>
-    std::vector<Result> run_once(
-        std::vector<Input> const& inputs,
-        Benches const&... bs
-    ) const {
-        std::vector<Result> rs;
-        rs.reserve(sizeof...(bs));
-
-        double units_per_run = compute_units_per_run(inputs);
-
-        (rs.push_back(run_one(inputs, units_per_run, bs)), ...);
-
-        if (check_sinks_) {
-            require_same_sinks(rs, /*fatal=*/true);
+        double const secs        = std::chrono::duration<double>(t1 - t0).count();
+        double const total_units = units_per_run * static_cast<double>(state.rounds);
+        state.ns_per_unit.push_back((secs * 1e9) / total_units);
+        if (finalize_) {
+            state.sink = finalize_();
         }
-
-        return rs;
     }
 
-    void print_if_needed(std::vector<Result> const& rs, bool best_of) const {
+    static Result make_result_(std::string_view name, State const& state) {
+        auto ns = state.ns_per_unit;
+        std::sort(ns.begin(), ns.end());
+        auto const n = ns.size();
+        double const median = (n % 2 == 1) ? ns[n / 2] : (ns[n / 2 - 1] + ns[n / 2]) / 2.0;
+        double const mean = std::accumulate(ns.begin(), ns.end(), 0.0) / static_cast<double>(n);
+        return Result{name, ns.front(), median, mean, state.rounds, n, state.sink};
+    }
+
+    void print_if_needed(std::vector<Result> const& rs) const {
         if (!print_results_) return;
-        if (best_of) {
-            std::cout << "\n=== " << title_ << " (best of " << repeats_ << ") ===\n";
-        } else {
-            std::cout << "\n=== " << title_ << " ===\n";
-        }
+        std::cout << "\n=== " << title_ << " (min of " << microbench_settings.repeats << ") ===\n";
         print(rs);
     }
 
@@ -375,14 +421,14 @@ private:
     // ------------------------------------------------------
 
     std::string title_;
-    std::size_t rounds_  = 10;
-    std::size_t repeats_ = 1;
 
     // Either a constant factor per element, or a custom function:
     double units_per_element_ = 1.0;
     std::function<double(Input const&)> units_fn_{};
 
-    bool check_sinks_   = true;
+    // Only the Sum sink gives a value per pass that is comparable between variants; Barrier and
+    // Write do not collect the results.
+    bool check_sinks_   = FISK_BENCHMARK_SINK_MODE == FISK_BENCHMARK_SINK_SUM;
     bool print_results_ = false;
 
     std::function<std::uint64_t()> finalize_{};

@@ -14,10 +14,10 @@
 
 using namespace fisk;
 
-// Number of entries per batch, and how often each implementation passes over that batch per timed
-// call. Their product is the number of extractions a measurement is averaged over; the split
-// between them only decides how much data is in flight, which we keep small enough for the
-// per-mask tables of all implementations to stay in L1.
+// Number of entries per batch, and how often each implementation passes over that batch per call.
+// Their product is the number of extractions per call, which Microbench repeats as often as its
+// sample time needs; the split between them only decides how much data is in flight, which we
+// keep small enough for the per-mask tables of all implementations to stay in L1.
 static constexpr std::size_t kBatchSize = 64;
 static constexpr std::size_t kInnerRounds = 1024;
 
@@ -99,13 +99,12 @@ static void survey_selector_modes(std::vector<std::size_t>& selector_counts)
 void bench_bit_extract_weights(std::ostream& csv_os)
 {
     std::size_t const n = kBatchSize;
-    std::size_t const rounds = kInnerRounds;
-    std::size_t const repeats = 32;
+    std::size_t const inner_rounds = kInnerRounds;
 
     // User output
     std::string const suite_title = "bit_extract_weights";
     std::cout << "\n=== bit extract weights ===\n";
-    std::cout << "n=" << n << ", rounds=" << rounds << ", repeats=" << repeats << "\n";
+    std::cout << "n=" << n << ", inner rounds=" << inner_rounds << "\n";
 
     // Prepare csv output file with benchmark results
     write_csv_header(csv_os);
@@ -142,10 +141,8 @@ void bench_bit_extract_weights(std::ostream& csv_os)
         // so the units per run are all extractions that one call performs.
         Microbench<BitExtractWeightsBatch> suite(suite_title);
         suite
-            .rounds(1)
-            .repeats(repeats)
             .units_fn([&](BitExtractWeightsBatch const& batch) {
-                return static_cast<double>(batch.values.size()) * static_cast<double>(rounds);
+                return static_cast<double>(batch.values.size()) * static_cast<double>(inner_rounds);
             });
 
         auto results = suite.run(
@@ -154,76 +151,76 @@ void bench_bit_extract_weights(std::ostream& csv_os)
             bench(
                 "pext",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_pext(b, rounds, sink_buffer);
+                    return run_var_pext(b, inner_rounds, sink_buffer);
                 }
             ),
             #endif
             bench(
                 "bit_loop",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_bit_loop(b, rounds, sink_buffer);
+                    return run_var_bit_loop(b, inner_rounds, sink_buffer);
                 }
             ),
             bench(
                 "split32",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_split32(b, rounds, sink_buffer);
+                    return run_var_split32(b, inner_rounds, sink_buffer);
                 }
             ),
             bench(
                 "byte_lookup",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_byte_lookup(b, rounds, sink_buffer);
+                    return run_var_byte_lookup(b, inner_rounds, sink_buffer);
                 }
             ),
             bench(
                 "block_shift",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_block_shift(b, rounds, sink_buffer);
+                    return run_var_block_shift(b, inner_rounds, sink_buffer);
                 }
             ),
             bench(
                 "block_shift_unrolled1",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_block_shift_unrolled1(b, rounds, sink_buffer);
+                    return run_var_block_shift_unrolled1(b, inner_rounds, sink_buffer);
                 }
             ),
             bench(
                 "block_shift_unrolled2",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_block_shift_unrolled2(b, rounds, sink_buffer);
+                    return run_var_block_shift_unrolled2(b, inner_rounds, sink_buffer);
                 }
             ),
             bench(
                 "block_shift_unrolled4",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_block_shift_unrolled4(b, rounds, sink_buffer);
+                    return run_var_block_shift_unrolled4(b, inner_rounds, sink_buffer);
                 }
             ),
             bench(
                 "block_shift_unrolled8",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_block_shift_unrolled8(b, rounds, sink_buffer);
+                    return run_var_block_shift_unrolled8(b, inner_rounds, sink_buffer);
                 }
             ),
             bench(
                 "butterfly",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_butterfly(b, rounds, sink_buffer);
+                    return run_var_butterfly(b, inner_rounds, sink_buffer);
                 }
             ),
             #if defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)
             bench(
                 "instlatx",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_instlatx(b, rounds, sink_buffer);
+                    return run_var_instlatx(b, inner_rounds, sink_buffer);
                 }
             ),
             #endif
             bench(
                 "zp7",
                 [&](BitExtractWeightsBatch const& b){
-                    return run_var_zp7(b, rounds, sink_buffer);
+                    return run_var_zp7(b, inner_rounds, sink_buffer);
                 }
             )
         );
