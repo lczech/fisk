@@ -227,6 +227,13 @@ for EXT in png svg ; do
         --dir "$DIR" --unchecked "$unchecked" --checked "$checked" "${US[@]}"
     done
 
+
+    # The extractors over the length of the input, with the cache sizes
+
+    CSV="${DIR}/extractor_scaling.csv"
+    run_plot "$CSV" python ./plot/plot_scaling.py --file "$CSV" "${US[@]}" \
+      --out "${DIR}/extractor_scaling.${EXT}"
+
   done
 done
 
