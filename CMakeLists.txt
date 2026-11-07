@@ -227,6 +227,13 @@ if(FISK_BUILD_BENCHMARKS)
     )
     add_executable(fisk_benchmarks ${FISK_BENCHMARK_SOURCES})
 
+    # Suffix of the binary name, so that builds for several compilers and sink modes can keep their
+    # binaries side by side in bin/; scripts/run_benchmarks.sh sets it, e.g. to _gcc_15_sum.
+    set(FISK_BENCHMARK_NAME_SUFFIX "" CACHE STRING "Suffix of the name of the benchmark binary")
+    set_target_properties(fisk_benchmarks PROPERTIES
+        OUTPUT_NAME "fisk_benchmarks${FISK_BENCHMARK_NAME_SUFFIX}"
+    )
+
     # Interprocedural optimization must stay off here: it would let the linker re-fuse every
     # variant's TU back into one optimization unit at link time, defeating the isolation above.
     set_target_properties(fisk_benchmarks PROPERTIES INTERPROCEDURAL_OPTIMIZATION OFF)

@@ -10,8 +10,8 @@
 # system and benchmark settings in sys_info.txt, and the output in log.txt. Existing results of
 # the same label and mode are moved to results/_archive/<date>/ first.
 #
-# Every build writes the benchmark program to bin/fisk_benchmarks, which is why each mode is
-# built and run before the next one is built.
+# Each build writes its benchmark program to bin/ under a name of its own, such as
+# bin/fisk_benchmarks_gcc_15_sum, the same as its build folder build-bench/gcc_15_sum/.
 #
 # Requires CMake (3.20 or later) and a C++20 compiler. Written for bash 3.2, which macOS ships.
 
@@ -247,13 +247,14 @@ for compiler in $COMPILERS; do
     fi
     clabel="$(compiler_label "$cxx")"
     label="${CPU_LABEL}, ${clabel}"
-    slug="$(echo "$clabel" | tr 'A-Z ' 'a-z-')"
+    slug="$(echo "$clabel" | tr 'A-Z ' 'a-z_')"
 
     for mode in $MODES; do
         echo
         echo "=== ${label}, ${mode} ==="
         echo "Start: $(date +%Y-%m-%dT%H:%M:%S)"
-        build_dir="${REPO_ROOT}/build-bench/${slug}-${mode}"
+        build_name="${slug}_${mode}"
+        build_dir="${REPO_ROOT}/build-bench/${build_name}"
         result_dir="${RESULTS_ROOT}/${label}/${mode}"
         mode_define="FISK_BENCHMARK_SINK_$(echo "$mode" | tr 'a-z' 'A-Z')"
 
@@ -262,7 +263,8 @@ for compiler in $COMPILERS; do
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_CXX_COMPILER="$cxx" \
                 -DFISK_BUILD_TESTS=OFF \
-                -DFISK_BENCHMARK_SINK_MODE="$mode_define" > /dev/null \
+                -DFISK_BENCHMARK_SINK_MODE="$mode_define" \
+                -DFISK_BENCHMARK_NAME_SUFFIX="_${build_name}" > /dev/null \
             || ! cmake --build "$build_dir" --target fisk_benchmarks -j "$JOBS"
         then
             echo "Build failed: ${label}, ${mode}" >&2
@@ -279,7 +281,7 @@ for compiler in $COMPILERS; do
             echo "Moved previous results to ${archive_dir}/${mode}"
         fi
         mkdir -p "$result_dir"
-        ${PIN[@]+"${PIN[@]}"} "${REPO_ROOT}/bin/fisk_benchmarks" --output-dir "$result_dir" \
+        ${PIN[@]+"${PIN[@]}"} "${REPO_ROOT}/bin/fisk_benchmarks_${build_name}" --output-dir "$result_dir" \
             ${BENCH_ARGS[@]+"${BENCH_ARGS[@]}"} 2>&1 | tee "${result_dir}/log.txt"
         rc=${PIPESTATUS[0]}
         echo "End:   $(date +%Y-%m-%dT%H:%M:%S)"
