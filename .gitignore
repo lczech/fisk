@@ -1,6 +1,7 @@
 # Build and Bin directories
 build/
 build-bench/
+build-example/
 bin/
 
 # Prerequisites
@@ -44,6 +45,10 @@ bin/
 
 # debug information files
 *.dwo
+
+# The genomes and builds of example/run_human_genome.sh
+example/data/
+example/build/
 
 # Earlier results, moved aside by scripts/run_benchmarks.sh
 results/_archive/

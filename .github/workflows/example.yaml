@@ -1,0 +1,81 @@
+name: Example
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+# Builds the example, a standalone CMake project that uses fisk as a program would, see
+# example/README.md, and runs it on a small FASTA file.
+jobs:
+  build-example:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          # Linux: GCC
+          - os: ubuntu-latest
+            compiler: gcc
+            cc: gcc
+            cxx: g++
+          # Linux: Clang
+          - os: ubuntu-latest
+            compiler: clang
+            cc: clang
+            cxx: clang++
+          # macOS: AppleClang
+          - os: macos-latest
+            compiler: clang
+            cc: clang
+            cxx: clang++
+          # Windows: MSVC
+          - os: windows-latest
+            compiler: msvc
+
+    runs-on: ${{ matrix.config.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ninja
+
+      # MSVC needs the Visual Studio developer environment, see bench.yaml.
+      - name: Setup C++ (Windows MSVC)
+        if: matrix.config.compiler == 'msvc'
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: msvc
+          cmake: true
+          ninja: true
+          vcvarsall: true
+
+      - name: Configure CMake
+        run: |
+          if [[ "${{ matrix.config.compiler }}" != "msvc" ]]; then
+            export CC="${{ matrix.config.cc }}"
+            export CXX="${{ matrix.config.cxx }}"
+          fi
+          cmake -G Ninja -S example -B build-example -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake --build build-example
+
+      - name: Run
+        run: |
+          ./build-example/fisk_example example/test.fa
