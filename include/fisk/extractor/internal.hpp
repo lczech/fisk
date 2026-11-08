@@ -422,28 +422,26 @@ public:
     template <typename Callback>
     FISK_ALWAYS_INLINE void for_each(Seq const& seq, Callback& callback) const
     {
-        auto const run = [&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
-            using Candidate = std::remove_cvref_t<decltype(candidate)>;
-            if constexpr (std::same_as<Candidate, ExtractorEstimate>) {
-                // At compile time, the preference list for this callback type; at runtime, its
-                // first candidate that is preferred on this CPU, see visit_estimate().
-                visit_estimate<Preference, Callback>(
-                    [&](auto const& preferred) FISK_ALWAYS_INLINE_LAMBDA {
-                        preferred.run(settings_, seq, callback);
-                    }
-                );
-            } else {
-                candidate.run(settings_, seq, callback);
-            }
-        };
+        // The candidate to run: the one that the plan holds, or for the estimate, its candidate for
+        // this callback type: at compile time, the preference list for the type; at runtime, its
+        // first candidate that is preferred on this CPU, see visit_estimate(). So the estimate runs
+        // the code of that candidate, instead of a copy of its own.
+        std::size_t index = plan_.index();
+        if (index == 0) {
+            index = visit_estimate<Preference, Callback>(
+                [](auto const& preferred) FISK_ALWAYS_INLINE_LAMBDA {
+                    return candidate_index_<std::remove_cvref_t<decltype(preferred)>>;
+                }
+            );
+        }
 
-        // At runtime: the jump to the alternative that the plan holds, the estimate or a candidate,
-        // with one branch per alternative. Not std::visit, which calls the function for an
-        // alternative out of line, so that the callback would escape into that call, and its state
-        // could not stay in registers in the loops of the candidate.
+        // At runtime: the jump to that candidate, with one branch per candidate. Not std::visit,
+        // which calls the function for an alternative out of line, so that the callback would escape
+        // into that call, and its state could not stay in registers in the loops of the candidate.
+        // The candidates are empty structs, see above, so each branch runs one of its own.
         [&]<std::size_t... I>(std::index_sequence<I...>) FISK_ALWAYS_INLINE_LAMBDA {
-            (void) ((plan_.index() == I && (run(*std::get_if<I>(&plan_)), true)) || ...);
-        }(std::make_index_sequence<std::variant_size_v<Plan>>{});
+            (void) ((index == I + 1 && (Candidates{}.run(settings_, seq, callback), true)) || ...);
+        }(std::index_sequence_for<Candidates...>{});
     }
 
     // -------------------------------------------------------------------------
@@ -627,6 +625,16 @@ public:
     }
 
 private:
+
+    // The index of the candidate `C` in the plan: 1 + its position among the candidates, after the
+    // estimate.
+    template <typename C>
+    static constexpr std::size_t candidate_index_ = [] {
+        static_assert((std::same_as<C, Candidates> || ...), "Not a candidate of the plan.");
+        std::size_t i = 1;
+        (void) ((std::same_as<C, Candidates> ? false : (++i, true)) && ...);
+        return i;
+    }();
 
     Settings settings_;
     Plan plan_;
