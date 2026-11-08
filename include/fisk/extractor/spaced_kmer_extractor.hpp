@@ -558,6 +558,13 @@ public:
      * algorithm. Its side effects during tuning are up to the caller. All algorithms call the same
      * callback, so that a callback that takes vectors gets single spaced k-mers from some
      * algorithms and vectors from others.
+     *
+     * Pass the callback as a temporary, such as `tune(MyCallback{})`, or with std::move(), to
+     * time the algorithms as for_each() runs them: for_each() inlines into its caller, where the
+     * state of a local callback can stay in registers, and tune() then times a local of its own in
+     * the same way. A named callback is called as it is, so that it sees all calls, but its state
+     * stays in memory while it is timed, so that tune() may choose another algorithm than the
+     * one that for_each() runs fastest.
      */
     template <typename Callback>
         requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
@@ -566,7 +573,9 @@ public:
         if (options.level == TuneLevel::kEstimate) {
             plan_.estimate();
         } else {
-            plan_.tune(make_tune_samples_<I, C, E, L>(options), options, callback);
+            plan_.tune(
+                make_tune_samples_<I, C, E, L>(options), options, std::forward<Callback>(callback)
+            );
         }
     }
 
@@ -578,7 +587,7 @@ public:
                  SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
     void tune(Sample const& sample, Callback&& callback, TuneOptions const& options = {})
     {
-        plan_.tune(sample, options, callback);
+        plan_.tune(sample, options, std::forward<Callback>(callback));
     }
 
     /**

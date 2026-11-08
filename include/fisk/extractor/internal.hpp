@@ -436,8 +436,9 @@ public:
         }
 
         // At runtime: the jump to that candidate, with one branch per candidate. Not std::visit,
-        // which calls the function for an alternative out of line, so that the callback would escape
-        // into that call, and its state could not stay in registers in the loops of the candidate.
+        // which calls the function for an alternative out of line, so that the callback would
+        // escape into that call, and its state could not stay in registers in the loops of the
+        // candidate.
         // The candidates are empty structs, see above, so each branch runs one of its own.
         [&]<std::size_t... I>(std::index_sequence<I...>) FISK_ALWAYS_INLINE_LAMBDA {
             (void) ((index == I + 1 && (Candidates{}.run(settings_, seq, callback), true)) || ...);
@@ -510,19 +511,20 @@ public:
 
     /**
      * @brief Estimate, or measure on a `sample` with the `callback`, by the level of the `options`.
-     * The sample is one sequence, or a range of them, see ExtractorSample.
+     * The sample is one sequence, or a range of them, see ExtractorSample. The callback is
+     * forwarded, see measure().
      */
     template <typename Sample, typename Callback>
         requires ExtractorSample<Sample, Seq>
-    void tune(Sample const& sample, TuneOptions const& options, Callback& callback)
+    void tune(Sample const& sample, TuneOptions const& options, Callback&& callback)
     {
         if (options.level == TuneLevel::kEstimate) {
             estimate();
         } else if constexpr (std::convertible_to<Sample const&, Seq const&>) {
             Seq const& seq = sample;
-            measure(std::span<Seq const>(&seq, 1), options, callback);
+            measure(std::span<Seq const>(&seq, 1), options, std::forward<Callback>(callback));
         } else {
-            measure(sample, options, callback);
+            measure(sample, options, std::forward<Callback>(callback));
         }
     }
 
@@ -535,9 +537,14 @@ public:
      * sample time of the `options`, which sets its number of passes per timed run. The timed runs
      * take turns between the candidates, so that changes of the clock speed of the CPU affect all
      * of them alike; the fastest run per pass of each candidate counts.
+     *
+     * A callback that is passed as an rvalue, such as a temporary, is moved in here, and each timed
+     * run moves it into a local of its own, so that it can stay in registers, as it does in
+     * for_each(), which inlines into its caller: so the candidates are timed as they will run. A
+     * callback that is passed as an lvalue is called as it is, so that its owner sees all calls.
      */
     template <typename Samples, typename Callback>
-    void measure(Samples const& samples, TuneOptions const& options, Callback& callback)
+    void measure(Samples const& samples, TuneOptions const& options, Callback&& callback)
     {
         using clock = std::chrono::steady_clock;
         constexpr std::size_t n = sizeof...(Candidates);
@@ -551,9 +558,52 @@ public:
         std::array<double, n> pass_time;
         pass_time.fill(std::numeric_limits<double>::infinity());
 
-        auto const run_pass = [&](auto const& candidate, auto& cb) {
+        auto const run_pass = [&](auto const& candidate, auto& cb) FISK_ALWAYS_INLINE_LAMBDA {
             for (auto const& seq : samples) {
                 candidate.run(settings_, seq, cb);
+            }
+        };
+
+        // The callback of an rvalue, moved in, see above; unused for an lvalue.
+        constexpr bool owned = !std::is_lvalue_reference_v<Callback>;
+        using Owned = std::conditional_t<
+            owned, std::optional<std::remove_cvref_t<Callback>>, std::monostate
+        >;
+        Owned owned_callback;
+        if constexpr (owned) {
+            owned_callback.emplace(std::move(callback));
+        }
+
+        // One timed run of a candidate: while its passes per run are not set yet, passes until the
+        // sample time, at least one, also for samples that take no time, such as empty ones, which
+        // then sets them; afterwards, its passes per run, of which the fastest per pass counts.
+        // One loop for both, so that the candidate is inlined once for the timing. An owned
+        // callback is moved into a local for the run, outside of its timing, and back after it,
+        // with its results kept alive, so that they are not optimized away.
+        auto const timed_run = [&](auto const& candidate, std::size_t i) {
+            auto const run = [&](auto& cb) FISK_ALWAYS_INLINE_LAMBDA {
+                bool const calibrate = passes[i] == 0;
+                std::size_t p = 0;
+                auto const start = clock::now();
+                do {
+                    run_pass(candidate, cb);
+                    ++p;
+                } while (calibrate ? clock::now() - start < sample_time : p < passes[i]);
+                std::chrono::duration<double> const elapsed = clock::now() - start;
+                if (calibrate) {
+                    passes[i] = p;
+                } else {
+                    pass_time[i] = std::min(pass_time[i], elapsed.count() / static_cast<double>(p));
+                }
+            };
+            if constexpr (owned) {
+                std::remove_cvref_t<Callback> local = std::move(*owned_callback);
+                owned_callback.reset();
+                run(local);
+                clobber_memory(&local);
+                owned_callback.emplace(std::move(local));
+            } else {
+                run(callback);
             }
         };
 
@@ -574,25 +624,13 @@ public:
                     "\" differ from those of \"" + reference_name + "\""
                 );
             }
-
-            // At least one pass, also for samples that take no time, such as empty ones.
-            auto const start = clock::now();
-            do {
-                run_pass(candidate, callback);
-                ++passes[i];
-            } while (clock::now() - start < sample_time);
+            timed_run(candidate, i);
         };
 
         auto const time_one = [&](auto const& candidate, std::size_t i) {
-            if (passes[i] == 0) {
-                return;
+            if (passes[i] > 0) {
+                timed_run(candidate, i);
             }
-            auto const start = clock::now();
-            for (std::size_t p = 0; p < passes[i]; ++p) {
-                run_pass(candidate, callback);
-            }
-            std::chrono::duration<double> const elapsed = clock::now() - start;
-            pass_time[i] = std::min(pass_time[i], elapsed.count() / static_cast<double>(passes[i]));
         };
 
         // Each fold runs the lambda for each candidate, with its index.
