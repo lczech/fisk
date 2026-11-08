@@ -21,9 +21,9 @@ std::uint64_t run_var_chunked_simd_sse2_acgt_msb(
     for_each_kmer_ascii_unchecked_chunked_simd<SimdSSE2>(
         seq, k, ChunkedWordEncoder<Encoding::kACGT, Layout::kMSB>{}, scratch,
         [&](
-            std::size_t /*pos*/, auto kmers, std::size_t /*valid_count*/
+            std::size_t /*pos*/, auto kmers, std::size_t valid_count
         ) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(kmer_value(kmers));
+            consume_valid_lanes(sink, kmers, valid_count);
         }
     );
     return sink.finalize();

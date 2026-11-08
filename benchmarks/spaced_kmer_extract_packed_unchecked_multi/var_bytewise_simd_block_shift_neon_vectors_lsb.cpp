@@ -22,9 +22,9 @@ std::uint64_t run_var_bytewise_simd_block_shift_neon_vectors(
             seq, kernel_span,
             [&](
                 std::size_t /*pos*/, std::size_t /*mask_idx*/, auto spaced_kmers,
-                std::size_t /*valid_count*/
+                std::size_t valid_count
             ) FISK_ALWAYS_INLINE_LAMBDA {
-                sink.consume(kmer_value(spaced_kmers));
+                consume_valid_lanes(sink, spaced_kmers, valid_count);
             }
         );
         return sink.finalize();

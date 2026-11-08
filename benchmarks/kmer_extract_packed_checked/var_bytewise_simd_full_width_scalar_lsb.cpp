@@ -16,8 +16,7 @@ std::uint64_t run_var_checked_bytewise_simd_full_width_scalar_lsb(
     auto const consume = [&](
         std::size_t, std::uint64_t v, SimdVectorValidLanes<SimdScalar> lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        sink.consume(v);
-        do_not_optimize(lanes.bits);
+        consume_valid_lanes<SimdScalar>(sink, v, lanes);
     };
     for_each_kmer_packed_bytewise_simd_full_width_<SimdScalar>(seq, k, consume);
     return sink.finalize();

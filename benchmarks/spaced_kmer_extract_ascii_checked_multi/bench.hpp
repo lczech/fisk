@@ -36,10 +36,9 @@ void bench_spaced_kmer_extract_ascii_checked_multi(
 // as a span of fixed size, see dispatch_static_span(), and create their sink inside of it.
 //
 // The SIMD ones take their spaced k-mers either as vectors (`_vectors`), or one at a time with
-// for_each_valid_lane() (`_scalars`). The `_vectors` ones sum the vectors whole, valid lanes or
-// not, as a caller takes them, and keep the valid lanes with a do_not_optimize() barrier, so that
-// they are computed. Their sums hence differ from those of the single spaced k-mers, and they run
-// in a suite.run() of their own.
+// for_each_valid_lane() (`_scalars`). The `_vectors` ones consume only their valid lanes, see
+// consume_valid_lanes() (sink.hpp), so that all variants sum the same spaced k-mers and share one
+// suite.run().
 std::uint64_t run_var_naive(
     std::string const& seq,
     std::size_t k,
@@ -478,8 +477,8 @@ std::uint64_t run_var_rolling_simd_pext_scalars(
 
 // The chunked variants, see spaced_kmer_extract/ascii_chunked_scalar.hpp, each with a scratch
 // of its own. The `_scalars` SIMD variants take the spaced k-mers out of the vectors with
-// for_each_valid_lane(), so that their sums match the others. The `_vectors` ones sum the vectors
-// whole, each arch in a suite.run() of its own, see bench.cpp.
+// for_each_valid_lane(), the `_vectors` ones consume only their valid lanes, see
+// consume_valid_lanes() (sink.hpp), so that their sums match the others.
 #if defined(FISK_HAS_BMI2)
 std::uint64_t run_var_chunked_scalar_pext(
     std::string const& seq,

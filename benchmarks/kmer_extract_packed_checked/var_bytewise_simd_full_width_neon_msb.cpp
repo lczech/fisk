@@ -18,8 +18,7 @@ std::uint64_t run_var_checked_bytewise_simd_full_width_neon_msb(
     auto const consume = [&](
         std::size_t, uint64x2_t v, SimdVectorValidLanes<SimdNEON> lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        sink.consume(v);
-        do_not_optimize(lanes.bits);
+        consume_valid_lanes<SimdNEON>(sink, v, lanes);
     };
     for_each_kmer_packed_bytewise_simd_full_width_<SimdNEON>(seq, k, consume);
     return sink.finalize();

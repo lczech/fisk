@@ -23,8 +23,8 @@ using PackedActgLsb = fisk::PackedSequence<fisk::Encoding::kACTG, fisk::Layout::
  * Encodings and both Layouts, and pack with the word encoder of chunked.hpp. The Encoding
  * only affects the packing step, not the extraction from the packed sequence. For ACGT, also
  * for_each_kmer_ascii_unchecked_chunked_simd() with the SIMD archs of the build: the `_scalars`
- * variants take the k-mers out of the vectors with for_each_valid_lane(), the others sum the
- * vectors whole. Both sums match, as the lanes that pad the last vector are zero.
+ * variants take the k-mers out of the vectors with for_each_valid_lane(), the others sum their
+ * valid lanes with consume_valid_lanes() (sink.hpp), so that both sums match.
  */
 void bench_kmer_extract_ascii_unchecked(
     std::vector<std::string> const& sequences,

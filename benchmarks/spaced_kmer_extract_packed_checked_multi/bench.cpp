@@ -78,15 +78,10 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
         make_spaced_kmer_kernels<BitExtractKernelPext>(bit_ext_masks);
     #endif
 
-    // Each run_() is a suite.run() of its own, as Microbench::run() cross-validates the sinks of
-    // all benches within one call. The functions that hand out single valid spaced k-mers all sum
-    // the same ones. The vector variants sum all lanes, valid or not, see bench.hpp, and the lanes
-    // past the last spaced k-mer depend on the arch, so that each arch has its own run.
-    auto const run_ = [&](auto const&... benches) {
-        auto results = suite.run(sequences, benches...);
-        write_csv_rows(csv_os, suite_title, layout_case, results, kSinkName);
-    };
-    run_(
+    // All variants in one suite.run(): the vector variants consume only their valid lanes, see
+    // consume_valid_lanes() (sink.hpp), so all of them sum the same spaced k-mers.
+    auto results = suite.run(
+        sequences,
         #if defined(FISK_HAS_BMI2)
         bench(
             "bytewise_scalar_pext",
@@ -147,10 +142,26 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
         ),
         #if defined(FISK_HAS_SSE2)
         bench(
+            "bytewise_simd_butterfly_sse2_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_sse2_vectors(
+                    seq, simd_bf_sse2_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
             "bytewise_simd_butterfly_sse2_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_sse2_scalars(
                     seq, simd_bf_sse2_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
+            "bytewise_simd_block_shift_sse2_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_block_shift_sse2_vectors(
+                    seq, simd_bt_sse2_kernels, sink_buffer
                 );
             }
         ),
@@ -165,10 +176,26 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
         #endif
         #if defined(FISK_HAS_AVX2)
         bench(
+            "bytewise_simd_butterfly_avx2_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_avx2_vectors(
+                    seq, simd_bf_avx2_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
             "bytewise_simd_butterfly_avx2_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_avx2_scalars(
                     seq, simd_bf_avx2_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
+            "bytewise_simd_block_shift_avx2_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_block_shift_avx2_vectors(
+                    seq, simd_bt_avx2_kernels, sink_buffer
                 );
             }
         ),
@@ -183,10 +210,26 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
         #endif
         #if defined(FISK_HAS_AVX512)
         bench(
+            "bytewise_simd_butterfly_avx512_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_avx512_vectors(
+                    seq, simd_bf_avx512_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
             "bytewise_simd_butterfly_avx512_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_avx512_scalars(
                     seq, simd_bf_avx512_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
+            "bytewise_simd_block_shift_avx512_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_block_shift_avx512_vectors(
+                    seq, simd_bt_avx512_kernels, sink_buffer
                 );
             }
         ),
@@ -201,10 +244,26 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
         #endif
         #if defined(FISK_HAS_NEON)
         bench(
+            "bytewise_simd_butterfly_neon_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_neon_vectors(
+                    seq, simd_bf_neon_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
             "bytewise_simd_butterfly_neon_scalars",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_butterfly_neon_scalars(
                     seq, simd_bf_neon_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
+            "bytewise_simd_block_shift_neon_vectors",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_block_shift_neon_vectors(
+                    seq, simd_bt_neon_kernels, sink_buffer
                 );
             }
         ),
@@ -219,115 +278,15 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
         #endif
         #if defined(FISK_HAS_BMI2)
         bench(
-            "bytewise_simd_pext_scalars",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_pext_scalars(seq, simd_pext_kernels, sink_buffer);
-            }
-        ),
-        #endif
-        bench(
-            "bytewise_simd_butterfly_scalar_scalars",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_butterfly_scalar_scalars(
-                    seq, simd_bf_scalar_kernels, sink_buffer
-                );
-            }
-        ),
-        bench(
-            "bytewise_simd_block_shift_scalar_scalars",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_block_shift_scalar_scalars(
-                    seq, simd_bt_scalar_kernels, sink_buffer
-                );
-            }
-        )
-    );
-    #if defined(FISK_HAS_SSE2)
-    run_(
-        bench(
-            "bytewise_simd_butterfly_sse2_vectors",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_butterfly_sse2_vectors(
-                    seq, simd_bf_sse2_kernels, sink_buffer
-                );
-            }
-        ),
-        bench(
-            "bytewise_simd_block_shift_sse2_vectors",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_block_shift_sse2_vectors(
-                    seq, simd_bt_sse2_kernels, sink_buffer
-                );
-            }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_AVX2)
-    run_(
-        bench(
-            "bytewise_simd_butterfly_avx2_vectors",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_butterfly_avx2_vectors(
-                    seq, simd_bf_avx2_kernels, sink_buffer
-                );
-            }
-        ),
-        bench(
-            "bytewise_simd_block_shift_avx2_vectors",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_block_shift_avx2_vectors(
-                    seq, simd_bt_avx2_kernels, sink_buffer
-                );
-            }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_AVX512)
-    run_(
-        bench(
-            "bytewise_simd_butterfly_avx512_vectors",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_butterfly_avx512_vectors(
-                    seq, simd_bf_avx512_kernels, sink_buffer
-                );
-            }
-        ),
-        bench(
-            "bytewise_simd_block_shift_avx512_vectors",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_block_shift_avx512_vectors(
-                    seq, simd_bt_avx512_kernels, sink_buffer
-                );
-            }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_NEON)
-    run_(
-        bench(
-            "bytewise_simd_butterfly_neon_vectors",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_butterfly_neon_vectors(
-                    seq, simd_bf_neon_kernels, sink_buffer
-                );
-            }
-        ),
-        bench(
-            "bytewise_simd_block_shift_neon_vectors",
-            [&](Packed const& seq) {
-                return run_var_bytewise_simd_block_shift_neon_vectors(
-                    seq, simd_bt_neon_kernels, sink_buffer
-                );
-            }
-        )
-    );
-    #endif
-    run_(
-        #if defined(FISK_HAS_BMI2)
-        bench(
             "bytewise_simd_pext_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_pext_vectors(seq, simd_pext_kernels, sink_buffer);
+            }
+        ),
+        bench(
+            "bytewise_simd_pext_scalars",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_pext_scalars(seq, simd_pext_kernels, sink_buffer);
             }
         ),
         #endif
@@ -340,14 +299,31 @@ static void bench_spaced_kmer_extract_packed_checked_multi_layout_(
             }
         ),
         bench(
+            "bytewise_simd_butterfly_scalar_scalars",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_butterfly_scalar_scalars(
+                    seq, simd_bf_scalar_kernels, sink_buffer
+                );
+            }
+        ),
+        bench(
             "bytewise_simd_block_shift_scalar_vectors",
             [&](Packed const& seq) {
                 return run_var_bytewise_simd_block_shift_scalar_vectors(
                     seq, simd_bt_scalar_kernels, sink_buffer
                 );
             }
+        ),
+        bench(
+            "bytewise_simd_block_shift_scalar_scalars",
+            [&](Packed const& seq) {
+                return run_var_bytewise_simd_block_shift_scalar_scalars(
+                    seq, simd_bt_scalar_kernels, sink_buffer
+                );
+            }
         )
     );
+    write_csv_rows(csv_os, suite_title, layout_case, results, kSinkName);
 }
 
 void bench_spaced_kmer_extract_packed_checked_multi(

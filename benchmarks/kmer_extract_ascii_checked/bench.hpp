@@ -22,8 +22,8 @@ using CheckedAcgtLsb = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, f
  * one. The rolling_simd loops encode and check a block of characters at a time with their arch. For
  * ACGT, the chunked loops pack the sequence in chunks with their validity, with the word encoder of
  * chunked.hpp, and extract the valid k-mers from those. The `_scalars` SIMD variants take the
- * valid k-mers out of the vectors with for_each_valid_lane(), so that their sums match; the other
- * SIMD variants sum the vectors whole, valid lanes or not, each arch in a suite.run() of its own.
+ * valid k-mers out of the vectors with for_each_valid_lane(); the other SIMD variants consume only
+ * the valid lanes of the vectors, see consume_valid_lanes() (sink.hpp), so that all sums match.
  */
 void bench_kmer_extract_ascii_checked(
     std::vector<std::string> const& sequences,

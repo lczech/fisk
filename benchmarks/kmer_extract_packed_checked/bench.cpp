@@ -46,10 +46,8 @@ void bench_kmer_extract_packed_checked(
     auto sink_buffer = make_sink_buffer();
 
     // The benches of one k on the sequences of one layout, in their own suite.run(), which
-    // cross-validates the sinks of all benches within one call. The functions that emit single
-    // valid k-mers all sum the same k-mers. The vector variants sum all lanes, valid or not, see
-    // bench.hpp, and the lanes past the last k-mer depend on the arch, so that each arch has its
-    // own run.
+    // cross-validates the sinks of all benches within one call. The vector variants consume only
+    // their valid lanes, see consume_valid_lanes() (sink.hpp), so all variants sum the same k-mers.
     auto const run_ = [&]<typename Seq, typename... Benches>(
         std::vector<Seq> const& packed, std::string const& layout, std::size_t k,
         Benches const&... benches
@@ -76,58 +74,6 @@ void bench_kmer_extract_packed_checked(
         run_(packed_msb, "msb", k,
             #if defined(FISK_HAS_SSE2)
             bench(
-                "bytewise_simd_sse2_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_sse2_scalars_msb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_SSE2
-            #if defined(FISK_HAS_AVX2)
-            bench(
-                "bytewise_simd_avx2_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_avx2_scalars_msb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_AVX2
-            #if defined(FISK_HAS_AVX512)
-            bench(
-                "bytewise_simd_avx512_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_avx512_scalars_msb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_AVX512
-            #if defined(FISK_HAS_NEON)
-            bench(
-                "bytewise_simd_neon_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_neon_scalars_msb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_NEON
-            bench(
-                "bytewise_simd_scalar_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_scalar_scalars_msb(seq, k, sink_buffer);
-                }
-            ),
-            bench(
-                "bytewise_scalar",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_scalar_msb(seq, k, sink_buffer);
-                }
-            ),
-            bench(
-                "rolling_scalar",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_rolling_scalar_msb(seq, k, sink_buffer);
-                }
-            )
-        );
-        #if defined(FISK_HAS_SSE2)
-        run_(packed_msb, "msb", k,
-            bench(
                 "bytewise_simd_narrow_width_sse2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_narrow_width_sse2_msb(seq, k, sink_buffer);
@@ -144,11 +90,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_sse2_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_SSE2
-        #if defined(FISK_HAS_AVX2)
-        run_(packed_msb, "msb", k,
+            ),
+            bench(
+                "bytewise_simd_sse2_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_sse2_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
             bench(
                 "bytewise_simd_narrow_width_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -166,11 +116,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_avx2_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_AVX2
-        #if defined(FISK_HAS_AVX512)
-        run_(packed_msb, "msb", k,
+            ),
+            bench(
+                "bytewise_simd_avx2_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_avx2_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
             bench(
                 "bytewise_simd_narrow_width_avx512",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -190,11 +144,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_avx512_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_AVX512
-        #if defined(FISK_HAS_NEON)
-        run_(packed_msb, "msb", k,
+            ),
+            bench(
+                "bytewise_simd_avx512_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_avx512_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
             bench(
                 "bytewise_simd_narrow_width_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -212,10 +170,14 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_neon_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_NEON
-        run_(packed_msb, "msb", k,
+            ),
+            bench(
+                "bytewise_simd_neon_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_neon_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_NEON
             bench(
                 "bytewise_simd_narrow_width_scalar",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -235,50 +197,7 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_scalar_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    //     layout=msb, k in [30, k_max]: full-width only
-    // -----------------------------------------------------------------------
-    for (std::size_t k = std::max<std::size_t>(k_min, 30); k <= k_max; ++k) {
-        if (stdout_is_terminal()) {
-            std::cout << "\rlayout=msb k " << std::setw(2) << k << std::flush;
-        }
-        run_(packed_msb, "msb", k,
-            #if defined(FISK_HAS_SSE2)
-            bench(
-                "bytewise_simd_sse2_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_sse2_scalars_msb(seq, k, sink_buffer);
-                }
             ),
-            #endif // FISK_HAS_SSE2
-            #if defined(FISK_HAS_AVX2)
-            bench(
-                "bytewise_simd_avx2_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_avx2_scalars_msb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_AVX2
-            #if defined(FISK_HAS_AVX512)
-            bench(
-                "bytewise_simd_avx512_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_avx512_scalars_msb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_AVX512
-            #if defined(FISK_HAS_NEON)
-            bench(
-                "bytewise_simd_neon_scalars",
-                [k, &sink_buffer](CheckedMsb const& seq) {
-                    return run_var_checked_bytewise_simd_neon_scalars_msb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_NEON
             bench(
                 "bytewise_simd_scalar_scalars",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -298,8 +217,17 @@ void bench_kmer_extract_packed_checked(
                 }
             )
         );
-        #if defined(FISK_HAS_SSE2)
+    }
+
+    // -----------------------------------------------------------------------
+    //     layout=msb, k in [30, k_max]: full-width only
+    // -----------------------------------------------------------------------
+    for (std::size_t k = std::max<std::size_t>(k_min, 30); k <= k_max; ++k) {
+        if (stdout_is_terminal()) {
+            std::cout << "\rlayout=msb k " << std::setw(2) << k << std::flush;
+        }
         run_(packed_msb, "msb", k,
+            #if defined(FISK_HAS_SSE2)
             bench(
                 "bytewise_simd_full_width_sse2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -311,11 +239,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_sse2_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_SSE2
-        #if defined(FISK_HAS_AVX2)
-        run_(packed_msb, "msb", k,
+            ),
+            bench(
+                "bytewise_simd_sse2_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_sse2_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
             bench(
                 "bytewise_simd_full_width_avx2",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -327,11 +259,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_avx2_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_AVX2
-        #if defined(FISK_HAS_AVX512)
-        run_(packed_msb, "msb", k,
+            ),
+            bench(
+                "bytewise_simd_avx2_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_avx2_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
             bench(
                 "bytewise_simd_full_width_avx512",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -343,11 +279,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_avx512_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_AVX512
-        #if defined(FISK_HAS_NEON)
-        run_(packed_msb, "msb", k,
+            ),
+            bench(
+                "bytewise_simd_avx512_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_avx512_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
             bench(
                 "bytewise_simd_full_width_neon",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -359,10 +299,14 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_neon_msb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_NEON
-        run_(packed_msb, "msb", k,
+            ),
+            bench(
+                "bytewise_simd_neon_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_neon_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_NEON
             bench(
                 "bytewise_simd_full_width_scalar",
                 [k, &sink_buffer](CheckedMsb const& seq) {
@@ -373,6 +317,24 @@ void bench_kmer_extract_packed_checked(
                 "bytewise_simd_scalar",
                 [k, &sink_buffer](CheckedMsb const& seq) {
                     return run_var_checked_bytewise_simd_scalar_msb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "bytewise_simd_scalar_scalars",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_simd_scalar_scalars_msb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "bytewise_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_bytewise_scalar_msb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "rolling_scalar",
+                [k, &sink_buffer](CheckedMsb const& seq) {
+                    return run_var_checked_rolling_scalar_msb(seq, k, sink_buffer);
                 }
             )
         );
@@ -387,58 +349,6 @@ void bench_kmer_extract_packed_checked(
         }
         run_(packed_lsb, "lsb", k,
             #if defined(FISK_HAS_SSE2)
-            bench(
-                "bytewise_simd_sse2_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_sse2_scalars_lsb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_SSE2
-            #if defined(FISK_HAS_AVX2)
-            bench(
-                "bytewise_simd_avx2_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_avx2_scalars_lsb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_AVX2
-            #if defined(FISK_HAS_AVX512)
-            bench(
-                "bytewise_simd_avx512_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_avx512_scalars_lsb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_AVX512
-            #if defined(FISK_HAS_NEON)
-            bench(
-                "bytewise_simd_neon_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_neon_scalars_lsb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_NEON
-            bench(
-                "bytewise_simd_scalar_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_scalar_scalars_lsb(seq, k, sink_buffer);
-                }
-            ),
-            bench(
-                "bytewise_scalar",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_scalar_lsb(seq, k, sink_buffer);
-                }
-            ),
-            bench(
-                "rolling_scalar",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_rolling_scalar_lsb(seq, k, sink_buffer);
-                }
-            )
-        );
-        #if defined(FISK_HAS_SSE2)
-        run_(packed_lsb, "lsb", k,
             bench(
                 "bytewise_simd_narrow_width_sse2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -456,11 +366,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_sse2_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_SSE2
-        #if defined(FISK_HAS_AVX2)
-        run_(packed_lsb, "lsb", k,
+            ),
+            bench(
+                "bytewise_simd_sse2_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_sse2_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
             bench(
                 "bytewise_simd_narrow_width_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -478,11 +392,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_avx2_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_AVX2
-        #if defined(FISK_HAS_AVX512)
-        run_(packed_lsb, "lsb", k,
+            ),
+            bench(
+                "bytewise_simd_avx2_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_avx2_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
             bench(
                 "bytewise_simd_narrow_width_avx512",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -502,11 +420,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_avx512_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_AVX512
-        #if defined(FISK_HAS_NEON)
-        run_(packed_lsb, "lsb", k,
+            ),
+            bench(
+                "bytewise_simd_avx512_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_avx512_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
             bench(
                 "bytewise_simd_narrow_width_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -524,10 +446,14 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_neon_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_NEON
-        run_(packed_lsb, "lsb", k,
+            ),
+            bench(
+                "bytewise_simd_neon_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_neon_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_NEON
             bench(
                 "bytewise_simd_narrow_width_scalar",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -547,50 +473,7 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_scalar_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    //     layout=lsb, k in [30, k_max]: full-width only
-    // -----------------------------------------------------------------------
-    for (std::size_t k = std::max<std::size_t>(k_min, 30); k <= k_max; ++k) {
-        if (stdout_is_terminal()) {
-            std::cout << "\rlayout=lsb k " << std::setw(2) << k << std::flush;
-        }
-        run_(packed_lsb, "lsb", k,
-            #if defined(FISK_HAS_SSE2)
-            bench(
-                "bytewise_simd_sse2_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_sse2_scalars_lsb(seq, k, sink_buffer);
-                }
             ),
-            #endif // FISK_HAS_SSE2
-            #if defined(FISK_HAS_AVX2)
-            bench(
-                "bytewise_simd_avx2_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_avx2_scalars_lsb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_AVX2
-            #if defined(FISK_HAS_AVX512)
-            bench(
-                "bytewise_simd_avx512_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_avx512_scalars_lsb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_AVX512
-            #if defined(FISK_HAS_NEON)
-            bench(
-                "bytewise_simd_neon_scalars",
-                [k, &sink_buffer](CheckedLsb const& seq) {
-                    return run_var_checked_bytewise_simd_neon_scalars_lsb(seq, k, sink_buffer);
-                }
-            ),
-            #endif // FISK_HAS_NEON
             bench(
                 "bytewise_simd_scalar_scalars",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -610,8 +493,17 @@ void bench_kmer_extract_packed_checked(
                 }
             )
         );
-        #if defined(FISK_HAS_SSE2)
+    }
+
+    // -----------------------------------------------------------------------
+    //     layout=lsb, k in [30, k_max]: full-width only
+    // -----------------------------------------------------------------------
+    for (std::size_t k = std::max<std::size_t>(k_min, 30); k <= k_max; ++k) {
+        if (stdout_is_terminal()) {
+            std::cout << "\rlayout=lsb k " << std::setw(2) << k << std::flush;
+        }
         run_(packed_lsb, "lsb", k,
+            #if defined(FISK_HAS_SSE2)
             bench(
                 "bytewise_simd_full_width_sse2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -623,11 +515,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_sse2_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_SSE2
-        #if defined(FISK_HAS_AVX2)
-        run_(packed_lsb, "lsb", k,
+            ),
+            bench(
+                "bytewise_simd_sse2_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_sse2_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_SSE2
+            #if defined(FISK_HAS_AVX2)
             bench(
                 "bytewise_simd_full_width_avx2",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -639,11 +535,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_avx2_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_AVX2
-        #if defined(FISK_HAS_AVX512)
-        run_(packed_lsb, "lsb", k,
+            ),
+            bench(
+                "bytewise_simd_avx2_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_avx2_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX2
+            #if defined(FISK_HAS_AVX512)
             bench(
                 "bytewise_simd_full_width_avx512",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -655,11 +555,15 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_avx512_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_AVX512
-        #if defined(FISK_HAS_NEON)
-        run_(packed_lsb, "lsb", k,
+            ),
+            bench(
+                "bytewise_simd_avx512_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_avx512_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_AVX512
+            #if defined(FISK_HAS_NEON)
             bench(
                 "bytewise_simd_full_width_neon",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -671,10 +575,14 @@ void bench_kmer_extract_packed_checked(
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_neon_lsb(seq, k, sink_buffer);
                 }
-            )
-        );
-        #endif // FISK_HAS_NEON
-        run_(packed_lsb, "lsb", k,
+            ),
+            bench(
+                "bytewise_simd_neon_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_neon_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            #endif // FISK_HAS_NEON
             bench(
                 "bytewise_simd_full_width_scalar",
                 [k, &sink_buffer](CheckedLsb const& seq) {
@@ -685,6 +593,24 @@ void bench_kmer_extract_packed_checked(
                 "bytewise_simd_scalar",
                 [k, &sink_buffer](CheckedLsb const& seq) {
                     return run_var_checked_bytewise_simd_scalar_lsb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "bytewise_simd_scalar_scalars",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_simd_scalar_scalars_lsb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "bytewise_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_bytewise_scalar_lsb(seq, k, sink_buffer);
+                }
+            ),
+            bench(
+                "rolling_scalar",
+                [k, &sink_buffer](CheckedLsb const& seq) {
+                    return run_var_checked_rolling_scalar_lsb(seq, k, sink_buffer);
                 }
             )
         );

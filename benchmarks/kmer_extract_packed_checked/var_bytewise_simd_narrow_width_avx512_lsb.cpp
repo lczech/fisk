@@ -18,8 +18,7 @@ std::uint64_t run_var_checked_bytewise_simd_narrow_width_avx512_lsb(
     auto const consume = [&](
         std::size_t, __m512i v, SimdVectorValidLanes<SimdAVX512> lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        sink.consume(v);
-        do_not_optimize(lanes.bits);
+        consume_valid_lanes<SimdAVX512>(sink, v, lanes);
     };
     for_each_kmer_packed_bytewise_simd_narrow_width_<SimdAVX512>(seq, k, consume);
     return sink.finalize();

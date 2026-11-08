@@ -14,8 +14,8 @@ std::uint64_t run_var_unchecked_bytewise_simd_scalar_msb(
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_unchecked_bytewise_simd<SimdScalar>(
-        seq, k, [&](std::size_t, auto kmers, std::size_t) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(kmer_value(kmers));
+        seq, k, [&](std::size_t, auto kmers, std::size_t valid_count) FISK_ALWAYS_INLINE_LAMBDA {
+            consume_valid_lanes(sink, kmers, valid_count);
         }
     );
     return sink.finalize();

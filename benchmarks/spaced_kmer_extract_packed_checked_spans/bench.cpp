@@ -59,15 +59,10 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
     auto const pext_kernel
         = make_spaced_kmer_kernel<BitExtractKernelPext>(mask);
     #endif
-    // Each run_() is a suite.run() of its own, as Microbench::run() cross-validates the sinks of
-    // all benches within one call. The functions that hand out single valid spaced k-mers all sum
-    // the same ones. The vector variants sum all lanes, valid or not, see bench.hpp, and the lanes
-    // past the last spaced k-mer depend on the arch, so that each arch has its own run.
-    auto const run_ = [&](auto const&... benches) {
-        auto results = suite.run(sequences, benches...);
-        write_csv_rows(csv_os, suite_title, layout_case, results, kSinkName);
-    };
-    run_(
+    // All variants in one suite.run(): the vector variants consume only their valid lanes, see
+    // consume_valid_lanes() (sink.hpp), so all of them sum the same spaced k-mers.
+    auto results = suite.run(
+        sequences,
         #if defined(FISK_HAS_BMI2)
         bench(
             "bytewise_scalar_pext",
@@ -77,14 +72,14 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
         ),
         #endif
         bench(
-            "bytewise_scalar_butterfly",
+            "bytewise_simd_butterfly_scalar_vectors",
             [&](Packed const& seq) {
-                return run_var_bytewise_scalar_butterfly(seq, butterfly_mask, sink_buffer);
+                return run_var_bytewise_simd_butterfly_scalar_vectors(
+                    seq, bf_scalar_kernel, sink_buffer
+                );
             }
-        )
-    );
-    #if defined(FISK_HAS_SSE2)
-    run_(
+        ),
+        #if defined(FISK_HAS_SSE2)
         bench(
             "bytewise_simd_butterfly_sse2_vectors",
             [&](Packed const& seq) {
@@ -92,11 +87,9 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
                     seq, bf_sse2_kernel, sink_buffer
                 );
             }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_AVX2)
-    run_(
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX2)
         bench(
             "bytewise_simd_butterfly_avx2_vectors",
             [&](Packed const& seq) {
@@ -104,11 +97,9 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
                     seq, bf_avx2_kernel, sink_buffer
                 );
             }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_AVX512)
-    run_(
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX512)
         bench(
             "bytewise_simd_butterfly_avx512_vectors",
             [&](Packed const& seq) {
@@ -116,11 +107,9 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
                     seq, bf_avx512_kernel, sink_buffer
                 );
             }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_NEON)
-    run_(
+        ),
+        #endif
+        #if defined(FISK_HAS_NEON)
         bench(
             "bytewise_simd_butterfly_neon_vectors",
             [&](Packed const& seq) {
@@ -128,10 +117,8 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
                     seq, bf_neon_kernel, sink_buffer
                 );
             }
-        )
-    );
-    #endif
-    run_(
+        ),
+        #endif
         #if defined(FISK_HAS_BMI2)
         bench(
             "bytewise_simd_pext_vectors",
@@ -143,14 +130,13 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
         ),
         #endif
         bench(
-            "bytewise_simd_butterfly_scalar_vectors",
+            "bytewise_scalar_butterfly",
             [&](Packed const& seq) {
-                return run_var_bytewise_simd_butterfly_scalar_vectors(
-                    seq, bf_scalar_kernel, sink_buffer
-                );
+                return run_var_bytewise_scalar_butterfly(seq, butterfly_mask, sink_buffer);
             }
         )
     );
+    write_csv_rows(csv_os, suite_title, layout_case, results, kSinkName);
 }
 
 void bench_spaced_kmer_extract_packed_checked_spans(

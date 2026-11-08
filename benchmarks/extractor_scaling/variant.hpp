@@ -16,19 +16,13 @@
 // The tuning and the run of one variant, for its var_*.cpp, which instantiates them in its own
 // translation unit. Both use the same callback, so that tune() chooses the fastest algorithm for
 // it: the k-mers, or spaced k-mers, into the sink, one at a time, or, with Vectors, also the
-// vectors of the SIMD algorithms, whole, valid lanes or not, as the vector variants of the other
-// suites. Each function constructs its own local Sink (see sink.hpp), so that Sum's accumulation
-// can auto-vectorize with the extraction.
+// vectors of the SIMD algorithms, with their valid lanes only, see consume_valid_lanes() (sink.hpp),
+// as the vector variants of the other suites. Each function constructs its own local Sink (see
+// sink.hpp), so that Sum's accumulation can auto-vectorize with the extraction.
 
 template <bool Spaced, bool Vectors, typename Sink>
 auto make_scaling_callback(Sink& sink)
 {
-    auto const consume_valid_lanes = [](auto valid) FISK_ALWAYS_INLINE_LAMBDA {
-        // Checked: the mask of the valid lanes, which a consumer would use; unchecked: a count.
-        if constexpr (requires { valid.bits; }) {
-            fisk::do_not_optimize(valid.bits);
-        }
-    };
     if constexpr (Spaced) {
         auto single = [&sink](std::size_t, std::size_t, auto kmer) FISK_ALWAYS_INLINE_LAMBDA {
             sink.consume(fisk::kmer_value(kmer));
@@ -36,11 +30,10 @@ auto make_scaling_callback(Sink& sink)
         if constexpr (Vectors) {
             return fisk::callback_overload{
                 single,
-                [&sink, consume_valid_lanes](
+                [&sink](
                     std::size_t, std::size_t, auto kmers, auto valid
                 ) FISK_ALWAYS_INLINE_LAMBDA {
-                    sink.consume(fisk::kmer_value(kmers));
-                    consume_valid_lanes(valid);
+                    consume_valid_lanes(sink, kmers, valid);
                 }
             };
         } else {
@@ -53,11 +46,10 @@ auto make_scaling_callback(Sink& sink)
         if constexpr (Vectors) {
             return fisk::callback_overload{
                 single,
-                [&sink, consume_valid_lanes](
+                [&sink](
                     std::size_t, auto kmers, auto valid
                 ) FISK_ALWAYS_INLINE_LAMBDA {
-                    sink.consume(fisk::kmer_value(kmers));
-                    consume_valid_lanes(valid);
+                    consume_valid_lanes(sink, kmers, valid);
                 }
             };
         } else {

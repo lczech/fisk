@@ -11,9 +11,6 @@ tables have (masks, k, layouts), and draws a grid of grouped bar charts: x-axis 
 bars per technique = unchecked and checked. The spaced suites are restricted to MSB, see
 normalize_spaced_layout(). Directories without both tables are left out.
 
-The `_vectors` techniques of the checked suites sum all lanes, valid or not, so for now their
-checked bars do not include the cost of using the valid lanes.
-
 The panel label is the CPU and compiler of each directory, e.g. "AMD EPYC 9684X, Clang 17" for
 "results/AMD_EPYC_9684X/Clang_17/sum", see platform_from_csv_path() in plot_common.py.
 

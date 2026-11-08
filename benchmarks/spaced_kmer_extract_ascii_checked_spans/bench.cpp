@@ -72,20 +72,63 @@ static void bench_spaced_kmer_extract_ascii_checked_spans_layout_(
     ChunkedCheckedScratch<L> scratch_simd_bf_neon;
     #endif
 
-    // Each run_() is a suite.run() of its own, as Microbench::run() cross-validates the sinks of
-    // all benches within one call. The scalar loops hand out the same valid spaced k-mers. The
-    // vector variants sum all lanes, valid or not, see bench.hpp, and the lanes past the last
-    // spaced k-mer depend on the arch, so that each arch has its own run.
-    auto const run_ = [&](auto const&... benches) {
-        auto results = suite.run(sequences, benches...);
-        write_csv_rows(csv_os, suite_title, layout_case, results, kSinkName);
-    };
-    run_(
+    // All variants in one suite.run(): the vector variants consume only their valid lanes, see
+    // consume_valid_lanes() (sink.hpp), so all of them sum the same spaced k-mers.
+    auto results = suite.run(
+        sequences,
         #if defined(FISK_HAS_BMI2)
         bench(
             "chunked_scalar_pext",
             [&](std::string const& seq) {
                 return run_var_chunked_scalar_pext(seq, mask, scratch_scalar_pext, sink_buffer);
+            }
+        ),
+        #endif
+        bench(
+            "chunked_simd_butterfly_scalar_vectors",
+            [&](std::string const& seq) {
+                return run_var_chunked_simd_butterfly_scalar_vectors(
+                    seq, bf_scalar_kernel, scratch_simd_bf_scalar, sink_buffer
+                );
+            }
+        ),
+        #if defined(FISK_HAS_SSE2)
+        bench(
+            "chunked_simd_butterfly_sse2_vectors",
+            [&](std::string const& seq) {
+                return run_var_chunked_simd_butterfly_sse2_vectors(
+                    seq, bf_sse2_kernel, scratch_simd_bf_sse2, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX2)
+        bench(
+            "chunked_simd_butterfly_avx2_vectors",
+            [&](std::string const& seq) {
+                return run_var_chunked_simd_butterfly_avx2_vectors(
+                    seq, bf_avx2_kernel, scratch_simd_bf_avx2, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_AVX512)
+        bench(
+            "chunked_simd_butterfly_avx512_vectors",
+            [&](std::string const& seq) {
+                return run_var_chunked_simd_butterfly_avx512_vectors(
+                    seq, bf_avx512_kernel, scratch_simd_bf_avx512, sink_buffer
+                );
+            }
+        ),
+        #endif
+        #if defined(FISK_HAS_NEON)
+        bench(
+            "chunked_simd_butterfly_neon_vectors",
+            [&](std::string const& seq) {
+                return run_var_chunked_simd_butterfly_neon_vectors(
+                    seq, bf_neon_kernel, scratch_simd_bf_neon, sink_buffer
+                );
             }
         ),
         #endif
@@ -98,64 +141,7 @@ static void bench_spaced_kmer_extract_ascii_checked_spans_layout_(
             }
         )
     );
-    run_(
-        bench(
-            "chunked_simd_butterfly_scalar_vectors",
-            [&](std::string const& seq) {
-                return run_var_chunked_simd_butterfly_scalar_vectors(
-                    seq, bf_scalar_kernel, scratch_simd_bf_scalar, sink_buffer
-                );
-            }
-        )
-    );
-    #if defined(FISK_HAS_SSE2)
-    run_(
-        bench(
-            "chunked_simd_butterfly_sse2_vectors",
-            [&](std::string const& seq) {
-                return run_var_chunked_simd_butterfly_sse2_vectors(
-                    seq, bf_sse2_kernel, scratch_simd_bf_sse2, sink_buffer
-                );
-            }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_AVX2)
-    run_(
-        bench(
-            "chunked_simd_butterfly_avx2_vectors",
-            [&](std::string const& seq) {
-                return run_var_chunked_simd_butterfly_avx2_vectors(
-                    seq, bf_avx2_kernel, scratch_simd_bf_avx2, sink_buffer
-                );
-            }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_AVX512)
-    run_(
-        bench(
-            "chunked_simd_butterfly_avx512_vectors",
-            [&](std::string const& seq) {
-                return run_var_chunked_simd_butterfly_avx512_vectors(
-                    seq, bf_avx512_kernel, scratch_simd_bf_avx512, sink_buffer
-                );
-            }
-        )
-    );
-    #endif
-    #if defined(FISK_HAS_NEON)
-    run_(
-        bench(
-            "chunked_simd_butterfly_neon_vectors",
-            [&](std::string const& seq) {
-                return run_var_chunked_simd_butterfly_neon_vectors(
-                    seq, bf_neon_kernel, scratch_simd_bf_neon, sink_buffer
-                );
-            }
-        )
-    );
-    #endif
+    write_csv_rows(csv_os, suite_title, layout_case, results, kSinkName);
 }
 
 void bench_spaced_kmer_extract_ascii_checked_spans(

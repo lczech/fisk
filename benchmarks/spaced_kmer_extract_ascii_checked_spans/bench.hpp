@@ -11,10 +11,9 @@
 #include "sink.hpp"
 #include "spaced_masks.hpp"
 
-// The variants that hand out vectors sum them whole, valid lanes or not, as a caller takes the
-// vectors with their valid lanes as they are, and keep the valid lanes with a do_not_optimize()
-// barrier, so that they are computed. The sums of the vector variants hence only match within an
-// arch, see bench_spaced_kmer_extract_ascii_checked_spans().
+// The variants that hand out vectors consume only their valid lanes, see consume_valid_lanes()
+// (sink.hpp), so that all variants of one case sum the same spaced k-mers and share one
+// suite.run().
 
 /**
  * @brief Benchmark the chunked extraction of the valid spaced k-mers from ASCII input, with a

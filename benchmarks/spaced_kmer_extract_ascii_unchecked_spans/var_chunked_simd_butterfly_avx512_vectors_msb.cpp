@@ -22,9 +22,9 @@ std::uint64_t run_var_chunked_simd_butterfly_avx512_vectors(
     for_each_spaced_kmer_ascii_unchecked_chunked_simd(
         seq, kernel, ChunkedWordEncoder<Encoding::kACGT, L>{}, scratch,
         [&](
-            std::size_t /*pos*/, auto spaced_kmers, std::size_t /*valid_count*/
+            std::size_t /*pos*/, auto spaced_kmers, std::size_t valid_count
         ) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(kmer_value(spaced_kmers));
+            consume_valid_lanes(sink, spaced_kmers, valid_count);
         }
     );
     return sink.finalize();

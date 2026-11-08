@@ -239,30 +239,7 @@ inline auto packed_bytewise_simd_emit_(Seq const& seq, std::size_t k, Emit& emit
         } else if (pos <= p_max) {
             std::size_t const count = std::min(Simd::lanes, p_max + 1 - pos);
 
-            // The benchmarks sum whole vectors, also this one, and need its lanes past the count to
-            // be zero, so that the sum matches that of the other extraction functions. Only built
-            // for them, as the do_not_optimize barriers, see internal.hpp.
-            #if defined(FISK_BENCHMARK_SINK_MODE)
-            auto const zero_from_count = [count](typename Simd::simd_vector v) {
-                alignas(64) std::uint64_t values[Simd::lanes];
-                Simd::store_aligned(v, values);
-                for (std::size_t j = count; j < Simd::lanes; ++j) {
-                    values[j] = 0;
-                }
-                return Simd::load_aligned(values);
-            };
-            auto zeroed = vec;
-            if constexpr (requires { zeroed.at; }) {
-                for (auto& v : zeroed.at) {
-                    v = zero_from_count(v);
-                }
-            } else {
-                zeroed = zero_from_count(zeroed);
-            }
-            emit(pos, zeroed, count);
-            #else
             emit(pos, vec, count);
-            #endif
         }
     };
 }

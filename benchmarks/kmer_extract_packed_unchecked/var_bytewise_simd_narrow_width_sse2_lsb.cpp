@@ -17,8 +17,8 @@ std::uint64_t run_var_unchecked_bytewise_simd_narrow_width_sse2_lsb(
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_bytewise_simd_narrow_width_<SimdSSE2>(
         seq, k,
-        [&](std::size_t, __m128i v, std::size_t) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(v);
+        [&](std::size_t, __m128i v, std::size_t valid_count) FISK_ALWAYS_INLINE_LAMBDA {
+            consume_valid_lanes<SimdSSE2>(sink, v, valid_count);
         }
     );
     return sink.finalize();

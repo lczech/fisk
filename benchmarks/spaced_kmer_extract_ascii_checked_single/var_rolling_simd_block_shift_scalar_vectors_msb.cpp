@@ -19,8 +19,7 @@ std::uint64_t run_var_rolling_simd_block_shift_scalar_vectors(
         [&](
             std::size_t /*pos*/, auto spaced_kmers, auto valid_lanes
         ) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(kmer_value(spaced_kmers));
-            do_not_optimize(valid_lanes.bits);
+            consume_valid_lanes(sink, spaced_kmers, valid_lanes);
         }
     );
     return sink.finalize();

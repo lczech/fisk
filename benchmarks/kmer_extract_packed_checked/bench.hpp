@@ -19,11 +19,8 @@
 using CheckedMsb = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, fisk::Layout::kMSB>;
 using CheckedLsb = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, fisk::Layout::kLSB>;
 
-// The variants that hand out vectors sum them whole, valid lanes or not, as a caller takes the
-// vectors with their valid lanes as they are, and keep the valid lanes with a do_not_optimize()
-// barrier, so that they are computed. Selecting the valid lanes for the sum, for example with
-// SimdVectorValidLanes::lane_mask(), would add work that callers do not need. The sums of the
-// vector variants hence only match within an arch, see bench_kmer_extract_packed_checked().
+// The variants that hand out vectors consume only their valid lanes, see consume_valid_lanes()
+// (sink.hpp), so that all variants of one case sum the same k-mers and share one suite.run().
 
 /**
  * @brief Benchmark checked k-mer extraction from a PackedSequenceWithValidity, the same variants

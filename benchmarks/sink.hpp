@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "fisk/core/cast.hpp"
+#include "fisk/core/types.hpp"
 #include "fisk/util/intrinsics.hpp"
 
 // Selects which of three strategies every run_var_*() function's per-element accumulation
@@ -43,7 +45,9 @@
 // k-mers at once. Benchmarking them by extracting individual lanes would measure work the
 // technique was never meant to do. Sum accumulates whole registers via a per-width vector
 // accumulator, reduced to one scalar only in finalize(); Barrier barriers the whole register, not
-// its lanes; Write stores the whole register per call, advancing by its lane count.
+// its lanes; Write stores the whole register per call, advancing by its lane count. The vector
+// variants pass their registers through consume_valid_lanes(), see below, which sets the invalid
+// lanes to zero, so that all variants of a suite sum the same values.
 #define FISK_BENCHMARK_SINK_SUM     0
 #define FISK_BENCHMARK_SINK_BARRIER 1
 #define FISK_BENCHMARK_SINK_WRITE   2
@@ -311,4 +315,76 @@ inline Sink make_sink(std::vector<std::uint64_t>& buf)
 inline std::vector<std::uint64_t> make_sink_buffer()
 {
     return std::vector<std::uint64_t>(std::size_t{1} << 13, 0);
+}
+
+// =================================================================================================
+//     Valid lanes
+// =================================================================================================
+
+/**
+ * @brief The vector `v` of the arch `Simd`, with the lanes outside of `mask` set to zero.
+ */
+template <fisk::SimdArch Simd>
+FISK_ALWAYS_INLINE
+inline typename Simd::simd_vector zero_invalid_lanes(
+    typename Simd::simd_vector v, typename Simd::lane_mask mask
+) noexcept {
+    // A lane mask as a vector, or the mask register of AVX512, see SimdArch.
+    if constexpr (sizeof(typename Simd::lane_mask) == sizeof(typename Simd::simd_vector)) {
+        return Simd::bitwise_and(v, mask);
+    } else {
+        #if defined(FISK_HAS_AVX512)
+        return _mm512_maskz_mov_epi64(mask, v);
+        #endif
+    }
+}
+
+/**
+ * @brief Consume the valid lanes of a vector `v` of the arch `Simd`, as handed out by the
+ * extraction functions without checks, with their count of valid lanes.
+ *
+ * Only the lanes below the count go into the sink, the others as zero, so that the sum is that of
+ * the single k-mers. All lanes are valid except in the last vector, so the whole vector goes in
+ * as it is unless the count is below all lanes, where a caller of the functions without checks
+ * does not need to select the lanes.
+ */
+template <fisk::SimdArch Simd, typename Sink>
+FISK_ALWAYS_INLINE
+inline void consume_valid_lanes(
+    Sink& sink, typename Simd::simd_vector v, std::size_t valid_count
+) noexcept {
+    if (valid_count == Simd::lanes) {
+        sink.consume(v);
+    } else {
+        auto const bits = (std::uint64_t{1} << valid_count) - 1u;
+        auto const mask = fisk::SimdVectorValidLanes<Simd>{bits}.lane_mask();
+        sink.consume(zero_invalid_lanes<Simd>(v, mask));
+    }
+}
+
+/**
+ * @brief Consume the valid lanes of a vector `v` of the arch `Simd`, as handed out by the
+ * extraction functions with checks, with their valid lanes.
+ *
+ * Only the valid lanes go into the sink, the others as zero, so that the sum is that of the single
+ * valid k-mers. The lanes are selected in every vector, as which of them are valid depends on the
+ * input.
+ */
+template <fisk::SimdArch Simd, typename Sink>
+FISK_ALWAYS_INLINE
+inline void consume_valid_lanes(
+    Sink& sink, typename Simd::simd_vector v, fisk::SimdVectorValidLanes<Simd> valid_lanes
+) noexcept {
+    sink.consume(zero_invalid_lanes<Simd>(v, valid_lanes.lane_mask()));
+}
+
+/**
+ * @brief Consume the valid lanes of a vector of k-mers or spaced k-mers, with their count of valid
+ * lanes or their valid lanes, as above.
+ */
+template <typename Sink, fisk::KmerVectorType V, typename Valid>
+FISK_ALWAYS_INLINE
+inline void consume_valid_lanes(Sink& sink, V kmers, Valid valid) noexcept
+{
+    consume_valid_lanes<typename V::simd>(sink, fisk::kmer_value(kmers), valid);
 }

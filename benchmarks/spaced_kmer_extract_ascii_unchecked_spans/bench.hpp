@@ -18,8 +18,8 @@
  *
  * The chunked loops, see spaced_kmer_extract/ascii_chunked_scalar.hpp and ascii_chunked_simd.hpp,
  * with the word encoder of chunked.hpp, which encodes invalid characters (see --n-prob in
- * main.cpp) alike for all variants, so that their sums match. The `_vectors` SIMD variants sum the
- * vectors whole, whose padding lanes are zero. Each variant has a scratch of its own.
+ * main.cpp) alike for all variants, so that their sums match. The `_vectors` SIMD variants sum
+ * their valid lanes with consume_valid_lanes() (sink.hpp). Each variant has a scratch of its own.
  */
 void bench_spaced_kmer_extract_ascii_unchecked_spans(
     std::vector<std::string> const& sequences,

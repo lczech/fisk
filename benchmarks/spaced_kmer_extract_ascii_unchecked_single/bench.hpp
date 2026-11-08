@@ -18,8 +18,8 @@
  * ascii_chunked_simd.hpp, against packing the whole sequence first and then extracting from it.
  * All of them pack with the word encoder of chunked.hpp, and hence encode invalid characters
  * (see --n-prob in main.cpp) alike, so that their sums match. The `_scalars` SIMD variants take
- * the spaced k-mers out of the vectors with for_each_valid_lane(), the `_vectors` ones sum the
- * vectors whole, whose padding lanes are zero. Each variant has a scratch of its own.
+ * the spaced k-mers out of the vectors with for_each_valid_lane(), the `_vectors` ones sum their
+ * valid lanes with consume_valid_lanes() (sink.hpp). Each variant has a scratch of its own.
  */
 void bench_spaced_kmer_extract_ascii_unchecked_single(
     std::vector<std::string> const& sequences,

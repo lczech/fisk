@@ -23,8 +23,7 @@ std::uint64_t run_var_chunked_simd_neon_acgt_msb(
         [&](
             std::size_t /*pos*/, auto kmers, auto valid_lanes
         ) FISK_ALWAYS_INLINE_LAMBDA {
-            sink.consume(kmer_value(kmers));
-            do_not_optimize(valid_lanes.bits);
+            consume_valid_lanes(sink, kmers, valid_lanes);
         }
     );
     return sink.finalize();
