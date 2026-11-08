@@ -1,8 +1,10 @@
 #pragma once
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "fisk/core/cast.hpp"
@@ -58,11 +60,29 @@ auto make_scaling_callback(Sink& sink)
     }
 }
 
+// The callback of tune(): it owns its sink, and calls the callback of make_scaling_callback() on
+// it. tune() moves a callback that is passed as a temporary into a local of its own, see
+// KmerExtractor::tune(), so that the sink is local to the timing there, as it is to the extraction
+// in run_scaling_variant(), and the candidates are timed as they run there.
+template <bool Spaced, bool Vectors>
+struct ScalingTuneCallback
+{
+    Sink sink;
+
+    template <typename... Args>
+        requires std::invocable<
+            decltype(make_scaling_callback<Spaced, Vectors>(std::declval<Sink&>()))&, Args...
+        >
+    FISK_ALWAYS_INLINE void operator()(Args... args)
+    {
+        make_scaling_callback<Spaced, Vectors>(sink)(args...);
+    }
+};
+
 template <bool Spaced, bool Vectors, typename Extractor>
 void tune_scaling_variant(Extractor& extractor, std::vector<std::uint64_t>& sink_buffer)
 {
-    auto sink = make_sink(sink_buffer);
-    extractor.tune(make_scaling_callback<Spaced, Vectors>(sink));
+    extractor.tune(ScalingTuneCallback<Spaced, Vectors>{make_sink(sink_buffer)});
 }
 
 template <bool Spaced, bool Vectors, typename Extractor>
