@@ -133,8 +133,11 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 // bits, see PackedSequence (core/types.hpp).
 //
 // Without validity bits, all k-mers are valid. The steps whose k-mers are all within the sequence
-// run with AllValid, and the step after them, if any, with a word that is all ones up to the last
-// k-mer, at `p_max`, and zero after it.
+// run with AllValid, one at a time, or with `UncheckedBlocks` in blocks of 8 bytes as below and
+// then one at a time, and the step after them, if any, with a word that is all ones up to the last
+// k-mer, at `p_max`, and zero after it. The blocks give the compiler the steps of 32 positions in
+// one body, as with validity bits, where it can combine the work of the steps, such as the sums
+// over the lanes of the vectors of the SIMD k-mer steps; for other steps, they mostly add code.
 //
 // With validity bits, see PackedSequenceWithValidityType (core/types.hpp), the steps run in blocks
 // of 8 bytes, that is, 32 positions, and each block is tested once: with one load of the validity
@@ -154,13 +157,14 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 // own start. `BlockWords`, if not 0, is the number of words of the test, known at compile time,
 // with the masks of the words computed once per call.
 //
-// Each copy of the step is inlined. Without validity bits, there are two: for the k-mers within
-// the sequence, and for the step after them. With validity bits, there are three: for the blocks
-// of all valid k-mers, for the other blocks, whose loop has a fixed count, and for the steps after
-// the last whole block.
+// Each copy of the step is inlined. Without validity bits, there are two: for the steps whose
+// k-mers are within the sequence, and for the step after them; with `UncheckedBlocks`, a third for
+// the blocks. With validity bits, there are three: for the blocks of all valid k-mers, for the
+// other blocks, whose loop has a fixed count, and for the steps after the last whole block.
 template <
     std::size_t StepBytes, PackedValidity Form = PackedValidity::kStarts, bool Wide = false,
-    std::size_t BlockWords = 0, PackedSequenceType Seq, typename Step
+    std::size_t BlockWords = 0, bool UncheckedBlocks = false, PackedSequenceType Seq,
+    typename Step
 >
 FISK_ALWAYS_INLINE
 inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& step)
@@ -179,10 +183,23 @@ inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& st
     auto const all_valid = [](std::size_t) FISK_ALWAYS_INLINE_LAMBDA { return AllValid{}; };
 
     std::size_t b = 0;
+
+    // The steps of the block at `b`, with the given validity.
+    auto const block_ = [&](auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
+        for (std::size_t i = 0; i < 8; i += StepBytes) {
+            step(b + i, validity_at);
+        }
+    };
+
     if constexpr (!PackedSequenceWithValidityType<Seq>) {
         // The steps before `whole_bytes` have all their k-mers within the sequence. The step after
         // them, if any, ends at `end_bytes`.
         std::size_t const whole_bytes = (p_max + 1) / 4 / StepBytes * StepBytes;
+        if constexpr (UncheckedBlocks) {
+            for (; b + 8 <= whole_bytes; b += 8) {
+                block_(all_valid);
+            }
+        }
         for (; b < whole_bytes; b += StepBytes) {
             step(b, all_valid);
         }
@@ -218,13 +235,6 @@ inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& st
             } else {
                 (void) k;
                 return w;
-            }
-        };
-
-        // The steps of the block at `b`, with the given validity.
-        auto const block_ = [&](auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
-            for (std::size_t i = 0; i < 8; i += StepBytes) {
-                step(b + i, validity_at);
             }
         };
 

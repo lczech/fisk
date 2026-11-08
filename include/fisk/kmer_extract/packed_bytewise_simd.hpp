@@ -312,8 +312,11 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
     };
 
     // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks_()
-    // (internal.hpp).
-    run_packed_bytewise_blocks_<step_bytes>(seq, k, step_);
+    // (internal.hpp). Without validity bits in blocks as well, so that the compiler can combine
+    // the work of the steps, such as the sums of a callback over the lanes of their vectors.
+    run_packed_bytewise_blocks_<step_bytes, PackedValidity::kStarts, false, 0, true>(
+        seq, k, step_
+    );
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -401,7 +404,9 @@ inline void for_each_kmer_packed_bytewise_simd_full_width_(
     };
 
     // As in the narrow-width loop.
-    run_packed_bytewise_blocks_<step_bytes>(seq, k, step_);
+    run_packed_bytewise_blocks_<step_bytes, PackedValidity::kStarts, false, 0, true>(
+        seq, k, step_
+    );
 }
 
 // -------------------------------------------------------------------------------------------------
