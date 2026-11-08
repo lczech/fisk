@@ -50,6 +50,9 @@ bin/
 example/data/
 example/build/
 
+# The source package of scripts/make_fisk_zip.sh
+fisk.zip
+
 # Earlier results, moved aside by scripts/run_benchmarks.sh
 results/_archive/
 

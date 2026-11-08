@@ -17,6 +17,18 @@ set -uo pipefail
 #
 #     ./fisk/scripts/submit_rubus_benchmarks.sh
 #
+# With FISK_GENOME_FILE set to a copy of the human genome, the example uses it instead of
+# downloading the genome on each node, see example/run_human_genome.sh. With the zip, in an empty
+# working directory:
+#
+#     unzip fisk.zip
+#     NCBI=https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38
+#     GENOME=GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
+#     curl -fLO "${NCBI}/seqs_for_alignment_pipelines.ucsc_ids/${GENOME}"
+#     FISK_GENOME_FILE="${GENOME}" bash fisk/scripts/submit_rubus_benchmarks.sh
+#
+# The script waits for the jobs, so run it in tmux or screen.
+#
 # The jobs are submitted with srun, all four at once, and the script waits for them. Results land
 # in ./results/<CPU>/<Compiler>_<version>/<mode>/, as with run_benchmarks.sh, which moves earlier
 # results of the same CPU, compiler and mode to ./results/_archive/; logs in ./logs/, where
@@ -28,15 +40,14 @@ set -uo pipefail
 
 ACCOUNT="spear"
 QOS="normal"
-TIME_LIMIT="2:00:00"
+TIME_LIMIT="4:00:00"
 
 # CPUs per job: all of them build, and the benchmarks run pinned to one.
 CPUS_PER_TASK=16
 
 # A copy of the human genome for the example, which run_benchmarks.sh runs on it, see
-# example/run_human_genome.sh: used instead of the download where it exists, e.g.
-# "$(pwd)/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz".
-GENOME_FILE=""
+# example/run_human_genome.sh: used instead of the download if set, see the usage above.
+GENOME_FILE="${FISK_GENOME_FILE:-}"
 
 # Node constraints, per CPU arch. "std" excludes the gpu/hgx nodes.
 declare -A CONSTRAINT=(
@@ -76,6 +87,15 @@ if [[ ! -d "fisk" ]]; then
   exit 1
 fi
 
+# The jobs run in their own working copies, so the genome path has to be absolute.
+if [[ -n "$GENOME_FILE" ]]; then
+  if [[ ! -f "$GENOME_FILE" ]]; then
+    echo "Error: FISK_GENOME_FILE '${GENOME_FILE}' does not exist." >&2
+    exit 1
+  fi
+  GENOME_FILE="$(cd "$(dirname "$GENOME_FILE")" && pwd)/$(basename "$GENOME_FILE")"
+fi
+
 TIMESTAMP="$(date +%Y-%m-%d-%H-%M-%S)"
 RESULTS_ROOT="$(pwd)/results"
 mkdir -p "$RESULTS_ROOT" logs
@@ -96,7 +116,7 @@ run_combo() {
   local workdir="fisk-${slug}"
   local logfile="logs/${slug}.log"
   local genome_arg=""
-  if [[ -n "$GENOME_FILE" && -f "$GENOME_FILE" ]]; then
+  if [[ -n "$GENOME_FILE" ]]; then
     genome_arg="--genome-file '${GENOME_FILE}'"
   fi
 
