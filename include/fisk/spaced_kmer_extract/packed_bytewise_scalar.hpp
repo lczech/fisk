@@ -307,6 +307,15 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
             ) FISK_ALWAYS_INLINE_LAMBDA {
                 (emit_(Locals, Count == 1 ? tail_window_(std::integral_constant<unsigned, Locals>{}) : 0), ...);
             }(std::make_integer_sequence<unsigned, 4>{});
+
+            // GCC only: with a callback without stores, such as one that keeps its state in
+            // registers, GCC computes the spaced k-mers of all bytes of an unrolled block up front,
+            // and spills them. The barrier keeps the work of each byte in it, as the stores of a
+            // callback would, as in the scalar k-mer loops
+            // (kmer_extract/packed_bytewise_scalar.hpp).
+            #if defined(__GNUC__) && !defined(__clang__)
+            clobber_memory(codes + at);
+            #endif
         }
     };
 
