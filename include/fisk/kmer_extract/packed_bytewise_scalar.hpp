@@ -129,6 +129,13 @@ inline void for_each_kmer_packed_bytewise_scalar_narrow_width_(Seq const& seq, F
         invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2));
         assert_fits_width_(v3, K);
         invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
+
+        // GCC only: with a callback without stores, such as one that keeps its state in registers,
+        // GCC loads the codes of all steps of an unrolled block up front, and spills them. The
+        // barrier keeps the loads of each step in it, as the stores of a callback would.
+        #if defined(__GNUC__) && !defined(__clang__)
+        clobber_memory(codes + b);
+        #endif
     };
 
     // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks_().
@@ -218,6 +225,13 @@ inline void for_each_kmer_packed_bytewise_scalar_full_width_(Seq const& seq, Fun
         invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2));
         assert_fits_width_(v3, K);
         invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
+
+        // GCC only: with a callback without stores, such as one that keeps its state in registers,
+        // GCC loads the codes of all steps of an unrolled block up front, and spills them. The
+        // barrier keeps the loads of each step in it, as the stores of a callback would.
+        #if defined(__GNUC__) && !defined(__clang__)
+        clobber_memory(codes + b);
+        #endif
     };
 
     // As in the narrow-width loop.
