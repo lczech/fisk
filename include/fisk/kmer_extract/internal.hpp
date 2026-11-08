@@ -137,7 +137,8 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
 // then one at a time, and the step after them, if any, with a word that is all ones up to the last
 // k-mer, at `p_max`, and zero after it. The blocks give the compiler the steps of 32 positions in
 // one body, as with validity bits, where it can combine the work of the steps, such as the sums
-// over the lanes of the vectors of the SIMD k-mer steps; for other steps, they mostly add code.
+// over the lanes of the vectors of the SIMD k-mer and spaced k-mer steps; for the scalar steps,
+// they mostly add code.
 //
 // With validity bits, see PackedSequenceWithValidityType (core/types.hpp), the steps run in blocks
 // of 8 bytes, that is, 32 positions, and each block is tested once: with one load of the validity

@@ -14,6 +14,7 @@
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/types.hpp"
+#include "fisk/simd/scalar.hpp"
 #include "fisk/kmer_extract/internal.hpp"
 #include "fisk/kmer_extract/packed_bytewise_simd.hpp"
 #include "fisk/spaced_kmer_extract/ascii_rolling_simd.hpp"
@@ -206,6 +207,12 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
         };
     };
 
+    // The steps over all bytes in which a span starts, see run_packed_bytewise_blocks_()
+    // (kmer_extract/internal.hpp). Without validity bits in blocks as well, so that the compiler
+    // can combine the work of the steps, such as the sums of a callback over the lanes of their
+    // vectors; not on the scalar arch, whose loops are slower in blocks.
+    constexpr bool UncheckedBlocks = !std::is_same_v<Simd, SimdScalar>;
+
     if constexpr (!Full) {
         // Right shifts that move the piece at position `local` of a starting byte to the low bits:
         // for the tail, as for a span of its length, and for the leading pieces of 28, the same
@@ -241,7 +248,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
         // for_each_spaced_kmer_packed_bytewise_scalar_loop_().
         constexpr std::size_t BlockWords = Count <= 1 ? 0 : (31 + 28 * Count + 1 + 63) / 64;
         run_packed_bytewise_blocks_<
-            step_bytes, PackedValidity::kNucleotides, Count != 1, BlockWords
+            step_bytes, PackedValidity::kNucleotides, Count != 1, BlockWords, UncheckedBlocks
         >(seq, span_k, step_);
     } else {
         // The word of the starting byte, shifted by `2 * local` so that the span starts at its
@@ -285,7 +292,9 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
                 return windows;
             }, piece_validity_(validity_at), emit_);
         };
-        run_packed_bytewise_blocks_<step_bytes, PackedValidity::kNucleotides>(seq, span_k, step_);
+        run_packed_bytewise_blocks_<
+            step_bytes, PackedValidity::kNucleotides, false, 0, UncheckedBlocks
+        >(seq, span_k, step_);
     }
 }
 
