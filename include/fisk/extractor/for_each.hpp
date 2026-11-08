@@ -92,8 +92,9 @@ inline constexpr void for_each_packed_checked_assert_()
  */
 template <InputCheck C, Encoding E, Layout L, typename Callback>
     requires KmerCallback<std::remove_reference_t<Callback>&, E, L>
-inline void for_each_kmer(std::string_view seq, std::size_t k, Callback&& callback)
-{
+FISK_ALWAYS_INLINE inline void for_each_kmer(
+    std::string_view seq, std::size_t k, Callback&& callback
+) {
     for_each_kmer_estimate_<InputFormat::kAscii, C, E, L>(seq, k, callback);
 }
 
@@ -104,8 +105,9 @@ inline void for_each_kmer(std::string_view seq, std::size_t k, Callback&& callba
  */
 template <InputCheck C = InputCheck::kUnchecked, Encoding E, Layout L, typename Callback>
     requires KmerCallback<std::remove_reference_t<Callback>&, E, L>
-inline void for_each_kmer(PackedSequence<E, L> const& seq, std::size_t k, Callback&& callback)
-{
+FISK_ALWAYS_INLINE inline void for_each_kmer(
+    PackedSequence<E, L> const& seq, std::size_t k, Callback&& callback
+) {
     for_each_packed_unchecked_assert_<C>();
     for_each_kmer_estimate_<InputFormat::kPacked, InputCheck::kUnchecked, E, L>(seq, k, callback);
 }
@@ -117,7 +119,7 @@ inline void for_each_kmer(PackedSequence<E, L> const& seq, std::size_t k, Callba
  */
 template <InputCheck C = InputCheck::kChecked, Encoding E, Layout L, typename Callback>
     requires KmerCallback<std::remove_reference_t<Callback>&, E, L>
-inline void for_each_kmer(
+FISK_ALWAYS_INLINE inline void for_each_kmer(
     PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Callback&& callback
 ) {
     for_each_packed_checked_assert_<C>();
@@ -251,7 +253,7 @@ template <
     std::size_t MaxSpan, typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
-inline void for_each_spaced_kmer(
+FISK_ALWAYS_INLINE inline void for_each_spaced_kmer(
     std::string_view seq, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms,
     Callback&& callback
 ) {
@@ -269,7 +271,7 @@ template <
     std::size_t MaxMasks, std::size_t MaxSpan, typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
-inline void for_each_spaced_kmer(
+FISK_ALWAYS_INLINE inline void for_each_spaced_kmer(
     PackedSequence<E, L> const& seq,
     SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms, Callback&& callback
 ) {
@@ -290,7 +292,7 @@ template <
     std::size_t MaxMasks, std::size_t MaxSpan, typename Callback
 >
     requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
-inline void for_each_spaced_kmer(
+FISK_ALWAYS_INLINE inline void for_each_spaced_kmer(
     PackedSequenceWithValidity<E, L> const& seq,
     SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms, Callback&& callback
 ) {
