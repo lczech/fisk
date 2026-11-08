@@ -327,9 +327,9 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_(
         return;
     }
     constexpr std::size_t Compiled = std::min(MaxCompiledPieces, Mask::max_pieces);
-    // Not FISK_ALWAYS_INLINE_LAMBDA: forced inline, GCC compiles the scalar-arch loops slower,
-    // already at 2 pieces.
-    bool const done = [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+    // Forced inline, as it takes the callback: out of line, the callback would keep its state in
+    // memory in every caller into which the extraction inlines, such as the extractors.
+    bool const done = [&]<std::size_t... Is>(std::index_sequence<Is...>) FISK_ALWAYS_INLINE_LAMBDA {
         return ((
             count == Is + 2 && (
                 for_each_spaced_kmer_packed_bytewise_simd_loop_<Is + 2, false>(

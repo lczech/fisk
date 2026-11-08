@@ -160,6 +160,12 @@ inline constexpr bool spaced_kmer_extractor_takes_vectors_ = (C == InputCheck::k
 //     ASCII
 // -------------------------------------------------------------------------------------------------
 
+// The run() of each candidate below, and the lambda that it hands to dispatch_static_span(), are
+// forced inline, so that the callback does not reach a function out of line, and the whole
+// extraction inlines into ExtractorPlan::for_each() (extractor/internal.hpp). A callback that
+// reaches a function out of line keeps its state in memory in all of for_each(), for all
+// candidates.
+
 template <InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename BitExtractForm>
 struct SpacedKmerCandidateAsciiChunkedScalar
 {
@@ -188,7 +194,8 @@ struct SpacedKmerCandidateAsciiChunkedScalar
     {
         ExtractorWordEncoder<E, L> const encoder{};
         auto const bit_extract = spaced_kmer_extractor_bit_extract_<BitExtractForm>();
-        dispatch_static_span<MaxMasks>(mask_forms.template get<BitExtractForm>(), [&](auto span) {
+        auto const& masks = mask_forms.template get<BitExtractForm>();
+        dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_ascii_checked_chunked_scalar(
                     seq, span, encoder, bit_extract, callback
@@ -226,7 +233,8 @@ struct SpacedKmerCandidateAsciiChunkedSimd
     {
         ExtractorWordEncoder<E, L> const encoder{};
         auto vector_callback = spaced_kmer_extractor_vector_callback_(callback);
-        dispatch_static_span<MaxMasks>(mask_forms.template get<Kernel>(), [&](auto span) {
+        auto const& masks = mask_forms.template get<Kernel>();
+        dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_ascii_checked_chunked_simd(
                     seq, span, encoder, vector_callback
@@ -271,7 +279,8 @@ struct SpacedKmerCandidatePackedBytewiseScalar
     ) const
     {
         auto const bit_extract = spaced_kmer_extractor_bit_extract_<BitExtractForm>();
-        dispatch_static_span<MaxMasks>(mask_forms.template get<BitExtractForm>(), [&](auto span) {
+        auto const& masks = mask_forms.template get<BitExtractForm>();
+        dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_packed_checked_bytewise_scalar(
                     seq, span, bit_extract, callback
@@ -308,7 +317,8 @@ struct SpacedKmerCandidatePackedBytewiseSimd
     ) const
     {
         auto vector_callback = spaced_kmer_extractor_vector_callback_(callback);
-        dispatch_static_span<MaxMasks>(mask_forms.template get<Kernel>(), [&](auto span) {
+        auto const& masks = mask_forms.template get<Kernel>();
+        dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (C == InputCheck::kChecked) {
                 for_each_spaced_kmer_packed_checked_bytewise_simd(seq, span, vector_callback);
             } else {

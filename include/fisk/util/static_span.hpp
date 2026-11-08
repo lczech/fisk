@@ -20,6 +20,7 @@ namespace fisk {
  * on with `N + 1`, up to `MaxN`.
  */
 template <typename T, std::size_t N, std::size_t MaxN, typename F>
+FISK_ALWAYS_INLINE
 inline decltype(auto) dispatch_static_span_(T* data, std::size_t n, F& f)
 {
     if constexpr (N < MaxN) {
@@ -61,9 +62,13 @@ inline void throw_invalid_static_span_size_(std::size_t n, std::size_t max_n)
  * `f` is instantiated for every `N` in `[1, MaxN]`, and all of these have to return the same type,
  * which is then returned from here.
  *
+ * Forced inline, so that `f`, and the loops that it runs, can inline into the caller together with
+ * the dispatch, see SpacedKmerExtractor::for_each().
+ *
  * @throws std::invalid_argument if `n` is 0 or larger than `MaxN`.
  */
 template <std::size_t MaxN, typename Range, typename F>
+FISK_ALWAYS_INLINE
 inline decltype(auto) dispatch_static_span(Range const& range, F&& f)
 {
     static_assert(MaxN >= 1, "dispatch_static_span() needs MaxN >= 1.");
