@@ -231,23 +231,30 @@ struct Sink
 {
     std::vector<std::uint64_t>& buf;
     std::size_t mask;
+
+    // The index of the single values, and one per register width, see consume() of the registers.
     std::size_t idx = 0;
+    std::size_t idx_128 = 0;
+    std::size_t idx_256 = 0;
+    std::size_t idx_512 = 0;
 
     void consume(std::uint64_t v) noexcept
     {
         buf[idx++ & mask] = v;
     }
 
-    // Store the whole register at once and advance by its lane count. Safe from a wrap splitting
-    // one store across the buffer's end: buf's size is a power of two chosen to also be a
-    // multiple of every lane count below (2/4/8), so idx & mask always lands on a lane-count-
-    // aligned offset with a full register's worth of room ahead of it before the next wrap.
+    // Store the whole register at once and advance the index of its width by its lane count. Each
+    // width has an index of its own, so that it stays a multiple of the lane count also in a sink
+    // that takes single values and registers, such as the one of tune(), which calls the scalar
+    // and the SIMD algorithms with one callback (see extractor_scaling/variant.hpp). With buf's
+    // size a power of two, and so a multiple of every lane count below (2/4/8), a store then
+    // always has a full register's worth of room ahead of it before the next wrap.
     #if defined(FISK_HAS_SSE2)
 
         void consume(__m128i v) noexcept
         {
-            _mm_storeu_si128(reinterpret_cast<__m128i*>(&buf[idx & mask]), v);
-            idx += 2;
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(&buf[idx_128 & mask]), v);
+            idx_128 += 2;
         }
 
     #endif
@@ -255,8 +262,8 @@ struct Sink
 
         void consume(__m256i v) noexcept
         {
-            _mm256_storeu_si256(reinterpret_cast<__m256i*>(&buf[idx & mask]), v);
-            idx += 4;
+            _mm256_storeu_si256(reinterpret_cast<__m256i*>(&buf[idx_256 & mask]), v);
+            idx_256 += 4;
         }
 
     #endif
@@ -264,8 +271,8 @@ struct Sink
 
         void consume(__m512i v) noexcept
         {
-            _mm512_storeu_si512(reinterpret_cast<void*>(&buf[idx & mask]), v);
-            idx += 8;
+            _mm512_storeu_si512(reinterpret_cast<void*>(&buf[idx_512 & mask]), v);
+            idx_512 += 8;
         }
 
     #endif
@@ -273,14 +280,14 @@ struct Sink
 
         void consume(uint64x2_t v) noexcept
         {
-            vst1q_u64(&buf[idx & mask], v);
-            idx += 2;
+            vst1q_u64(&buf[idx_128 & mask], v);
+            idx_128 += 2;
         }
 
     #endif
 
     // No correctness value, as for Barrier: the buffer only keeps the last writes, which differ
-    // between the scalar variants and the vector ones that also write their padding lanes. Reading
+    // between the scalar variants and the vector ones that also write their invalid lanes. Reading
     // the buffer here would also add a pass over it to the timed call.
     std::uint64_t finalize() const noexcept
     {
@@ -290,7 +297,7 @@ struct Sink
 
 inline Sink make_sink(std::vector<std::uint64_t>& buf)
 {
-    return Sink{buf, buf.size() - 1, 0};
+    return Sink{buf, buf.size() - 1, 0, 0, 0, 0};
 }
 
 // =================================================================================================
