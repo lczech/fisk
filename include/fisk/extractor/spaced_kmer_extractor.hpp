@@ -520,7 +520,7 @@ public:
      */
     template <typename Callback>
         requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
-    void for_each(sequence_type const& seq, Callback&& callback) const
+    FISK_ALWAYS_INLINE void for_each(sequence_type const& seq, Callback&& callback) const
     {
         plan_.for_each(seq, callback);
     }

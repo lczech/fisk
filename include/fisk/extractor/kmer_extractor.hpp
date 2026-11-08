@@ -331,7 +331,7 @@ public:
      */
     template <typename Callback>
         requires KmerCallback<std::remove_reference_t<Callback>&, E, L>
-    void for_each(sequence_type const& seq, Callback&& callback) const
+    FISK_ALWAYS_INLINE void for_each(sequence_type const& seq, Callback&& callback) const
     {
         plan_.for_each(seq, callback);
     }

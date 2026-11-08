@@ -422,24 +422,28 @@ public:
     template <typename Callback>
     FISK_ALWAYS_INLINE void for_each(Seq const& seq, Callback& callback) const
     {
-        // At runtime: the jump to the alternative that the plan holds, the estimate or a candidate.
-        std::visit(
-            [&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
-                using Candidate = std::remove_cvref_t<decltype(candidate)>;
-                if constexpr (std::same_as<Candidate, ExtractorEstimate>) {
-                    // At compile time, the preference list for this callback type; at runtime,
-                    // its first candidate that is preferred on this CPU, see visit_estimate().
-                    visit_estimate<Preference, Callback>(
-                        [&](auto const& preferred) FISK_ALWAYS_INLINE_LAMBDA {
-                            preferred.run(settings_, seq, callback);
-                        }
-                    );
-                } else {
-                    candidate.run(settings_, seq, callback);
-                }
-            },
-            plan_
-        );
+        auto const run = [&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
+            using Candidate = std::remove_cvref_t<decltype(candidate)>;
+            if constexpr (std::same_as<Candidate, ExtractorEstimate>) {
+                // At compile time, the preference list for this callback type; at runtime, its
+                // first candidate that is preferred on this CPU, see visit_estimate().
+                visit_estimate<Preference, Callback>(
+                    [&](auto const& preferred) FISK_ALWAYS_INLINE_LAMBDA {
+                        preferred.run(settings_, seq, callback);
+                    }
+                );
+            } else {
+                candidate.run(settings_, seq, callback);
+            }
+        };
+
+        // At runtime: the jump to the alternative that the plan holds, the estimate or a candidate,
+        // with one branch per alternative. Not std::visit, which calls the function for an
+        // alternative out of line, so that the callback would escape into that call, and its state
+        // could not stay in registers in the loops of the candidate.
+        [&]<std::size_t... I>(std::index_sequence<I...>) FISK_ALWAYS_INLINE_LAMBDA {
+            (void) ((plan_.index() == I && (run(*std::get_if<I>(&plan_)), true)) || ...);
+        }(std::make_index_sequence<std::variant_size_v<Plan>>{});
     }
 
     // -------------------------------------------------------------------------
