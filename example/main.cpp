@@ -17,6 +17,7 @@
 using namespace fisk;
 
 // The sequences of a FASTA file, without their names.
+// No error checking to keep this example simple.
 std::vector<std::string> read_fasta(std::string const& path)
 {
     std::ifstream in(path);
@@ -35,10 +36,10 @@ std::vector<std::string> read_fasta(std::string const& path)
     return sequences;
 }
 
-// The callback: counts the k-mers, and sums their values as a checksum. The extractors call it
-// with each k-mer and its position, and with each spaced k-mer, its position, and the index of its
-// mask.
-struct Counter
+// The callback, i.e., the function that is executed for each k-mer: here, it simply counts
+// the k-mers, and sums their values as a checksum. The extractors call it with each k-mer
+// and its position, and with each spaced k-mer, its position, and the index of its mask.
+struct MyCounter
 {
     std::uint64_t count = 0;
     std::uint64_t checksum = 0;
@@ -65,9 +66,9 @@ void extract(
     char const* name, Extractor& extractor, std::vector<std::string> const& sequences,
     std::size_t bases, double read_seconds
 ) {
-    extractor.tune(Counter{});
+    extractor.tune(MyCounter{});
 
-    Counter counter;
+    MyCounter counter;
     auto const start = std::chrono::steady_clock::now();
     for (auto const& seq : sequences) {
         extractor.for_each(seq, counter);
@@ -94,18 +95,24 @@ int main(int argc, char** argv)
         bases += seq.size();
     }
 
+    using MyKmerExtractor = KmerExtractor<
+        InputFormat::kAscii, InputCheck::kChecked, Encoding::kACGT, Layout::kLSB
+    >;
+    using MySpacedKmerExtractor = SpacedKmerExtractor<
+        InputFormat::kAscii, InputCheck::kChecked, Encoding::kACGT, Layout::kLSB
+    >;
+
     // k-mers with k = 31, and spaced k-mers with a mask of span 31 and weight 22, from the
     // characters of the sequences, encoded as A = 0, C = 1, G = 2, T = 3 (ACGT), with the first
     // base in the lowest bits (LSB). Checked: the k-mers that contain other characters than ACGT,
     // in upper or lower case, such as N, are skipped.
-    KmerExtractor<InputFormat::kAscii, InputCheck::kChecked, Encoding::kACGT, Layout::kLSB> kmers(
-        31
+    MyKmerExtractor kmer_extractor(31);
+    MySpacedKmerExtractor spaced_kmer_extractor(
+        std::vector<std::string>{ "1111011101110010111001011011111" }
     );
-    SpacedKmerExtractor<InputFormat::kAscii, InputCheck::kChecked, Encoding::kACGT, Layout::kLSB>
-        spaced_kmers(std::vector<std::string>{ "1111011101110010111001011011111" });
 
     std::cout << "extractor,algorithm,sequences,bases,kmers,checksum,"
               << "read_seconds,extract_seconds\n";
-    extract("kmers", kmers, sequences, bases, read_seconds.count());
-    extract("spaced_kmers", spaced_kmers, sequences, bases, read_seconds.count());
+    extract("kmers",        kmer_extractor,        sequences, bases, read_seconds.count());
+    extract("spaced_kmers", spaced_kmer_extractor, sequences, bases, read_seconds.count());
 }

@@ -1,4 +1,6 @@
-# The example of fisk, set up as a program that uses fisk would: see README.md. To build it:
+# The example of fisk, set up as a standalone program. See README.md for details.
+#
+# To build it, from the main directory of the repository, run:
 #
 #     cmake -S example -B build-example
 #     cmake --build build-example
