@@ -555,7 +555,9 @@ public:
      * @brief Choose the algorithm, by timing with `callback` on random sequences.
      *
      * The callback is called with all spaced k-mers of the sequences, `options.repeats` times per
-     * algorithm. Its side effects during tuning are up to the caller.
+     * algorithm. Its side effects during tuning are up to the caller. All algorithms call the same
+     * callback, so that a callback that takes vectors gets single spaced k-mers from some
+     * algorithms and vectors from others.
      */
     template <typename Callback>
         requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
