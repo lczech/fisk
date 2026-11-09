@@ -139,6 +139,19 @@ FORMATS=(
   "svg"
 )
 
+# inkscape converts the SVGs to PDF. Without it, there are only the PNG and SVG plots.
+HAVE_INKSCAPE=true
+if ! command -v inkscape > /dev/null 2>&1; then
+  warn "inkscape not found, skipping the PDFs"
+  HAVE_INKSCAPE=false
+fi
+
+# Convert one SVG to PDF, next to it, if inkscape is there.
+svg_to_pdf() {
+  "$HAVE_INKSCAPE" || return 0
+  inkscape "$1" --export-filename="${1%.svg}.pdf"
+}
+
 # Convert the SVGs of the given plots (paths without the "_<sink>_<unit>_<scale>.svg" that the
 # plotting scripts append) to PDF, for each unit/scale combination; the ones not produced are
 # skipped.
@@ -148,7 +161,7 @@ svgs_to_pdf() {
     for combo in "${COMBOS[@]}"; do
       svg="${name}_${SINK}_${combo%%:*}_${combo##*:}.svg"
       if [[ -f "$svg" ]]; then
-        inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+        svg_to_pdf "$svg"
       fi
     done
   done
@@ -255,7 +268,7 @@ for suite in "sequence_pack_unchecked" "sequence_pack_checked"; do
     for svg in "${OUT}/${suite}"_{overview,references}_*_per_cpu_full_"${SINK}_${UNIT}_${SCALE}".svg
     do
       [[ -e "$svg" ]] || continue
-      inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+      svg_to_pdf "$svg"
     done
   done
 done
@@ -502,11 +515,8 @@ if build_file_args "spaced_kmer_extract_ascii_checked_single.csv" \
     UNIT="${combo%%:*}"
     SCALE="${combo##*:}"
 
-    svg="${OUT}/Fig2a_${SINK}_${UNIT}_${SCALE}.svg"
-    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
-
-    svg="${OUT}/Fig2b_${SINK}_${UNIT}_${SCALE}.svg"
-    inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+    svg_to_pdf "${OUT}/Fig2a_${SINK}_${UNIT}_${SCALE}.svg"
+    svg_to_pdf "${OUT}/Fig2b_${SINK}_${UNIT}_${SCALE}.svg"
   done
 fi
 
@@ -569,8 +579,7 @@ if [[ "$SINK" == "sum" ]] && build_file_args "DuoHash.csv"; then
       UNIT="${combo%%:*}"
       SCALE="${combo##*:}"
       for mode in supp full; do
-        svg="${OUT}/DuoHash_${suite}_${mode}_${UNIT}_${SCALE}.svg"
-        inkscape "$svg" --export-filename="${svg%.svg}.pdf"
+        svg_to_pdf "${OUT}/DuoHash_${suite}_${mode}_${UNIT}_${SCALE}.svg"
       done
     done
   done

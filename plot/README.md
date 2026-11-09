@@ -11,7 +11,7 @@ conda env create -f plot/conda-env.yaml
 conda activate fisk-plot
 ```
 
-`inkscape` converts the SVG plots to PDF; without it, there are only the PNG and SVG plots.
+`inkscape` (version 1.0 or later) converts the SVG plots to PDF; without it, there are only the PNG and SVG plots. It comes from the system, for instance its package manager, as conda-forge has no current build of it.
 
 ## Usage
 
