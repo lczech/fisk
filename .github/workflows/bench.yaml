@@ -48,15 +48,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
+      # The environment of the plot scripts, activated only in the step that plots: a login shell
+      # in the build steps could reorder PATH and shadow the MSVC tools on Windows.
+      - name: Set up the plot environment
+        uses: mamba-org/setup-micromamba@v3
         with:
-          python-version: "3.11"
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pandas matplotlib
+          environment-file: plot/conda-env.yaml
+          init-shell: bash
+          cache-environment: true
 
       - name: Install build tools (Linux)
         if: runner.os == 'Linux'
@@ -114,6 +113,7 @@ jobs:
           ./bin/fisk_benchmarks --output-dir "${OUTPUT_DIR}" &> ${OUTPUT_DIR}/log.txt
 
       - name: Run plotting script
+        shell: bash -leo pipefail {0}
         run: |
           ./plot/plot_run.sh "${OUTPUT_DIR}"
 

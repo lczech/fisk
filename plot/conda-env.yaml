@@ -1,9 +1,10 @@
 name: fisk-plot
 channels:
   - conda-forge
+# Minor versions pinned, as new ones can change the layout of the plots. matplotlib-base is
+# matplotlib without the Qt backend, which the scripts do not need, as they only write files.
 dependencies:
-  - python >= 3.12
-  - matplotlib
-  - numpy
-  - pandas
-  - seaborn
+  - python =3.13
+  - matplotlib-base =3.10
+  - numpy =2.3
+  - pandas =2.3
