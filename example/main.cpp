@@ -13,18 +13,22 @@
 
 #include "fisk/extractor/kmer_extractor.hpp"
 #include "fisk/extractor/spaced_kmer_extractor.hpp"
+#include "fisk/util/aligned_allocator.hpp"
 
 using namespace fisk;
 
 // The sequences of a FASTA file, without their names.
 // No error checking to keep this example simple.
-std::vector<std::string> read_fasta(std::string const& path)
+// The extractors take any string, such as std::string. AlignedString is a std::string whose
+// characters start at a cache line (64 bytes), which the SIMD algorithms can read faster, mostly
+// with AVX-512, see fisk/util/aligned_allocator.hpp.
+std::vector<AlignedString> read_fasta(std::string const& path)
 {
     std::ifstream in(path);
     if (!in) {
         throw std::runtime_error("Cannot open " + path);
     }
-    std::vector<std::string> sequences;
+    std::vector<AlignedString> sequences;
     std::string line;
     while (std::getline(in, line)) {
         if (!line.empty() && line[0] == '>') {
@@ -63,7 +67,7 @@ struct MyCounter
 // and print a CSV row.
 template <typename Extractor>
 void extract(
-    char const* name, Extractor& extractor, std::vector<std::string> const& sequences,
+    char const* name, Extractor& extractor, std::vector<AlignedString> const& sequences,
     std::size_t bases, double read_seconds
 ) {
     extractor.tune(MyCounter{});

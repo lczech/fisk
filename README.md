@@ -178,6 +178,16 @@ The vector forms are those of the extraction functions: with a count of valid la
 **Order and compile time.** The k-mers are handed out in order of their positions; spaced k-mers in order of their positions per mask, while the order between masks differs between the algorithms: the scalar algorithms hand out the spaced k-mers of all masks at one position before going on to the next position, while the SIMD algorithms hand out those of one mask for a whole vector of positions, then those of the next mask for the same positions. Each callback type compiles all algorithms of the extractor, and for spaced k-mers each of them for each number of masks up to `MaxMasks`.
 
 
+## Maximizing performance
+
+These are optional: fisk works without them, at some cost in speed.
+
+**Instruction sets.** By default, fisk only uses SSE2 on x86-64 and Neon on arm64. The `FISK_ENABLE_*` options, see [Using the library](#using-the-library), enable the faster algorithms of AVX2, AVX-512 and PEXT, or `-march=native` for a program that runs on the computer that builds it, as the [example](example/CMakeLists.txt) does.
+
+**Aligned input.** The SIMD algorithms read the ASCII input in vectors of up to 64 bytes, which they can read faster when the input starts at a cache line (64 bytes), mostly with AVX-512. `fisk::AlignedString` is a `std::string`, and `fisk::AlignedVector<T>` a `std::vector`, whose elements start there, see [aligned_allocator.hpp](include/fisk/util/aligned_allocator.hpp); the extractors take them as any other string. The benchmarks and the example read their input into `AlignedString`. The buffers of fisk itself, such as those of `PackedSequence`, are always aligned.
+
+**Code alignment.** `-falign-functions=64 -falign-loops=64` (GCC, and Clang 14 or later) start each function and loop at a 64-byte boundary, so that the speed of a hot loop does not depend on where the code around it puts it. The benchmarks and the example build with them.
+
 ## Reproducing the benchmarks
 
 To build and run the benchmarks that produced the results in the manuscript, call

@@ -26,3 +26,12 @@ check_cxx_compiler_flag(-march=native FISK_EXAMPLE_MARCH_NATIVE)
 if(FISK_EXAMPLE_MARCH_NATIVE)
     target_compile_options(fisk_example PRIVATE -march=native)
 endif()
+
+# Optional, for the most stable speed: start every function and loop at a 64-byte boundary, so that
+# the speed of a hot loop does not depend on where the code around it puts it. The benchmarks of
+# fisk use the same flags. A program can leave them out; the speed of its loops can then differ
+# between builds.
+check_cxx_compiler_flag(-falign-loops=64 FISK_EXAMPLE_ALIGN_LOOPS)
+if(FISK_EXAMPLE_ALIGN_LOOPS)
+    target_compile_options(fisk_example PRIVATE -falign-functions=64 -falign-loops=64)
+endif()
