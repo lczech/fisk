@@ -14,7 +14,7 @@ std::uint64_t run_var_bytewise_simd_butterfly_avx2_vectors(
     SpacedKmerMask<
         Layout::kMSB, BitExtractKernelButterfly<SimdAVX2>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer_packed_unchecked_bytewise_simd(

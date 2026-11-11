@@ -10,10 +10,10 @@
 using namespace fisk;
 
 std::uint64_t run_var_chunked_scalar_butterfly(
-    std::string const& seq,
+    InputSequence const& seq,
     ButterflyMask<Layout::kMSB> const& mask,
     ChunkedScratch<Layout::kMSB>& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     constexpr Layout L = Layout::kMSB;
     auto sink = make_sink(sink_buffer);

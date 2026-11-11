@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "fisk/core/types.hpp"
+#include "seq_data.hpp"
 #include "sink.hpp"
 
 // Scratch for the chunked variants, see kmer_extract/ascii_chunked_scalar.hpp.
@@ -26,7 +27,7 @@ using CheckedAcgtLsb = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, f
  * the valid lanes of the vectors, see consume_valid_lanes() (sink.hpp), so that all sums match.
  */
 void bench_kmer_extract_ascii_checked(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::size_t k_min,
     std::size_t k_max,
     std::ostream& csv_os
@@ -34,7 +35,7 @@ void bench_kmer_extract_ascii_checked(
 
 // Test all valid k-mer sizes.
 void bench_kmer_extract_ascii_checked(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::ostream& csv_os
 );
 
@@ -44,324 +45,324 @@ void bench_kmer_extract_ascii_checked(
 // the matching comment in bit_extract_weights/bench.hpp for why a Sink built elsewhere and passed
 // in by reference would defeat that.
 std::uint64_t run_var_chunked_scalar_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_chunked_simd_scalar_scalars_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_chunked_simd_scalar_scalars_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #if defined(FISK_HAS_AVX2)
 std::uint64_t run_var_chunked_simd_avx2_scalars_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_AVX2
 #if defined(FISK_HAS_AVX512)
 std::uint64_t run_var_chunked_simd_avx512_scalars_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_AVX512
 #if defined(FISK_HAS_NEON)
 std::uint64_t run_var_chunked_simd_neon_scalars_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_NEON
 std::uint64_t run_var_chunked_scalar_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #if defined(FISK_HAS_AVX2)
 std::uint64_t run_var_chunked_simd_avx2_scalars_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_AVX2
 #if defined(FISK_HAS_AVX512)
 std::uint64_t run_var_chunked_simd_avx512_scalars_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_AVX512
 #if defined(FISK_HAS_NEON)
 std::uint64_t run_var_chunked_simd_neon_scalars_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_NEON
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_chunked_simd_sse2_scalars_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_SSE2
 std::uint64_t run_var_chunked_simd_scalar_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_chunked_simd_sse2_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_SSE2
 #if defined(FISK_HAS_AVX2)
 std::uint64_t run_var_chunked_simd_avx2_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_AVX2
 #if defined(FISK_HAS_AVX512)
 std::uint64_t run_var_chunked_simd_avx512_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_AVX512
 #if defined(FISK_HAS_NEON)
 std::uint64_t run_var_chunked_simd_neon_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_NEON
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_chunked_simd_sse2_scalars_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_SSE2
 std::uint64_t run_var_chunked_simd_scalar_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_chunked_simd_sse2_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_SSE2
 #if defined(FISK_HAS_AVX2)
 std::uint64_t run_var_chunked_simd_avx2_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_AVX2
 #if defined(FISK_HAS_AVX512)
 std::uint64_t run_var_chunked_simd_avx512_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_AVX512
 #if defined(FISK_HAS_NEON)
 std::uint64_t run_var_chunked_simd_neon_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif // FISK_HAS_NEON
 std::uint64_t run_var_reextract_scalar_ifs_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_reextract_scalar_switch_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_reextract_scalar_table_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_reextract_scalar_ascii_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_rolling_scalar_ifs_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_rolling_scalar_switch_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_rolling_scalar_table_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_rolling_scalar_ascii_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_scalar_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_rolling_simd_sse2_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX2)
 std::uint64_t run_var_rolling_simd_avx2_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX512)
 std::uint64_t run_var_rolling_simd_avx512_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_NEON)
 std::uint64_t run_var_rolling_simd_neon_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 
 // Variants emitting Layout::kLSB, to compare against their MSB counterparts.
 std::uint64_t run_var_rolling_scalar_table_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_rolling_scalar_ascii_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_scalar_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_rolling_simd_sse2_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX2)
 std::uint64_t run_var_rolling_simd_avx2_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX512)
 std::uint64_t run_var_rolling_simd_avx512_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_NEON)
 std::uint64_t run_var_rolling_simd_neon_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 
 // Variants emitting Encoding::kACTG, to compare against their ACGT counterparts.
 std::uint64_t run_var_rolling_scalar_ascii_actg_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_rolling_simd_scalar_actg_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_rolling_simd_sse2_actg_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX2)
 std::uint64_t run_var_rolling_simd_avx2_actg_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX512)
 std::uint64_t run_var_rolling_simd_avx512_actg_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_NEON)
 std::uint64_t run_var_rolling_simd_neon_actg_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif

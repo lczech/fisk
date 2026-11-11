@@ -10,7 +10,7 @@
 #include "utils.hpp"
 
 void bench_kmer_extract_ascii_checked(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::size_t k_min,
     std::size_t k_max,
     std::ostream& csv_os
@@ -96,9 +96,9 @@ void bench_kmer_extract_ascii_checked(
             std::cout << "\rk " << std::setw(2) << k << std::flush;
         }
 
-        Microbench<std::string> suite(suite_title);
+        Microbench<InputSequence> suite(suite_title);
         suite
-            .units_fn([k](std::string const& seq) {
+            .units_fn([k](InputSequence const& seq) {
                 // 1 unit per k-mer
                 return static_cast<double>(seq.size() - k + 1);
             });
@@ -109,25 +109,25 @@ void bench_kmer_extract_ascii_checked(
             // Full re-extract
             bench(
                 "reextract_scalar_ifs",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_reextract_scalar_ifs_acgt_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "reextract_scalar_switch",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_reextract_scalar_switch_acgt_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "reextract_scalar_table",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_reextract_scalar_table_acgt_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "reextract_scalar_ascii",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_reextract_scalar_ascii_acgt_msb(seq, k, sink_buffer);
                 }
             ),
@@ -135,32 +135,32 @@ void bench_kmer_extract_ascii_checked(
             // Shift bits
             bench(
                 "rolling_scalar_ifs",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_scalar_ifs_acgt_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "rolling_scalar_switch",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_scalar_switch_acgt_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "rolling_scalar_table",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_scalar_table_acgt_msb(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "rolling_scalar_ascii",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_scalar_ascii_acgt_msb(seq, k, sink_buffer);
                 }
             ),
 
             bench(
                 "chunked_scalar",
-                [k, &scratch_scalar_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_scalar_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_scalar_acgt_msb(
                         seq, k, scratch_scalar_acgt_msb, sink_buffer
                     );
@@ -168,7 +168,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_scalar",
-                [k, &scratch_simd_scalar_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_scalar_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_scalar_acgt_msb(
                         seq, k, scratch_simd_scalar_acgt_msb, sink_buffer
                     );
@@ -176,7 +176,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_scalar_scalars",
-                [k, &scratch_simd_scalar_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_scalar_scalars_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_scalar_scalars_acgt_msb(
                         seq, k, scratch_simd_scalar_scalars_acgt_msb, sink_buffer
                     );
@@ -185,7 +185,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "chunked_simd_sse2",
-                [k, &scratch_simd_sse2_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_sse2_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_sse2_acgt_msb(
                         seq, k, scratch_simd_sse2_acgt_msb, sink_buffer
                     );
@@ -193,7 +193,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_sse2_scalars",
-                [k, &scratch_simd_sse2_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_sse2_scalars_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_sse2_scalars_acgt_msb(
                         seq, k, scratch_simd_sse2_scalars_acgt_msb, sink_buffer
                     );
@@ -203,7 +203,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX2)
             bench(
                 "chunked_simd_avx2",
-                [k, &scratch_simd_avx2_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_avx2_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_avx2_acgt_msb(
                         seq, k, scratch_simd_avx2_acgt_msb, sink_buffer
                     );
@@ -211,7 +211,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_avx2_scalars",
-                [k, &scratch_simd_avx2_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_avx2_scalars_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_avx2_scalars_acgt_msb(
                         seq, k, scratch_simd_avx2_scalars_acgt_msb, sink_buffer
                     );
@@ -221,7 +221,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX512)
             bench(
                 "chunked_simd_avx512",
-                [k, &scratch_simd_avx512_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_avx512_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_avx512_acgt_msb(
                         seq, k, scratch_simd_avx512_acgt_msb, sink_buffer
                     );
@@ -229,7 +229,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_avx512_scalars",
-                [k, &scratch_simd_avx512_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_avx512_scalars_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_avx512_scalars_acgt_msb(
                         seq, k, scratch_simd_avx512_scalars_acgt_msb, sink_buffer
                     );
@@ -239,7 +239,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_NEON)
             bench(
                 "chunked_simd_neon",
-                [k, &scratch_simd_neon_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_neon_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_neon_acgt_msb(
                         seq, k, scratch_simd_neon_acgt_msb, sink_buffer
                     );
@@ -247,7 +247,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_neon_scalars",
-                [k, &scratch_simd_neon_scalars_acgt_msb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_neon_scalars_acgt_msb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_neon_scalars_acgt_msb(
                         seq, k, scratch_simd_neon_scalars_acgt_msb, sink_buffer
                     );
@@ -257,7 +257,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "rolling_simd_sse2",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_sse2_acgt_msb(seq, k, sink_buffer);
                 }
             ),
@@ -265,7 +265,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX2)
             bench(
                 "rolling_simd_avx2",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_avx2_acgt_msb(seq, k, sink_buffer);
                 }
             ),
@@ -273,7 +273,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX512)
             bench(
                 "rolling_simd_avx512",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_avx512_acgt_msb(seq, k, sink_buffer);
                 }
             ),
@@ -281,14 +281,14 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_NEON)
             bench(
                 "rolling_simd_neon",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_neon_acgt_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
                 "rolling_simd_scalar",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_scalar_acgt_msb(seq, k, sink_buffer);
                 }
             )
@@ -305,19 +305,19 @@ void bench_kmer_extract_ascii_checked(
             sequences,
             bench(
                 "rolling_scalar_table",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_scalar_table_acgt_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "rolling_scalar_ascii",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_scalar_ascii_acgt_lsb(seq, k, sink_buffer);
                 }
             ),
             bench(
                 "chunked_scalar",
-                [k, &scratch_scalar_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_scalar_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_scalar_acgt_lsb(
                         seq, k, scratch_scalar_acgt_lsb, sink_buffer
                     );
@@ -325,7 +325,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_scalar",
-                [k, &scratch_simd_scalar_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_scalar_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_scalar_acgt_lsb(
                         seq, k, scratch_simd_scalar_acgt_lsb, sink_buffer
                     );
@@ -333,7 +333,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_scalar_scalars",
-                [k, &scratch_simd_scalar_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_scalar_scalars_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_scalar_scalars_acgt_lsb(
                         seq, k, scratch_simd_scalar_scalars_acgt_lsb, sink_buffer
                     );
@@ -342,7 +342,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "chunked_simd_sse2",
-                [k, &scratch_simd_sse2_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_sse2_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_sse2_acgt_lsb(
                         seq, k, scratch_simd_sse2_acgt_lsb, sink_buffer
                     );
@@ -350,7 +350,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_sse2_scalars",
-                [k, &scratch_simd_sse2_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_sse2_scalars_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_sse2_scalars_acgt_lsb(
                         seq, k, scratch_simd_sse2_scalars_acgt_lsb, sink_buffer
                     );
@@ -360,7 +360,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX2)
             bench(
                 "chunked_simd_avx2",
-                [k, &scratch_simd_avx2_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_avx2_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_avx2_acgt_lsb(
                         seq, k, scratch_simd_avx2_acgt_lsb, sink_buffer
                     );
@@ -368,7 +368,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_avx2_scalars",
-                [k, &scratch_simd_avx2_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_avx2_scalars_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_avx2_scalars_acgt_lsb(
                         seq, k, scratch_simd_avx2_scalars_acgt_lsb, sink_buffer
                     );
@@ -378,7 +378,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX512)
             bench(
                 "chunked_simd_avx512",
-                [k, &scratch_simd_avx512_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_avx512_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_avx512_acgt_lsb(
                         seq, k, scratch_simd_avx512_acgt_lsb, sink_buffer
                     );
@@ -386,7 +386,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_avx512_scalars",
-                [k, &scratch_simd_avx512_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_avx512_scalars_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_avx512_scalars_acgt_lsb(
                         seq, k, scratch_simd_avx512_scalars_acgt_lsb, sink_buffer
                     );
@@ -396,7 +396,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_NEON)
             bench(
                 "chunked_simd_neon",
-                [k, &scratch_simd_neon_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_neon_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_neon_acgt_lsb(
                         seq, k, scratch_simd_neon_acgt_lsb, sink_buffer
                     );
@@ -404,7 +404,7 @@ void bench_kmer_extract_ascii_checked(
             ),
             bench(
                 "chunked_simd_neon_scalars",
-                [k, &scratch_simd_neon_scalars_acgt_lsb, &sink_buffer](std::string const& seq){
+                [k, &scratch_simd_neon_scalars_acgt_lsb, &sink_buffer](InputSequence const& seq){
                     return run_var_chunked_simd_neon_scalars_acgt_lsb(
                         seq, k, scratch_simd_neon_scalars_acgt_lsb, sink_buffer
                     );
@@ -414,7 +414,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "rolling_simd_sse2",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_sse2_acgt_lsb(seq, k, sink_buffer);
                 }
             ),
@@ -422,7 +422,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX2)
             bench(
                 "rolling_simd_avx2",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_avx2_acgt_lsb(seq, k, sink_buffer);
                 }
             ),
@@ -430,7 +430,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX512)
             bench(
                 "rolling_simd_avx512",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_avx512_acgt_lsb(seq, k, sink_buffer);
                 }
             ),
@@ -438,14 +438,14 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_NEON)
             bench(
                 "rolling_simd_neon",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_neon_acgt_lsb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
                 "rolling_simd_scalar",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_scalar_acgt_lsb(seq, k, sink_buffer);
                 }
             )
@@ -459,14 +459,14 @@ void bench_kmer_extract_ascii_checked(
             sequences,
             bench(
                 "rolling_scalar_ascii",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_scalar_ascii_actg_msb(seq, k, sink_buffer);
                 }
             ),
             #if defined(FISK_HAS_SSE2)
             bench(
                 "rolling_simd_sse2",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_sse2_actg_msb(seq, k, sink_buffer);
                 }
             ),
@@ -474,7 +474,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX2)
             bench(
                 "rolling_simd_avx2",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_avx2_actg_msb(seq, k, sink_buffer);
                 }
             ),
@@ -482,7 +482,7 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_AVX512)
             bench(
                 "rolling_simd_avx512",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_avx512_actg_msb(seq, k, sink_buffer);
                 }
             ),
@@ -490,14 +490,14 @@ void bench_kmer_extract_ascii_checked(
             #if defined(FISK_HAS_NEON)
             bench(
                 "rolling_simd_neon",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_neon_actg_msb(seq, k, sink_buffer);
                 }
             ),
             #endif // FISK_HAS_NEON
             bench(
                 "rolling_simd_scalar",
-                [k, &sink_buffer](std::string const& seq){
+                [k, &sink_buffer](InputSequence const& seq){
                     return run_var_rolling_simd_scalar_actg_msb(seq, k, sink_buffer);
                 }
             )
@@ -512,7 +512,7 @@ void bench_kmer_extract_ascii_checked(
 }
 
 void bench_kmer_extract_ascii_checked(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::ostream& csv_os
 ) {
     // Test all valid k-mer sizes

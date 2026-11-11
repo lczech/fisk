@@ -16,10 +16,10 @@ using namespace fisk;
 // different values.
 template <Layout L>
 static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
-    Microbench<std::string>& suite,
-    std::vector<std::string> const& sequences,
+    Microbench<InputSequence>& suite,
+    std::vector<InputSequence> const& sequences,
     std::vector<std::string> const& masks,
-    std::vector<std::uint64_t>& sink_buffer,
+    SinkBuffer& sink_buffer,
     std::ostream& csv_os,
     std::string const& suite_title,
     std::string const& case_label
@@ -88,7 +88,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_BMI2)
         bench(
             "chunked_scalar_pext",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_scalar_pext(
                     seq, bit_ext_masks, scratch_scalar_pext, sink_buffer
                 );
@@ -97,7 +97,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #endif
         bench(
             "chunked_scalar_butterfly",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_scalar_butterfly(
                     seq, bit_ext_butterfly_masks, scratch_scalar_bf, sink_buffer
                 );
@@ -106,7 +106,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_SSE2)
         bench(
             "chunked_simd_butterfly_sse2_scalars",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_sse2_scalars(
                     seq, simd_bf_sse2_kernels, scratch_simd_bf_sse2, sink_buffer
                 );
@@ -116,7 +116,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_AVX2)
         bench(
             "chunked_simd_butterfly_avx2_scalars",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_avx2_scalars(
                     seq, simd_bf_avx2_kernels, scratch_simd_bf_avx2, sink_buffer
                 );
@@ -126,7 +126,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_AVX512)
         bench(
             "chunked_simd_butterfly_avx512_scalars",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_avx512_scalars(
                     seq, simd_bf_avx512_kernels, scratch_simd_bf_avx512, sink_buffer
                 );
@@ -136,7 +136,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_NEON)
         bench(
             "chunked_simd_butterfly_neon_scalars",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_neon_scalars(
                     seq, simd_bf_neon_kernels, scratch_simd_bf_neon, sink_buffer
                 );
@@ -145,7 +145,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #endif
         bench(
             "chunked_simd_butterfly_scalar_scalars",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_scalar_scalars(
                     seq, simd_bf_scalar_kernels, scratch_simd_bf_scalar, sink_buffer
                 );
@@ -154,7 +154,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_SSE2)
         bench(
             "chunked_simd_butterfly_sse2_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_sse2_vectors(
                     seq, simd_bf_sse2_kernels, scratch_simd_bf_sse2_vectors, sink_buffer
                 );
@@ -164,7 +164,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_AVX2)
         bench(
             "chunked_simd_butterfly_avx2_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_avx2_vectors(
                     seq, simd_bf_avx2_kernels, scratch_simd_bf_avx2_vectors, sink_buffer
                 );
@@ -174,7 +174,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_AVX512)
         bench(
             "chunked_simd_butterfly_avx512_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_avx512_vectors(
                     seq, simd_bf_avx512_kernels, scratch_simd_bf_avx512_vectors, sink_buffer
                 );
@@ -184,7 +184,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #if defined(FISK_HAS_NEON)
         bench(
             "chunked_simd_butterfly_neon_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_neon_vectors(
                     seq, simd_bf_neon_kernels, scratch_simd_bf_neon_vectors, sink_buffer
                 );
@@ -193,7 +193,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         #endif
         bench(
             "chunked_simd_butterfly_scalar_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_scalar_vectors(
                     seq, simd_bf_scalar_kernels, scratch_simd_bf_scalar_vectors, sink_buffer
                 );
@@ -201,7 +201,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
         ),
         bench(
             "pack_then_bytewise_scalar_butterfly",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_pack_then_bytewise_scalar_butterfly(
                     seq, bit_ext_butterfly_masks, scratch_pack_bf, sink_buffer
                 );
@@ -212,7 +212,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_multi_layout_(
 }
 
 void bench_spaced_kmer_extract_ascii_unchecked_multi(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::vector<std::vector<std::string>> const& multi_masks,
     std::ostream& csv_os
 ) {
@@ -244,9 +244,9 @@ void bench_spaced_kmer_extract_ascii_unchecked_multi(
         }
         auto const k = multi_masks[m][0].size();
 
-        Microbench<std::string> suite(suite_title);
+        Microbench<InputSequence> suite(suite_title);
         suite
-            .units_fn([&, k](std::string const& seq) {
+            .units_fn([&, k](InputSequence const& seq) {
                 // 1 unit per original (unspaced) k-mer and per mask
                 auto const kmer_count = static_cast<double>(seq.size() - k + 1);
                 auto const mask_count = static_cast<double>(multi_masks[m].size());

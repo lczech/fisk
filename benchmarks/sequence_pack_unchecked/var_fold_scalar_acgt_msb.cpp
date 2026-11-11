@@ -7,7 +7,7 @@
 using namespace fisk;
 
 std::uint64_t run_var_unchecked_fold_scalar_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     PackedSequence<Encoding::kACGT, Layout::kMSB>& out
 ) {
     pack_sequence_unchecked(seq, WordEncoderFold<Encoding::kACGT, Layout::kMSB>{}, out);

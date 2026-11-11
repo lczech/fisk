@@ -200,7 +200,7 @@ int main(int argc, char **argv)
 
     // Get the sequence to process, either random, or from fasta.
     // The input description goes into sys_info.txt along with the timing settings.
-    std::vector<std::string> sequences;
+    std::vector<InputSequence> sequences;
     std::string input_info;
     if (opts.input_file.size() && opts.input_length.size()) {
         throw std::invalid_argument(
@@ -233,7 +233,7 @@ int main(int argc, char **argv)
         auto const seed = std::stoull(opts.seed);
         std::cout << "Generating input sequence of length " << inp_len;
         std::cout << " with N probability " << n_prob << " and seed " << seed << "\n";
-        sequences = std::vector<std::string>{ random_acgt( inp_len, n_prob, seed )};
+        sequences = std::vector<InputSequence>{ random_acgt( inp_len, n_prob, seed )};
         input_info = "random, length " + std::to_string(inp_len) + ", N probability "
             + opts.n_prob + ", seed " + std::to_string(seed);
     }

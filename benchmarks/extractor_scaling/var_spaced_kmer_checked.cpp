@@ -7,7 +7,7 @@
 
 void tune_var_spaced_kmer_checked(
     ScalingSpacedKmerChecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     tune_scaling_variant</*Spaced=*/true, /*Vectors=*/false>(extractor, sink_buffer);
 }
@@ -15,7 +15,7 @@ void tune_var_spaced_kmer_checked(
 std::uint64_t run_var_spaced_kmer_checked(
     ScalingSpacedKmerChecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     return run_scaling_variant</*Spaced=*/true, /*Vectors=*/false>(
         extractor, seq, sink_buffer

@@ -12,7 +12,7 @@ using namespace fisk;
 std::uint64_t run_var_checked_bytewise_simd_full_width_sse2_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     auto const consume = [&](

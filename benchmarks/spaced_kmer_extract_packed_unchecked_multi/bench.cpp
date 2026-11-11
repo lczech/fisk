@@ -19,7 +19,7 @@ template <Layout L>
 static void bench_spaced_kmer_extract_packed_unchecked_multi_layout_(
     std::vector<PackedSequence<Encoding::kACGT, L>> const& sequences,
     std::vector<std::string> const& masks,
-    std::vector<std::uint64_t>& sink_buffer,
+    SinkBuffer& sink_buffer,
     std::ostream& csv_os,
     std::string const& suite_title,
     std::string const& case_label
@@ -328,7 +328,7 @@ static void bench_spaced_kmer_extract_packed_unchecked_multi_layout_(
 }
 
 void bench_spaced_kmer_extract_packed_unchecked_multi(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::vector<std::vector<std::string>> const& multi_masks,
     std::ostream& csv_os
 ) {

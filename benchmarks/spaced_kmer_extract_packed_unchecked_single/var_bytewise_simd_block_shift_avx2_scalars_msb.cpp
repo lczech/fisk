@@ -12,7 +12,7 @@ using namespace fisk;
 std::uint64_t run_var_bytewise_simd_block_shift_avx2_scalars(
     PackedMsb const& seq,
     SpacedKmerMask<Layout::kMSB, BitExtractKernelBlockShift<SimdAVX2>> const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer_packed_unchecked_bytewise_simd(

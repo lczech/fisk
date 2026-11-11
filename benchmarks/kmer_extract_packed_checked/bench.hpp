@@ -12,6 +12,7 @@
 #include "fisk/simd/avx2.hpp"
 #include "fisk/simd/avx512.hpp"
 #include "fisk/simd/neon.hpp"
+#include "seq_data.hpp"
 #include "sink.hpp"
 
 // Every sequence benchmarked below is packed with its validity, with an ACGT word encoder; only
@@ -31,7 +32,7 @@ using CheckedLsb = fisk::PackedSequenceWithValidity<fisk::Encoding::kACGT, fisk:
  * "kmer_extract_packed_unchecked" suite for the unchecked extraction to compare this against.
  */
 void bench_kmer_extract_packed_checked(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::size_t k_min,
     std::size_t k_max,
     std::ostream& csv_os
@@ -39,7 +40,7 @@ void bench_kmer_extract_packed_checked(
 
 // Test all valid k-mer sizes.
 void bench_kmer_extract_packed_checked(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::ostream& csv_os
 );
 
@@ -61,64 +62,64 @@ void bench_kmer_extract_packed_checked(
 std::uint64_t run_var_checked_bytewise_scalar_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_rolling_scalar_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_scalar_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_rolling_scalar_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_sse2_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_sse2_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_sse2_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_sse2_scalars_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_sse2_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_sse2_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_sse2_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_sse2_scalars_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 
@@ -126,42 +127,42 @@ std::uint64_t run_var_checked_bytewise_simd_sse2_scalars_lsb(
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_avx2_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_avx2_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_avx2_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_avx2_scalars_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_avx2_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_avx2_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_avx2_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_avx2_scalars_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 
@@ -169,42 +170,42 @@ std::uint64_t run_var_checked_bytewise_simd_avx2_scalars_lsb(
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_avx512_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_avx512_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_avx512_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_avx512_scalars_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_avx512_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_avx512_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_avx512_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_avx512_scalars_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 
@@ -212,82 +213,82 @@ std::uint64_t run_var_checked_bytewise_simd_avx512_scalars_lsb(
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_neon_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_neon_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_neon_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_neon_scalars_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_neon_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_neon_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_neon_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_neon_scalars_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_scalar_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_scalar_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_scalar_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_scalar_scalars_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_narrow_width_scalar_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_full_width_scalar_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_scalar_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_checked_bytewise_simd_scalar_scalars_lsb(
     CheckedLsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );

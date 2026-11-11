@@ -414,7 +414,7 @@ inline void clark_getSpacedSeed_improved(
 // ------------------------------------------------------------------------
 
 inline std::uint64_t clark_improved(
-    std::string const& seq,
+    std::string_view seq,
     std::vector<fisk::BitExtractMask> const& masks
 ) {
     // Compute all spaced kmers across the sequence, and sum their hashes, for our checking.

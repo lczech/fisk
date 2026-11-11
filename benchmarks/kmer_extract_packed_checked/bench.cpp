@@ -12,7 +12,7 @@
 using namespace fisk;
 
 void bench_kmer_extract_packed_checked(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::size_t k_min,
     std::size_t k_max,
     std::ostream& csv_os
@@ -622,7 +622,7 @@ void bench_kmer_extract_packed_checked(
 }
 
 void bench_kmer_extract_packed_checked(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::ostream& csv_os
 ) {
     bench_kmer_extract_packed_checked(sequences, 1, 32, csv_os);

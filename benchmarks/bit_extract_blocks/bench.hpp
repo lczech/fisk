@@ -60,68 +60,68 @@ void bench_bit_extract_blocks(std::ostream& csv_os);
 std::uint64_t run_var_pext(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 
 std::uint64_t run_var_bit_loop(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_split32(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_byte_lookup(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 
 std::uint64_t run_var_block_shift(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_block_shift_unrolled1(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_block_shift_unrolled2(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_block_shift_unrolled4(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_block_shift_unrolled8(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 
 std::uint64_t run_var_butterfly(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 
 #if defined(PLATFORM_X86_64) && defined(FISK_HAS_CLMUL)
 std::uint64_t run_var_instlatx(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 
 std::uint64_t run_var_zp7(
     BitExtractBlocksBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );

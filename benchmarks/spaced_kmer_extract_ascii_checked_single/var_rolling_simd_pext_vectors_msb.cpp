@@ -11,9 +11,9 @@
 using namespace fisk;
 
 std::uint64_t run_var_rolling_simd_pext_vectors(
-    std::string const& seq,
+    InputSequence const& seq,
     SpacedKmerMask<Layout::kMSB, BitExtractKernelPext> const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer_ascii_checked_rolling_simd(

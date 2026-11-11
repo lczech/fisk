@@ -7,7 +7,7 @@
 using namespace fisk;
 
 std::uint64_t run_var_checked_butterfly_scalar_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     PackedSequenceWithValidity<Encoding::kACGT, Layout::kMSB>& out
 ) {
     pack_sequence_checked(

@@ -12,7 +12,7 @@ std::uint64_t run_var_bytewise_simd_block_shift_scalar_vectors(
     std::vector<
         SpacedKmerMask<Layout::kLSB, BitExtractKernelBlockShift<SimdScalar>>
     > const& kernels,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     return dispatch_static_span<kBenchmarkMaxMasks>(kernels, [&](auto kernel_span) {
         auto sink = make_sink(sink_buffer);

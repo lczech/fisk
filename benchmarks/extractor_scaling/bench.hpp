@@ -8,6 +8,7 @@
 
 #include "fisk/extractor/kmer_extractor.hpp"
 #include "fisk/extractor/spaced_kmer_extractor.hpp"
+#include "sink.hpp"
 
 // The extractors, from ASCII with ACGT and LSB, the fastest encoding and layout, see
 // bench_extractor_scaling().
@@ -48,73 +49,73 @@ void bench_extractor_scaling(
 // with the callback of the variant, and its run.
 void tune_var_kmer_checked(
     ScalingKmerChecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_kmer_checked(
     ScalingKmerChecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 void tune_var_kmer_checked_vectors(
     ScalingKmerChecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_kmer_checked_vectors(
     ScalingKmerChecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 void tune_var_kmer_unchecked(
     ScalingKmerUnchecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_kmer_unchecked(
     ScalingKmerUnchecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 void tune_var_kmer_unchecked_vectors(
     ScalingKmerUnchecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_kmer_unchecked_vectors(
     ScalingKmerUnchecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 void tune_var_spaced_kmer_checked(
     ScalingSpacedKmerChecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_spaced_kmer_checked(
     ScalingSpacedKmerChecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 void tune_var_spaced_kmer_checked_vectors(
     ScalingSpacedKmerChecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_spaced_kmer_checked_vectors(
     ScalingSpacedKmerChecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 void tune_var_spaced_kmer_unchecked(
     ScalingSpacedKmerUnchecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_spaced_kmer_unchecked(
     ScalingSpacedKmerUnchecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 void tune_var_spaced_kmer_unchecked_vectors(
     ScalingSpacedKmerUnchecked& extractor,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_spaced_kmer_unchecked_vectors(
     ScalingSpacedKmerUnchecked const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );

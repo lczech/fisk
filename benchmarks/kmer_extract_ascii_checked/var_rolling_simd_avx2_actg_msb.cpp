@@ -12,9 +12,9 @@
 using namespace fisk;
 
 std::uint64_t run_var_rolling_simd_avx2_actg_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_ascii_checked_rolling_simd<SimdAVX2, Encoding::kACTG, Layout::kMSB>(

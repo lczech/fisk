@@ -9,7 +9,7 @@
 using namespace fisk;
 
 std::uint64_t run_var_checked_fold_neon_actg_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     PackedSequenceWithValidity<Encoding::kACTG, Layout::kMSB>& out
 ) {
     pack_sequence_checked(

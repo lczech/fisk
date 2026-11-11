@@ -6,6 +6,7 @@
 
 #include "fisk/core/cast.hpp"
 #include "fisk/core/types.hpp"
+#include "fisk/util/aligned_allocator.hpp"
 #include "fisk/util/intrinsics.hpp"
 
 // Selects which of three strategies every run_var_*() function's per-element accumulation
@@ -55,6 +56,11 @@
 #ifndef FISK_BENCHMARK_SINK_MODE
 #define FISK_BENCHMARK_SINK_MODE FISK_BENCHMARK_SINK_SUM
 #endif
+
+/**
+ * @brief The buffer of the Write sink, see make_sink_buffer().
+ */
+using SinkBuffer = fisk::AlignedVector<std::uint64_t>;
 
 // =================================================================================================
 //     FISK_BENCHMARK_SINK_SUM
@@ -154,7 +160,7 @@ struct Sink
     #pragma warning(pop)
 #endif
 
-inline Sink make_sink(std::vector<std::uint64_t>&)
+inline Sink make_sink(SinkBuffer&)
 {
     return Sink{};
 }
@@ -214,7 +220,7 @@ struct Sink
     }
 };
 
-inline Sink make_sink(std::vector<std::uint64_t>&)
+inline Sink make_sink(SinkBuffer&)
 {
     return Sink{};
 }
@@ -229,7 +235,7 @@ inline constexpr char const* kSinkName = "write";
 
 struct Sink
 {
-    std::vector<std::uint64_t>& buf;
+    SinkBuffer& buf;
     std::size_t mask;
 
     // The index of the single values, and one per register width, see consume() of the registers.
@@ -295,7 +301,7 @@ struct Sink
     }
 };
 
-inline Sink make_sink(std::vector<std::uint64_t>& buf)
+inline Sink make_sink(SinkBuffer& buf)
 {
     return Sink{buf, buf.size() - 1, 0, 0, 0, 0};
 }
@@ -317,11 +323,12 @@ inline Sink make_sink(std::vector<std::uint64_t>& buf)
  * along with the input, so that Write measures the stores rather than memory throughput.
  *
  * Its size is a power of two, so that the writes wrap around with a mask, and a multiple of every
- * vector lane count, see Sink::consume().
+ * vector lane count, see Sink::consume(). It starts at a cache line, so that no vector store of
+ * Write spans two of them, which would make the timing depend on where the heap places it.
  */
-inline std::vector<std::uint64_t> make_sink_buffer()
+inline SinkBuffer make_sink_buffer()
 {
-    return std::vector<std::uint64_t>(std::size_t{1} << 13, 0);
+    return SinkBuffer(std::size_t{1} << 13, 0);
 }
 
 // =================================================================================================

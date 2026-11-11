@@ -9,7 +9,7 @@
 using namespace fisk;
 
 std::uint64_t run_var_unchecked_direct_double_avx512_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     PackedSequence<Encoding::kACGT, Layout::kLSB>& out
 ) {
     pack_sequence_unchecked(

@@ -12,7 +12,7 @@ std::vector<std::string> const mask_names = { "T295", "T38570", "T58570" };
 
 } // anonymous namespace
 
-std::uint64_t run_var_original(std::string const& seq)
+std::uint64_t run_var_original(InputSequence const& seq)
 {
     return clark::clark_getObjectsDataComputeFull(seq, mask_names);
 }

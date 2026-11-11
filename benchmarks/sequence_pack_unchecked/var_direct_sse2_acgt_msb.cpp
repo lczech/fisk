@@ -9,7 +9,7 @@
 using namespace fisk;
 
 std::uint64_t run_var_unchecked_direct_sse2_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     PackedSequence<Encoding::kACGT, Layout::kMSB>& out
 ) {
     pack_sequence_unchecked(seq, WordEncoderDirect<Encoding::kACGT, Layout::kMSB, SimdSSE2>{}, out);

@@ -12,7 +12,7 @@ using namespace fisk;
 std::uint64_t run_var_unchecked_bytewise_simd_neon_scalars_msb(
     PackedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_unchecked_bytewise_simd<SimdNEON>(

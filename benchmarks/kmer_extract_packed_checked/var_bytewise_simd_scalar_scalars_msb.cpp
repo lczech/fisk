@@ -10,7 +10,7 @@ using namespace fisk;
 std::uint64_t run_var_checked_bytewise_simd_scalar_scalars_msb(
     CheckedMsb const& seq,
     std::size_t k,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_packed_checked_bytewise_simd<SimdScalar>(

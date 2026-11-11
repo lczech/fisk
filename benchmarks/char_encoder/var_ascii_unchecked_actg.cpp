@@ -8,8 +8,8 @@
 using namespace fisk;
 
 std::uint64_t run_var_ascii_unchecked_actg(
-    std::string const& seq,
-    std::vector<std::uint64_t>& sink_buffer
+    InputSequence const& seq,
+    SinkBuffer& sink_buffer
 ) {
     CharEncoderAscii<Encoding::kACTG, InputCheck::kUnchecked> const encoder;
     auto sink = make_sink(sink_buffer);

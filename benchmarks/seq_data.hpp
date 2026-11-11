@@ -11,10 +11,21 @@
 #include <string>
 #include <vector>
 
+#include "fisk/util/aligned_allocator.hpp"
+
+/**
+ * @brief The input sequences of the benchmarks: ASCII strings whose characters start at a cache
+ * line, so that the SIMD loads on them do not depend on where the heap places them.
+ *
+ * fisk takes its ASCII input as `std::string_view`, of any alignment; the benchmarks align it to
+ * measure the best case, and to keep runs repeatable, see fisk::AlignedAllocator.
+ */
+using InputSequence = fisk::AlignedString;
+
 /**
  * @brief Read FASTA file, remove all non-ACGT characters, and concatenate all sequences.
  */
-inline std::vector<std::string> load_fasta_clean(std::string const& path)
+inline std::vector<InputSequence> load_fasta_clean(std::string const& path)
 {
     // Read FASTA file, remove all non-ACGT characters, and concatenate all sequences.
     // This is just for a simple test here, so we skip all the complexity of dealing
@@ -30,7 +41,7 @@ inline std::vector<std::string> load_fasta_clean(std::string const& path)
     // Not the most efficient - see genesis for a way faster set of functions:
     // https://github.com/lczech/genesis/blob/master/lib/genesis/sequence/formats/fasta_reader.hpp
     // But good enough for our simple test purposes here.
-    std::vector<std::string> result;
+    std::vector<InputSequence> result;
     std::string line;
     while(std::getline(in, line)) {
         // skip headers/labels
@@ -46,7 +57,7 @@ inline std::vector<std::string> load_fasta_clean(std::string const& path)
                 "Invalid FASTA file (missing header before sequence data): " + path
             );
         }
-        std::string seq;
+        InputSequence seq;
         seq.reserve(line.size());
         for(char& c : line) {
             char uc = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
@@ -83,7 +94,7 @@ inline std::vector<std::string> load_fasta_clean(std::string const& path)
  * the raw output of the engine, which the standard specifies, instead of from the std
  * distributions, whose algorithms differ between standard libraries.
  */
-inline std::string random_acgt(std::size_t len, double n_prob, std::uint64_t seed)
+inline InputSequence random_acgt(std::size_t len, double n_prob, std::uint64_t seed)
 {
     if( !std::isfinite(n_prob) || n_prob < 0.0 || n_prob > 1.0 ) {
         throw std::invalid_argument("Invalid probability not in [0.0, 1.0]");
@@ -96,7 +107,7 @@ inline std::string random_acgt(std::size_t len, double n_prob, std::uint64_t see
     auto const n_threshold = static_cast<std::uint64_t>(std::ldexp(n_prob, 53));
 
     // Fill the result string
-    std::string s;
+    InputSequence s;
     s.resize(len);
     for(std::size_t i = 0; i < len; ++i) {
         std::uint64_t const r = rng();

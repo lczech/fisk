@@ -6,7 +6,7 @@
 #include "char_encoder/bench.hpp"
 #include "microbench.hpp"
 
-void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream& csv_os)
+void bench_char_encoder(std::vector<InputSequence> const& sequences, std::ostream& csv_os)
 {
     // User output
     std::string const suite_title = "char_encoder";
@@ -21,9 +21,9 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
     //     encoding=acgt
     // -----------------------------------------------------------------------
     {
-        Microbench<std::string> suite(suite_title);
+        Microbench<InputSequence> suite(suite_title);
         suite
-            .units_fn([](std::string const& in) {
+            .units_fn([](InputSequence const& in) {
                 // 1 unit per base
                 return static_cast<double>(in.size());
             });
@@ -32,25 +32,25 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
             sequences, // vector<std::string>
             bench(
                 "ifs",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_ifs_acgt(seq, sink_buffer);
                 }
             ),
             bench(
                 "switch",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_switch_acgt(seq, sink_buffer);
                 }
             ),
             bench(
                 "table",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_table_acgt(seq, sink_buffer);
                 }
             ),
             bench(
                 "ascii_checked",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_ascii_checked_acgt(seq, sink_buffer);
                 }
             )
@@ -66,7 +66,7 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
             sequences,
             bench(
                 "ascii_unchecked",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_ascii_unchecked_acgt(seq, sink_buffer);
                 }
             )
@@ -78,9 +78,9 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
     //     encoding=actg
     // -----------------------------------------------------------------------
     {
-        Microbench<std::string> suite(suite_title);
+        Microbench<InputSequence> suite(suite_title);
         suite
-            .units_fn([](std::string const& in) {
+            .units_fn([](InputSequence const& in) {
                 // 1 unit per base
                 return static_cast<double>(in.size());
             });
@@ -89,25 +89,25 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
             sequences, // vector<std::string>
             bench(
                 "ifs",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_ifs_actg(seq, sink_buffer);
                 }
             ),
             bench(
                 "switch",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_switch_actg(seq, sink_buffer);
                 }
             ),
             bench(
                 "table",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_table_actg(seq, sink_buffer);
                 }
             ),
             bench(
                 "ascii_checked",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_ascii_checked_actg(seq, sink_buffer);
                 }
             )
@@ -120,7 +120,7 @@ void bench_char_encoder(std::vector<std::string> const& sequences, std::ostream&
             sequences,
             bench(
                 "ascii_unchecked",
-                [&](std::string const& seq){
+                [&](InputSequence const& seq){
                     return run_var_ascii_unchecked_actg(seq, sink_buffer);
                 }
             )

@@ -14,6 +14,7 @@
 #include "fisk/simd/avx2.hpp"
 #include "fisk/simd/avx512.hpp"
 #include "fisk/simd/neon.hpp"
+#include "seq_data.hpp"
 #include "sink.hpp"
 #include "spaced_masks.hpp"
 
@@ -25,7 +26,7 @@ using PackedLsb = fisk::PackedSequence<fisk::Encoding::kACGT, fisk::Layout::kLSB
  * from 1 to kSpanSweepMaxSpan, see spaced_mask_for_span(), each span its own case.
  */
 void bench_spaced_kmer_extract_packed_unchecked_spans(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::ostream& csv_os
 );
 
@@ -35,12 +36,12 @@ void bench_spaced_kmer_extract_packed_unchecked_spans(
 std::uint64_t run_var_bytewise_scalar_pext(
     PackedMsb const& seq,
     fisk::SpacedKmerMask<fisk::Layout::kMSB, fisk::BitExtractMask, kSpanSweepMaxSpan> const& mask,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_scalar_pext(
     PackedLsb const& seq,
     fisk::SpacedKmerMask<fisk::Layout::kLSB, fisk::BitExtractMask, kSpanSweepMaxSpan> const& mask,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 std::uint64_t run_var_bytewise_scalar_butterfly(
@@ -48,28 +49,28 @@ std::uint64_t run_var_bytewise_scalar_butterfly(
     fisk::SpacedKmerMask<
         fisk::Layout::kMSB, fisk::BitExtractButterflyMask, kSpanSweepMaxSpan
     > const& mask,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_scalar_butterfly(
     PackedLsb const& seq,
     fisk::SpacedKmerMask<
         fisk::Layout::kLSB, fisk::BitExtractButterflyMask, kSpanSweepMaxSpan
     > const& mask,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_simd_butterfly_scalar_vectors(
     PackedMsb const& seq,
     fisk::SpacedKmerMask<
         fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_simd_butterfly_scalar_vectors(
     PackedLsb const& seq,
     fisk::SpacedKmerMask<
         fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdScalar>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #if defined(FISK_HAS_SSE2)
 std::uint64_t run_var_bytewise_simd_butterfly_sse2_vectors(
@@ -77,14 +78,14 @@ std::uint64_t run_var_bytewise_simd_butterfly_sse2_vectors(
     fisk::SpacedKmerMask<
         fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_simd_butterfly_sse2_vectors(
     PackedLsb const& seq,
     fisk::SpacedKmerMask<
         fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdSSE2>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX2)
@@ -93,14 +94,14 @@ std::uint64_t run_var_bytewise_simd_butterfly_avx2_vectors(
     fisk::SpacedKmerMask<
         fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_simd_butterfly_avx2_vectors(
     PackedLsb const& seq,
     fisk::SpacedKmerMask<
         fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX2>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_AVX512)
@@ -109,14 +110,14 @@ std::uint64_t run_var_bytewise_simd_butterfly_avx512_vectors(
     fisk::SpacedKmerMask<
         fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_simd_butterfly_avx512_vectors(
     PackedLsb const& seq,
     fisk::SpacedKmerMask<
         fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdAVX512>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_NEON)
@@ -125,14 +126,14 @@ std::uint64_t run_var_bytewise_simd_butterfly_neon_vectors(
     fisk::SpacedKmerMask<
         fisk::Layout::kMSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_simd_butterfly_neon_vectors(
     PackedLsb const& seq,
     fisk::SpacedKmerMask<
         fisk::Layout::kLSB, fisk::BitExtractKernelButterfly<fisk::SimdNEON>, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif
 #if defined(FISK_HAS_BMI2)
@@ -141,13 +142,13 @@ std::uint64_t run_var_bytewise_simd_pext_vectors(
     fisk::SpacedKmerMask<
         fisk::Layout::kMSB, fisk::BitExtractKernelPext, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 std::uint64_t run_var_bytewise_simd_pext_vectors(
     PackedLsb const& seq,
     fisk::SpacedKmerMask<
         fisk::Layout::kLSB, fisk::BitExtractKernelPext, kSpanSweepMaxSpan
     > const& kernel,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 );
 #endif

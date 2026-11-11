@@ -39,10 +39,10 @@ std::uint64_t compute_spaced_kmer_naive(
 } // namespace
 
 std::uint64_t run_var_naive(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     std::vector<std::vector<std::size_t>> const& naive_masks,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     std::size_t const stop = seq.size() - k;

@@ -10,7 +10,7 @@ using namespace fisk;
 std::uint64_t run_var_bytewise_scalar_block_shift_unrolled4(
     CheckedLsb const& seq,
     SpacedKmerMask<Layout::kLSB, BitExtractBlockShiftMask> const& mask,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer_packed_checked_bytewise_scalar(

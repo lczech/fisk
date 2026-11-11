@@ -12,10 +12,10 @@
 using namespace fisk;
 
 std::uint64_t run_var_chunked_simd_avx2_acgt_lsb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     CheckedAcgtLsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_kmer_ascii_checked_chunked_simd<SimdAVX2>(

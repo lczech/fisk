@@ -12,9 +12,9 @@
 using namespace fisk;
 
 std::uint64_t run_var_rolling_scalar_pext(
-    std::string const& seq,
+    InputSequence const& seq,
     SpacedKmerMask<Layout::kMSB, BitExtractMask> const& mask,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for_each_spaced_kmer_ascii_checked_rolling_scalar(

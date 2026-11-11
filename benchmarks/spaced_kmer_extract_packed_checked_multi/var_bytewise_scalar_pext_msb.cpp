@@ -12,7 +12,7 @@ using namespace fisk;
 std::uint64_t run_var_bytewise_scalar_pext(
     CheckedMsb const& seq,
     std::vector<SpacedKmerMask<Layout::kMSB, BitExtractMask>> const& masks,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     return dispatch_static_span<kBenchmarkMaxMasks>(masks, [&](auto mask_span) {
         auto sink = make_sink(sink_buffer);

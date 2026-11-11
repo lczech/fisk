@@ -11,10 +11,10 @@
 using namespace fisk;
 
 std::uint64_t run_var_chunked_simd_butterfly_scalar_vectors(
-    std::string const& seq,
+    InputSequence const& seq,
     std::vector<ButterflyKernel<Layout::kLSB, fisk::SimdScalar>> const& masks,
     ChunkedCheckedScratch<Layout::kLSB>& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     constexpr Layout L = Layout::kLSB;
     return dispatch_static_span<kBenchmarkMaxMasks>(masks, [&](auto mask_span) {

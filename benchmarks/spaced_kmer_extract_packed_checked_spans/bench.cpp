@@ -20,7 +20,7 @@ template <Layout L>
 static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
     std::vector<PackedSequenceWithValidity<Encoding::kACGT, L>> const& sequences,
     std::size_t span,
-    std::vector<std::uint64_t>& sink_buffer,
+    SinkBuffer& sink_buffer,
     std::ostream& csv_os,
     std::string const& suite_title
 ) {
@@ -140,7 +140,7 @@ static void bench_spaced_kmer_extract_packed_checked_spans_layout_(
 }
 
 void bench_spaced_kmer_extract_packed_checked_spans(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::ostream& csv_os
 ) {
     // User output

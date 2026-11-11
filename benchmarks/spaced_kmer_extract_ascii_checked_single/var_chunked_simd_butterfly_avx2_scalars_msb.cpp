@@ -12,10 +12,10 @@
 using namespace fisk;
 
 std::uint64_t run_var_chunked_simd_butterfly_avx2_scalars(
-    std::string const& seq,
+    InputSequence const& seq,
     ButterflyKernel<Layout::kMSB, fisk::SimdAVX2> const& mask,
     ChunkedCheckedScratch<Layout::kMSB>& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     constexpr Layout L = Layout::kMSB;
     auto sink = make_sink(sink_buffer);

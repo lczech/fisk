@@ -47,7 +47,7 @@ inline fisk::PackedSequence<fisk::Encoding::kACTG, L> expected_sequence(std::str
  */
 template <fisk::Layout L, typename Kernel>
 inline void check_kernel(
-    std::string_view name, Kernel kernel, std::vector<std::string> const& sequences
+    std::string_view name, Kernel kernel, std::vector<InputSequence> const& sequences
 ) {
     fisk::PackedSequence<fisk::Encoding::kACTG, L> out(512);
     std::fill(out.codes().begin(), out.codes().end(), std::uint8_t{0xFF});
@@ -77,7 +77,7 @@ inline void check_kernel(
 /**
  * @brief Validate reference wrappers and fisk PEXT/scalar packing outside benchmark timing.
  */
-inline void check_sequences(std::vector<std::string> const& sequences)
+inline void check_sequences(std::vector<InputSequence> const& sequences)
 {
     using fisk::Layout;
     check_kernel<Layout::kMSB>("fastdna_lut", run_var_fastdna_lut, sequences);
@@ -108,13 +108,13 @@ inline void check_sequences(std::vector<std::string> const& sequences)
 /**
  * @brief Check tails, all input bytes, and the actual benchmark sequences before timing.
  */
-inline void validate(std::vector<std::string> const& sequences)
+inline void validate(std::vector<InputSequence> const& sequences)
 {
-    std::vector<std::string> corpus;
+    std::vector<InputSequence> corpus;
     fisk::Splitmix64 rng(3005);
     constexpr std::string_view alphabet = "ACGTNacgtn";
     for (std::size_t length = 0; length <= 129; ++length) {
-        std::string seq(length, 'A');
+        InputSequence seq(length, 'A');
         for (char& c : seq) {
             c = alphabet[rng.get_uint64() % alphabet.size()];
         }

@@ -44,10 +44,10 @@ std::uint64_t compute_spaced_kmer_missh(
 } // namespace
 
 std::uint64_t run_var_missh(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     std::vector<std::size_t> const& naive_mask,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     std::size_t const stop = seq.size() - k;

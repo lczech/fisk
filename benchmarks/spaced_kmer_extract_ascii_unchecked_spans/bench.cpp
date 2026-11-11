@@ -16,18 +16,18 @@ using namespace fisk;
 // the Layouts emit different values.
 template <Layout L>
 static void bench_spaced_kmer_extract_ascii_unchecked_spans_layout_(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::size_t span,
-    std::vector<std::uint64_t>& sink_buffer,
+    SinkBuffer& sink_buffer,
     std::ostream& csv_os,
     std::string const& suite_title
 ) {
     std::string const layout_case = std::string("layout=") + ((L == Layout::kMSB) ? "msb" : "lsb")
         + ";span=" + std::to_string(span);
 
-    Microbench<std::string> suite(suite_title);
+    Microbench<InputSequence> suite(suite_title);
     suite
-        .units_fn([span](std::string const& seq) {
+        .units_fn([span](InputSequence const& seq) {
             // 1 unit per position at which a span starts
             return seq.size() >= span ? static_cast<double>(seq.size() - span + 1) : 0.0;
         });
@@ -76,7 +76,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_spans_layout_(
         sequences,
         bench(
             "chunked_simd_butterfly_scalar_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_scalar_vectors(
                     seq, bf_scalar_kernel, scratch_simd_bf_scalar, sink_buffer
                 );
@@ -85,7 +85,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_spans_layout_(
         #if defined(FISK_HAS_SSE2)
         bench(
             "chunked_simd_butterfly_sse2_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_sse2_vectors(
                     seq, bf_sse2_kernel, scratch_simd_bf_sse2, sink_buffer
                 );
@@ -95,7 +95,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_spans_layout_(
         #if defined(FISK_HAS_AVX2)
         bench(
             "chunked_simd_butterfly_avx2_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_avx2_vectors(
                     seq, bf_avx2_kernel, scratch_simd_bf_avx2, sink_buffer
                 );
@@ -105,7 +105,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_spans_layout_(
         #if defined(FISK_HAS_AVX512)
         bench(
             "chunked_simd_butterfly_avx512_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_avx512_vectors(
                     seq, bf_avx512_kernel, scratch_simd_bf_avx512, sink_buffer
                 );
@@ -115,7 +115,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_spans_layout_(
         #if defined(FISK_HAS_NEON)
         bench(
             "chunked_simd_butterfly_neon_vectors",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_simd_butterfly_neon_vectors(
                     seq, bf_neon_kernel, scratch_simd_bf_neon, sink_buffer
                 );
@@ -125,14 +125,14 @@ static void bench_spaced_kmer_extract_ascii_unchecked_spans_layout_(
         #if defined(FISK_HAS_BMI2)
         bench(
             "chunked_scalar_pext",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_scalar_pext(seq, mask, scratch_scalar_pext, sink_buffer);
             }
         ),
         #endif
         bench(
             "chunked_scalar_butterfly",
-            [&](std::string const& seq) {
+            [&](InputSequence const& seq) {
                 return run_var_chunked_scalar_butterfly(
                     seq, butterfly_mask, scratch_scalar_bf, sink_buffer
                 );
@@ -143,7 +143,7 @@ static void bench_spaced_kmer_extract_ascii_unchecked_spans_layout_(
 }
 
 void bench_spaced_kmer_extract_ascii_unchecked_spans(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::ostream& csv_os
 ) {
     // User output

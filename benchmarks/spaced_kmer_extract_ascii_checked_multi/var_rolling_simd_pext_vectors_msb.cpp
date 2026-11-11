@@ -11,9 +11,9 @@
 using namespace fisk;
 
 std::uint64_t run_var_rolling_simd_pext_vectors(
-    std::string const& seq,
+    InputSequence const& seq,
     std::vector<SpacedKmerMask<Layout::kMSB, BitExtractKernelPext>> const& kernels,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     return dispatch_static_span<kBenchmarkMaxMasks>(kernels, [&](auto kernel_span) {
         auto sink = make_sink(sink_buffer);

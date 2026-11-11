@@ -14,7 +14,7 @@ using namespace fisk;
 std::uint64_t run_var_instlatx(
     BitExtractWeightsBatch const& batch,
     std::size_t rounds,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     for (std::size_t r = 0; r < rounds; ++r) {

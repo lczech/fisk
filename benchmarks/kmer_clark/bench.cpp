@@ -6,7 +6,7 @@
 #include "microbench.hpp"
 
 void bench_kmer_clark(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::ostream& csv_os
 ) {
     size_t const k = 31;
@@ -19,9 +19,9 @@ void bench_kmer_clark(
     write_csv_header(csv_os);
 
     // Prepare a benchmark with repititions
-    Microbench<std::string> suite(suite_title);
+    Microbench<InputSequence> suite(suite_title);
     suite
-        .units_fn([](std::string const& seq) {
+        .units_fn([](InputSequence const& seq) {
             // 1 unit per original (unspaced) k-mer
             return static_cast<double>(seq.size() - k + 1);
         });

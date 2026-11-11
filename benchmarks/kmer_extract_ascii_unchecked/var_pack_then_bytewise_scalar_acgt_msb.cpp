@@ -10,10 +10,10 @@
 using namespace fisk;
 
 std::uint64_t run_var_pack_then_bytewise_scalar_acgt_msb(
-    std::string const& seq,
+    InputSequence const& seq,
     std::size_t k,
     PackedAcgtMsb& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     pack_sequence_unchecked(seq, ChunkedWordEncoder<Encoding::kACGT, Layout::kMSB>{}, scratch);
     auto sink = make_sink(sink_buffer);

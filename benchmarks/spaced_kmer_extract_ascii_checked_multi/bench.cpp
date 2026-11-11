@@ -17,10 +17,10 @@ using namespace fisk;
 // different values. The `baselines` are run alongside, and hence need to emit the same values.
 template <Layout L, typename... Baselines>
 static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
-    Microbench<std::string>& suite,
-    std::vector<std::string> const& sequences,
+    Microbench<InputSequence>& suite,
+    std::vector<InputSequence> const& sequences,
     std::vector<std::string> const& masks,
-    std::vector<std::uint64_t>& sink_buffer,
+    SinkBuffer& sink_buffer,
     std::ostream& csv_os,
     std::string const& suite_title,
     std::string const& case_label,
@@ -111,7 +111,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_BMI2)
             bench(
                 "chunked_scalar_pext",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_scalar_pext(
                         seq, bit_ext_masks, scratch_scalar_pext, sink_buffer
                     );
@@ -120,7 +120,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #endif
             bench(
                 "chunked_scalar_butterfly",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_scalar_butterfly(
                         seq, bit_ext_butterfly_masks, scratch_scalar_bf, sink_buffer
                     );
@@ -129,7 +129,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "chunked_simd_butterfly_sse2_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_sse2_vectors(
                         seq, simd_bf_sse2_kernels, scratch_simd_bf_sse2_vectors, sink_buffer
                     );
@@ -137,7 +137,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "chunked_simd_butterfly_sse2_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_sse2_scalars(
                         seq, simd_bf_sse2_kernels, scratch_simd_bf_sse2, sink_buffer
                     );
@@ -147,7 +147,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_AVX2)
             bench(
                 "chunked_simd_butterfly_avx2_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_avx2_vectors(
                         seq, simd_bf_avx2_kernels, scratch_simd_bf_avx2_vectors, sink_buffer
                     );
@@ -155,7 +155,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "chunked_simd_butterfly_avx2_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_avx2_scalars(
                         seq, simd_bf_avx2_kernels, scratch_simd_bf_avx2, sink_buffer
                     );
@@ -165,7 +165,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_AVX512)
             bench(
                 "chunked_simd_butterfly_avx512_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_avx512_vectors(
                         seq, simd_bf_avx512_kernels, scratch_simd_bf_avx512_vectors, sink_buffer
                     );
@@ -173,7 +173,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "chunked_simd_butterfly_avx512_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_avx512_scalars(
                         seq, simd_bf_avx512_kernels, scratch_simd_bf_avx512, sink_buffer
                     );
@@ -183,7 +183,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_NEON)
             bench(
                 "chunked_simd_butterfly_neon_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_neon_vectors(
                         seq, simd_bf_neon_kernels, scratch_simd_bf_neon_vectors, sink_buffer
                     );
@@ -191,7 +191,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "chunked_simd_butterfly_neon_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_neon_scalars(
                         seq, simd_bf_neon_kernels, scratch_simd_bf_neon, sink_buffer
                     );
@@ -200,7 +200,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #endif
             bench(
                 "chunked_simd_butterfly_scalar_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_scalar_vectors(
                         seq, simd_bf_scalar_kernels, scratch_simd_bf_scalar_vectors, sink_buffer
                     );
@@ -208,7 +208,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "chunked_simd_butterfly_scalar_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_chunked_simd_butterfly_scalar_scalars(
                         seq, simd_bf_scalar_kernels, scratch_simd_bf_scalar, sink_buffer
                     );
@@ -224,26 +224,26 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_BMI2)
             bench(
                 "rolling_scalar_pext",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_scalar_pext(seq, bit_ext_masks, sink_buffer);
                 }
             ),
             #endif
             bench(
                 "rolling_scalar_bit_loop",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_scalar_bit_loop(seq, bit_ext_masks, sink_buffer);
                 }
             ),
             bench(
                 "rolling_scalar_byte_lookup",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_scalar_byte_lookup(seq, bit_ext_masks, sink_buffer);
                 }
             ),
             bench(
                 "rolling_scalar_block_shift",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_scalar_block_shift(
                         seq, bit_ext_block_masks, sink_buffer
                     );
@@ -251,7 +251,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_scalar_block_shift_unrolled2",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_scalar_block_shift_unrolled2(
                         seq, bit_ext_block_masks, sink_buffer
                     );
@@ -259,7 +259,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_scalar_block_shift_unrolled4",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_scalar_block_shift_unrolled4(
                         seq, bit_ext_block_masks, sink_buffer
                     );
@@ -267,7 +267,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_scalar_block_shift_unrolled8",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_scalar_block_shift_unrolled8(
                         seq, bit_ext_block_masks, sink_buffer
                     );
@@ -275,7 +275,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_scalar_butterfly",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_scalar_butterfly(
                         seq, bit_ext_butterfly_masks, sink_buffer
                     );
@@ -286,7 +286,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_SSE2)
             bench(
                 "rolling_simd_butterfly_sse2_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_sse2_vectors(
                         seq, simd_bf_sse2_kernels, sink_buffer
                     );
@@ -294,7 +294,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_butterfly_sse2_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_sse2_scalars(
                         seq, simd_bf_sse2_kernels, sink_buffer
                     );
@@ -302,7 +302,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_sse2_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_sse2_vectors(
                         seq, simd_bt_sse2_kernels, sink_buffer
                     );
@@ -310,7 +310,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_sse2_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_sse2_scalars(
                         seq, simd_bt_sse2_kernels, sink_buffer
                     );
@@ -320,7 +320,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_AVX2)
             bench(
                 "rolling_simd_butterfly_avx2_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_avx2_vectors(
                         seq, simd_bf_avx2_kernels, sink_buffer
                     );
@@ -328,7 +328,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_butterfly_avx2_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_avx2_scalars(
                         seq, simd_bf_avx2_kernels, sink_buffer
                     );
@@ -336,7 +336,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_avx2_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_avx2_vectors(
                         seq, simd_bt_avx2_kernels, sink_buffer
                     );
@@ -344,7 +344,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_avx2_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_avx2_scalars(
                         seq, simd_bt_avx2_kernels, sink_buffer
                     );
@@ -354,7 +354,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_AVX512)
             bench(
                 "rolling_simd_butterfly_avx512_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_avx512_vectors(
                         seq, simd_bf_avx512_kernels, sink_buffer
                     );
@@ -362,7 +362,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_butterfly_avx512_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_avx512_scalars(
                         seq, simd_bf_avx512_kernels, sink_buffer
                     );
@@ -370,7 +370,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_avx512_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_avx512_vectors(
                         seq, simd_bt_avx512_kernels, sink_buffer
                     );
@@ -378,7 +378,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_avx512_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_avx512_scalars(
                         seq, simd_bt_avx512_kernels, sink_buffer
                     );
@@ -388,7 +388,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_NEON)
             bench(
                 "rolling_simd_butterfly_neon_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_neon_vectors(
                         seq, simd_bf_neon_kernels, sink_buffer
                     );
@@ -396,7 +396,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_butterfly_neon_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_neon_scalars(
                         seq, simd_bf_neon_kernels, sink_buffer
                     );
@@ -404,7 +404,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_neon_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_neon_vectors(
                         seq, simd_bt_neon_kernels, sink_buffer
                     );
@@ -412,7 +412,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_neon_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_neon_scalars(
                         seq, simd_bt_neon_kernels, sink_buffer
                     );
@@ -422,20 +422,20 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             #if defined(FISK_HAS_BMI2)
             bench(
                 "rolling_simd_pext_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_pext_vectors(seq, simd_pext_kernels, sink_buffer);
                 }
             ),
             bench(
                 "rolling_simd_pext_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_pext_scalars(seq, simd_pext_kernels, sink_buffer);
                 }
             ),
             #endif
             bench(
                 "rolling_simd_butterfly_scalar_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_scalar_vectors(
                         seq, simd_bf_scalar_kernels, sink_buffer
                     );
@@ -443,7 +443,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_butterfly_scalar_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_butterfly_scalar_scalars(
                         seq, simd_bf_scalar_kernels, sink_buffer
                     );
@@ -451,7 +451,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_scalar_vectors",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_scalar_vectors(
                         seq, simd_bt_scalar_kernels, sink_buffer
                     );
@@ -459,7 +459,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
             ),
             bench(
                 "rolling_simd_block_shift_scalar_scalars",
-                [&](std::string const& seq) {
+                [&](InputSequence const& seq) {
                     return run_var_rolling_simd_block_shift_scalar_scalars(
                         seq, simd_bt_scalar_kernels, sink_buffer
                     );
@@ -474,7 +474,7 @@ static void bench_spaced_kmer_extract_ascii_checked_multi_layout_(
 }
 
 void bench_spaced_kmer_extract_ascii_checked_multi(
-    std::vector<std::string> const& sequences,
+    std::vector<InputSequence> const& sequences,
     std::vector<std::vector<std::string>> const& multi_masks,
     std::ostream& csv_os
 ) {
@@ -515,9 +515,9 @@ void bench_spaced_kmer_extract_ascii_checked_multi(
         }
 
         // Prepare a benchmark with repititions
-        Microbench<std::string> suite(suite_title);
+        Microbench<InputSequence> suite(suite_title);
         suite
-            .units_fn([&, k](std::string const& seq) {
+            .units_fn([&, k](InputSequence const& seq) {
                 // 1 unit per original (unspaced) k-mer and per mask
                 auto const kmer_count = static_cast<double>(seq.size() - k + 1);
                 auto const mask_count = static_cast<double>(multi_masks[m].size());
@@ -533,7 +533,7 @@ void bench_spaced_kmer_extract_ascii_checked_multi(
             // naive, as baseline and validity check
             bench(
                 "naive",
-                [&, k](std::string const& seq) {
+                [&, k](InputSequence const& seq) {
                     return run_var_naive(seq, k, naive_masks, sink_buffer);
                 }
             )

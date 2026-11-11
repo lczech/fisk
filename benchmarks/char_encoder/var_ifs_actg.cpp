@@ -7,7 +7,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_ifs_actg(std::string const& seq, std::vector<std::uint64_t>& sink_buffer)
+std::uint64_t run_var_ifs_actg(InputSequence const& seq, SinkBuffer& sink_buffer)
 {
     CharEncoderIfs<Encoding::kACTG> const encoder;
     auto sink = make_sink(sink_buffer);

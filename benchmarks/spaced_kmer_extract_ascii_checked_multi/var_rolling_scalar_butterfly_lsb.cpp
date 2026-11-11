@@ -10,9 +10,9 @@
 using namespace fisk;
 
 std::uint64_t run_var_rolling_scalar_butterfly(
-    std::string const& seq,
+    InputSequence const& seq,
     std::vector<SpacedKmerMask<Layout::kLSB, BitExtractButterflyMask>> const& masks,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     return dispatch_static_span<kBenchmarkMaxMasks>(masks, [&](auto mask_span) {
         auto sink = make_sink(sink_buffer);

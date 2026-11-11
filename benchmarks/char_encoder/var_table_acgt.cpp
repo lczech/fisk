@@ -7,7 +7,7 @@
 
 using namespace fisk;
 
-std::uint64_t run_var_table_acgt(std::string const& seq, std::vector<std::uint64_t>& sink_buffer)
+std::uint64_t run_var_table_acgt(InputSequence const& seq, SinkBuffer& sink_buffer)
 {
     CharEncoderTable<Encoding::kACGT> const encoder;
     auto sink = make_sink(sink_buffer);

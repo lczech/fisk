@@ -27,7 +27,7 @@ std::vector<fisk::BitExtractMask> const masks = make_masks();
 
 } // anonymous namespace
 
-std::uint64_t run_var_improved(std::string const& seq)
+std::uint64_t run_var_improved(InputSequence const& seq)
 {
     return clark::clark_improved(seq, masks);
 }

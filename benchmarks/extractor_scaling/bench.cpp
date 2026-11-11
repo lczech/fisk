@@ -36,7 +36,7 @@ void bench_extractor_scaling(
     // The input of all lengths. With the seed and N probability of the other suites, its start is
     // their input.
     std::cout << "Generating input sequence of length " << max_length << "\n";
-    std::string const input = random_acgt(max_length, n_prob, seed);
+    InputSequence const input = random_acgt(max_length, n_prob, seed);
 
     // The buffer of the Write sink, see sink.hpp; Sum and Barrier ignore it.
     auto sink_buffer = make_sink_buffer();

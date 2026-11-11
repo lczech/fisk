@@ -9,7 +9,7 @@
 using namespace fisk;
 
 std::uint64_t run_var_cute_mul(
-    std::string const& seq,
+    InputSequence const& seq,
     PackedSequence<Encoding::kACTG, Layout::kLSB>& out
 ) {
     cute_nucleotides::pack_sequence_unchecked(seq, cute_nucleotides::encode_mul, out);

@@ -80,7 +80,7 @@ struct ScalingTuneCallback
 };
 
 template <bool Spaced, bool Vectors, typename Extractor>
-void tune_scaling_variant(Extractor& extractor, std::vector<std::uint64_t>& sink_buffer)
+void tune_scaling_variant(Extractor& extractor, SinkBuffer& sink_buffer)
 {
     extractor.tune(ScalingTuneCallback<Spaced, Vectors>{make_sink(sink_buffer)});
 }
@@ -89,7 +89,7 @@ template <bool Spaced, bool Vectors, typename Extractor>
 std::uint64_t run_scaling_variant(
     Extractor const& extractor,
     std::string_view seq,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
     extractor.for_each(seq, make_scaling_callback<Spaced, Vectors>(sink));

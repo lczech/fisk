@@ -13,10 +13,10 @@
 using namespace fisk;
 
 std::uint64_t run_var_chunked_scalar_pext(
-    std::string const& seq,
+    InputSequence const& seq,
     std::vector<PextMask<Layout::kLSB>> const& masks,
     ChunkedCheckedScratch<Layout::kLSB>& scratch,
-    std::vector<std::uint64_t>& sink_buffer
+    SinkBuffer& sink_buffer
 ) {
     constexpr Layout L = Layout::kLSB;
     return dispatch_static_span<kBenchmarkMaxMasks>(masks, [&](auto mask_span) {

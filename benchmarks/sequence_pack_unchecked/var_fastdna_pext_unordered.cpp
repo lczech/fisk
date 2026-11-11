@@ -9,7 +9,7 @@
 using namespace fisk;
 
 std::uint64_t run_var_fastdna_pext_unordered(
-    std::string const& seq,
+    InputSequence const& seq,
     PackedSequence<Encoding::kACTG, Layout::kLSB>& out
 ) {
     fastdna::pack_sequence_unchecked<Layout::kLSB, true, 1>(seq, out);
