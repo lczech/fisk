@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "fisk/util/aligned_allocator.hpp"
 #include "fisk/util/platform.hpp"
 #include "fisk/simd/simd.hpp"
 
@@ -111,7 +112,8 @@ inline constexpr bool dependent_false_v = false;
  * codes() holds exactly `ceil(length() / 4)` bytes of 4 codes each. When the length is not a
  * multiple of 4, the unused bits of the last byte are zero. For a length above 0, the codes are
  * followed by `codes_padding` zero bytes, which codes() does not include, so that loops can read
- * whole words up to the end of the codes without testing for it.
+ * whole words up to the end of the codes without testing for it. The codes start at a multiple of
+ * 64 bytes, see AlignedAllocator.
  *
  * `E` states which nucleotide each 2-bit code stands for (see Encoding), and `L` how the 4 codes
  * are arranged within each byte (see Layout). Both are also exposed as the `encoding` and `layout`
@@ -229,8 +231,8 @@ private:
         return (length + 3) / 4;
     }
 
-    // The codes and the padding after them.
-    std::vector<std::uint8_t> storage_;
+    // The codes and the padding after them, aligned for the SIMD algorithms.
+    AlignedVector<std::uint8_t> storage_;
     std::size_t length_ = 0;
 };
 
@@ -362,7 +364,7 @@ private:
 
     // The moves of the members leave a moved-from sequence empty, see PackedSequence.
     PackedSequence<E, L> sequence_;
-    std::vector<std::uint8_t> validity_;
+    AlignedVector<std::uint8_t> validity_;
 };
 
 /**

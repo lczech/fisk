@@ -223,6 +223,10 @@ static void check_construct_resize_move()
     EXPECT_EQ(packed.validity()[1], 0u);
     check_zero_beyond_length(packed);
 
+    // The codes and the validity bits start at a cache line, see AlignedAllocator.
+    EXPECT_EQ(reinterpret_cast<std::uintptr_t>(packed.codes().data()) % 64, 0u);
+    EXPECT_EQ(reinterpret_cast<std::uintptr_t>(packed.validity().data()) % 64, 0u);
+
     // A move leaves the moved-from sequence empty.
     Packed moved = std::move(packed);
     EXPECT_EQ(moved.length(), std::size_t{13});

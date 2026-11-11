@@ -9,6 +9,7 @@
 #include "fisk/util/platform.hpp"
 #include "fisk/util/intrinsics.hpp"
 #include "fisk/util/cpu_runtime.hpp"
+#include "fisk/util/aligned_allocator.hpp"
 #include "fisk/util/random.hpp"
 #include "fisk/util/static_span.hpp"
 

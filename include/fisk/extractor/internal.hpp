@@ -18,6 +18,7 @@
 #include <variant>
 #include <vector>
 
+#include "fisk/util/aligned_allocator.hpp"
 #include "fisk/util/cpu_runtime.hpp"
 #include "fisk/util/intrinsics.hpp"
 #include "fisk/util/random.hpp"
@@ -215,9 +216,10 @@ inline auto make_tune_samples_(TuneOptions const& options)
     std::size_t const total = options.total_length;
     std::size_t const length = options.sequence_length == 0 ? total : options.sequence_length;
 
-    std::vector<std::string> strings;
+    // Aligned, so that the timing does not depend on where the heap places the samples.
+    std::vector<AlignedString> strings;
     for (std::size_t start = 0; start < total; start += length) {
-        std::string seq(std::min(length, total - start), 'A');
+        AlignedString seq(std::min(length, total - start), 'A');
         for (auto& c : seq) {
             c = "ACGT"[rng.get_uint64() & 3u];
             if (C == InputCheck::kChecked && rng.get_double() < options.invalid_rate) {
