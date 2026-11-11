@@ -7,8 +7,9 @@ set -uo pipefail
 #
 # Runs scripts/run_benchmarks.sh, with all benchmark sink modes, on its own exclusive node for
 # each combination of CPU arch x compiler:
-#   - AMD EPYC 9684X    x  Clang / GCC 15
-#   - Intel Xeon 8568Y  x  Clang / GCC 15
+#   - AMD EPYC 9684X (Zen 4)  x  Clang / GCC 15
+#   - AMD EPYC 9655 (Zen 5)   x  Clang / GCC 15
+#   - Intel Xeon 8568Y        x  Clang / GCC 15
 #
 # Usage:
 #   Run from a working directory that already contains a `fisk/` subdirectory
@@ -18,18 +19,12 @@ set -uo pipefail
 #     ./fisk/scripts/submit_rubus_benchmarks.sh
 #
 # With FISK_GENOME_FILE set to a copy of the human genome, the example uses it instead of
-# downloading the genome on each node, see example/run_human_genome.sh. With the zip, in an empty
-# working directory:
-#
-#     unzip fisk.zip
-#     NCBI=https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38
-#     GENOME=GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
-#     curl -fLO "${NCBI}/seqs_for_alignment_pipelines.ucsc_ids/${GENOME}"
-#     FISK_GENOME_FILE="${GENOME}" bash fisk/scripts/submit_rubus_benchmarks.sh
+# downloading the genome on each node, see example/run_human_genome.sh. scripts/rubus_launch.sh
+# does that, and unpacks the zip: copy it once next to fisk.zip, and run it after each new zip.
 #
 # The script waits for the jobs, so run it in tmux or screen.
 #
-# The jobs are submitted with srun, all four at once, and the script waits for them. Everything
+# The jobs are submitted with srun, all at once, and the script waits for them. Everything
 # lands in ./output/, so that one folder holds all runs: results in
 # ./output/results/<CPU>/<Compiler>_<version>/<mode>/, as with run_benchmarks.sh, which moves
 # earlier results of the same CPU, compiler and mode to ./output/results/_archive/; logs in
@@ -44,7 +39,7 @@ QOS="normal"
 TIME_LIMIT="4:00:00"
 
 # CPUs per job: all of them build, and the benchmarks run pinned to one.
-CPUS_PER_TASK=16
+CPUS_PER_TASK=64
 
 # A copy of the human genome for the example, which run_benchmarks.sh runs on it, see
 # example/run_human_genome.sh: used instead of the download if set, see the usage above.
@@ -53,6 +48,7 @@ GENOME_FILE="${FISK_GENOME_FILE:-}"
 # Node constraints, per CPU arch. "std" excludes the gpu/hgx nodes.
 declare -A CONSTRAINT=(
   [epyc]="std,epyc,znver4"
+  [zen5]="std,epyc,znver5"
   [xeon]="std,xeon,sapphirerapids"
 )
 
@@ -66,14 +62,17 @@ declare -A MODULE=(
 # usual names; run_benchmarks.sh replaces the spaces by underscores.
 declare -A CPU_LABEL=(
   [epyc]="AMD EPYC 9684X"
+  [zen5]="AMD EPYC 9655"
   [xeon]="Intel Xeon Platinum 8568Y"
 )
 
-# The four combos to run. Each gets its own --exclusive node, so all four
+# The combos to run. Each gets its own --exclusive node, so all of them
 # run fully in parallel with no timing interference between them.
 COMBOS=(
   "epyc:clang"
   "epyc:gcc"
+  "zen5:clang"
+  "zen5:gcc"
   "xeon:clang"
   "xeon:gcc"
 )
@@ -138,9 +137,10 @@ run_combo() {
     echo "Start: $(date -Iseconds)"
   } > "$logfile"
 
+  # --mem=0 asks for all memory of the node, without which Slurm refuses exclusive EPYC nodes.
   srun \
     --job-name="fisk-${slug}" \
-    --exclusive \
+    --exclusive --mem=0 \
     --nodes=1 --ntasks=1 --cpus-per-task="${CPUS_PER_TASK}" \
     --constraint="${constraint}" \
     --account="${ACCOUNT}" \

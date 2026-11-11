@@ -23,6 +23,9 @@ Options:
   --compiler <name>     C++ compiler to build with, e.g. g++ or clang++. Default: that of CMake.
   --cpu <n>             Run on this CPU only, pinned via taskset (Linux).
   --output <file>       Write the CSV to this file instead of the terminal.
+  --data-dir <dir>      Folder for the download and the unpacked genome. Default: example/data/.
+  --download-only       Only download and unpack the genome, and print the path of its FASTA
+                        file, for other runs to use via --genome-file.
   -h, --help            Show this help.
 EOF
 }
@@ -33,10 +36,12 @@ GENOME_FILE=""
 COMPILER=""
 CPU=""
 OUTPUT=""
+DATA=""
+DOWNLOAD_ONLY=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --genome|--genome-file|--compiler|--cpu|--output)
+        --genome|--genome-file|--compiler|--cpu|--output|--data-dir)
             if [ $# -lt 2 ]; then
                 echo "Error: $1 needs a value." >&2
                 exit 1
@@ -49,6 +54,8 @@ while [ $# -gt 0 ]; do
         --compiler)    COMPILER="$2"; shift 2 ;;
         --cpu)         CPU="$2"; shift 2 ;;
         --output)      OUTPUT="$2"; shift 2 ;;
+        --data-dir)    DATA="$2"; shift 2 ;;
+        --download-only) DOWNLOAD_ONLY=1; shift ;;
         -h|--help)     usage; exit 0 ;;
         *)             echo "Error: unknown option '$1'." >&2; usage >&2; exit 1 ;;
     esac
@@ -83,7 +90,7 @@ sha256() {
     fi
 }
 
-DATA="${EXAMPLE_DIR}/data"
+DATA="${DATA:-${EXAMPLE_DIR}/data}"
 mkdir -p "$DATA"
 if [ -z "$GENOME_FILE" ]; then
     GENOME_FILE="${DATA}/$(basename "$URL")"
@@ -114,6 +121,11 @@ case "$GENOME_FILE" in
         fi
         ;;
 esac
+
+if [ "$DOWNLOAD_ONLY" -eq 1 ]; then
+    echo "$(cd "$(dirname "$FASTA")" && pwd)/$(basename "$FASTA")"
+    exit 0
+fi
 
 # ------------------------------------------------------------------------
 #   Build and run
