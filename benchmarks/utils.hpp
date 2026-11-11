@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <ostream>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -14,7 +16,8 @@
 #if defined(_MSC_VER)
     #include <io.h>  // _isatty, _fileno
 #else
-    #include <unistd.h>  // isatty, fileno
+    #include <sys/utsname.h>  // uname
+    #include <unistd.h>  // isatty, fileno, gethostname
 #endif
 
 #if defined(__linux__)
@@ -133,15 +136,86 @@ inline bool stdout_is_terminal()
  * @brief Print the benchmark-specific build settings that affect results, complementing the
  * platform and compiler info from fisk/util/cpu_runtime.hpp.
  */
-inline void info_print_benchmark_build(std::ostream& os)
+inline void info_print_benchmark_build(std::ostream& os, std::string const& source_revision)
 {
     os << "Benchmark build:\n";
+    os << "  source     : " << source_revision << "\n";
     #if defined(FISK_BENCHMARK_ALIGN_CODE)
     os << "  code align : 64 (-falign-functions=64 -falign-loops=64)\n";
     #else
     os << "  code align : compiler default\n";
     #endif
     os << "  sink mode  : " << kSinkName << "\n";
+}
+
+// =================================================================================================
+//     Host Info
+// =================================================================================================
+
+/**
+ * @brief Print the machine that runs the benchmark: its host name and kernel, and on Linux its CPU
+ * packages, NUMA nodes and transparent huge pages setting, as well as the Slurm job, if any.
+ * Settings that the system does not have are left out; with MSVC, the whole section.
+ */
+inline void info_print_host(std::ostream& os)
+{
+    #if !defined(_MSC_VER)
+        os << "Host:\n";
+        char name[256] = {};
+        if (gethostname(name, sizeof(name) - 1) == 0) {
+            os << "  name       : " << name << "\n";
+        }
+        struct utsname uts;
+        if (uname(&uts) == 0) {
+            os << "  kernel     : " << uts.sysname << " " << uts.release << "\n";
+        }
+
+        #if defined(__linux__)
+            namespace fs = std::filesystem;
+            std::error_code ec;
+            std::set<std::string> packages;
+            for (auto const& entry : fs::directory_iterator("/sys/devices/system/cpu", ec)) {
+                std::ifstream in(entry.path() / "topology" / "physical_package_id");
+                std::string id;
+                if (std::getline(in, id)) {
+                    packages.insert(id);
+                }
+            }
+            std::size_t nodes = 0;
+            for (auto const& entry : fs::directory_iterator("/sys/devices/system/node", ec)) {
+                auto const file = entry.path().filename().string();
+                nodes += file.size() > 4 && file.compare(0, 4, "node") == 0;
+            }
+            if (!packages.empty()) {
+                os << "  packages   : " << packages.size() << "\n";
+            }
+            if (nodes > 0) {
+                os << "  numa nodes : " << nodes << "\n";
+            }
+
+            // The setting is the one in brackets, as in "always [madvise] never".
+            std::ifstream thp_in("/sys/kernel/mm/transparent_hugepage/enabled");
+            std::string thp;
+            std::getline(thp_in, thp);
+            auto const open = thp.find('[');
+            auto const close = thp.find(']', open);
+            if (open != std::string::npos && close != std::string::npos) {
+                os << "  huge pages : " << thp.substr(open + 1, close - open - 1) << "\n";
+            }
+        #endif
+
+        char const* job = std::getenv("SLURM_JOB_ID");
+        char const* nodelist = std::getenv("SLURM_JOB_NODELIST");
+        if (job) {
+            os << "  slurm job  : " << job;
+            if (nodelist) {
+                os << " on " << nodelist;
+            }
+            os << "\n";
+        }
+    #else
+        (void)os;
+    #endif
 }
 
 // =================================================================================================

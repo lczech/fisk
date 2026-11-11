@@ -55,6 +55,11 @@
 #include "seq_data.hpp"
 #include "fisk/util/cpu_runtime.hpp"
 
+// The revision of the sources, for sys_info.txt; set by CMakeLists.txt for this file only.
+#if !defined(FISK_BENCHMARK_SOURCE_REVISION)
+    #define FISK_BENCHMARK_SOURCE_REVISION "unknown"
+#endif
+
 using namespace fisk;
 
 struct Options
@@ -302,7 +307,8 @@ int main(int argc, char **argv)
     {
         auto os_info = get_ofstream(out_dir, "sys_info.txt" );
         info_print_system(os_info);
-        info_print_benchmark_build(os_info);
+        info_print_host(os_info);
+        info_print_benchmark_build(os_info, FISK_BENCHMARK_SOURCE_REVISION);
         info_print_power(os_info);
         os_info << "Benchmark run:\n";
         os_info << "  input      : " << input_info << "\n";

@@ -29,10 +29,11 @@ set -uo pipefail
 #
 # The script waits for the jobs, so run it in tmux or screen.
 #
-# The jobs are submitted with srun, all four at once, and the script waits for them. Results land
-# in ./results/<CPU>/<Compiler>_<version>/<mode>/, as with run_benchmarks.sh, which moves earlier
-# results of the same CPU, compiler and mode to ./results/_archive/; logs in ./logs/, where
-# earlier logs are archived as well.
+# The jobs are submitted with srun, all four at once, and the script waits for them. Everything
+# lands in ./output/, so that one folder holds all runs: results in
+# ./output/results/<CPU>/<Compiler>_<version>/<mode>/, as with run_benchmarks.sh, which moves
+# earlier results of the same CPU, compiler and mode to ./output/results/_archive/; logs in
+# ./output/logs/, where earlier logs are archived as well.
 
 # ------------------------------------------------------------------------
 #   Config
@@ -97,8 +98,10 @@ if [[ -n "$GENOME_FILE" ]]; then
 fi
 
 TIMESTAMP="$(date +%Y-%m-%d-%H-%M-%S)"
-RESULTS_ROOT="$(pwd)/results"
-mkdir -p "$RESULTS_ROOT" logs
+OUTPUT_DIR="$(pwd)/output"
+RESULTS_ROOT="${OUTPUT_DIR}/results"
+LOG_DIR="${OUTPUT_DIR}/logs"
+mkdir -p "$RESULTS_ROOT" "$LOG_DIR"
 
 STATUS_DIR="$(mktemp -d)"
 trap 'rm -rf "$STATUS_DIR"' EXIT
@@ -114,7 +117,7 @@ run_combo() {
   local module="${MODULE[$compiler]}"
   local cpu_label="${CPU_LABEL[$arch]}"
   local workdir="fisk-${slug}"
-  local logfile="logs/${slug}.log"
+  local logfile="${LOG_DIR}/${slug}.log"
   local genome_arg=""
   if [[ -n "$GENOME_FILE" ]]; then
     genome_arg="--genome-file '${GENOME_FILE}'"
@@ -122,8 +125,8 @@ run_combo() {
 
   # Archive any previous log for this combo instead of overwriting.
   if [[ -f "$logfile" ]]; then
-    mkdir -p "logs/_archive/${TIMESTAMP}"
-    mv "$logfile" "logs/_archive/${TIMESTAMP}/${slug}.log"
+    mkdir -p "${LOG_DIR}/_archive/${TIMESTAMP}"
+    mv "$logfile" "${LOG_DIR}/_archive/${TIMESTAMP}/${slug}.log"
   fi
 
   # Fresh working copy, built fresh on the node it will run on.
@@ -190,9 +193,9 @@ for combo in "${COMBOS[@]}"; do
   slug="${arch}-${compiler}"
   rc="$(cat "${STATUS_DIR}/${slug}" 2>/dev/null || echo "?")"
   if [[ "$rc" == "0" ]]; then
-    printf "  %-45s OK      logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}.log"
+    printf "  %-45s OK      output/logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}.log"
   else
-    printf "  %-45s FAILED  logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}.log"
+    printf "  %-45s FAILED  output/logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}.log"
     overall_rc=1
   fi
 done

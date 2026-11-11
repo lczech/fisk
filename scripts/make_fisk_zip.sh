@@ -48,6 +48,9 @@ cp CMakeLists.txt Makefile README.md LICENSE "${PKG_DIR}/"
 cp -r include benchmarks tests masks scripts example "${PKG_DIR}/"
 # Without a local genome and build of the example, see example/run_human_genome.sh.
 rm -rf "${PKG_DIR}/example/data" "${PKG_DIR}/example/build"
+# The revision of the sources, for the sys_info.txt of the benchmarks, as the zip has no git
+# history; "-dirty" marks uncommitted changes.
+git describe --always --dirty > "${PKG_DIR}/SOURCE_REVISION"
 
 # ------------------------------------------------------------------------
 #   Zip it up

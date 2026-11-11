@@ -234,6 +234,28 @@ if(FISK_BUILD_BENCHMARKS)
         OUTPUT_NAME "fisk_benchmarks${FISK_BENCHMARK_NAME_SUFFIX}"
     )
 
+    # The revision of the sources for sys_info.txt, at configure time: from git, or else from the
+    # file SOURCE_REVISION that scripts/make_fisk_zip.sh puts into its zip, which has no git
+    # history. Only main.cpp gets it, so that a new revision does not rebuild every variant.
+    set(FISK_BENCHMARK_SOURCE_REVISION "unknown")
+    find_package(Git QUIET)
+    if (GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" describe --always --dirty
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            OUTPUT_VARIABLE FISK_BENCHMARK_SOURCE_REVISION
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+    elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/SOURCE_REVISION")
+        file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/SOURCE_REVISION" FISK_BENCHMARK_SOURCE_REVISION
+            LIMIT_COUNT 1
+        )
+    endif()
+    set_property(SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/main.cpp" APPEND PROPERTY
+        COMPILE_DEFINITIONS "FISK_BENCHMARK_SOURCE_REVISION=\"${FISK_BENCHMARK_SOURCE_REVISION}\""
+    )
+
     # Interprocedural optimization must stay off here: it would let the linker re-fuse every
     # variant's TU back into one optimization unit at link time, defeating the isolation above.
     set_target_properties(fisk_benchmarks PROPERTIES INTERPROCEDURAL_OPTIMIZATION OFF)
