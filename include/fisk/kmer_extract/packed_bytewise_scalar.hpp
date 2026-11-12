@@ -335,10 +335,10 @@ inline void for_each_kmer_packed_unchecked_bytewise_scalar(
  * of 32 positions at once, and the blocks whose nucleotides are all valid run without a test per
  * k-mer, as do most blocks of sequences whose invalid nucleotides come in runs, such as assemblies.
  */
-template <Encoding E, Layout L, typename Func>
+template <PackedSequenceWithValidityType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_checked_bytewise_scalar(
-    PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
+    Seq const& seq, std::size_t k, Func&& func
 ) {
     for_each_kmer_packed_bytewise_scalar_(seq, k, func);
 }

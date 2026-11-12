@@ -473,11 +473,13 @@ inline void for_each_kmer_packed_unchecked_bytewise_simd(Seq const& seq, std::si
  *
  * @tparam Simd  SIMD arch, such as SimdAVX2, to be given explicitly.
  */
-template <SimdArch Simd, Encoding E, Layout L, typename Func>
+template <SimdArch Simd, PackedSequenceWithValidityType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_checked_bytewise_simd(
-    PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
+    Seq const& seq, std::size_t k, Func&& func
 ) {
+    constexpr Encoding E = Seq::encoding;
+    constexpr Layout L = Seq::layout;
     if (k == 0 || k > 32) {
         throw_invalid_kmer_k_(32);
     }

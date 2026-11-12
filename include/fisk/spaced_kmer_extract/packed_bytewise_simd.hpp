@@ -456,18 +456,20 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
  */
 template <
     std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces,
-    Encoding E, Layout L, typename KernelMask, std::size_t N, typename Callback
+    PackedSequenceWithValidityType Seq, typename KernelMask, std::size_t N, typename Callback
 >
     requires SpacedKmerMaskType<std::remove_const_t<KernelMask>>
         && BitExtractKernel<typename KernelMask::bit_extract_form>
-        && (KernelMask::layout == L) && (N != std::dynamic_extent)
+        && (KernelMask::layout == Seq::layout) && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
-    PackedSequenceWithValidity<E, L> const& seq,
+    Seq const& seq,
     std::span<KernelMask, N> kernels,
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one kernel.");
+    constexpr Encoding E = Seq::encoding;
+    constexpr Layout L = Seq::layout;
     using Simd = typename KernelMask::bit_extract_form::simd_arch;
     static_assert(
         SpacedKmerVectorValidLanesCallback<Callback&, E, L, Simd, N == 1>,
@@ -489,12 +491,13 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
  */
 template <
     std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces,
-    Encoding E, Layout L, typename Kernel, std::size_t MaxSpan, typename Callback
+    PackedSequenceWithValidityType Seq, Layout L, typename Kernel, std::size_t MaxSpan,
+    typename Callback
 >
-    requires BitExtractKernel<Kernel>
+    requires BitExtractKernel<Kernel> && (L == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
-    PackedSequenceWithValidity<E, L> const& seq,
+    Seq const& seq,
     SpacedKmerMask<L, Kernel, MaxSpan> const& kernel,
     Callback&& callback
 ) {

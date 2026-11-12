@@ -507,12 +507,12 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
  */
 template <
     std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces,
-    Encoding E, Layout L, typename Mask, typename BitExtract, typename Callback
+    PackedSequenceWithValidityType Seq, typename Mask, typename BitExtract, typename Callback
 >
-    requires SpacedKmerMaskType<Mask> && (Mask::layout == L)
+    requires SpacedKmerMaskType<Mask> && (Mask::layout == Seq::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_checked_bytewise_scalar(
-    PackedSequenceWithValidity<E, L> const& seq,
+    Seq const& seq,
     Mask const& mask,
     BitExtract&& bit_ext,
     Callback&& callback
@@ -533,13 +533,14 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_scalar(
  */
 template <
     std::size_t MaxCompiledPieces = kDefaultMaxCompiledPieces,
-    Encoding E, Layout L, typename Mask, std::size_t N, typename BitExtract, typename Callback
+    PackedSequenceWithValidityType Seq, typename Mask, std::size_t N, typename BitExtract,
+    typename Callback
 >
-    requires SpacedKmerMaskType<std::remove_const_t<Mask>> && (Mask::layout == L)
+    requires SpacedKmerMaskType<std::remove_const_t<Mask>> && (Mask::layout == Seq::layout)
         && (N != std::dynamic_extent)
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_spaced_kmer_packed_checked_bytewise_scalar(
-    PackedSequenceWithValidity<E, L> const& seq,
+    Seq const& seq,
     std::span<Mask, N> masks,
     BitExtract&& bit_ext,
     Callback&& callback

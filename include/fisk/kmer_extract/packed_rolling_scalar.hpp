@@ -299,10 +299,10 @@ inline void for_each_kmer_packed_unchecked_rolling_scalar(
  * with the codes. Kept as a baseline as well; prefer
  * for_each_kmer_packed_checked_bytewise_scalar().
  */
-template <Encoding E, Layout L, typename Func>
+template <PackedSequenceWithValidityType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_checked_rolling_scalar(
-    PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Func&& func
+    Seq const& seq, std::size_t k, Func&& func
 ) {
     for_each_kmer_packed_rolling_scalar_(seq, k, func);
 }
