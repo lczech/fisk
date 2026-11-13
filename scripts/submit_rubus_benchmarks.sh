@@ -7,9 +7,9 @@ set -uo pipefail
 #
 # Runs scripts/run_benchmarks.sh, with all benchmark sink modes, on its own exclusive node for
 # each combination of CPU arch x compiler:
-#   - AMD EPYC 9684X (Zen 4)  x  Clang / GCC 15
-#   - AMD EPYC 9655 (Zen 5)   x  Clang / GCC 15
-#   - Intel Xeon 8568Y        x  Clang / GCC 15
+#   - AMD EPYC 9684X (Zen 4)  x  Clang 21 / GCC 15
+#   - AMD EPYC 9655 (Zen 5)   x  Clang 21 / GCC 15
+#   - Intel Xeon 8568Y        x  Clang 21 / GCC 15
 #
 # Usage:
 #   Run from a working directory that already contains a `fisk/` subdirectory
@@ -52,10 +52,16 @@ declare -A CONSTRAINT=(
   [xeon]="std,xeon,sapphirerapids"
 )
 
-# Module to load, per compiler.
+# Module to load, per compiler, and a folder to put in front of the PATH, for compilers without a
+# module that loads: the module of Clang 21 (LLVM/21.1.8-GCCcore-15.2.0) asks for two versions of
+# zlib, so Clang 21 runs from its folder, on top of the GCC 15.2 module, whose libstdc++ it uses.
 declare -A MODULE=(
-  [clang]="Clang"
+  [clang]="GCC/15.2.0"
   [gcc]="GCC/15.2.0"
+)
+declare -A COMPILER_PATH=(
+  [clang]="/opt/software/software/LLVM/21.1.8-GCCcore-15.2.0/bin"
+  [gcc]=""
 )
 
 # CPU names for the results/<CPU>/ folders, as the CPU model strings of these nodes are not the
@@ -114,6 +120,7 @@ run_combo() {
   local slug="${arch}-${compiler}"
   local constraint="${CONSTRAINT[$arch]}"
   local module="${MODULE[$compiler]}"
+  local compiler_path="${COMPILER_PATH[$compiler]}"
   local cpu_label="${CPU_LABEL[$arch]}"
   local workdir="fisk-${slug}"
   local logfile="${LOG_DIR}/${slug}.log"
@@ -149,6 +156,7 @@ run_combo() {
     bash -lc "
       set -e
       module load '${module}'
+      ${compiler_path:+export PATH=\"${compiler_path}:\$PATH\"}
       cd '${workdir}'
       scripts/run_benchmarks.sh --compilers '${compiler}' --cpu-label '${cpu_label}' \
         --jobs '${CPUS_PER_TASK}' --results-dir '${RESULTS_ROOT}' ${genome_arg}
