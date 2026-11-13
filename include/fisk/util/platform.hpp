@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bit>
+#include <cstddef>
 
 namespace fisk {
 
@@ -23,6 +24,14 @@ namespace fisk {
 static_assert(
     std::endian::native == std::endian::little,
     "fisk assumes a little-endian host for its byte-to-integer packing tricks"
+);
+
+// Positions, lengths, and counts are std::size_t throughout, and genomic input exceeds 2^32
+// nucleotides, in total and in single sequences. On a host with a narrower std::size_t, they would
+// wrap silently.
+static_assert(
+    sizeof(std::size_t) == 8,
+    "fisk assumes a 64-bit std::size_t for positions, lengths, and counts"
 );
 
 } // namespace fisk
