@@ -28,16 +28,16 @@ FISK_ALWAYS_INLINE inline void for_each_kmer_estimate_(
 ) {
     using Preference = typename KmerExtractorPreference<I, C, E, L>::type;
     auto const settings = make_kmer_extractor_settings_(k);
-    visit_estimate<Preference, Callback>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
+    visit_estimate<Preference>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
         candidate.run(settings, seq, callback);
     });
 }
 
-template <InputFormat I, InputCheck C, Encoding E, Layout L, typename Callback>
+template <InputFormat I, InputCheck C, Encoding E, Layout L>
 inline std::string for_each_kmer_estimate_name_()
 {
     using Preference = typename KmerExtractorPreference<I, C, E, L>::type;
-    return visit_estimate<Preference, Callback>([](auto const& candidate) {
+    return visit_estimate<Preference>([](auto const& candidate) {
         return std::remove_cvref_t<decltype(candidate)>::name();
     });
 }
@@ -136,37 +136,27 @@ FISK_ALWAYS_INLINE inline void for_each_kmer(
 /**
  * @brief The name of the algorithm that for_each_kmer() runs with these arguments, which are
  * not used otherwise: the name of the k-mer extraction function, followed by the SIMD arch, such
- * as "for_each_kmer_ascii_checked_chunked_simd_avx2".
+ * as "for_each_kmer_ascii_checked_chunked_simd_avx2". The same for all callbacks.
  */
-template <InputCheck C, Encoding E, Layout L, typename Callback>
-    requires KmerCallback<std::remove_reference_t<Callback>&, E, L>
-inline std::string for_each_kmer_algorithm_name(std::string_view, std::size_t, Callback&&)
+template <InputCheck C, Encoding E, Layout L>
+inline std::string for_each_kmer_algorithm_name(std::string_view, std::size_t)
 {
-    return for_each_kmer_estimate_name_<
-        InputFormat::kAscii, C, E, L, std::remove_reference_t<Callback>
-    >();
+    return for_each_kmer_estimate_name_<InputFormat::kAscii, C, E, L>();
 }
 
-template <InputCheck C = InputCheck::kUnchecked, Encoding E, Layout L, typename Callback>
-    requires KmerCallback<std::remove_reference_t<Callback>&, E, L>
-inline std::string for_each_kmer_algorithm_name(
-    PackedSequence<E, L> const&, std::size_t, Callback&&
-) {
+template <InputCheck C = InputCheck::kUnchecked, Encoding E, Layout L>
+inline std::string for_each_kmer_algorithm_name(PackedSequence<E, L> const&, std::size_t)
+{
     for_each_packed_unchecked_assert_<C>();
-    return for_each_kmer_estimate_name_<
-        InputFormat::kPacked, InputCheck::kUnchecked, E, L, std::remove_reference_t<Callback>
-    >();
+    return for_each_kmer_estimate_name_<InputFormat::kPacked, InputCheck::kUnchecked, E, L>();
 }
 
-template <InputCheck C = InputCheck::kChecked, Encoding E, Layout L, typename Callback>
-    requires KmerCallback<std::remove_reference_t<Callback>&, E, L>
+template <InputCheck C = InputCheck::kChecked, Encoding E, Layout L>
 inline std::string for_each_kmer_algorithm_name(
-    PackedSequenceWithValidity<E, L> const&, std::size_t, Callback&&
+    PackedSequenceWithValidity<E, L> const&, std::size_t
 ) {
     for_each_packed_checked_assert_<C>();
-    return for_each_kmer_estimate_name_<
-        InputFormat::kPacked, InputCheck::kChecked, E, L, std::remove_reference_t<Callback>
-    >();
+    return for_each_kmer_estimate_name_<InputFormat::kPacked, InputCheck::kChecked, E, L>();
 }
 
 // =================================================================================================
@@ -200,22 +190,21 @@ FISK_ALWAYS_INLINE inline void for_each_spaced_kmer_estimate_(
     for_each_spaced_kmer_layout_assert_<L, MasksLayout>();
     if constexpr (MasksLayout == L) {
         using Preference = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type;
-        visit_estimate<Preference, Callback>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
+        visit_estimate<Preference>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
             candidate.run(mask_forms, seq, callback);
         });
     }
 }
 
 template <
-    InputFormat I, InputCheck C, Encoding E, Layout L, Layout MasksLayout, std::size_t MaxMasks,
-    typename Callback
+    InputFormat I, InputCheck C, Encoding E, Layout L, Layout MasksLayout, std::size_t MaxMasks
 >
 inline std::string for_each_spaced_kmer_estimate_name_()
 {
     for_each_spaced_kmer_layout_assert_<L, MasksLayout>();
     if constexpr (MasksLayout == L) {
         using Preference = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type;
-        return visit_estimate<Preference, Callback>([](auto const& candidate) {
+        return visit_estimate<Preference>([](auto const& candidate) {
             return std::remove_cvref_t<decltype(candidate)>::name();
         });
     } else {
@@ -324,50 +313,45 @@ FISK_ALWAYS_INLINE inline void for_each_spaced_kmer(
 /**
  * @brief The name of the algorithm that for_each_spaced_kmer() runs with these arguments, which
  * are not used otherwise: the name of the spaced k-mer extraction function, followed by the bit
- * extraction, such as "for_each_spaced_kmer_ascii_checked_chunked_scalar_pext".
+ * extraction, such as "for_each_spaced_kmer_ascii_checked_chunked_scalar_pext". The same for all
+ * callbacks.
  */
 template <
     InputCheck C, Encoding E, Layout L, Layout MasksLayout, std::size_t MaxMasks,
-    std::size_t MaxSpan, typename Callback
+    std::size_t MaxSpan
 >
-    requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
-    std::string_view, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&, Callback&&
+    std::string_view, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&
 ) {
     return for_each_spaced_kmer_estimate_name_<
-        InputFormat::kAscii, C, E, L, MasksLayout, MaxMasks, std::remove_reference_t<Callback>
+        InputFormat::kAscii, C, E, L, MasksLayout, MaxMasks
     >();
 }
 
 template <
     InputCheck C = InputCheck::kUnchecked, Encoding E, Layout L, Layout MasksLayout,
-    std::size_t MaxMasks, std::size_t MaxSpan, typename Callback
+    std::size_t MaxMasks, std::size_t MaxSpan
 >
-    requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
-    PackedSequence<E, L> const&, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&,
-    Callback&&
+    PackedSequence<E, L> const&, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&
 ) {
     for_each_packed_unchecked_assert_<C>();
     return for_each_spaced_kmer_estimate_name_<
-        InputFormat::kPacked, InputCheck::kUnchecked, E, L, MasksLayout, MaxMasks,
-        std::remove_reference_t<Callback>
+        InputFormat::kPacked, InputCheck::kUnchecked, E, L, MasksLayout, MaxMasks
     >();
 }
 
 template <
     InputCheck C = InputCheck::kChecked, Encoding E, Layout L, Layout MasksLayout,
-    std::size_t MaxMasks, std::size_t MaxSpan, typename Callback
+    std::size_t MaxMasks, std::size_t MaxSpan
 >
-    requires SpacedKmerCallback<std::remove_reference_t<Callback>&, E, L, false>
 inline std::string for_each_spaced_kmer_algorithm_name(
     PackedSequenceWithValidity<E, L> const&,
-    SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&, Callback&&
+    SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&
 ) {
     for_each_packed_checked_assert_<C>();
     return for_each_spaced_kmer_estimate_name_<
-        InputFormat::kPacked, InputCheck::kChecked, E, L, MasksLayout, MaxMasks,
-        std::remove_reference_t<Callback>
+        InputFormat::kPacked, InputCheck::kChecked, E, L, MasksLayout, MaxMasks
     >();
 }
 

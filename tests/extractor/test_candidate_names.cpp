@@ -204,7 +204,7 @@ TEST(CandidateNames, KmerAsciiChecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
-        typename KmerExtractorPreference<kAscii, kChecked, kAcgt, kMsb>::List{},
+        typename KmerExtractorPreference<kAscii, kChecked, kAcgt, kMsb>::type{},
         make_kmer_extractor_settings_(kK), table
     );
 }
@@ -221,7 +221,7 @@ TEST(CandidateNames, KmerAsciiUnchecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
-        typename KmerExtractorPreference<kAscii, kUnchecked, kAcgt, kMsb>::List{},
+        typename KmerExtractorPreference<kAscii, kUnchecked, kAcgt, kMsb>::type{},
         make_kmer_extractor_settings_(kK), table
     );
 }
@@ -237,7 +237,7 @@ TEST(CandidateNames, KmerPackedChecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
-        typename KmerExtractorPreference<kPacked, kChecked, kAcgt, kMsb>::List{},
+        typename KmerExtractorPreference<kPacked, kChecked, kAcgt, kMsb>::type{},
         make_kmer_extractor_settings_(kK), table
     );
 }
@@ -253,7 +253,7 @@ TEST(CandidateNames, KmerPackedUnchecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
-        typename KmerExtractorPreference<kPacked, kUnchecked, kAcgt, kMsb>::List{},
+        typename KmerExtractorPreference<kPacked, kUnchecked, kAcgt, kMsb>::type{},
         make_kmer_extractor_settings_(kK), table
     );
 }
@@ -325,7 +325,7 @@ TEST(CandidateNames, SpacedAsciiChecked)
     check_algorithm_table<SpacedTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
         typename SpacedKmerExtractorPreference<
             kAscii, kChecked, kAcgt, kMsb, kTableMasks
-        >::List{},
+        >::type{},
         masks, table
     );
 }
@@ -356,7 +356,7 @@ TEST(CandidateNames, SpacedAsciiUnchecked)
     check_algorithm_table<SpacedTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
         typename SpacedKmerExtractorPreference<
             kAscii, kUnchecked, kAcgt, kMsb, kTableMasks
-        >::List{},
+        >::type{},
         masks, table
     );
 }
@@ -383,7 +383,7 @@ TEST(CandidateNames, SpacedPackedChecked)
     check_algorithm_table<SpacedTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
         typename SpacedKmerExtractorPreference<
             kPacked, kChecked, kAcgt, kMsb, kTableMasks
-        >::List{},
+        >::type{},
         masks, table
     );
 }
@@ -410,7 +410,7 @@ TEST(CandidateNames, SpacedPackedUnchecked)
     check_algorithm_table<SpacedTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
         typename SpacedKmerExtractorPreference<
             kPacked, kUnchecked, kAcgt, kMsb, kTableMasks
-        >::List{},
+        >::type{},
         masks, table
     );
 }

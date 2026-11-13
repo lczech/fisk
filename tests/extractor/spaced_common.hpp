@@ -27,7 +27,7 @@ inline void check_spaced_kmer_candidates(
     std::vector<std::vector<std::string>> const& mask_sets
 ) {
     using namespace fisk;
-    using Candidates = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::List;
+    using Candidates = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type;
     auto const seqs = extractor_test_sequences<C>();
 
     for (auto const& masks : mask_sets) {

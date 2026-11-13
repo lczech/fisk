@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <ostream>
-#include <string>
 #include <string_view>
 
 #include "fisk/extractor/spaced_kmer_mask_forms.hpp"
@@ -34,7 +33,7 @@ void bench_for_each_scaling(
 );
 
 // The variants, each defined in its own translation unit (var_*.cpp): the extraction with the
-// callback of the variant, and the name of the algorithm that it runs.
+// callback of the variant.
 std::uint64_t run_var_kmer_checked(std::string_view seq, SinkBuffer& sink_buffer);
 std::uint64_t run_var_kmer_checked_vectors(std::string_view seq, SinkBuffer& sink_buffer);
 std::uint64_t run_var_kmer_unchecked(std::string_view seq, SinkBuffer& sink_buffer);
@@ -51,12 +50,3 @@ std::uint64_t run_var_spaced_kmer_unchecked(
 std::uint64_t run_var_spaced_kmer_unchecked_vectors(
     std::string_view seq, ScalingMaskForms const& mask_forms, SinkBuffer& sink_buffer
 );
-
-std::string name_var_kmer_checked();
-std::string name_var_kmer_checked_vectors();
-std::string name_var_kmer_unchecked();
-std::string name_var_kmer_unchecked_vectors();
-std::string name_var_spaced_kmer_checked(ScalingMaskForms const& mask_forms);
-std::string name_var_spaced_kmer_checked_vectors(ScalingMaskForms const& mask_forms);
-std::string name_var_spaced_kmer_unchecked(ScalingMaskForms const& mask_forms);
-std::string name_var_spaced_kmer_unchecked_vectors(ScalingMaskForms const& mask_forms);

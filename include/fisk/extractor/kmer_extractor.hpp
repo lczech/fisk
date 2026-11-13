@@ -62,13 +62,6 @@ FISK_ALWAYS_INLINE inline auto kmer_extractor_vector_callback_(Callback& callbac
     };
 }
 
-// Whether `Callback` takes the vectors of k-mers of `Simd`, as handed out with a count of valid
-// lanes when unchecked, and with the valid lanes when checked.
-template <typename Callback, InputCheck C, Encoding E, Layout L, typename Simd>
-inline constexpr bool kmer_extractor_takes_vectors_ = (C == InputCheck::kChecked)
-    ? KmerVectorValidLanesCallback<Callback&, E, L, Simd>
-    : KmerVectorCallback<Callback&, E, L, Simd>;
-
 // -------------------------------------------------------------------------------------------------
 //     ASCII
 // -------------------------------------------------------------------------------------------------
@@ -81,9 +74,6 @@ struct KmerCandidateAsciiChunkedScalar
         return "for_each_kmer_ascii_" + input_check_name_(C) + "_chunked_scalar";
     }
     static bool available() { return true; }
-
-    template <typename Callback>
-    static constexpr bool takes_vectors = false;
 
     template <typename Callback>
     FISK_ALWAYS_INLINE void run(
@@ -108,9 +98,6 @@ struct KmerCandidateAsciiChunkedSimd
             simd_arch_name_<Simd>();
     }
     static bool available() { return simd_arch_enabled_<Simd>(); }
-
-    template <typename Callback>
-    static constexpr bool takes_vectors = kmer_extractor_takes_vectors_<Callback, C, E, L, Simd>;
 
     template <typename Callback>
     FISK_ALWAYS_INLINE void run(
@@ -144,9 +131,6 @@ struct KmerCandidatePackedBytewiseScalar
     }
     static bool available() { return true; }
 
-    template <typename Callback>
-    static constexpr bool takes_vectors = false;
-
     template <typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
         KmerExtractorSettings const& settings, Seq const& seq, Callback& callback
@@ -170,9 +154,6 @@ struct KmerCandidatePackedBytewiseSimd
     }
     static bool available() { return simd_arch_enabled_<Simd>(); }
 
-    template <typename Callback>
-    static constexpr bool takes_vectors = kmer_extractor_takes_vectors_<Callback, C, E, L, Simd>;
-
     template <typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
         KmerExtractorSettings const& settings, Seq const& seq, Callback& callback
@@ -191,7 +172,7 @@ struct KmerCandidatePackedBytewiseSimd
 //     Candidate Lists
 // -------------------------------------------------------------------------------------------------
 
-// The estimate of for_each_kmer(), see ExtractorPreference: the SIMD loop of the first of the
+// The estimate of for_each_kmer(), see visit_estimate(): the SIMD loop of the first of the
 // `Simds`, a TypeList, that the CPU has, in the order of CandidateSimdArchs (AVX512, AVX2, and SSE2
 // or Neon), else the scalar loop, for all callbacks.
 template <
@@ -211,8 +192,7 @@ struct KmerExtractorPreference<I, C, E, L, TypeList<Simd...>>
         KmerCandidatePackedBytewiseScalar<C, E, L>
     >;
 
-    using List = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
-    using type = ExtractorPreference<List, List>;
+    using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
 };
 
 } // namespace fisk

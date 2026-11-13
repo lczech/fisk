@@ -112,7 +112,7 @@ int main(int argc, char** argv)
     std::cout << "extraction,algorithm,sequences,bases,kmers,checksum,"
               << "read_seconds,extract_seconds\n";
     extract(
-        "kmers", for_each_kmer_algorithm_name<C, E, L>(std::string_view{}, k, MyCounter{}),
+        "kmers", for_each_kmer_algorithm_name<C, E, L>(std::string_view{}, k),
         [&](std::string_view seq, MyCounter& counter) {
             for_each_kmer<C, E, L>(seq, k, counter);
         },
@@ -120,7 +120,7 @@ int main(int argc, char** argv)
     );
     extract(
         "spaced_kmers",
-        for_each_spaced_kmer_algorithm_name<C, E, L>(std::string_view{}, mask_forms, MyCounter{}),
+        for_each_spaced_kmer_algorithm_name<C, E, L>(std::string_view{}, mask_forms),
         [&](std::string_view seq, MyCounter& counter) {
             for_each_spaced_kmer<C, E, L>(seq, mask_forms, counter);
         },

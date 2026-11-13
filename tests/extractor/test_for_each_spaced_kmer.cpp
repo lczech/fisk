@@ -54,7 +54,7 @@ static void check_for_each_spaced_kmer()
             for_each_spaced_kmer<C, E, L>(input, mask_forms, single);
             check_spaced_events(by_mask(single.events), expected);
             auto const single_name =
-                for_each_spaced_kmer_algorithm_name<C, E, L>(input, mask_forms, single);
+                for_each_spaced_kmer_algorithm_name<C, E, L>(input, mask_forms);
             EXPECT_EQ(single_name, estimate);
 
             SpacedKmerRecorder unpacked;
@@ -74,9 +74,7 @@ static void check_for_each_spaced_kmer()
             };
             for_each_spaced_kmer<C, E, L>(input, mask_forms, both);
             check_spaced_events(by_mask(unpacked.events), expected);
-            auto const name = for_each_spaced_kmer_algorithm_name<C, E, L>(input, mask_forms, both);
-            EXPECT_EQ(name, estimate);
-            bool const simd = name.find("simd") != std::string::npos;
+            bool const simd = estimate.find("simd") != std::string::npos;
             EXPECT_TRUE(simd ? (vectors > 0 || expected.empty()) : vectors == 0);
 
             // Packed input gives the template arguments by its type.
@@ -85,7 +83,7 @@ static void check_for_each_spaced_kmer()
                 for_each_spaced_kmer(input, mask_forms, deduced);
                 check_spaced_events(deduced.events, single.events);
                 EXPECT_EQ(
-                    for_each_spaced_kmer_algorithm_name(input, mask_forms, deduced), estimate
+                    for_each_spaced_kmer_algorithm_name(input, mask_forms), estimate
                 );
             }
         }

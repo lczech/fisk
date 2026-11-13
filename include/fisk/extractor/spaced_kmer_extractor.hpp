@@ -148,13 +148,6 @@ FISK_ALWAYS_INLINE inline auto spaced_kmer_extractor_vector_callback_(Callback& 
     };
 }
 
-// Whether `Callback` takes the vectors of spaced k-mers of `Simd`, as handed out with a count of
-// valid lanes when unchecked, and with the valid lanes when checked.
-template <typename Callback, InputCheck C, Encoding E, Layout L, typename Simd>
-inline constexpr bool spaced_kmer_extractor_takes_vectors_ = (C == InputCheck::kChecked)
-    ? SpacedKmerVectorValidLanesCallback<Callback&, E, L, Simd, false>
-    : SpacedKmerVectorCallback<Callback&, E, L, Simd, false>;
-
 // -------------------------------------------------------------------------------------------------
 //     ASCII
 // -------------------------------------------------------------------------------------------------
@@ -180,9 +173,6 @@ struct SpacedKmerCandidateAsciiChunkedScalar
     {
         return spaced_kmer_extractor_bit_extract_preferred_<BitExtractForm>();
     }
-
-    template <typename Callback>
-    static constexpr bool takes_vectors = false;
 
     template <std::size_t MaxSpan, typename Callback>
     FISK_ALWAYS_INLINE void run(
@@ -217,11 +207,6 @@ struct SpacedKmerCandidateAsciiChunkedSimd
     }
     static bool available() { return spaced_kmer_extractor_bit_extract_available_<Kernel>(); }
     static bool preferred() { return spaced_kmer_extractor_bit_extract_preferred_<Kernel>(); }
-
-    template <typename Callback>
-    static constexpr bool takes_vectors = spaced_kmer_extractor_takes_vectors_<
-        Callback, C, E, L, typename Kernel::simd_arch
-    >;
 
     template <std::size_t MaxSpan, typename Callback>
     FISK_ALWAYS_INLINE void run(
@@ -267,9 +252,6 @@ struct SpacedKmerCandidatePackedBytewiseScalar
         return spaced_kmer_extractor_bit_extract_preferred_<BitExtractForm>();
     }
 
-    template <typename Callback>
-    static constexpr bool takes_vectors = false;
-
     template <std::size_t MaxSpan, typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
         SpacedKmerMaskForms<L, MaxMasks, MaxSpan> const& mask_forms, Seq const& seq,
@@ -303,11 +285,6 @@ struct SpacedKmerCandidatePackedBytewiseSimd
     static bool available() { return spaced_kmer_extractor_bit_extract_available_<Kernel>(); }
     static bool preferred() { return spaced_kmer_extractor_bit_extract_preferred_<Kernel>(); }
 
-    template <typename Callback>
-    static constexpr bool takes_vectors = spaced_kmer_extractor_takes_vectors_<
-        Callback, C, E, L, typename Kernel::simd_arch
-    >;
-
     template <std::size_t MaxSpan, typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
         SpacedKmerMaskForms<L, MaxMasks, MaxSpan> const& mask_forms, Seq const& seq,
@@ -330,7 +307,7 @@ struct SpacedKmerCandidatePackedBytewiseSimd
 //     Candidate Lists
 // -------------------------------------------------------------------------------------------------
 
-// The estimate of for_each_spaced_kmer(), see ExtractorPreference: the scalar loop with PEXT, where
+// The estimate of for_each_spaced_kmer(), see visit_estimate(): the scalar loop with PEXT, where
 // it is likely fast, else the SIMD loop with the butterfly kernel of the first of the `Simds`, a
 // TypeList, that the CPU has, in the order of CandidateSimdArchs (AVX512, AVX2, and SSE2 or Neon),
 // else the scalar loop with the butterfly, for all callbacks.
@@ -363,8 +340,7 @@ struct SpacedKmerExtractorPreference<I, C, E, L, MaxMasks, TypeList<Simd...>>
         SpacedKmerCandidatePackedBytewiseScalar<C, E, L, MaxMasks, BitExtractButterflyMask>
     >;
 
-    using List = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
-    using type = ExtractorPreference<List, List>;
+    using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
 };
 
 } // namespace fisk

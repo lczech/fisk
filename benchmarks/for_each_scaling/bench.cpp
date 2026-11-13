@@ -5,6 +5,7 @@
 #include <string_view>
 #include <vector>
 
+#include "fisk/extractor/for_each.hpp"
 #include "for_each_scaling/bench.hpp"
 #include "microbench.hpp"
 #include "seq_data.hpp"
@@ -41,28 +42,31 @@ void bench_for_each_scaling(
     // The buffer of the Write sink, see sink.hpp; Sum and Barrier ignore it.
     auto sink_buffer = make_sink_buffer();
 
-    // The benchmark names: the algorithms of the estimate. The callback is in the case, as the
-    // same algorithm can run for both.
-    std::string const name_kmer_checked = name_var_kmer_checked();
-    std::string const name_kmer_checked_vectors = name_var_kmer_checked_vectors();
-    std::string const name_kmer_unchecked = name_var_kmer_unchecked();
-    std::string const name_kmer_unchecked_vectors = name_var_kmer_unchecked_vectors();
-    std::string const name_spaced_kmer_checked = name_var_spaced_kmer_checked(mask_forms);
-    std::string const name_spaced_kmer_checked_vectors =
-        name_var_spaced_kmer_checked_vectors(mask_forms);
-    std::string const name_spaced_kmer_unchecked = name_var_spaced_kmer_unchecked(mask_forms);
-    std::string const name_spaced_kmer_unchecked_vectors =
-        name_var_spaced_kmer_unchecked_vectors(mask_forms);
-    std::cout << "Estimate, one k-mer at a time:\n"
+    // The benchmark names: the algorithms of the estimate, the same for both callbacks, which are
+    // told apart by the case.
+    using fisk::Encoding;
+    using fisk::InputCheck;
+    using fisk::Layout;
+    std::string_view const none;
+    std::string const name_kmer_checked =
+        fisk::for_each_kmer_algorithm_name<InputCheck::kChecked, Encoding::kACGT, Layout::kLSB>(
+            none, k
+        );
+    std::string const name_kmer_unchecked =
+        fisk::for_each_kmer_algorithm_name<InputCheck::kUnchecked, Encoding::kACGT, Layout::kLSB>(
+            none, k
+        );
+    std::string const name_spaced_kmer_checked = fisk::for_each_spaced_kmer_algorithm_name<
+        InputCheck::kChecked, Encoding::kACGT, Layout::kLSB
+    >(none, mask_forms);
+    std::string const name_spaced_kmer_unchecked = fisk::for_each_spaced_kmer_algorithm_name<
+        InputCheck::kUnchecked, Encoding::kACGT, Layout::kLSB
+    >(none, mask_forms);
+    std::cout << "Estimate:\n"
               << "  " << name_kmer_checked << "\n"
               << "  " << name_kmer_unchecked << "\n"
               << "  " << name_spaced_kmer_checked << "\n"
-              << "  " << name_spaced_kmer_unchecked << "\n"
-              << "Estimate, with vectors:\n"
-              << "  " << name_kmer_checked_vectors << "\n"
-              << "  " << name_kmer_unchecked_vectors << "\n"
-              << "  " << name_spaced_kmer_checked_vectors << "\n"
-              << "  " << name_spaced_kmer_unchecked_vectors << "\n";
+              << "  " << name_spaced_kmer_unchecked << "\n";
 
     // Time per k-mer, or per spaced k-mer of the one mask.
     auto const units = [](std::string_view const& seq) {
@@ -100,16 +104,16 @@ void bench_for_each_scaling(
         vectors.units_fn(units).check_sinks(false);
         auto const vectors_results = vectors.run(
             inputs,
-            bench(name_kmer_checked_vectors, [&](std::string_view seq) {
+            bench(name_kmer_checked, [&](std::string_view seq) {
                 return run_var_kmer_checked_vectors(seq, sink_buffer);
             }),
-            bench(name_kmer_unchecked_vectors, [&](std::string_view seq) {
+            bench(name_kmer_unchecked, [&](std::string_view seq) {
                 return run_var_kmer_unchecked_vectors(seq, sink_buffer);
             }),
-            bench(name_spaced_kmer_checked_vectors, [&](std::string_view seq) {
+            bench(name_spaced_kmer_checked, [&](std::string_view seq) {
                 return run_var_spaced_kmer_checked_vectors(seq, mask_forms, sink_buffer);
             }),
-            bench(name_spaced_kmer_unchecked_vectors, [&](std::string_view seq) {
+            bench(name_spaced_kmer_unchecked, [&](std::string_view seq) {
                 return run_var_spaced_kmer_unchecked_vectors(seq, mask_forms, sink_buffer);
             })
         );

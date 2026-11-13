@@ -29,7 +29,7 @@ constexpr auto kUnchecked = InputCheck::kUnchecked;
 
 // for_each_kmer() extracts all k-mers, with a callback of single k-mers, and with one that also
 // takes vectors, which gets vectors from a SIMD algorithm, and runs the algorithm of the estimate,
-// see expected_kmer_estimate(), for both callbacks.
+// see expected_kmer_estimate(), the same for both callbacks.
 template <InputFormat I, InputCheck C, Encoding E, Layout L>
 static void check_for_each_kmer()
 {
@@ -47,7 +47,7 @@ static void check_for_each_kmer()
             KmerRecorder single;
             for_each_kmer<C, E, L>(input, k, single);
             check_emitted_kmers(expected, k, single.values, &single.positions);
-            auto const single_name = for_each_kmer_algorithm_name<C, E, L>(input, k, single);
+            auto const single_name = for_each_kmer_algorithm_name<C, E, L>(input, k);
             EXPECT_EQ(single_name, estimate);
 
             KmerRecorder unpacked;
@@ -61,9 +61,7 @@ static void check_for_each_kmer()
             };
             for_each_kmer<C, E, L>(input, k, both);
             check_emitted_kmers(expected, k, unpacked.values, &unpacked.positions);
-            auto const name = for_each_kmer_algorithm_name<C, E, L>(input, k, both);
-            EXPECT_EQ(name, estimate);
-            bool const simd = name.find("simd") != std::string::npos;
+            bool const simd = estimate.find("simd") != std::string::npos;
             EXPECT_TRUE(simd ? (vectors > 0 || expected.empty()) : vectors == 0);
 
             // Packed input gives the template arguments by its type.
@@ -71,7 +69,7 @@ static void check_for_each_kmer()
                 KmerRecorder deduced;
                 for_each_kmer(input, k, deduced);
                 EXPECT_EQ(deduced.values, single.values);
-                EXPECT_EQ(for_each_kmer_algorithm_name(input, k, deduced), estimate);
+                EXPECT_EQ(for_each_kmer_algorithm_name(input, k), estimate);
             }
         }
     }

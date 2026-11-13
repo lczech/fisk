@@ -55,8 +55,6 @@ using ExtractorWordEncoder = WordEncoderButterfly<E, L>;
  *   - `static bool available()`, whether it can run in this build on this CPU,
  *   - optionally `static bool preferred()`, whether the estimate may run it, see
  *     extractor_candidate_preferred_(),
- *   - `template <typename Cb> static constexpr bool takes_vectors`, whether it hands vectors to a
- *     callback of type `Cb`, rather than single k-mers,
  *   - `void run(Settings const& settings, Seq const& seq, Cb& callback) const`, the extraction,
  *     with the data that it needs from the `settings`, such as the prepared masks.
  */
@@ -160,31 +158,9 @@ inline bool simd_arch_enabled_()
 //     Extractor Estimate
 // =================================================================================================
 
-/**
- * @brief The estimate of the free functions, such as for_each_kmer(): lists of
- * candidates in order of preference, as TypeLists, for callbacks of single k-mers and for callbacks
- * that take vectors. Of the list for a callback, the first candidate that is preferred on this CPU
- * runs, see visit_estimate(). The last one of each list is a scalar one, which always is
- * preferred.
- */
-template <typename Single, typename Vectors>
-struct ExtractorPreference
-{
-    // Whether a candidate of the list hands vectors to a callback of type `Callback`.
-    template <typename Callback, typename... Candidates>
-    static constexpr bool takes_vectors_(TypeList<Candidates...>)
-    {
-        return (Candidates::template takes_vectors<Callback> || ...);
-    }
-
-    // The list for callbacks of type `Callback`.
-    template <typename Callback>
-    using list = std::conditional_t<takes_vectors_<Callback>(Vectors{}), Vectors, Single>;
-};
-
 // Whether the estimate may run `Candidate` on this CPU: its preferred(), where it has one, such as
-// the PEXT candidates, which are available wherever BMI2 is, but preferred only where PEXT is likely
-// fast; else its available().
+// the PEXT candidates, which are available wherever BMI2 is, but preferred only where PEXT is
+// likely fast; else its available().
 template <typename Candidate>
 inline bool extractor_candidate_preferred_()
 {
@@ -216,17 +192,18 @@ FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred_(TypeList<Candida
 }
 
 /**
- * @brief Call `f` with the candidate of the estimate for callbacks of type `Callback`, such as to
- * run it, or to get its name.
+ * @brief Call `f` with the candidate of the estimate of the free functions, such as
+ * for_each_kmer(), to run it, or to get its name.
  *
- * The `Preference`, an ExtractorPreference, has a list of candidates for the callback type, chosen
- * at compile time. Of this list, the first one that is preferred on this CPU is chosen at runtime,
- * with cached checks of the CPU, which are a few predictable branches.
+ * The `Preference` is a TypeList of candidates in order of preference, for all callbacks, whose
+ * last one is a scalar one, which is always preferred. Of this list, the first one that is
+ * preferred on this CPU is chosen at runtime, with cached checks of the CPU, which are a few
+ * predictable branches.
  */
-template <typename Preference, typename Callback, typename F>
+template <typename Preference, typename F>
 FISK_ALWAYS_INLINE inline decltype(auto) visit_estimate(F&& f)
 {
-    return visit_first_preferred_(typename Preference::template list<Callback>{}, f);
+    return visit_first_preferred_(Preference{}, f);
 }
 
 } // namespace fisk

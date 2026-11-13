@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <string>
 #include <string_view>
 
 #include "for_each_scaling/bench.hpp"
@@ -11,9 +10,4 @@ std::uint64_t run_var_spaced_kmer_checked(
     return run_scaling_spaced_kmer</*Vectors=*/false, fisk::InputCheck::kChecked>(
         seq, mask_forms, sink_buffer
     );
-}
-
-std::string name_var_spaced_kmer_checked(ScalingMaskForms const& mask_forms)
-{
-    return scaling_spaced_kmer_name</*Vectors=*/false, fisk::InputCheck::kChecked>(mask_forms);
 }
