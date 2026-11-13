@@ -45,10 +45,10 @@ inline PackedSequenceChunk& ascii_chunked_buffer_()
 // The callback that the packed loops get for a chunk starting at `offset`: it shifts the positions
 // that they report, relative to the chunk, to positions in the whole sequence, and forwards
 // everything else as it is. It is constrained to the forms that `func` accepts, so that the packed
-// loops pick the same callback form for it as for `func` itself. In every form, a first argument
-// of type std::size_t is the position; the forms without it start with a (spaced) k-mer. Made here
-// rather than in the driver, so that its type depends on `Func` only, not on the chunk size, and
-// the packed loops are compiled once per callback.
+// loops pick the same callback form for it as for `func` itself. In every form, an integer first
+// argument is the position, which the loops pass as std::size_t; the forms without it start with
+// a (spaced) k-mer. Made here rather than in the driver, so that its type depends on `Func` only,
+// not on the chunk size, and the packed loops are compiled once per callback.
 template <typename Func>
 FISK_ALWAYS_INLINE
 inline auto ascii_chunk_callback_(Func& func, std::size_t offset)
@@ -56,7 +56,11 @@ inline auto ascii_chunk_callback_(Func& func, std::size_t offset)
     return [&func, offset]<typename First, typename... Args>(
         First&& first, Args&&... args
     ) FISK_ALWAYS_INLINE_LAMBDA requires std::invocable<Func&, First, Args...> {
-        if constexpr (std::is_same_v<std::remove_cvref_t<First>, std::size_t>) {
+        if constexpr (std::integral<std::remove_cvref_t<First>>) {
+            static_assert(
+                std::same_as<std::remove_cvref_t<First>, std::size_t>,
+                "The packed loops pass positions as std::size_t."
+            );
             func(offset + first, std::forward<Args>(args)...);
         } else {
             func(std::forward<First>(first), std::forward<Args>(args)...);
