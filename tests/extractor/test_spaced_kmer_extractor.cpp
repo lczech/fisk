@@ -79,29 +79,16 @@ using AsciiCheckedSpacedExtractor = SpacedKmerExtractor<
     InputFormat::kAscii, kChecked, kAcgt, kMsb, kMaxTestMasks
 >;
 
-// The estimate: PEXT where likely fast, else the butterfly in the SIMD loop of AVX2, SSE2, or Neon,
-// the first one compiled, else in the scalar loop; `loop` is the name of the function of the loop
-// for the input.
+// The estimate: PEXT where likely fast, else the butterfly in the SIMD loop of the arch of the
+// estimates, see estimate_simd_arch_name(), else in the scalar loop; `loop` is the name of the
+// function of the loop for the input.
 static std::string expected_spaced_estimate(std::string const& loop)
 {
-    std::string expected = loop + "_scalar_butterfly";
-    #if defined(FISK_HAS_AVX2)
-    if (avx2_enabled()) {
-        expected = loop + "_simd_butterfly_avx2";
-    }
-    #elif defined(FISK_HAS_SSE2)
-    if (sse2_enabled()) {
-        expected = loop + "_simd_butterfly_sse2";
-    }
-    #elif defined(FISK_HAS_NEON)
-    if (neon_enabled()) {
-        expected = loop + "_simd_butterfly_neon";
-    }
-    #endif
     if (pext_likely_fast()) {
-        expected = loop + "_scalar_pext";
+        return loop + "_scalar_pext";
     }
-    return expected;
+    auto const arch = estimate_simd_arch_name();
+    return loop + (arch.empty() ? "_scalar_butterfly" : "_simd_butterfly_" + arch);
 }
 
 TEST(SpacedKmerExtractor, Estimate)

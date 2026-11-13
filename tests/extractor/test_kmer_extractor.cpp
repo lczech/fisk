@@ -57,54 +57,35 @@ using AsciiCheckedExtractor = KmerExtractor<
     InputFormat::kAscii, InputCheck::kChecked, Encoding::kACGT, Layout::kMSB
 >;
 
-// The SIMD arch that the estimate prefers for callbacks that take vectors, if any.
-static std::string preferred_simd_arch_name()
-{
-    #if defined(FISK_HAS_AVX2)
-    if (avx2_enabled()) {
-        return "avx2";
-    }
-    #endif
-    #if defined(FISK_HAS_NEON)
-    if (neon_enabled()) {
-        return "neon";
-    }
-    #endif
-    return "";
-}
-
 TEST(KmerExtractor, Estimate)
 {
-    // Single k-mers: the scalar loop; vectors: the SIMD loop of AVX2 or Neon.
+    // The SIMD loop of the first arch of the candidates that the CPU has, else the scalar loop, the
+    // same for callbacks of single k-mers and for those that take vectors.
     AsciiCheckedExtractor extractor(21);
     auto const vector_callback = callback_overload{
         [](std::size_t, KmerAcgtMsb) {},
         [](std::size_t, auto, auto) {}
     };
-    auto const arch = preferred_simd_arch_name();
+    auto const arch = estimate_simd_arch_name();
     std::string const scalar = "for_each_kmer_ascii_checked_chunked_scalar";
-    std::string const simd = "for_each_kmer_ascii_checked_chunked_simd_" + arch;
-    EXPECT_EQ(extractor.algorithm_name(), scalar);
-    EXPECT_EQ(
-        extractor.algorithm_name(vector_callback),
-        arch.empty() ? scalar : simd
-    );
+    std::string const expected = arch.empty()
+        ? scalar : "for_each_kmer_ascii_checked_chunked_simd_" + arch;
+    EXPECT_EQ(extractor.algorithm_name(), expected);
+    EXPECT_EQ(extractor.algorithm_name(vector_callback), expected);
 
     KmerExtractor<InputFormat::kPacked, kUnchecked, kAcgt, kMsb> packed(21);
-    EXPECT_EQ(packed.algorithm_name(), "for_each_kmer_packed_unchecked_bytewise_scalar");
+    EXPECT_EQ(
+        packed.algorithm_name(),
+        "for_each_kmer_packed_unchecked_bytewise_" + (arch.empty() ? "scalar" : "simd_" + arch)
+    );
 
-    // A set algorithm is used for all callbacks.
+    // A set algorithm is used for all callbacks, until the estimate again.
     extractor.set_algorithm(scalar);
     EXPECT_EQ(extractor.algorithm_name(vector_callback), scalar);
-
-    // An estimate brings the choice by callback back.
     TuneOptions options;
     options.level = TuneLevel::kEstimate;
     extractor.tune(options);
-    EXPECT_EQ(
-        extractor.algorithm_name(vector_callback),
-        arch.empty() ? scalar : simd
-    );
+    EXPECT_EQ(extractor.algorithm_name(vector_callback), expected);
 }
 
 TEST(KmerExtractor, Tune)

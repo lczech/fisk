@@ -85,6 +85,8 @@ struct TypeList
 /**
  * @brief The SIMD archs of the candidates that use SIMD: the best one compiled, and AVX2 next to
  * AVX512, as AVX512 is not faster on all CPUs that have it. SSE2 only when it is the best one.
+ * The estimates prefer them in this order, before the scalar loops, see KmerExtractorPreference
+ * and SpacedKmerExtractorPreference.
  */
 #if defined(FISK_HAS_AVX512) && defined(FISK_HAS_AVX2)
 using CandidateSimdArchs = TypeList<SimdAVX512, SimdAVX2>;
@@ -98,34 +100,6 @@ using CandidateSimdArchs = TypeList<SimdNEON>;
 using CandidateSimdArchs = TypeList<SimdSSE2>;
 #else
 using CandidateSimdArchs = TypeList<>;
-#endif
-
-/**
- * @brief The SIMD archs of the estimate of the k-mers, see ExtractorPreference: AVX2, also next to
- * AVX512, or Neon, else none, so that the estimate is a scalar loop. The SSE2 loops of the k-mers
- * are not faster than the scalar ones.
- */
-#if defined(FISK_HAS_AVX2)
-using PreferredSimdArchs = TypeList<SimdAVX2>;
-#elif defined(FISK_HAS_NEON)
-using PreferredSimdArchs = TypeList<SimdNEON>;
-#else
-using PreferredSimdArchs = TypeList<>;
-#endif
-
-/**
- * @brief The SIMD archs of the estimate of the spaced k-mers: AVX2, also next to AVX512, else SSE2,
- * whose butterfly kernel is faster than the scalar butterfly, else Neon, else none. Neon comes
- * after the x86 archs, as a build has either of them.
- */
-#if defined(FISK_HAS_AVX2)
-using PreferredSpacedSimdArchs = TypeList<SimdAVX2>;
-#elif defined(FISK_HAS_SSE2)
-using PreferredSpacedSimdArchs = TypeList<SimdSSE2>;
-#elif defined(FISK_HAS_NEON)
-using PreferredSpacedSimdArchs = TypeList<SimdNEON>;
-#else
-using PreferredSpacedSimdArchs = TypeList<>;
 #endif
 
 // The input check in the names of the candidates.

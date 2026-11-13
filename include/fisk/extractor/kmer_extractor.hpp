@@ -216,32 +216,28 @@ struct KmerExtractorCandidates<I, C, E, L, TypeList<Simd...>>
     using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
 };
 
-// The estimate of a KmerExtractor and of for_each_kmer(), see ExtractorPreference: for callbacks of
-// single k-mers, the scalar loop, which is as fast as the SIMD loops with their lanes taken out one
-// by one, or faster; for callbacks that take vectors, the SIMD loop of the `Simds`, a TypeList,
-// which are AVX2 or Neon.
+// The estimate of a KmerExtractor and of for_each_kmer(), see ExtractorPreference: the SIMD loop of
+// the first of the `Simds`, a TypeList, that the CPU has, in the order of CandidateSimdArchs
+// (AVX512, AVX2, and SSE2 or Neon), else the scalar loop, for all callbacks.
 template <
-    InputFormat I, InputCheck C, Encoding E, Layout L, typename Simds = PreferredSimdArchs
+    InputFormat I, InputCheck C, Encoding E, Layout L, typename Simds = CandidateSimdArchs
 >
 struct KmerExtractorPreference;
 
 template <InputFormat I, InputCheck C, Encoding E, Layout L, typename... Simd>
 struct KmerExtractorPreference<I, C, E, L, TypeList<Simd...>>
 {
-    using AsciiScalar = KmerCandidateAsciiChunkedScalar<C, E, L>;
-    using PackedScalar = KmerCandidatePackedBytewiseScalar<C, E, L>;
-
-    using Ascii = ExtractorPreference<
-        TypeList<AsciiScalar>,
-        TypeList<KmerCandidateAsciiChunkedSimd<C, E, L, Simd>..., AsciiScalar>
+    using Ascii = TypeList<
+        KmerCandidateAsciiChunkedSimd<C, E, L, Simd>..., KmerCandidateAsciiChunkedScalar<C, E, L>
     >;
 
-    using Packed = ExtractorPreference<
-        TypeList<PackedScalar>,
-        TypeList<KmerCandidatePackedBytewiseSimd<C, E, L, Simd>..., PackedScalar>
+    using Packed = TypeList<
+        KmerCandidatePackedBytewiseSimd<C, E, L, Simd>...,
+        KmerCandidatePackedBytewiseScalar<C, E, L>
     >;
 
-    using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
+    using List = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
+    using type = ExtractorPreference<List, List>;
 };
 
 // =================================================================================================

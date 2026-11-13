@@ -368,12 +368,11 @@ struct SpacedKmerExtractorCandidates<I, C, E, L, MaxMasks, TypeList<Simd...>>
 
 // The estimate of a SpacedKmerExtractor and of for_each_spaced_kmer(), see ExtractorPreference:
 // the scalar loop with PEXT, where it is likely fast, else the SIMD loop with the butterfly kernel
-// of the `Simds`, a TypeList, which are AVX2, SSE2, or Neon, else the scalar loop with the
-// butterfly. These are the fastest for callbacks of single spaced k-mers as well as for those that
-// take vectors.
+// of the first of the `Simds`, a TypeList, that the CPU has, in the order of CandidateSimdArchs
+// (AVX512, AVX2, and SSE2 or Neon), else the scalar loop with the butterfly, for all callbacks.
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L, std::size_t MaxMasks,
-    typename Simds = PreferredSpacedSimdArchs
+    typename Simds = CandidateSimdArchs
 >
 struct SpacedKmerExtractorPreference;
 

@@ -12,6 +12,7 @@
 #include "fisk/kmer_extract/ascii_chunked.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
 #include "fisk/sequence_pack/word_encoder.hpp"
+#include "fisk/util/cpu_runtime.hpp"
 #include "fisk/util/random.hpp"
 #include "corpus.hpp"
 #include "oracle.hpp"
@@ -150,4 +151,29 @@ inline std::vector<std::vector<std::string>> extractor_wide_mask_sets()
     }
     sets.push_back({ std::string("1").append(62, '0').append("1") });
     return sets;
+}
+
+// The SIMD arch of the estimates, see CandidateSimdArchs (extractor/internal.hpp): the first of
+// the candidates' archs that the CPU has, or empty for none, as in the names of the algorithms.
+inline std::string estimate_simd_arch_name()
+{
+    #if defined(FISK_HAS_AVX512)
+    if (fisk::avx512_enabled()) {
+        return "avx512";
+    }
+    #endif
+    #if defined(FISK_HAS_AVX2)
+    if (fisk::avx2_enabled()) {
+        return "avx2";
+    }
+    #elif defined(FISK_HAS_NEON)
+    if (fisk::neon_enabled()) {
+        return "neon";
+    }
+    #elif defined(FISK_HAS_SSE2) && !defined(FISK_HAS_AVX512)
+    if (fisk::sse2_enabled()) {
+        return "sse2";
+    }
+    #endif
+    return "";
 }
