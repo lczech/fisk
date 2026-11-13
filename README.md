@@ -171,7 +171,7 @@ struct Consumer
 };
 ```
 
-The vector forms are those of the extraction functions: with a count of valid lanes when unchecked, and with `SimdVectorValidLanes` when checked; for spaced k-mers with `mask_idx` after `pos`. Such a callback should also be passed to `tune()`, so that the vectors are part of the measurement.
+The vector forms are those of the extraction functions: with a count of valid lanes when unchecked, and with `SimdVectorValidLanes` when checked; for spaced k-mers with `mask_idx` after `pos`. Such a callback should also be passed to `tune()`, so that the vectors are part of the measurement. Positions, mask indices, and counts are `std::size_t`, as sequences can exceed 2^32 nucleotides: a callback that takes them as a narrower integer, such as `int` or `std::uint32_t`, fails to compile. This check needs the parameter types from the type of the callback, so a lambda with an `auto` parameter, such as `[&](std::uint32_t pos, auto kmer)`, and a struct with several `operator()`, such as the one above, escape it; take `std::size_t` (or `auto`) there as well.
 
 **Threads.** `for_each()` is `const`, and one extractor can be used by several threads at once, but not while `tune()` or `set_algorithm()` run. ASCII input is packed chunk by chunk into a buffer per thread.
 

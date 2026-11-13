@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "fisk/util/intrinsics.hpp"
+#include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
 
@@ -53,6 +54,9 @@ template <typename Func>
 FISK_ALWAYS_INLINE
 inline auto ascii_chunk_callback_(Func& func, std::size_t offset)
 {
+    // `func` is checked here, as the packed loops see only this callback, see
+    // check_callback_parameters_() (core/kmer_callback.hpp).
+    check_callback_parameters_<Func>();
     return [&func, offset]<typename First, typename... Args>(
         First&& first, Args&&... args
     ) FISK_ALWAYS_INLINE_LAMBDA requires std::invocable<Func&, First, Args...> {

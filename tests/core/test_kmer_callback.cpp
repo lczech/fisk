@@ -1,5 +1,6 @@
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 
 #include "fisk/core/kmer_callback.hpp"
@@ -155,3 +156,50 @@ TEST(CoreKmerCallback, CallbackOverload)
     EXPECT_EQ(single, std::size_t{1});
     EXPECT_EQ(vectors, std::size_t{2});
 }
+
+// =================================================================================================
+//     Parameter Widths
+// =================================================================================================
+
+// Callbacks with an integer narrower than 64 bits are rejected where their parameter types can be
+// read from their type, see check_callback_parameters_(): functions and function pointers, lambdas
+// (also mutable and noexcept), and std::function. Lambdas with an `auto` parameter are not
+// checked.
+
+inline void narrow_function_(std::uint32_t, K const&) {}
+inline void wide_function_(std::size_t, K const&) noexcept {}
+
+static_assert(callback_has_narrow_parameters_<decltype(narrow_function_)>());
+static_assert(callback_has_narrow_parameters_<decltype(&narrow_function_)>());
+static_assert(!callback_has_narrow_parameters_<decltype(wide_function_)>());
+static_assert(!callback_has_narrow_parameters_<decltype(&wide_function_)>());
+
+static_assert(callback_has_narrow_parameters_<decltype([](int, K const&) {})>());
+static_assert(callback_has_narrow_parameters_<decltype([](unsigned, K const&) mutable {})>());
+static_assert(callback_has_narrow_parameters_<decltype([](std::uint32_t, K) noexcept {})>());
+static_assert(callback_has_narrow_parameters_<
+    decltype([](std::uint32_t, K) mutable noexcept {})
+>());
+static_assert(callback_has_narrow_parameters_<std::function<void(std::uint32_t, K const&)>>());
+static_assert(!callback_has_narrow_parameters_<std::function<void(std::size_t, K const&)>>());
+
+// Each parameter counts: the position, the mask index, and the count of valid lanes.
+static_assert(callback_has_narrow_parameters_<decltype([](std::size_t, KV, unsigned) {})>());
+static_assert(callback_has_narrow_parameters_<
+    decltype([](std::size_t, std::uint16_t, S const&) {})
+>());
+static_assert(!callback_has_narrow_parameters_<decltype([](std::size_t, KV, std::size_t) {})>());
+static_assert(!callback_has_narrow_parameters_<decltype([](std::size_t, KV, Lanes) {})>());
+
+// Any 64-bit integer type is accepted, as are callbacks without integers.
+static_assert(!callback_has_narrow_parameters_<decltype([](std::uint64_t, K const&) {})>());
+static_assert(!callback_has_narrow_parameters_<decltype([](std::int64_t, K const&) {})>());
+static_assert(!callback_has_narrow_parameters_<decltype([](K const&) {})>());
+
+// Not checked: lambdas with an `auto` parameter, also with a narrow one next to it, and overload
+// sets as a whole, whose parts callback_overload checks each.
+static_assert(!callback_has_narrow_parameters_<decltype([](auto, auto const&) {})>());
+static_assert(!callback_has_narrow_parameters_<decltype([](std::uint32_t, auto const&) {})>());
+static_assert(!callback_has_narrow_parameters_<callback_overload<
+    decltype([](std::size_t, K const&) {}), decltype([](std::size_t, auto, auto) {})
+>>());
