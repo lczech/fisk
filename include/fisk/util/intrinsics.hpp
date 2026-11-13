@@ -52,7 +52,9 @@
     #include <immintrin.h>
     #define FISK_HAS_AVX2 1
 #endif
-#if defined(FISK_HAS_AVX512) || defined(__AVX512F__)
+// SimdAVX512 needs AVX512BW as well, for its byte shuffles, see CMakeLists.txt: with AVX512F
+// alone, it stays off.
+#if defined(FISK_HAS_AVX512) || (defined(__AVX512F__) && defined(__AVX512BW__))
     #include <immintrin.h>
     #define FISK_HAS_AVX512 1
 #endif

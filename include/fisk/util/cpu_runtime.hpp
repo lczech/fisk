@@ -455,7 +455,7 @@ inline bool msvc_cpu_avx2_() noexcept
     return (regs[1] & (1 << 5)) != 0; // EBX.AVX2
 }
 
-inline bool msvc_cpu_avx512f_() noexcept
+inline bool msvc_cpu_avx512_() noexcept
 {
     if (!os_avx512_state_enabled_()) {
         return false;
@@ -463,7 +463,7 @@ inline bool msvc_cpu_avx512f_() noexcept
 
     int regs[4] = {};
     cpuidex_(regs, 7, 0);
-    return (regs[1] & (1 << 16)) != 0; // EBX.AVX512F
+    return (regs[1] & (1 << 16)) != 0 && (regs[1] & (1 << 30)) != 0; // EBX.AVX512F, EBX.AVX512BW
 }
 
 #endif
@@ -599,13 +599,14 @@ inline bool cpu_avx2() noexcept
     #endif
 }
 
+// AVX512F and AVX512BW, both of which SimdAVX512 needs, see FISK_HAS_AVX512 (intrinsics.hpp).
 inline bool cpu_avx512() noexcept
 {
     #if (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
         ensure_cpu_init_();
-        return __builtin_cpu_supports("avx512f");
+        return __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw");
     #elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
-        return msvc_cpu_avx512f_();
+        return msvc_cpu_avx512_();
     #else
         return false;
     #endif
