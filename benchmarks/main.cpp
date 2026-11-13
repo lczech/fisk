@@ -223,7 +223,7 @@ int main(int argc, char **argv)
         // the measurements show the algorithms rather than memory throughput.
         size_t inp_len = 0;
         if(opts.input_length.size()) {
-            inp_len = std::stoul(opts.input_length);
+            inp_len = std::stoull(opts.input_length);
         } else {
             std::cout << "No input provided, using default\n";
             size_t const default_len = (1u << 18);
