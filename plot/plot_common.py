@@ -41,14 +41,17 @@ def platform_from_csv_path(csv_path: str) -> str:
     return f"{d.parent.name}, {d.name}".replace("_", " ")
 
 
-# Canonical CPU-family / compiler orderings, shared by every cross-CPU plot script, so that
-# platforms and compilers appear in the same relative order across every chart in the project
-# regardless of which script produced it.
+# Canonical CPU / compiler orderings, shared by every cross-CPU plot script, so that platforms and
+# compilers appear in the same relative order across every chart in the project regardless of which
+# script produced it. The platforms are CPU models where a family has several, and families
+# otherwise; infer_platform() takes the first that matches, so "M1 Pro" comes before "M1".
 PLATFORM_ORDER = [
-    "Epyc",
+    "EPYC 9684X",
+    "EPYC 9655",
     "Ryzen",
     "Xeon",
     "Core 7",
+    "M1 Pro",
     "M1",
     "M2",
     "M3",
@@ -58,6 +61,37 @@ COMPILER_ORDER = [
     "Clang",
     "GCC",
 ]
+
+# The colors of the platforms, by brand: green for AMD EPYC, orange for AMD Ryzen, blue for Intel,
+# gray for Apple. Of the models of a family, the one in the summary plots has the brand color, and
+# the others darker shades of it.
+PLATFORM_COLORS = {
+    "EPYC 9684X": "#05704b",  # dark green
+    "EPYC 9655":  "#08aa72",  # green
+    "Ryzen":      "#fb6516",  # orange
+    "Xeon":       "#0874d1",  # blue
+    "Core 7":     "#013364",  # dark blue
+    "M1 Pro":     "#979797",  # gray
+    "M1":         "#979797",  # gray
+    "M2":         "#979797",  # gray
+    "M3":         "#979797",  # gray
+}
+
+# The hatches of the compilers.
+COMPILER_HATCHES = {
+    "Clang": "",
+    "GCC":   "///",
+}
+
+
+def color_for_platform(platform: str) -> str:
+    """The color of a platform of PLATFORM_ORDER, gray for others."""
+    return PLATFORM_COLORS.get(platform, "#b0b0b0")
+
+
+def hatch_for_compiler(compiler: str) -> str:
+    """The hatch of a compiler of COMPILER_ORDER, crosses for others."""
+    return COMPILER_HATCHES.get(compiler, "xx")
 
 
 def infer_platform(raw_label: str) -> str:

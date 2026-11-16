@@ -8,7 +8,7 @@ bar chart:
 
 - x-axis: benchmark (implementation name)
 - for each benchmark: bars for each platform/compiler combination
-- color: platform (CPU family / branding)
+- color: platform (CPU model or family, by brand), see PLATFORM_COLORS in plot_common.py
 - hatch: compiler
 - y-axis: mean ns/op across cases
 
@@ -118,30 +118,6 @@ def load_one(
         df = df[df["benchmark"].isin(plot_benchmarks)]
 
     return df
-
-
-def color_for_platform(platform: str) -> str:
-    platform_colors = {
-        "Epyc":   "#08aa72",  # green
-        "Ryzen":  "#fb6516",  # orange
-        # "Xeon":   "#0874d1",  # blue old
-        "Xeon":   "#013364",  # blue
-        "Core 7": "#0874d1",  # blue
-        "M1":     "#979797",  # gray
-        "M2":     "#979797",  # gray
-        "M3":     "#979797",  # gray
-        "Other":  "#b0b0b0",  # fallback
-    }
-    return platform_colors.get(platform, "grey")
-
-
-def hatch_for_compiler(compiler: str) -> str:
-    compiler_hatches = {
-        "Clang": "",
-        "GCC": "///",
-        "Other": "xx",
-    }
-    return compiler_hatches.get(compiler, "xx")
 
 
 def series_sort_key(series_name: str) -> tuple[int, int, str]:

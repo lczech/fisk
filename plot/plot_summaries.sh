@@ -24,36 +24,42 @@ SINK="$1"
 # Leave empty to auto-scan.
 # ------------------------------------------------------------
 
-# Select which CPUs we want in the summary plots, as results/<CPU>/<Compiler>/, see
-# scripts/run_benchmarks.sh. The results of the sink mode are in its folder in there.
+# Select which CPUs we want in the summary plots, as their folders results/<CPU>/, see
+# scripts/run_benchmarks.sh. Each compiler folder in there is shown, and the results of the sink
+# mode are in its folder in that. CPUs without results yet are left out, with a warning.
 ROOT="results"
 CPUS=(
-  # "AMD_EPYC_7763/Clang_18"
-  # "AMD_EPYC_7763/GCC_13"
-  "AMD_EPYC_9684X/Clang_17"
-  "AMD_EPYC_9684X/GCC_15"
-  "AMD_Ryzen_7_Pro_4750U/Clang_17"
-  "AMD_Ryzen_7_Pro_4750U/GCC_14"
-  "Intel_Xeon_Platinum_8568Y/Clang_17"
-  "Intel_Xeon_Platinum_8568Y/GCC_15"
-  # "Intel_Core_7_240H/Clang_21"
-  # "Intel_Core_7_240H/GCC_15"
-  # Standing in for the Apple entry until M1 Pro measurements exist -- swap for
-  # "Apple_M1_Pro/Clang_17" (currently has no kmer_extract_packed_unchecked.csv) once available.
-  "Apple_M1/Clang_21"
+  # "AMD_EPYC_9684X"
+  "AMD_EPYC_9655"
+  "AMD_Ryzen_7_Pro_4750U"
+  "Intel_Xeon_Platinum_8568Y"
+  # "Intel_Core_7_240H"
+  "Apple_M1_Pro"
 )
 
-# The folder of the results in each of the CPUS. Empty for those that do not depend on the sink.
+# The folder of the results in each of the RUNS. Empty for those that do not depend on the sink.
 RUN_SUBDIR="$SINK"
 
-# Auto-scan: every CPU and compiler with results of this sink mode.
+# The CPU and compiler folders of the CPUS, as <CPU>/<Compiler>; without CPUS, every CPU and
+# compiler with results of this sink mode.
+RUNS=()
+for cpu in ${CPUS[@]+"${CPUS[@]}"}; do
+  found=false
+  for dir in "${ROOT}/${cpu}"/*/; do
+    [[ -d "$dir" ]] || continue
+    dir="${dir%/}"
+    RUNS+=( "${dir#"${ROOT}/"}" )
+    found=true
+  done
+  "$found" || warn "No results for ${cpu} yet, leaving it out of the plots"
+done
 if ((${#CPUS[@]} == 0)); then
   while read -r info; do
     run="${info#"${ROOT}/"}"
-    CPUS+=( "${run%/*/sys_info.txt}" )
+    RUNS+=( "${run%/*/sys_info.txt}" )
   done < <(find "$ROOT" -mindepth 4 -maxdepth 4 -path "*/${SINK}/sys_info.txt" | sort)
 fi
-if ((${#CPUS[@]} == 0)); then
+if ((${#RUNS[@]} == 0)); then
   error "No benchmark directories found."
   exit 1
 fi
@@ -112,13 +118,13 @@ run_job() {
 build_file_args() {
   args=()
   local csv_name
-  for cpu in "${CPUS[@]}"; do
+  for run in "${RUNS[@]}"; do
     for csv_name in "$@"; do
-      local f="${ROOT}/${cpu}${RUN_SUBDIR:+/${RUN_SUBDIR}}/${csv_name}"
+      local f="${ROOT}/${run}${RUN_SUBDIR:+/${RUN_SUBDIR}}/${csv_name}"
       if [[ -f "$f" ]]; then
         args+=( --file "$f" )
       else
-        warn "${csv_name} missing for ${cpu}, leaving it out of its plots"
+        warn "${csv_name} missing for ${run}, leaving it out of its plots"
       fi
     done
   done
@@ -326,8 +332,8 @@ CHECKED_PAIRS=(
 )
 
 dir_args=()
-for cpu in "${CPUS[@]}"; do
-  dir_args+=( --dir "${ROOT}/${cpu}/${RUN_SUBDIR}" )
+for run in "${RUNS[@]}"; do
+  dir_args+=( --dir "${ROOT}/${run}/${RUN_SUBDIR}" )
 done
 
 echo "Plotting checked vs. unchecked comparison"
