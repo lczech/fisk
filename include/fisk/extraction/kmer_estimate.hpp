@@ -3,7 +3,6 @@
 #include <concepts>
 #include <cstddef>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -28,25 +27,6 @@ namespace fisk {
 
 // The candidate algorithms of for_each_kmer(), see TypeList for their shape. Each calls one of the
 // k-mer extraction functions, and is named after it, followed by the SIMD arch.
-
-/**
- * @brief The settings that the k-mer candidates run with.
- */
-struct KmerExtractorSettings
-{
-    std::size_t k = 0;
-};
-
-// The settings for k-mers of size `k`, for for_each_kmer().
-inline KmerExtractorSettings make_kmer_extractor_settings_(std::size_t k)
-{
-    if (k == 0 || k > 32) {
-        throw std::invalid_argument(
-            "k-mer extraction: k = " + std::to_string(k) + " not in [1, 32]"
-        );
-    }
-    return {k};
-}
 
 // The callback that a SIMD candidate hands its vectors to: the vectors as they are, if `callback`
 // takes them, else their valid k-mers one by one.
@@ -77,14 +57,14 @@ struct KmerCandidateAsciiChunkedScalar
 
     template <typename Callback>
     FISK_ALWAYS_INLINE void run(
-        KmerExtractorSettings const& settings, std::string_view seq, Callback& callback
+        std::size_t k, std::string_view seq, Callback& callback
     ) const
     {
         EstimateWordEncoder<E, L> const encoder{};
         if constexpr (C == InputCheck::kChecked) {
-            for_each_kmer_ascii_checked_chunked_scalar(seq, settings.k, encoder, callback);
+            for_each_kmer_ascii_checked_chunked_scalar(seq, k, encoder, callback);
         } else {
-            for_each_kmer_ascii_unchecked_chunked_scalar(seq, settings.k, encoder, callback);
+            for_each_kmer_ascii_unchecked_chunked_scalar(seq, k, encoder, callback);
         }
     }
 };
@@ -101,18 +81,18 @@ struct KmerCandidateAsciiChunkedSimd
 
     template <typename Callback>
     FISK_ALWAYS_INLINE void run(
-        KmerExtractorSettings const& settings, std::string_view seq, Callback& callback
+        std::size_t k, std::string_view seq, Callback& callback
     ) const
     {
         EstimateWordEncoder<E, L> const encoder{};
         auto vector_callback = kmer_candidate_vector_callback_(callback);
         if constexpr (C == InputCheck::kChecked) {
             for_each_kmer_ascii_checked_chunked_simd<Simd>(
-                seq, settings.k, encoder, vector_callback
+                seq, k, encoder, vector_callback
             );
         } else {
             for_each_kmer_ascii_unchecked_chunked_simd<Simd>(
-                seq, settings.k, encoder, vector_callback
+                seq, k, encoder, vector_callback
             );
         }
     }
@@ -133,13 +113,13 @@ struct KmerCandidatePackedBytewiseScalar
 
     template <typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
-        KmerExtractorSettings const& settings, Seq const& seq, Callback& callback
+        std::size_t k, Seq const& seq, Callback& callback
     ) const
     {
         if constexpr (C == InputCheck::kChecked) {
-            for_each_kmer_packed_checked_bytewise_scalar(seq, settings.k, callback);
+            for_each_kmer_packed_checked_bytewise_scalar(seq, k, callback);
         } else {
-            for_each_kmer_packed_unchecked_bytewise_scalar(seq, settings.k, callback);
+            for_each_kmer_packed_unchecked_bytewise_scalar(seq, k, callback);
         }
     }
 };
@@ -156,14 +136,14 @@ struct KmerCandidatePackedBytewiseSimd
 
     template <typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
-        KmerExtractorSettings const& settings, Seq const& seq, Callback& callback
+        std::size_t k, Seq const& seq, Callback& callback
     ) const
     {
         auto vector_callback = kmer_candidate_vector_callback_(callback);
         if constexpr (C == InputCheck::kChecked) {
-            for_each_kmer_packed_checked_bytewise_simd<Simd>(seq, settings.k, vector_callback);
+            for_each_kmer_packed_checked_bytewise_simd<Simd>(seq, k, vector_callback);
         } else {
-            for_each_kmer_packed_unchecked_bytewise_simd<Simd>(seq, settings.k, vector_callback);
+            for_each_kmer_packed_unchecked_bytewise_simd<Simd>(seq, k, vector_callback);
         }
     }
 };

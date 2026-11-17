@@ -25,7 +25,6 @@ inline void check_kmer_candidates()
     auto const seqs = extraction_test_sequences<C>();
 
     for (std::size_t k : std::initializer_list<std::size_t>{1, 7, 15, 31, 32}) {
-        auto const settings = make_kmer_extractor_settings_(k);
         std::size_t count = 0;
         for_each_available_candidate(Candidates{}, [&](auto const& candidate) {
             ++count;
@@ -36,7 +35,7 @@ inline void check_kmer_candidates()
                 auto const input = extraction_test_input<I, C, E, L>(seq);
 
                 KmerRecorder single;
-                candidate.run(settings, input, single);
+                candidate.run(k, input, single);
                 check_emitted_kmers(expected, k, single.values, &single.positions);
 
                 // The SIMD algorithms hand their vectors to a callback that takes them.
@@ -49,7 +48,7 @@ inline void check_kmer_candidates()
                         for_each_valid_lane(pos, kmers, valid, unpacked);
                     }
                 };
-                candidate.run(settings, input, both);
+                candidate.run(k, input, both);
                 check_emitted_kmers(expected, k, unpacked.values, &unpacked.positions);
                 bool const simd = name.find("simd") != std::string::npos;
                 EXPECT_TRUE(simd ? (vectors > 0 || expected.empty()) : vectors == 0);

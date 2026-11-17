@@ -55,8 +55,9 @@ using EstimateWordEncoder = WordEncoderButterfly<E, L>;
  *   - `static bool available()`, whether it can run in this build on this CPU,
  *   - optionally `static bool preferred()`, whether the estimate may run it, see
  *     candidate_preferred_(),
- *   - `void run(Settings const& settings, Seq const& seq, Cb& callback) const`, the extraction,
- *     with the data that it needs from the `settings`, such as the prepared masks.
+ *   - `void run(Param const& param, Seq const& seq, Cb& callback) const`, the extraction, with
+ *     its parameter: the k-mer size `k`, which the extraction function that it calls checks, or
+ *     the masks, a SpacedKmerMaskForms, which are checked when they are prepared.
  */
 template <typename... Ts>
 struct TypeList

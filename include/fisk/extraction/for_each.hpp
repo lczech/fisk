@@ -27,9 +27,8 @@ FISK_ALWAYS_INLINE inline void for_each_kmer_estimate_(
     Seq const& seq, std::size_t k, Callback& callback
 ) {
     using Preference = typename KmerEstimate<I, C, E, L>::type;
-    auto const settings = make_kmer_extractor_settings_(k);
     visit_estimate<Preference>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
-        candidate.run(settings, seq, callback);
+        candidate.run(k, seq, callback);
     });
 }
 

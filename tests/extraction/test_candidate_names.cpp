@@ -129,13 +129,14 @@ inline std::string sorted_names(std::vector<std::string> names)
 }
 
 // Check the names of the `Candidates`, those of the estimate, against the `table`, and that each
-// candidate, run with the `settings`, extracts the same as the function of its name. The tests are
-// compiled for the CPU that they run on, so that all compiled candidates are available.
+// candidate, run with the `param` of the extraction, extracts the same as the function of its
+// name. The tests are compiled for the CPU that they run on, so that all compiled candidates are
+// available.
 template <
     typename Recorder, InputFormat I, InputCheck C, Encoding E, Layout L, typename Candidates,
-    typename Settings, typename Table
+    typename Param, typename Table
 >
-void check_algorithm_table(Candidates, Settings const& settings, Table const& table)
+void check_algorithm_table(Candidates, Param const& param, Table const& table)
 {
     // The names of the candidates are exactly those of the table.
     std::vector<std::string> table_names;
@@ -160,7 +161,7 @@ void check_algorithm_table(Candidates, Settings const& settings, Table const& ta
                 Recorder expected;
                 call(input, expected);
                 Recorder result;
-                candidate.run(settings, input, result);
+                candidate.run(param, input, result);
                 check_spaced_events(result.events, expected.events);
             }
         });
@@ -204,8 +205,7 @@ TEST(CandidateNames, KmerAsciiChecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
-        typename KmerEstimate<kAscii, kChecked, kAcgt, kMsb>::type{},
-        make_kmer_extractor_settings_(kK), table
+        typename KmerEstimate<kAscii, kChecked, kAcgt, kMsb>::type{}, kK, table
     );
 }
 
@@ -221,8 +221,7 @@ TEST(CandidateNames, KmerAsciiUnchecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
-        typename KmerEstimate<kAscii, kUnchecked, kAcgt, kMsb>::type{},
-        make_kmer_extractor_settings_(kK), table
+        typename KmerEstimate<kAscii, kUnchecked, kAcgt, kMsb>::type{}, kK, table
     );
 }
 
@@ -237,8 +236,7 @@ TEST(CandidateNames, KmerPackedChecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
-        typename KmerEstimate<kPacked, kChecked, kAcgt, kMsb>::type{},
-        make_kmer_extractor_settings_(kK), table
+        typename KmerEstimate<kPacked, kChecked, kAcgt, kMsb>::type{}, kK, table
     );
 }
 
@@ -253,8 +251,7 @@ TEST(CandidateNames, KmerPackedUnchecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
-        typename KmerEstimate<kPacked, kUnchecked, kAcgt, kMsb>::type{},
-        make_kmer_extractor_settings_(kK), table
+        typename KmerEstimate<kPacked, kUnchecked, kAcgt, kMsb>::type{}, kK, table
     );
 }
 
