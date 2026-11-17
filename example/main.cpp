@@ -62,20 +62,55 @@ struct MyCounter
     }
 };
 
-// Extract all k-mers of the sequences with `extract_one(seq, counter)`, and print a CSV row.
-template <typename ExtractOne>
-void extract(
-    char const* name, std::string const& algorithm, ExtractOne extract_one,
+// Extract all k-mers with k = 31 from the characters of the sequences, encoded as A = 0, C = 1,
+// G = 2, T = 3 (ACGT), with the first base in the lowest bits (LSB), and print a CSV row. Checked:
+// the k-mers that contain other characters than ACGT, in upper or lower case, such as N, are
+// skipped. for_each_kmer() runs the algorithm that is likely the fastest on this CPU, which
+// for_each_kmer_algorithm_name() names. It is called directly in the timed loop: behind a lambda
+// that the compiler does not inline, the loop can be slower.
+void extract_kmers(
     std::vector<AlignedString> const& sequences, std::size_t bases, double read_seconds
 ) {
+    std::string const algorithm = for_each_kmer_algorithm_name<
+        InputCheck::kChecked, Encoding::kACGT, Layout::kLSB
+    >(std::string_view{}, 31);
+
     MyCounter counter;
     auto const start = std::chrono::steady_clock::now();
     for (auto const& seq : sequences) {
-        extract_one(seq, counter);
+        for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kLSB>(
+            std::string_view(seq), 31, counter
+        );
     }
     std::chrono::duration<double> const seconds = std::chrono::steady_clock::now() - start;
 
-    std::cout << name << "," << algorithm << "," << sequences.size() << "," << bases << ","
+    std::cout << "kmers," << algorithm << "," << sequences.size() << "," << bases << ","
+              << counter.count << "," << counter.checksum << "," << read_seconds << ","
+              << seconds.count() << "\n";
+}
+
+// Extract all spaced k-mers with a mask of span 31 and weight 22, with the same encoding and
+// checks, and print a CSV row. The masks are prepared once, for all sequences.
+void extract_spaced_kmers(
+    std::vector<AlignedString> const& sequences, std::size_t bases, double read_seconds
+) {
+    SpacedKmerMaskForms<Layout::kLSB> const mask_forms(
+        std::vector<std::string>{ "1111011101110010111001011011111" }
+    );
+    std::string const algorithm = for_each_spaced_kmer_algorithm_name<
+        InputCheck::kChecked, Encoding::kACGT, Layout::kLSB
+    >(std::string_view{}, mask_forms);
+
+    MyCounter counter;
+    auto const start = std::chrono::steady_clock::now();
+    for (auto const& seq : sequences) {
+        for_each_spaced_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kLSB>(
+            std::string_view(seq), mask_forms, counter
+        );
+    }
+    std::chrono::duration<double> const seconds = std::chrono::steady_clock::now() - start;
+
+    std::cout << "spaced_kmers," << algorithm << "," << sequences.size() << "," << bases << ","
               << counter.count << "," << counter.checksum << "," << read_seconds << ","
               << seconds.count() << "\n";
 }
@@ -95,35 +130,8 @@ int main(int argc, char** argv)
         bases += seq.size();
     }
 
-    // k-mers with k = 31, and spaced k-mers with a mask of span 31 and weight 22, from the
-    // characters of the sequences, encoded as A = 0, C = 1, G = 2, T = 3 (ACGT), with the first
-    // base in the lowest bits (LSB). Checked: the k-mers that contain other characters than ACGT,
-    // in upper or lower case, such as N, are skipped. The masks are prepared once, for all
-    // sequences. Both functions run the algorithm that is likely the fastest on this CPU, which
-    // the _algorithm_name() functions name.
-    constexpr auto C = InputCheck::kChecked;
-    constexpr auto E = Encoding::kACGT;
-    constexpr auto L = Layout::kLSB;
-    std::size_t const k = 31;
-    SpacedKmerMaskForms<L> const mask_forms(
-        std::vector<std::string>{ "1111011101110010111001011011111" }
-    );
-
     std::cout << "extraction,algorithm,sequences,bases,kmers,checksum,"
               << "read_seconds,extract_seconds\n";
-    extract(
-        "kmers", for_each_kmer_algorithm_name<C, E, L>(std::string_view{}, k),
-        [&](std::string_view seq, MyCounter& counter) {
-            for_each_kmer<C, E, L>(seq, k, counter);
-        },
-        sequences, bases, read_seconds.count()
-    );
-    extract(
-        "spaced_kmers",
-        for_each_spaced_kmer_algorithm_name<C, E, L>(std::string_view{}, mask_forms),
-        [&](std::string_view seq, MyCounter& counter) {
-            for_each_spaced_kmer<C, E, L>(seq, mask_forms, counter);
-        },
-        sequences, bases, read_seconds.count()
-    );
+    extract_kmers(sequences, bases, read_seconds.count());
+    extract_spaced_kmers(sequences, bases, read_seconds.count());
 }
