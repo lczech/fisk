@@ -150,12 +150,11 @@ inline std::vector<std::vector<std::string>> extraction_wide_mask_sets()
 }
 
 // The SIMD arch of the estimates, see CandidateSimdArchs (extraction/estimate.hpp): the widest
-// one compiled, where the CPU has it, else empty, as in the names of the algorithms.
+// one compiled of AVX2, Neon, and SSE2, where the CPU has it, else empty, as in the names of the
+// algorithms.
 inline std::string estimate_simd_arch_name()
 {
-    #if defined(FISK_HAS_AVX512)
-    return fisk::avx512_enabled() ? "avx512" : "";
-    #elif defined(FISK_HAS_AVX2)
+    #if defined(FISK_HAS_AVX2)
     return fisk::avx2_enabled() ? "avx2" : "";
     #elif defined(FISK_HAS_NEON)
     return fisk::neon_enabled() ? "neon" : "";

@@ -94,7 +94,7 @@ The input is a `std::string_view` (or anything that converts to one, such as a `
 
 ## Extraction
 
-**Choosing the algorithm.** Both functions run the algorithm that is likely the fastest by what the build and the CPU support: the SIMD loop of the widest instruction set of the build (AVX-512, AVX2, SSE2, or Neon), and for spaced k-mers PEXT where the CPU has a fast one. `for_each_kmer_algorithm_name()` and `for_each_spaced_kmer_algorithm_name()` name the choice. To run another algorithm, call its function directly, see [K-mer extraction functions](#k-mer-extraction-functions).
+**Choosing the algorithm.** Both functions run the algorithm that is likely the fastest by what the build and the CPU support: the SIMD loop of the widest instruction set of the build of AVX2, SSE2, and Neon, and for spaced k-mers PEXT where the CPU has a fast one. The AVX-512 algorithms are not among the choices, as with callbacks of single k-mers they are in general not faster than those of AVX2; they can be called directly, for instance for callbacks that take vectors. `for_each_kmer_algorithm_name()` and `for_each_spaced_kmer_algorithm_name()` name the choice. To run another algorithm, call its function directly, see [K-mer extraction functions](#k-mer-extraction-functions).
 
 **Vectors.** The callback can also take the vectors of the SIMD algorithms, for consumers that process the k-mers with SIMD themselves, which saves unpacking them:
 

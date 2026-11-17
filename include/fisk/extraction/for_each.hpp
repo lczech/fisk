@@ -69,7 +69,8 @@ inline constexpr void for_each_packed_checked_assert_()
  *
  * One call, with the choices that change the result as template arguments, and the algorithm
  * chosen by what this build and CPU support, the estimate: the SIMD loop of the widest SIMD arch
- * of the build, AVX-512, AVX2, SSE2, or Neon, where the CPU has it, else the scalar loop:
+ * of the build of AVX2, SSE2, and Neon, where the CPU has it, else the scalar loop, see
+ * CandidateSimdArchs:
  *
  *     using namespace fisk;
  *     for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
@@ -84,7 +85,8 @@ inline constexpr void for_each_packed_checked_assert_()
  * KmerCallback. It can in addition take the vectors of k-mers of the SIMD algorithms, see
  * KmerVectorCallback and KmerVectorValidLanesCallback, for instance as a callback_overload, or a
  * struct with several `operator()`. The SIMD algorithms then hand it their vectors, and else their
- * k-mers one by one. Positions and counts are std::size_t, as sequences can exceed 2^32
+ * k-mers one by one; for the vectors of AVX512, call its functions directly, see
+ * CandidateSimdArchs. Positions and counts are std::size_t, as sequences can exceed 2^32
  * nucleotides: a callback that takes them as a narrower integer, such as `int`, fails to compile,
  * where its type tells its parameter types, which a lambda with an `auto` parameter and a struct
  * with several `operator()` do not; take std::size_t (or `auto`) there as well. The callback is a
@@ -234,8 +236,8 @@ inline std::string for_each_spaced_kmer_estimate_name_()
  *     );
  *
  * The estimate is the scalar loop with PEXT, unless the CPU is known for a slow PEXT, see
- * pext_likely_fast(), else the SIMD loop with the butterfly bit extraction of the widest SIMD arch
- * of the build, where the CPU has it, else the scalar loop with the butterfly.
+ * pext_likely_fast(), else the SIMD loop with the butterfly bit extraction of the SIMD arch of
+ * for_each_kmer(), where the CPU has it, else the scalar loop with the butterfly.
  * for_each_spaced_kmer_algorithm_name() names it. To call another algorithm, see the functions in
  * spaced_kmer_extract/.
  *
@@ -244,8 +246,9 @@ inline std::string for_each_spaced_kmer_estimate_name_()
  * `callback(pos, mask_idx, spaced_kmers, valid_count)` when unchecked, or
  * `callback(pos, mask_idx, spaced_kmers, valid_lanes)` when checked, see SpacedKmerVectorCallback
  * and SpacedKmerVectorValidLanesCallback. The SIMD algorithms then hand it their vectors, and else
- * their spaced k-mers one by one. Positions, mask indices, and counts are std::size_t, see
- * for_each_kmer().
+ * their spaced k-mers one by one. As the estimate prefers PEXT, which hands out single spaced
+ * k-mers, a callback that takes vectors can be faster with a SIMD algorithm called directly on some
+ * CPUs. Positions, mask indices, and counts are std::size_t, see for_each_kmer().
  *
  * The spaced k-mers of each mask are handed out in order of their positions; the order between
  * masks differs between the algorithms: the scalar loops hand out the spaced k-mers of all masks

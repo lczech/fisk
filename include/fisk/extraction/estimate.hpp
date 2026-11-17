@@ -64,14 +64,19 @@ struct TypeList
 {};
 
 /**
- * @brief The SIMD arch of the candidates that use SIMD, as a TypeList: the widest one compiled,
- * AVX512, AVX2, Neon, or SSE2, or none. A build with an arch runs only on CPUs that have it, as the
+ * @brief The SIMD arch of the candidates that use SIMD, as a TypeList: the widest one compiled of
+ * AVX2, Neon, and SSE2, or none. A build with an arch runs only on CPUs that have it, as the
  * compiler uses it elsewhere as well, so the narrower archs are not compiled as candidates. The
  * estimates prefer it before the scalar loops, see KmerEstimate and SpacedKmerEstimate.
+ *
+ * Builds with AVX512 use AVX2 as well. With callbacks of single k-mers, the AVX512 loops are in
+ * general not faster than those of AVX2, as each k-mer is handed to the callback on its own. For
+ * spaced k-mers in builds with BMI2, the estimate runs PEXT on all CPUs with AVX512, and an AVX512
+ * candidate next to it makes GCC keep the state of the callback in memory in the loop with PEXT.
+ * Callbacks that take vectors, and spaced k-mers in builds without BMI2, can be faster with the
+ * AVX512 functions, called directly, such as for_each_kmer_ascii_checked_chunked_simd<SimdAVX512>().
  */
-#if defined(FISK_HAS_AVX512)
-using CandidateSimdArchs = TypeList<SimdAVX512>;
-#elif defined(FISK_HAS_AVX2)
+#if defined(FISK_HAS_AVX2)
 using CandidateSimdArchs = TypeList<SimdAVX2>;
 #elif defined(FISK_HAS_NEON)
 using CandidateSimdArchs = TypeList<SimdNEON>;
