@@ -75,6 +75,23 @@ inline std::vector<ExpectedKmer> extraction_test_expected(std::string const& seq
     }
 }
 
+// The same, for an extractor, such as KmerExtractor, by its choices.
+template <typename Extractor>
+inline auto extraction_test_input(std::string const& seq)
+{
+    return extraction_test_input<
+        Extractor::input_format, Extractor::input_check, Extractor::encoding, Extractor::layout
+    >(seq);
+}
+
+template <typename Extractor>
+inline std::vector<ExpectedKmer> extraction_test_expected(std::string const& seq, std::size_t k)
+{
+    return extraction_test_expected<Extractor::input_check, Extractor::encoding, Extractor::layout>(
+        seq, k
+    );
+}
+
 // A callback of single k-mers that records them.
 struct KmerRecorder
 {
@@ -183,16 +200,4 @@ inline std::string expected_spaced_estimate(std::string const& loop)
     }
     auto const arch = estimate_simd_arch_name();
     return loop + (arch.empty() ? "_scalar_butterfly" : "_simd_butterfly_" + arch);
-}
-
-// Call `f` with each candidate of the TypeList that this build and CPU can run: the candidates of
-// the estimate, such as those of KmerEstimate, which the estimate chooses from.
-template <typename... Candidates, typename F>
-inline void for_each_available_candidate(fisk::TypeList<Candidates...>, F&& f)
-{
-    ([&] {
-        if (Candidates::available()) {
-            f(Candidates{});
-        }
-    }(), ...);
 }

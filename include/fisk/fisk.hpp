@@ -54,6 +54,8 @@
 #include "fisk/spaced_kmer_extract/packed_bytewise_scalar.hpp"
 #include "fisk/spaced_kmer_extract/packed_bytewise_simd.hpp"
 
-// Extraction with the estimate
+// Extraction with the estimate, and the extractors, which tune in situ
 #include "fisk/extraction/spaced_kmer_mask_forms.hpp"
 #include "fisk/extraction/for_each.hpp"
+#include "fisk/extraction/kmer_extractor.hpp"
+#include "fisk/extraction/spaced_kmer_extractor.hpp"

@@ -25,11 +25,11 @@ namespace fisk {
 /**
  * @brief The masks of a SpacedKmerMaskForms, as a std::tuple of one std::array of
  * `MaxMasks` spaced k-mer masks of a span up to `MaxSpan` per form: the masks as given, in the
- * form BitExtractMask, for PEXT, of the butterfly, BitExtractButterflyMask, and of the butterfly
- * kernels of the `Simds`, a TypeList.
+ * form BitExtractMask, for PEXT, in the form of the PEXT kernel, where BMI2 is compiled, of the
+ * butterfly, BitExtractButterflyMask, and of the butterfly kernels of the `Simds`, a TypeList.
  */
 template <
-    Layout L, std::size_t MaxMasks, std::size_t MaxSpan, typename Simds = CandidateSimdArchs
+    Layout L, std::size_t MaxMasks, std::size_t MaxSpan, typename Simds = ExtractorSimdArchs
 >
 struct spaced_kmer_mask_forms_tuple_;
 
@@ -41,6 +41,9 @@ struct spaced_kmer_mask_forms_tuple_<L, MaxMasks, MaxSpan, TypeList<Simd...>>
 
     using type = std::tuple<
         MaskForms<BitExtractMask>,
+        #if defined(FISK_HAS_BMI2)
+        MaskForms<BitExtractKernelPext>,
+        #endif
         MaskForms<BitExtractButterflyMask>,
         MaskForms<BitExtractKernelButterfly<Simd>>...
     >;
@@ -65,9 +68,9 @@ struct spaced_kmer_mask_forms_tuple_<L, MaxMasks, MaxSpan, TypeList<Simd...>>
  *     });
  *
  * get() returns all masks of the set in one of the forms, as a std::span of SpacedKmerMask:
- * BitExtractMask, the masks as given, for PEXT; BitExtractButterflyMask; and
- * BitExtractKernelButterfly of the SIMD arch of the algorithms, see CandidateSimdArchs. For other
- * forms, see the functions of spaced_kmer_extract/mask.hpp.
+ * BitExtractMask, the masks as given, for PEXT; BitExtractKernelPext, where BMI2 is compiled;
+ * BitExtractButterflyMask; and BitExtractKernelButterfly of the SIMD archs of the algorithms, see
+ * ExtractorSimdArchs. For other forms, see the functions of spaced_kmer_extract/mask.hpp.
  *
  * @tparam L Layout of the spaced k-mers.
  * @tparam MaxMasks The largest number of masks of the set. The extraction compiles its loops for

@@ -78,8 +78,9 @@ inline constexpr void for_each_packed_checked_assert_()
  *     );
  *
  * The overloads for packed input take the Encoding, Layout, and InputCheck from the type of the
- * sequence. for_each_kmer_algorithm_name() names the algorithm. To call another algorithm, see the
- * functions in kmer_extract/, such as for_each_kmer_ascii_checked_chunked_scalar().
+ * sequence. for_each_kmer_algorithm_name() names the algorithm. To measure the fastest algorithm
+ * on your hardware, with your input and callback, see KmerExtractor. To call another algorithm,
+ * see the functions in kmer_extract/, such as for_each_kmer_ascii_checked_chunked_scalar().
  *
  * The callback takes single k-mers, as `callback(pos, kmer)` or `callback(kmer)`, see
  * KmerCallback. It can in addition take the vectors of k-mers of the SIMD algorithms, see
@@ -238,8 +239,8 @@ inline std::string for_each_spaced_kmer_estimate_name_()
  * The estimate is the scalar loop with PEXT, unless the CPU is known for a slow PEXT, see
  * pext_likely_fast(), else the SIMD loop with the butterfly bit extraction of the SIMD arch of
  * for_each_kmer(), where the CPU has it, else the scalar loop with the butterfly.
- * for_each_spaced_kmer_algorithm_name() names it. To call another algorithm, see the functions in
- * spaced_kmer_extract/.
+ * for_each_spaced_kmer_algorithm_name() names it. To measure the fastest algorithm, see
+ * SpacedKmerExtractor. To call another algorithm, see the functions in spaced_kmer_extract/.
  *
  * The callback takes single spaced k-mers, as `callback(pos, mask_idx, spaced_kmer)`. It can in
  * addition take the vectors of the SIMD algorithms, as

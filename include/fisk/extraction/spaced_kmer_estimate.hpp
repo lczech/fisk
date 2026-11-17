@@ -60,7 +60,10 @@ inline std::string spaced_kmer_candidate_bit_extract_name_()
         return "butterfly";
     }
     #if defined(FISK_HAS_BMI2)
-    else if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
+    else if constexpr (
+        std::same_as<BitExtractForm, BitExtractMask> ||
+        std::same_as<BitExtractForm, BitExtractKernelPext>
+    ) {
         return "pext";
     }
     #endif
@@ -76,6 +79,9 @@ inline bool spaced_kmer_candidate_bit_extract_available_()
         return true;
     } else if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
         return bmi2_enabled();
+    } else if constexpr (std::same_as<typename BitExtractForm::simd_arch, SimdScalar>) {
+        // BitExtractKernelPext, the only kernel of the scalar arch here.
+        return bmi2_enabled();
     } else {
         return simd_arch_enabled_<typename BitExtractForm::simd_arch>();
     }
@@ -83,12 +89,16 @@ inline bool spaced_kmer_candidate_bit_extract_available_()
 
 // Whether the estimate may run the bit extraction of the masks of the form `BitExtractForm`, see
 // candidate_preferred_(): PEXT only where it is likely fast, as it is slow on some CPUs,
-// see pext_likely_fast().
+// see pext_likely_fast(); the in-situ tuning of SpacedKmerExtractor measures it wherever it is
+// available.
 template <typename BitExtractForm>
 inline bool spaced_kmer_candidate_bit_extract_preferred_()
 {
     #if defined(FISK_HAS_BMI2)
-    if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
+    if constexpr (
+        std::same_as<BitExtractForm, BitExtractMask> ||
+        std::same_as<BitExtractForm, BitExtractKernelPext>
+    ) {
         return pext_likely_fast();
     }
     #endif
@@ -145,8 +155,9 @@ FISK_ALWAYS_INLINE inline auto spaced_kmer_candidate_vector_callback_(Callback& 
 
 // The run() of each candidate below, and the lambda that it hands to dispatch_static_span(), are
 // forced inline, so that the callback does not reach a function out of line, and the whole
-// extraction inlines into for_each_spaced_kmer() (extraction/for_each.hpp). A callback that reaches
-// a function out of line keeps its state in memory in all of the extraction.
+// extraction inlines into for_each_spaced_kmer() (extraction/for_each.hpp) and
+// ExtractorPlan::for_each() (extraction/extractor_plan.hpp). A callback that reaches a function out
+// of line keeps its state in memory in all of the extraction.
 
 template <InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename BitExtractForm>
 struct SpacedKmerCandidateAsciiChunkedScalar

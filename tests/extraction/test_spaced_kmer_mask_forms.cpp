@@ -61,7 +61,17 @@ static void check_forms(std::size_t span)
         }
     }
 
-    // The butterfly kernels of the SIMD arch of the candidates.
+    #if defined(FISK_HAS_BMI2)
+    auto const pext = masks.get<BitExtractKernelPext>();
+    check_common(pext);
+    for (std::size_t i = 0; i < raw.size(); ++i) {
+        for (std::size_t j = 0; j < raw[i].max_pieces; ++j) {
+            EXPECT_EQ(pext[i].mask_pieces[j].mask.mask, raw[i].mask_pieces[j].mask);
+        }
+    }
+    #endif
+
+    // The butterfly kernels of each SIMD arch of the candidates.
     [&]<typename... Simd>(TypeList<Simd...>) {
         (
             [&] {
@@ -78,7 +88,7 @@ static void check_forms(std::size_t span)
             }(),
             ...
         );
-    }(CandidateSimdArchs{});
+    }(ExtractorSimdArchs{});
 }
 
 // One piece, and three, the most of the default MaxSpan.

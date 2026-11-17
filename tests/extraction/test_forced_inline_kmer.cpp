@@ -7,12 +7,12 @@
 //     K-mers
 // =================================================================================================
 
-TEST(ForcedInline, KmerCandidates)
+TEST(ForcedInline, KmerExtractor)
 {
-    check_kmer_candidates<kAscii, kChecked, kAcgt, kMsb>();
-    check_kmer_candidates<kAscii, kUnchecked, kAcgt, kMsb>();
-    check_kmer_candidates<kPacked, kChecked, kAcgt, kMsb>();
-    check_kmer_candidates<kPacked, kUnchecked, kAcgt, kMsb>();
+    check_kmer_extractor_algorithms<kAscii, kChecked, kAcgt, kMsb>();
+    check_kmer_extractor_algorithms<kAscii, kUnchecked, kAcgt, kMsb>();
+    check_kmer_extractor_algorithms<kPacked, kChecked, kAcgt, kMsb>();
+    check_kmer_extractor_algorithms<kPacked, kUnchecked, kAcgt, kMsb>();
 }
 
 TEST(ForcedInline, KmerLoops)

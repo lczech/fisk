@@ -86,6 +86,17 @@ using CandidateSimdArchs = TypeList<SimdSSE2>;
 using CandidateSimdArchs = TypeList<>;
 #endif
 
+/**
+ * @brief The SIMD archs of the candidates of the extractors, see KmerExtractor: those of
+ * CandidateSimdArchs, and AVX512 next to AVX2, as AVX512 is faster on some CPUs that have it and for
+ * some callbacks, so that the in-situ tuning can choose either.
+ */
+#if defined(FISK_HAS_AVX512) && defined(FISK_HAS_AVX2)
+using ExtractorSimdArchs = TypeList<SimdAVX512, SimdAVX2>;
+#else
+using ExtractorSimdArchs = CandidateSimdArchs;
+#endif
+
 // The input check in the names of the candidates.
 inline std::string input_check_name_(InputCheck input_check)
 {
@@ -197,7 +208,7 @@ FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred_(TypeList<Candida
 
 /**
  * @brief Call `f` with the candidate of the estimate of the free functions, such as
- * for_each_kmer(), to run it, or to get its name.
+ * for_each_kmer(), and of the extractors, such as KmerExtractor, to run it, or to get its name.
  *
  * The `Preference` is a TypeList of candidates in order of preference, for all callbacks, whose
  * last one is a scalar one, which is always preferred. Of this list, the first one that is

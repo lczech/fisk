@@ -3,7 +3,7 @@
 
 using namespace fisk;
 
-// The candidates of the estimate of the spaced k-mers from ASCII, in their own translation unit, as
+// The algorithms of the spaced k-mer extractors from ASCII, in their own translation unit, as
 // each compiles all of them.
 
 constexpr auto kAcgt = Encoding::kACGT;
@@ -13,12 +13,12 @@ constexpr auto kLsb = Layout::kLSB;
 constexpr auto kChecked = InputCheck::kChecked;
 constexpr auto kUnchecked = InputCheck::kUnchecked;
 
-TEST(SpacedKmerCandidates, AsciiChecked)
+TEST(SpacedKmerExtractor, AsciiChecked)
 {
-    check_spaced_kmer_candidates<InputFormat::kAscii, kChecked, kAcgt, kMsb>();
+    check_spaced_kmer_extractor_algorithms<InputFormat::kAscii, kChecked, kAcgt, kMsb>();
 }
 
-TEST(SpacedKmerCandidates, AsciiUnchecked)
+TEST(SpacedKmerExtractor, AsciiUnchecked)
 {
-    check_spaced_kmer_candidates<InputFormat::kAscii, kUnchecked, kActg, kLsb>();
+    check_spaced_kmer_extractor_algorithms<InputFormat::kAscii, kUnchecked, kActg, kLsb>();
 }

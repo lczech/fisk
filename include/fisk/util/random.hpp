@@ -1,7 +1,13 @@
 #pragma once
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <random>
+#include <stdexcept>
+
+#include "fisk/util/aligned_allocator.hpp"
 
 namespace fisk {
 
@@ -75,5 +81,40 @@ private:
     std::uint64_t state_ = 0;
     double const two_pow_64_ = std::pow( 2.0, 64 );
 };
+
+// =================================================================================================
+//     Random Sequences
+// =================================================================================================
+
+/**
+ * @brief A string of `length` random nucleotides `ACGT`, each an invalid `N` with probability
+ * `n_prob` in [0.0, 1.0], such as a sample for the in-situ tuning of the extractors, see the
+ * README.
+ *
+ * The same `seed` gives the same string on every platform: the nucleotides and the `N`s are taken
+ * from the raw output of the engine, which the standard specifies, instead of from the std
+ * distributions, whose algorithms differ between standard libraries.
+ *
+ * @throws std::invalid_argument if `n_prob` is not in [0.0, 1.0].
+ */
+inline AlignedString random_acgt(
+    std::size_t length = std::size_t{1} << 20, double n_prob = 0.0, std::uint64_t seed = 42
+) {
+    if (!std::isfinite(n_prob) || n_prob < 0.0 || n_prob > 1.0) {
+        throw std::invalid_argument("random_acgt(): probability not in [0.0, 1.0]");
+    }
+    std::mt19937_64 rng{seed};
+    static constexpr std::array<char, 4> nucleotides{'A', 'C', 'G', 'T'};
+
+    // An N if the upper 53 bits of a draw are below n_prob * 2^53, which is exact for any double
+    // in [0.0, 1.0]; else the nucleotide from the lowest two bits.
+    auto const n_threshold = static_cast<std::uint64_t>(std::ldexp(n_prob, 53));
+    AlignedString seq(length, 'A');
+    for (auto& c : seq) {
+        std::uint64_t const r = rng();
+        c = (r >> 11) < n_threshold ? 'N' : nucleotides[static_cast<std::size_t>(r & 3u)];
+    }
+    return seq;
+}
 
 } // namespace fisk

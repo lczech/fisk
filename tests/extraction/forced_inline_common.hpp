@@ -4,7 +4,7 @@
 // defines FISK_ALWAYS_INLINE_FOR_EACH as empty (see CMakeLists.txt), as forcing all of its many
 // instantiations inline costs too much compile time. The test_forced_inline_*.cpp files undefine it
 // before any fisk header, so that util/intrinsics.hpp defines it as for any other program, and
-// each loop is compiled and run once with it: the candidates of the estimate, and the loops that
+// each loop is compiled and run once with it: the algorithms of the extractors, and the loops that
 // are none of them. The loops are split across these files, as each file needs a lot of memory to
 // compile, in particular with sanitizers.
 

@@ -362,7 +362,7 @@ if(FISK_BUILD_TESTS)
     )
     add_executable(fisk_tests ${FISK_TEST_SOURCES})
     target_include_directories(fisk_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
-    # Some tests, such as those of for_each_kmer(), run on several threads.
+    # Some tests, such as those of the extractors and of for_each_kmer(), run on several threads.
     find_package(Threads REQUIRED)
     target_link_libraries(fisk_tests PRIVATE fisk::fisk Threads::Threads)
 
