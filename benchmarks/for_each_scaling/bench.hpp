@@ -5,7 +5,7 @@
 #include <ostream>
 #include <string_view>
 
-#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
+#include "fisk/extraction/spaced_kmer_mask_forms.hpp"
 #include "sink.hpp"
 
 // The k of the k-mers, and the masks of the spaced k-mers, see bench_for_each_scaling(). From

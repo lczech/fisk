@@ -64,7 +64,7 @@ When fisk is built standalone (i.e., not pulled in via `add_subdirectory()`/`Fet
 `for_each_kmer()` calls back with each k-mer of a sequence, with the algorithm that is likely the fastest by what your build and CPU support:
 
 ```cpp
-#include "fisk/extractor/for_each.hpp"
+#include "fisk/extraction/for_each.hpp"
 
 using namespace fisk;
 
@@ -97,7 +97,7 @@ The input is a `std::string_view` (or anything that converts to one, such as a `
 The extractors choose the fastest of the [k-mer extraction functions](#k-mer-extraction-functions) on the hardware, and run it with your callback:
 
 ```cpp
-#include "fisk/extractor/kmer_extractor.hpp"
+#include "fisk/extraction/kmer_estimate.hpp"
 
 using namespace fisk;
 
@@ -119,7 +119,7 @@ for (auto const& read : reads) {
 `SpacedKmerExtractor` does the same for a set of spaced k-mer masks of the same span, and calls back as `callback(pos, mask_idx, spaced_kmer)`:
 
 ```cpp
-#include "fisk/extractor/spaced_kmer_extractor.hpp"
+#include "fisk/extraction/spaced_kmer_estimate.hpp"
 
 using namespace fisk;
 

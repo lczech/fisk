@@ -6,7 +6,7 @@
 
 #include "fisk/core/cast.hpp"
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/extractor/for_each.hpp"
+#include "fisk/extraction/for_each.hpp"
 #include "for_each_scaling/bench.hpp"
 #include "sink.hpp"
 

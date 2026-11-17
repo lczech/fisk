@@ -25,9 +25,9 @@
 #include "fisk/spaced_kmer_extract/ascii_rolling_scalar.hpp"
 #include "fisk/spaced_kmer_extract/ascii_rolling_simd.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
-#include "extractor/common.hpp"
-#include "extractor/kmer_common.hpp"
-#include "extractor/spaced_common.hpp"
+#include "extraction/common.hpp"
+#include "extraction/kmer_common.hpp"
+#include "extraction/spaced_common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 

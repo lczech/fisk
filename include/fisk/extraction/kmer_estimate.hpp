@@ -14,7 +14,7 @@
 #include "fisk/util/intrinsics.hpp"
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/extractor/internal.hpp"
+#include "fisk/extraction/estimate.hpp"
 #include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
 #include "fisk/kmer_extract/ascii_chunked_simd.hpp"
 #include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
@@ -51,7 +51,7 @@ inline KmerExtractorSettings make_kmer_extractor_settings_(std::size_t k)
 // The callback that a SIMD candidate hands its vectors to: the vectors as they are, if `callback`
 // takes them, else their valid k-mers one by one.
 template <typename Callback>
-FISK_ALWAYS_INLINE inline auto kmer_extractor_vector_callback_(Callback& callback)
+FISK_ALWAYS_INLINE inline auto kmer_candidate_vector_callback_(Callback& callback)
 {
     return [&callback](std::size_t pos, auto kmers, auto valid) FISK_ALWAYS_INLINE_LAMBDA {
         if constexpr (std::invocable<Callback&, std::size_t, decltype(kmers), decltype(valid)>) {
@@ -80,7 +80,7 @@ struct KmerCandidateAsciiChunkedScalar
         KmerExtractorSettings const& settings, std::string_view seq, Callback& callback
     ) const
     {
-        ExtractorWordEncoder<E, L> const encoder{};
+        EstimateWordEncoder<E, L> const encoder{};
         if constexpr (C == InputCheck::kChecked) {
             for_each_kmer_ascii_checked_chunked_scalar(seq, settings.k, encoder, callback);
         } else {
@@ -104,8 +104,8 @@ struct KmerCandidateAsciiChunkedSimd
         KmerExtractorSettings const& settings, std::string_view seq, Callback& callback
     ) const
     {
-        ExtractorWordEncoder<E, L> const encoder{};
-        auto vector_callback = kmer_extractor_vector_callback_(callback);
+        EstimateWordEncoder<E, L> const encoder{};
+        auto vector_callback = kmer_candidate_vector_callback_(callback);
         if constexpr (C == InputCheck::kChecked) {
             for_each_kmer_ascii_checked_chunked_simd<Simd>(
                 seq, settings.k, encoder, vector_callback
@@ -159,7 +159,7 @@ struct KmerCandidatePackedBytewiseSimd
         KmerExtractorSettings const& settings, Seq const& seq, Callback& callback
     ) const
     {
-        auto vector_callback = kmer_extractor_vector_callback_(callback);
+        auto vector_callback = kmer_candidate_vector_callback_(callback);
         if constexpr (C == InputCheck::kChecked) {
             for_each_kmer_packed_checked_bytewise_simd<Simd>(seq, settings.k, vector_callback);
         } else {
@@ -178,10 +178,10 @@ struct KmerCandidatePackedBytewiseSimd
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L, typename Simds = CandidateSimdArchs
 >
-struct KmerExtractorPreference;
+struct KmerEstimate;
 
 template <InputFormat I, InputCheck C, Encoding E, Layout L, typename... Simd>
-struct KmerExtractorPreference<I, C, E, L, TypeList<Simd...>>
+struct KmerEstimate<I, C, E, L, TypeList<Simd...>>
 {
     using Ascii = TypeList<
         KmerCandidateAsciiChunkedSimd<C, E, L, Simd>..., KmerCandidateAsciiChunkedScalar<C, E, L>

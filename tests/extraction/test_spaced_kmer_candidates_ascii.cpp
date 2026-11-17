@@ -1,4 +1,4 @@
-#include "extractor/spaced_common.hpp"
+#include "extraction/spaced_common.hpp"
 #include "testing.hpp"
 
 using namespace fisk;

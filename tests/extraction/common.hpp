@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "fisk/core/types.hpp"
-#include "fisk/extractor/internal.hpp"
+#include "fisk/extraction/estimate.hpp"
 #include "fisk/kmer_extract/ascii_chunked.hpp"
 #include "fisk/sequence_pack/pack_sequence.hpp"
 #include "fisk/sequence_pack/word_encoder.hpp"
@@ -19,13 +19,13 @@
 #include "spaced_kmer_extract/common.hpp"
 
 // =================================================================================================
-//     Extractor Test Helpers
+//     Extraction Test Helpers
 // =================================================================================================
 
 // Random sequences, of lengths around the edges of k and of the chunks of the chunked loops, with
 // invalid characters when checked.
 template <fisk::InputCheck C>
-inline std::vector<std::string> extractor_test_sequences()
+inline std::vector<std::string> extraction_test_sequences()
 {
     fisk::Splitmix64 rng(4711);
     std::vector<std::string> seqs;
@@ -41,7 +41,7 @@ inline std::vector<std::string> extractor_test_sequences()
         seqs.push_back(std::move(seq));
     }
 
-    // A single invalid character, which for the sparse masks of extractor_wide_mask_sets() is at
+    // A single invalid character, which for the sparse masks of extraction_wide_mask_sets() is at
     // skipped positions of most windows that contain it.
     if (C == fisk::InputCheck::kChecked) {
         auto seq = random_sequence(rng, 130, "ACGT");
@@ -53,7 +53,7 @@ inline std::vector<std::string> extractor_test_sequences()
 
 // The input of the extraction for a sequence: the sequence itself for ASCII, else packed.
 template <fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layout L>
-inline auto extractor_test_input(std::string const& seq)
+inline auto extraction_test_input(std::string const& seq)
 {
     if constexpr (I == fisk::InputFormat::kAscii) {
         return seq;
@@ -66,7 +66,7 @@ inline auto extractor_test_input(std::string const& seq)
 
 // The k-mers that the extraction is expected to hand out.
 template <fisk::InputCheck C, fisk::Encoding E, fisk::Layout L>
-inline std::vector<ExpectedKmer> extractor_test_expected(std::string const& seq, std::size_t k)
+inline std::vector<ExpectedKmer> extraction_test_expected(std::string const& seq, std::size_t k)
 {
     if constexpr (C == fisk::InputCheck::kChecked) {
         return oracle_kmers_skipping_invalid<E, L>(seq, k);
@@ -139,7 +139,7 @@ inline std::vector<std::string> random_masks(
 // span 32, two up to 57, and three from 58 on, which the extraction loops run in their loop over
 // the pieces at runtime, see kDefaultMaxCompiledPieces. Each set has kMaxTestMasks masks, and the
 // last one is a single mask of span 64 with no kept position in its middle piece.
-inline std::vector<std::vector<std::string>> extractor_wide_mask_sets()
+inline std::vector<std::vector<std::string>> extraction_wide_mask_sets()
 {
     std::vector<std::vector<std::string>> sets;
     for (std::size_t span : {32u, 33u, 57u, 58u, 64u}) {
@@ -149,7 +149,7 @@ inline std::vector<std::vector<std::string>> extractor_wide_mask_sets()
     return sets;
 }
 
-// The SIMD arch of the estimates, see CandidateSimdArchs (extractor/internal.hpp): the first of
+// The SIMD arch of the estimates, see CandidateSimdArchs (extraction/estimate.hpp): the first of
 // the candidates' archs that the CPU has, or empty for none, as in the names of the algorithms.
 inline std::string estimate_simd_arch_name()
 {
@@ -195,7 +195,7 @@ inline std::string expected_spaced_estimate(std::string const& loop)
 }
 
 // Call `f` with each candidate of the TypeList that this build and CPU can run: the candidates of
-// the estimate, such as those of KmerExtractorPreference, which the estimate chooses from.
+// the estimate, such as those of KmerEstimate, which the estimate chooses from.
 template <typename... Candidates, typename F>
 inline void for_each_available_candidate(fisk::TypeList<Candidates...>, F&& f)
 {

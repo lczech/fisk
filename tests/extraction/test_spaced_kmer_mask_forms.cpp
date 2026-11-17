@@ -5,10 +5,10 @@
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
-#include "fisk/extractor/for_each.hpp"
-#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
+#include "fisk/extraction/for_each.hpp"
+#include "fisk/extraction/spaced_kmer_mask_forms.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
-#include "extractor/common.hpp"
+#include "extraction/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 
@@ -109,7 +109,7 @@ TEST(SpacedKmerMaskForms, Extraction)
     auto const masks = make_spaced_kmer_masks<kMsb>(strings);
     TestMaskForms const from_masks(masks);
     TestMaskForms const from_strings(strings);
-    for (auto const& seq : extractor_test_sequences<kChecked>()) {
+    for (auto const& seq : extraction_test_sequences<kChecked>()) {
         SpacedKmerRecorder expected;
         for_each_spaced_kmer<kChecked, kAcgt, kMsb>(seq, from_strings, expected);
         SpacedKmerRecorder result;

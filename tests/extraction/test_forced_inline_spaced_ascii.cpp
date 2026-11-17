@@ -1,7 +1,7 @@
 // See forced_inline_common.hpp: undefined before any fisk header.
 #undef FISK_ALWAYS_INLINE_FOR_EACH
 
-#include "extractor/forced_inline_common.hpp"
+#include "extraction/forced_inline_common.hpp"
 
 // =================================================================================================
 //     Spaced K-mers from ASCII
@@ -21,7 +21,7 @@ TEST(ForcedInline, SpacedKmerLoops)
     };
     CharEncoderTable<kAcgt> const enc{};
 
-    for (auto const& seq : extractor_test_sequences<kChecked>()) {
+    for (auto const& seq : extraction_test_sequences<kChecked>()) {
         auto const expected = by_mask(oracle_spaced_events<kAcgt, kMsb>(seq, masks));
 
         SpacedKmerRecorder scalar;

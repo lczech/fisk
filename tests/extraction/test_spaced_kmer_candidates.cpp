@@ -4,8 +4,8 @@
 
 #include "fisk/core/types.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
-#include "extractor/common.hpp"
-#include "extractor/spaced_common.hpp"
+#include "extraction/common.hpp"
+#include "extraction/spaced_common.hpp"
 #include "testing.hpp"
 
 using namespace fisk;

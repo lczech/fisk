@@ -7,8 +7,8 @@
 #include <vector>
 
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/extractor/for_each.hpp"
-#include "extractor/common.hpp"
+#include "fisk/extraction/for_each.hpp"
+#include "extraction/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 
@@ -33,7 +33,7 @@ constexpr auto kUnchecked = InputCheck::kUnchecked;
 template <InputFormat I, InputCheck C, Encoding E, Layout L>
 static void check_for_each_kmer()
 {
-    auto const seqs = extractor_test_sequences<C>();
+    auto const seqs = extraction_test_sequences<C>();
     auto const estimate = expected_kmer_estimate(
         std::string("for_each_kmer_") + (I == kAscii ? "ascii_" : "packed_") +
         (C == kChecked ? "checked_" : "unchecked_") + (I == kAscii ? "chunked" : "bytewise")
@@ -41,8 +41,8 @@ static void check_for_each_kmer()
 
     for (std::size_t k : std::initializer_list<std::size_t>{1, 15, 31, 32}) {
         for (auto const& seq : seqs) {
-            auto const expected = extractor_test_expected<C, E, L>(seq, k);
-            auto const input = extractor_test_input<I, C, E, L>(seq);
+            auto const expected = extraction_test_expected<C, E, L>(seq, k);
+            auto const input = extraction_test_input<I, C, E, L>(seq);
 
             KmerRecorder single;
             for_each_kmer<C, E, L>(input, k, single);
@@ -129,7 +129,7 @@ TEST(ForEachKmer, Errors)
 // the ASCII input.
 TEST(ForEachKmer, Threads)
 {
-    auto const seqs = extractor_test_sequences<kChecked>();
+    auto const seqs = extraction_test_sequences<kChecked>();
     std::vector<std::vector<ExpectedKmer>> expected;
     for (auto const& seq : seqs) {
         expected.push_back(oracle_kmers_skipping_invalid<kAcgt, kMsb>(seq, 21));

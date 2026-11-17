@@ -7,10 +7,10 @@
 
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/extractor/internal.hpp"
-#include "fisk/extractor/kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
+#include "fisk/extraction/estimate.hpp"
+#include "fisk/extraction/kmer_estimate.hpp"
+#include "fisk/extraction/spaced_kmer_estimate.hpp"
+#include "fisk/extraction/spaced_kmer_mask_forms.hpp"
 
 namespace fisk {
 
@@ -19,14 +19,14 @@ namespace fisk {
 // =================================================================================================
 
 // The k-mer extraction with the estimate: the algorithm that is likely the fastest by what this
-// build and CPU support, see KmerExtractorPreference. Each overload takes one kind of input; the
+// build and CPU support, see KmerEstimate. Each overload takes one kind of input; the
 // internal functions do the work for all of them.
 
 template <InputFormat I, InputCheck C, Encoding E, Layout L, typename Seq, typename Callback>
 FISK_ALWAYS_INLINE inline void for_each_kmer_estimate_(
     Seq const& seq, std::size_t k, Callback& callback
 ) {
-    using Preference = typename KmerExtractorPreference<I, C, E, L>::type;
+    using Preference = typename KmerEstimate<I, C, E, L>::type;
     auto const settings = make_kmer_extractor_settings_(k);
     visit_estimate<Preference>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
         candidate.run(settings, seq, callback);
@@ -36,7 +36,7 @@ FISK_ALWAYS_INLINE inline void for_each_kmer_estimate_(
 template <InputFormat I, InputCheck C, Encoding E, Layout L>
 inline std::string for_each_kmer_estimate_name_()
 {
-    using Preference = typename KmerExtractorPreference<I, C, E, L>::type;
+    using Preference = typename KmerEstimate<I, C, E, L>::type;
     return visit_estimate<Preference>([](auto const& candidate) {
         return std::remove_cvref_t<decltype(candidate)>::name();
     });
@@ -163,7 +163,7 @@ inline std::string for_each_kmer_algorithm_name(
 //     For Each Spaced K-mer
 // =================================================================================================
 
-// The spaced k-mer extraction with the estimate, see SpacedKmerExtractorPreference, as for
+// The spaced k-mer extraction with the estimate, see SpacedKmerEstimate, as for
 // for_each_kmer().
 // The overloads take masks of any Layout `MasksLayout`, so that masks of another Layout than the
 // spaced k-mers fail here, with a message, instead of leaving no overload to match. The extraction
@@ -189,7 +189,7 @@ FISK_ALWAYS_INLINE inline void for_each_spaced_kmer_estimate_(
 ) {
     for_each_spaced_kmer_layout_assert_<L, MasksLayout>();
     if constexpr (MasksLayout == L) {
-        using Preference = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type;
+        using Preference = typename SpacedKmerEstimate<I, C, E, L, MaxMasks>::type;
         visit_estimate<Preference>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
             candidate.run(mask_forms, seq, callback);
         });
@@ -203,7 +203,7 @@ inline std::string for_each_spaced_kmer_estimate_name_()
 {
     for_each_spaced_kmer_layout_assert_<L, MasksLayout>();
     if constexpr (MasksLayout == L) {
-        using Preference = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type;
+        using Preference = typename SpacedKmerEstimate<I, C, E, L, MaxMasks>::type;
         return visit_estimate<Preference>([](auto const& candidate) {
             return std::remove_cvref_t<decltype(candidate)>::name();
         });

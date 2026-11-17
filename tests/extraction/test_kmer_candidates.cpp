@@ -1,5 +1,5 @@
 #include "fisk/core/types.hpp"
-#include "extractor/kmer_common.hpp"
+#include "extraction/kmer_common.hpp"
 #include "testing.hpp"
 
 using namespace fisk;

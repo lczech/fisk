@@ -1,7 +1,7 @@
 // See forced_inline_common.hpp: undefined before any fisk header.
 #undef FISK_ALWAYS_INLINE_FOR_EACH
 
-#include "extractor/forced_inline_common.hpp"
+#include "extraction/forced_inline_common.hpp"
 
 // =================================================================================================
 //     K-mers
@@ -21,7 +21,7 @@ TEST(ForcedInline, KmerLoops)
     CharEncoderTable<kAcgt> const enc{};
     WordEncoderButterfly<kAcgt, kMsb> const encoder{};
 
-    for (auto const& seq : extractor_test_sequences<kChecked>()) {
+    for (auto const& seq : extraction_test_sequences<kChecked>()) {
         auto const expected = oracle_kmers_skipping_invalid<kAcgt, kMsb>(seq, k);
         auto const check = [&](auto const& extract) {
             KmerRecorder result;
@@ -46,7 +46,7 @@ TEST(ForcedInline, KmerLoops)
         });
     }
 
-    for (auto const& seq : extractor_test_sequences<kUnchecked>()) {
+    for (auto const& seq : extraction_test_sequences<kUnchecked>()) {
         auto const expected = oracle_kmers_all_windows<kAcgt, kMsb>(seq, k);
         auto const packed = pack_sequence_unchecked(seq, encoder);
         KmerRecorder result;

@@ -13,7 +13,7 @@
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/kmer_spaced.hpp"
 #include "fisk/core/types.hpp"
-#include "fisk/extractor/internal.hpp"
+#include "fisk/extraction/estimate.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
 
 namespace fisk {

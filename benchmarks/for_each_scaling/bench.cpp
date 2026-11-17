@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-#include "fisk/extractor/for_each.hpp"
+#include "fisk/extraction/for_each.hpp"
 #include "for_each_scaling/bench.hpp"
 #include "microbench.hpp"
 #include "seq_data.hpp"

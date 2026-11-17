@@ -2,7 +2,7 @@
 
 // Umbrella header that includes the entire fisk library.
 // Most users will want to include only the specific headers they need instead;
-// see the theme subdirectories (bit_extract/, extractor/, kmer_extract/, spaced_kmer_extract/,
+// see the theme subdirectories (bit_extract/, extraction/, kmer_extract/, spaced_kmer_extract/,
 // sequence_pack/, core/, simd/, util/).
 
 // Utilities
@@ -55,5 +55,5 @@
 #include "fisk/spaced_kmer_extract/packed_bytewise_simd.hpp"
 
 // Extraction with the estimate
-#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
-#include "fisk/extractor/for_each.hpp"
+#include "fisk/extraction/spaced_kmer_mask_forms.hpp"
+#include "fisk/extraction/for_each.hpp"

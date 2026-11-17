@@ -19,7 +19,7 @@
 namespace fisk {
 
 // =================================================================================================
-//     Extractor Types
+//     Estimate Types
 // =================================================================================================
 
 /**
@@ -28,16 +28,16 @@ namespace fisk {
  */
 #if defined(FISK_HAS_AVX2)
 template <Encoding E, Layout L>
-using ExtractorWordEncoder = WordEncoderDirectDouble<E, L, SimdAVX2>;
+using EstimateWordEncoder = WordEncoderDirectDouble<E, L, SimdAVX2>;
 #elif defined(FISK_HAS_NEON)
 template <Encoding E, Layout L>
-using ExtractorWordEncoder = WordEncoderDirectDouble<E, L, SimdNEON>;
+using EstimateWordEncoder = WordEncoderDirectDouble<E, L, SimdNEON>;
 #elif defined(FISK_HAS_SSSE3)
 template <Encoding E, Layout L>
-using ExtractorWordEncoder = WordEncoderDirectDouble<E, L, SimdSSE2>;
+using EstimateWordEncoder = WordEncoderDirectDouble<E, L, SimdSSE2>;
 #else
 template <Encoding E, Layout L>
-using ExtractorWordEncoder = WordEncoderButterfly<E, L>;
+using EstimateWordEncoder = WordEncoderButterfly<E, L>;
 #endif
 
 // =================================================================================================
@@ -54,7 +54,7 @@ using ExtractorWordEncoder = WordEncoderButterfly<E, L>;
  *     for_each_kmer_ascii_checked_chunked_simd<SimdAVX2>(),
  *   - `static bool available()`, whether it can run in this build on this CPU,
  *   - optionally `static bool preferred()`, whether the estimate may run it, see
- *     extractor_candidate_preferred_(),
+ *     candidate_preferred_(),
  *   - `void run(Settings const& settings, Seq const& seq, Cb& callback) const`, the extraction,
  *     with the data that it needs from the `settings`, such as the prepared masks.
  */
@@ -65,8 +65,8 @@ struct TypeList
 /**
  * @brief The SIMD archs of the candidates that use SIMD: the best one compiled, and AVX2 next to
  * AVX512, for CPUs on which AVX512 is not enabled at runtime. SSE2 only when it is the best one.
- * The estimates prefer them in this order, before the scalar loops, see KmerExtractorPreference
- * and SpacedKmerExtractorPreference.
+ * The estimates prefer them in this order, before the scalar loops, see KmerEstimate
+ * and SpacedKmerEstimate.
  */
 #if defined(FISK_HAS_AVX512) && defined(FISK_HAS_AVX2)
 using CandidateSimdArchs = TypeList<SimdAVX512, SimdAVX2>;
@@ -155,14 +155,14 @@ inline bool simd_arch_enabled_()
 }
 
 // =================================================================================================
-//     Extractor Estimate
+//     Estimate
 // =================================================================================================
 
 // Whether the estimate may run `Candidate` on this CPU: its preferred(), where it has one, such as
 // the PEXT candidates, which are available wherever BMI2 is, but preferred only where PEXT is
 // likely fast; else its available().
 template <typename Candidate>
-inline bool extractor_candidate_preferred_()
+inline bool candidate_preferred_()
 {
     if constexpr (requires { Candidate::preferred(); }) {
         return Candidate::preferred();
@@ -178,7 +178,7 @@ FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred_(F& f)
     if constexpr (sizeof...(Rest) == 0) {
         return f(Candidate{});
     } else {
-        if (extractor_candidate_preferred_<Candidate>()) {
+        if (candidate_preferred_<Candidate>()) {
             return f(Candidate{});
         }
         return visit_first_preferred_<Rest...>(f);

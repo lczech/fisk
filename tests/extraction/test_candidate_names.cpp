@@ -10,10 +10,10 @@
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/extractor/internal.hpp"
-#include "fisk/extractor/kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_extractor.hpp"
-#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
+#include "fisk/extraction/estimate.hpp"
+#include "fisk/extraction/kmer_estimate.hpp"
+#include "fisk/extraction/spaced_kmer_estimate.hpp"
+#include "fisk/extraction/spaced_kmer_mask_forms.hpp"
 #include "fisk/kmer_extract/ascii_chunked_scalar.hpp"
 #include "fisk/kmer_extract/ascii_chunked_simd.hpp"
 #include "fisk/kmer_extract/packed_bytewise_scalar.hpp"
@@ -22,7 +22,7 @@
 #include "fisk/spaced_kmer_extract/ascii_chunked_simd.hpp"
 #include "fisk/spaced_kmer_extract/packed_bytewise_scalar.hpp"
 #include "fisk/spaced_kmer_extract/packed_bytewise_simd.hpp"
-#include "extractor/common.hpp"
+#include "extraction/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 
@@ -155,8 +155,8 @@ void check_algorithm_table(Candidates, Settings const& settings, Table const& ta
             if (table_name != name) {
                 return;
             }
-            for (auto const& seq : extractor_test_sequences<C>()) {
-                auto const input = extractor_test_input<I, C, E, L>(seq);
+            for (auto const& seq : extraction_test_sequences<C>()) {
+                auto const input = extraction_test_input<I, C, E, L>(seq);
                 Recorder expected;
                 call(input, expected);
                 Recorder result;
@@ -194,7 +194,7 @@ struct KmerTableRecorder
 
 TEST(CandidateNames, KmerAsciiChecked)
 {
-    ExtractorWordEncoder<kAcgt, kMsb> const encoder{};
+    EstimateWordEncoder<kAcgt, kMsb> const encoder{};
     auto const table = std::tuple{
         FISK_TEST_ALGORITHM(
             for_each_kmer_ascii_checked_chunked_scalar, , "", (seq, kK, encoder, callback)
@@ -204,14 +204,14 @@ TEST(CandidateNames, KmerAsciiChecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
-        typename KmerExtractorPreference<kAscii, kChecked, kAcgt, kMsb>::type{},
+        typename KmerEstimate<kAscii, kChecked, kAcgt, kMsb>::type{},
         make_kmer_extractor_settings_(kK), table
     );
 }
 
 TEST(CandidateNames, KmerAsciiUnchecked)
 {
-    ExtractorWordEncoder<kAcgt, kMsb> const encoder{};
+    EstimateWordEncoder<kAcgt, kMsb> const encoder{};
     auto const table = std::tuple{
         FISK_TEST_ALGORITHM(
             for_each_kmer_ascii_unchecked_chunked_scalar, , "", (seq, kK, encoder, callback)
@@ -221,7 +221,7 @@ TEST(CandidateNames, KmerAsciiUnchecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
-        typename KmerExtractorPreference<kAscii, kUnchecked, kAcgt, kMsb>::type{},
+        typename KmerEstimate<kAscii, kUnchecked, kAcgt, kMsb>::type{},
         make_kmer_extractor_settings_(kK), table
     );
 }
@@ -237,7 +237,7 @@ TEST(CandidateNames, KmerPackedChecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
-        typename KmerExtractorPreference<kPacked, kChecked, kAcgt, kMsb>::type{},
+        typename KmerEstimate<kPacked, kChecked, kAcgt, kMsb>::type{},
         make_kmer_extractor_settings_(kK), table
     );
 }
@@ -253,7 +253,7 @@ TEST(CandidateNames, KmerPackedUnchecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
-        typename KmerExtractorPreference<kPacked, kUnchecked, kAcgt, kMsb>::type{},
+        typename KmerEstimate<kPacked, kUnchecked, kAcgt, kMsb>::type{},
         make_kmer_extractor_settings_(kK), table
     );
 }
@@ -301,7 +301,7 @@ TableMaskForms const table_masks({"1101101", "1011011"});
 
 TEST(CandidateNames, SpacedAsciiChecked)
 {
-    ExtractorWordEncoder<kAcgt, kMsb> const encoder{};
+    EstimateWordEncoder<kAcgt, kMsb> const encoder{};
     auto const& masks = table_masks;
     auto const table = std::tuple{
         #if defined(FISK_HAS_BMI2)
@@ -323,7 +323,7 @@ TEST(CandidateNames, SpacedAsciiChecked)
         ),
     };
     check_algorithm_table<SpacedTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
-        typename SpacedKmerExtractorPreference<
+        typename SpacedKmerEstimate<
             kAscii, kChecked, kAcgt, kMsb, kTableMasks
         >::type{},
         masks, table
@@ -332,7 +332,7 @@ TEST(CandidateNames, SpacedAsciiChecked)
 
 TEST(CandidateNames, SpacedAsciiUnchecked)
 {
-    ExtractorWordEncoder<kAcgt, kMsb> const encoder{};
+    EstimateWordEncoder<kAcgt, kMsb> const encoder{};
     auto const& masks = table_masks;
     auto const table = std::tuple{
         #if defined(FISK_HAS_BMI2)
@@ -354,7 +354,7 @@ TEST(CandidateNames, SpacedAsciiUnchecked)
         ),
     };
     check_algorithm_table<SpacedTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
-        typename SpacedKmerExtractorPreference<
+        typename SpacedKmerEstimate<
             kAscii, kUnchecked, kAcgt, kMsb, kTableMasks
         >::type{},
         masks, table
@@ -381,7 +381,7 @@ TEST(CandidateNames, SpacedPackedChecked)
         ),
     };
     check_algorithm_table<SpacedTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
-        typename SpacedKmerExtractorPreference<
+        typename SpacedKmerEstimate<
             kPacked, kChecked, kAcgt, kMsb, kTableMasks
         >::type{},
         masks, table
@@ -408,7 +408,7 @@ TEST(CandidateNames, SpacedPackedUnchecked)
         ),
     };
     check_algorithm_table<SpacedTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
-        typename SpacedKmerExtractorPreference<
+        typename SpacedKmerEstimate<
             kPacked, kUnchecked, kAcgt, kMsb, kTableMasks
         >::type{},
         masks, table

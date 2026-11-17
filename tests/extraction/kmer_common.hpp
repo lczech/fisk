@@ -6,8 +6,8 @@
 #include <type_traits>
 
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/extractor/kmer_extractor.hpp"
-#include "extractor/common.hpp"
+#include "fisk/extraction/kmer_estimate.hpp"
+#include "extraction/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 
@@ -21,8 +21,8 @@ template <fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layou
 inline void check_kmer_candidates()
 {
     using namespace fisk;
-    using Candidates = typename KmerExtractorPreference<I, C, E, L>::type;
-    auto const seqs = extractor_test_sequences<C>();
+    using Candidates = typename KmerEstimate<I, C, E, L>::type;
+    auto const seqs = extraction_test_sequences<C>();
 
     for (std::size_t k : std::initializer_list<std::size_t>{1, 7, 15, 31, 32}) {
         auto const settings = make_kmer_extractor_settings_(k);
@@ -32,8 +32,8 @@ inline void check_kmer_candidates()
             auto const name = std::remove_cvref_t<decltype(candidate)>::name();
 
             for (auto const& seq : seqs) {
-                auto const expected = extractor_test_expected<C, E, L>(seq, k);
-                auto const input = extractor_test_input<I, C, E, L>(seq);
+                auto const expected = extraction_test_expected<C, E, L>(seq, k);
+                auto const input = extraction_test_input<I, C, E, L>(seq);
 
                 KmerRecorder single;
                 candidate.run(settings, input, single);

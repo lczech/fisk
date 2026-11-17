@@ -4,9 +4,9 @@
 #include <vector>
 
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/extractor/for_each.hpp"
-#include "fisk/extractor/spaced_kmer_mask_forms.hpp"
-#include "extractor/common.hpp"
+#include "fisk/extraction/for_each.hpp"
+#include "fisk/extraction/spaced_kmer_mask_forms.hpp"
+#include "extraction/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 
@@ -26,12 +26,12 @@ constexpr auto kUnchecked = InputCheck::kUnchecked;
 // =================================================================================================
 
 // for_each_spaced_kmer() extracts all spaced k-mers of each mask, for sets of one and of the most
-// masks, and for the wide sets of extractor_wide_mask_sets(), and runs the algorithm of the
+// masks, and for the wide sets of extraction_wide_mask_sets(), and runs the algorithm of the
 // estimate, see expected_spaced_estimate(), as for_each_kmer(), see test_for_each_kmer.cpp.
 template <InputFormat I, InputCheck C, Encoding E, Layout L>
 static void check_for_each_spaced_kmer()
 {
-    auto const seqs = extractor_test_sequences<C>();
+    auto const seqs = extraction_test_sequences<C>();
     auto const estimate = expected_spaced_estimate(
         std::string("for_each_spaced_kmer_") + (I == kAscii ? "ascii_" : "packed_") +
         (C == kChecked ? "checked_" : "unchecked_") + (I == kAscii ? "chunked" : "bytewise")
@@ -40,7 +40,7 @@ static void check_for_each_spaced_kmer()
         {"1101101"},
         random_masks(kMaxTestMasks, 11, 1),
     };
-    for (auto& set : extractor_wide_mask_sets()) {
+    for (auto& set : extraction_wide_mask_sets()) {
         mask_sets.push_back(std::move(set));
     }
 
@@ -48,7 +48,7 @@ static void check_for_each_spaced_kmer()
         SpacedKmerMaskForms<L, kMaxTestMasks> const mask_forms(strings);
         for (auto const& seq : seqs) {
             auto const expected = by_mask(oracle_spaced_events<E, L>(seq, strings));
-            auto const input = extractor_test_input<I, C, E, L>(seq);
+            auto const input = extraction_test_input<I, C, E, L>(seq);
 
             SpacedKmerRecorder single;
             for_each_spaced_kmer<C, E, L>(input, mask_forms, single);

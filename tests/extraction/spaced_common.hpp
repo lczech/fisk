@@ -7,8 +7,8 @@
 #include <vector>
 
 #include "fisk/core/kmer_callback.hpp"
-#include "fisk/extractor/spaced_kmer_extractor.hpp"
-#include "extractor/common.hpp"
+#include "fisk/extraction/spaced_kmer_estimate.hpp"
+#include "extraction/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
 
@@ -27,8 +27,8 @@ inline void check_spaced_kmer_candidates(
     std::vector<std::vector<std::string>> const& mask_sets
 ) {
     using namespace fisk;
-    using Candidates = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::type;
-    auto const seqs = extractor_test_sequences<C>();
+    using Candidates = typename SpacedKmerEstimate<I, C, E, L, MaxMasks>::type;
+    auto const seqs = extraction_test_sequences<C>();
 
     for (auto const& masks : mask_sets) {
         SpacedKmerMaskForms<L, MaxMasks, MaxSpan> const mask_forms(masks);
@@ -39,7 +39,7 @@ inline void check_spaced_kmer_candidates(
 
             for (auto const& seq : seqs) {
                 auto const expected = by_mask(oracle_spaced_events<E, L>(seq, masks));
-                auto const input = extractor_test_input<I, C, E, L>(seq);
+                auto const input = extraction_test_input<I, C, E, L>(seq);
 
                 SpacedKmerRecorder single;
                 candidate.run(mask_forms, input, single);
@@ -72,7 +72,7 @@ inline void check_spaced_kmer_candidates(
 }
 
 // The candidates as above, for sets of one and three masks, and for the wide sets of
-// extractor_wide_mask_sets(), which keeps the compile time down; the largest sets are checked on
+// extraction_wide_mask_sets(), which keeps the compile time down; the largest sets are checked on
 // their own, see test_spaced_kmer_candidates.cpp.
 template <fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layout L>
 inline void check_spaced_kmer_candidates()
@@ -81,7 +81,7 @@ inline void check_spaced_kmer_candidates()
         {"1101101"},
         random_masks(kMaxTestMasks, 11, 1),
     };
-    for (auto& set : extractor_wide_mask_sets()) {
+    for (auto& set : extraction_wide_mask_sets()) {
         mask_sets.push_back(std::move(set));
     }
     check_spaced_kmer_candidates<I, C, E, L>(mask_sets);
