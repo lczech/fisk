@@ -65,8 +65,8 @@ enum class Layout
  * @brief Whether the input is checked for characters that are not nucleotides, or trusted to have
  * none.
  *
- * Used by the per-character encoders, see CharEncoderAscii, and by the extractors, see
- * KmerExtractor.
+ * Used by the per-character encoders, see CharEncoderAscii, and by the extraction with the
+ * estimate, see for_each_kmer().
  */
 enum class InputCheck
 {
@@ -83,8 +83,8 @@ enum class InputCheck
 };
 
 /**
- * @brief The input of the extractors, see KmerExtractor: ASCII characters, as a `std::string_view`,
- * or a packed sequence, as a PackedSequence or PackedSequenceWithValidity.
+ * @brief The input of the extraction with the estimate, see for_each_kmer(): ASCII characters, as
+ * a `std::string_view`, or a packed sequence, as a PackedSequence or PackedSequenceWithValidity.
  */
 enum class InputFormat
 {

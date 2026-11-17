@@ -484,8 +484,8 @@ inline std::size_t store_valid_lanes(
 /**
  * @brief A callback made of several callables, such as lambdas, with the `operator()` of each.
  *
- * For instance, a callback for single k-mers and one for vectors of k-mers, for the extractors
- * that hand vectors to callbacks that take them, see KmerExtractor:
+ * For instance, a callback for single k-mers and one for vectors of k-mers, for the extraction
+ * functions that hand vectors to callbacks that take them, see for_each_kmer():
  *
  *     auto callback = callback_overload{
  *         [&](std::size_t pos, KmerAcgtMsb kmer) { ... },

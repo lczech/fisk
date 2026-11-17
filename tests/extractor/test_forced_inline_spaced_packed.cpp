@@ -7,8 +7,8 @@
 //     Spaced K-mers from Packed Sequences
 // =================================================================================================
 
-TEST(ForcedInline, SpacedKmerExtractorPacked)
+TEST(ForcedInline, SpacedKmerCandidatesPacked)
 {
-    check_spaced_kmer_extractor_algorithms<kPacked, kChecked, kAcgt, kMsb>();
-    check_spaced_kmer_extractor_algorithms<kPacked, kUnchecked, kAcgt, kMsb>();
+    check_spaced_kmer_candidates<kPacked, kChecked, kAcgt, kMsb>();
+    check_spaced_kmer_candidates<kPacked, kUnchecked, kAcgt, kMsb>();
 }

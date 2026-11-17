@@ -5,7 +5,6 @@
 
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/extractor/for_each.hpp"
-#include "fisk/extractor/spaced_kmer_extractor.hpp"
 #include "fisk/extractor/spaced_kmer_mask_forms.hpp"
 #include "extractor/common.hpp"
 #include "oracle.hpp"
@@ -27,13 +26,16 @@ constexpr auto kUnchecked = InputCheck::kUnchecked;
 // =================================================================================================
 
 // for_each_spaced_kmer() extracts all spaced k-mers of each mask, for sets of one and of the most
-// masks, and for the wide sets of extractor_wide_mask_sets(), as for_each_kmer(), see
-// test_for_each_kmer.cpp.
+// masks, and for the wide sets of extractor_wide_mask_sets(), and runs the algorithm of the
+// estimate, see expected_spaced_estimate(), as for_each_kmer(), see test_for_each_kmer.cpp.
 template <InputFormat I, InputCheck C, Encoding E, Layout L>
 static void check_for_each_spaced_kmer()
 {
-    using Extractor = SpacedKmerExtractor<I, C, E, L, kMaxTestMasks>;
     auto const seqs = extractor_test_sequences<C>();
+    auto const estimate = expected_spaced_estimate(
+        std::string("for_each_spaced_kmer_") + (I == kAscii ? "ascii_" : "packed_") +
+        (C == kChecked ? "checked_" : "unchecked_") + (I == kAscii ? "chunked" : "bytewise")
+    );
     std::vector<std::vector<std::string>> mask_sets = {
         {"1101101"},
         random_masks(kMaxTestMasks, 11, 1),
@@ -44,17 +46,16 @@ static void check_for_each_spaced_kmer()
 
     for (auto const& strings : mask_sets) {
         SpacedKmerMaskForms<L, kMaxTestMasks> const mask_forms(strings);
-        Extractor const extractor(mask_forms);
         for (auto const& seq : seqs) {
             auto const expected = by_mask(oracle_spaced_events<E, L>(seq, strings));
-            auto const input = extractor_test_input<Extractor>(seq);
+            auto const input = extractor_test_input<I, C, E, L>(seq);
 
             SpacedKmerRecorder single;
             for_each_spaced_kmer<C, E, L>(input, mask_forms, single);
             check_spaced_events(by_mask(single.events), expected);
             auto const single_name =
                 for_each_spaced_kmer_algorithm_name<C, E, L>(input, mask_forms, single);
-            EXPECT_EQ(single_name, extractor.algorithm_name(single));
+            EXPECT_EQ(single_name, estimate);
 
             SpacedKmerRecorder unpacked;
             std::size_t vectors = 0;
@@ -74,7 +75,7 @@ static void check_for_each_spaced_kmer()
             for_each_spaced_kmer<C, E, L>(input, mask_forms, both);
             check_spaced_events(by_mask(unpacked.events), expected);
             auto const name = for_each_spaced_kmer_algorithm_name<C, E, L>(input, mask_forms, both);
-            EXPECT_EQ(name, extractor.algorithm_name(both));
+            EXPECT_EQ(name, estimate);
             bool const simd = name.find("simd") != std::string::npos;
             EXPECT_TRUE(simd ? (vectors > 0 || expected.empty()) : vectors == 0);
 
@@ -84,8 +85,7 @@ static void check_for_each_spaced_kmer()
                 for_each_spaced_kmer(input, mask_forms, deduced);
                 check_spaced_events(deduced.events, single.events);
                 EXPECT_EQ(
-                    for_each_spaced_kmer_algorithm_name(input, mask_forms, deduced),
-                    extractor.algorithm_name()
+                    for_each_spaced_kmer_algorithm_name(input, mask_forms, deduced), estimate
                 );
             }
         }

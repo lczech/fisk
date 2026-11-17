@@ -7,10 +7,10 @@
 //     Spaced K-mers from ASCII
 // =================================================================================================
 
-TEST(ForcedInline, SpacedKmerExtractorAscii)
+TEST(ForcedInline, SpacedKmerCandidatesAscii)
 {
-    check_spaced_kmer_extractor_algorithms<kAscii, kChecked, kAcgt, kMsb>();
-    check_spaced_kmer_extractor_algorithms<kAscii, kUnchecked, kAcgt, kMsb>();
+    check_spaced_kmer_candidates<kAscii, kChecked, kAcgt, kMsb>();
+    check_spaced_kmer_candidates<kAscii, kUnchecked, kAcgt, kMsb>();
 }
 
 TEST(ForcedInline, SpacedKmerLoops)

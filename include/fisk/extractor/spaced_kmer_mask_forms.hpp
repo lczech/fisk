@@ -55,7 +55,7 @@ struct spaced_kmer_mask_forms_tuple_<L, MaxMasks, MaxSpan, TypeList<Simd...>>
 
 /**
  * @brief A set of spaced k-mer masks of the same span, each prepared in all forms that the
- * algorithms of SpacedKmerExtractor and for_each_spaced_kmer() take.
+ * algorithms of for_each_spaced_kmer() take.
  *
  * Unlike a std::vector or std::span of SpacedKmerMask, which holds its masks in one form, this
  * holds them in all of these forms, as the extraction chooses its algorithm, and hence the form,
@@ -173,7 +173,7 @@ private:
             throw std::invalid_argument(
                 "SpacedKmerMaskForms: " + std::to_string(masks.size()) + " masks given, but the "
                 "compile-time maximum is " + std::to_string(MaxMasks) + ". Raise the template "
-                "parameter MaxMasks of SpacedKmerMaskForms and SpacedKmerExtractor, or its "
+                "parameter MaxMasks of SpacedKmerMaskForms, or its "
                 "default, the CMake option or macro FISK_DEFAULT_MAX_MASKS."
             );
         }

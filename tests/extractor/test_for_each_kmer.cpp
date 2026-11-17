@@ -3,11 +3,11 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "fisk/core/kmer_callback.hpp"
 #include "fisk/extractor/for_each.hpp"
-#include "fisk/extractor/kmer_extractor.hpp"
 #include "extractor/common.hpp"
 #include "oracle.hpp"
 #include "testing.hpp"
@@ -28,25 +28,27 @@ constexpr auto kUnchecked = InputCheck::kUnchecked;
 // =================================================================================================
 
 // for_each_kmer() extracts all k-mers, with a callback of single k-mers, and with one that also
-// takes vectors, which gets vectors from a SIMD algorithm, and runs the algorithm of the estimate
-// of the extractor for the same callback.
+// takes vectors, which gets vectors from a SIMD algorithm, and runs the algorithm of the estimate,
+// see expected_kmer_estimate(), for both callbacks.
 template <InputFormat I, InputCheck C, Encoding E, Layout L>
 static void check_for_each_kmer()
 {
-    using Extractor = KmerExtractor<I, C, E, L>;
     auto const seqs = extractor_test_sequences<C>();
+    auto const estimate = expected_kmer_estimate(
+        std::string("for_each_kmer_") + (I == kAscii ? "ascii_" : "packed_") +
+        (C == kChecked ? "checked_" : "unchecked_") + (I == kAscii ? "chunked" : "bytewise")
+    );
 
     for (std::size_t k : std::initializer_list<std::size_t>{1, 15, 31, 32}) {
-        Extractor const extractor(k);
         for (auto const& seq : seqs) {
-            auto const expected = extractor_test_expected<Extractor>(seq, k);
-            auto const input = extractor_test_input<Extractor>(seq);
+            auto const expected = extractor_test_expected<C, E, L>(seq, k);
+            auto const input = extractor_test_input<I, C, E, L>(seq);
 
             KmerRecorder single;
             for_each_kmer<C, E, L>(input, k, single);
             check_emitted_kmers(expected, k, single.values, &single.positions);
             auto const single_name = for_each_kmer_algorithm_name<C, E, L>(input, k, single);
-            EXPECT_EQ(single_name, extractor.algorithm_name(single));
+            EXPECT_EQ(single_name, estimate);
 
             KmerRecorder unpacked;
             std::size_t vectors = 0;
@@ -60,7 +62,7 @@ static void check_for_each_kmer()
             for_each_kmer<C, E, L>(input, k, both);
             check_emitted_kmers(expected, k, unpacked.values, &unpacked.positions);
             auto const name = for_each_kmer_algorithm_name<C, E, L>(input, k, both);
-            EXPECT_EQ(name, extractor.algorithm_name(both));
+            EXPECT_EQ(name, estimate);
             bool const simd = name.find("simd") != std::string::npos;
             EXPECT_TRUE(simd ? (vectors > 0 || expected.empty()) : vectors == 0);
 
@@ -69,9 +71,7 @@ static void check_for_each_kmer()
                 KmerRecorder deduced;
                 for_each_kmer(input, k, deduced);
                 EXPECT_EQ(deduced.values, single.values);
-                EXPECT_EQ(
-                    for_each_kmer_algorithm_name(input, k, deduced), extractor.algorithm_name()
-                );
+                EXPECT_EQ(for_each_kmer_algorithm_name(input, k, deduced), estimate);
             }
         }
     }
@@ -121,4 +121,43 @@ TEST(ForEachKmer, Errors)
     };
     EXPECT_THROW(run(0), std::invalid_argument);
     EXPECT_THROW(run(33), std::invalid_argument);
+}
+
+// =================================================================================================
+//     Threads
+// =================================================================================================
+
+// for_each_kmer() on several threads at once, each with the buffer of its thread for the chunks of
+// the ASCII input.
+TEST(ForEachKmer, Threads)
+{
+    auto const seqs = extractor_test_sequences<kChecked>();
+    std::vector<std::vector<ExpectedKmer>> expected;
+    for (auto const& seq : seqs) {
+        expected.push_back(oracle_kmers_skipping_invalid<kAcgt, kMsb>(seq, 21));
+    }
+
+    std::size_t const thread_count = 4;
+    std::vector<std::vector<KmerRecorder>> results(thread_count);
+    std::vector<std::thread> threads;
+    for (std::size_t t = 0; t < thread_count; ++t) {
+        threads.emplace_back([&, t] {
+            for (std::size_t round = 0; round < 20; ++round) {
+                results[t].assign(seqs.size(), KmerRecorder{});
+                for (std::size_t i = 0; i < seqs.size(); ++i) {
+                    for_each_kmer<kChecked, kAcgt, kMsb>(seqs[i], 21, results[t][i]);
+                }
+            }
+        });
+    }
+    for (auto& thread : threads) {
+        thread.join();
+    }
+    for (std::size_t t = 0; t < thread_count; ++t) {
+        for (std::size_t i = 0; i < seqs.size(); ++i) {
+            check_emitted_kmers(
+                expected[i], 21, results[t][i].values, &results[t][i].positions
+            );
+        }
+    }
 }

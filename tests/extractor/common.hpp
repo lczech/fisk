@@ -51,28 +51,24 @@ inline std::vector<std::string> extractor_test_sequences()
     return seqs;
 }
 
-// The input of an extractor for a sequence: the sequence itself for ASCII, else packed.
-template <typename Extractor>
+// The input of the extraction for a sequence: the sequence itself for ASCII, else packed.
+template <fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layout L>
 inline auto extractor_test_input(std::string const& seq)
 {
-    constexpr auto E = Extractor::encoding;
-    constexpr auto L = Extractor::layout;
-    if constexpr (Extractor::input_format == fisk::InputFormat::kAscii) {
+    if constexpr (I == fisk::InputFormat::kAscii) {
         return seq;
-    } else if constexpr (Extractor::input_check == fisk::InputCheck::kChecked) {
+    } else if constexpr (C == fisk::InputCheck::kChecked) {
         return fisk::pack_sequence_checked(seq, fisk::WordEncoderButterfly<E, L>{});
     } else {
         return fisk::pack_sequence_unchecked(seq, fisk::WordEncoderButterfly<E, L>{});
     }
 }
 
-// The k-mers that an extractor is expected to hand out.
-template <typename Extractor>
+// The k-mers that the extraction is expected to hand out.
+template <fisk::InputCheck C, fisk::Encoding E, fisk::Layout L>
 inline std::vector<ExpectedKmer> extractor_test_expected(std::string const& seq, std::size_t k)
 {
-    constexpr auto E = Extractor::encoding;
-    constexpr auto L = Extractor::layout;
-    if constexpr (Extractor::input_check == fisk::InputCheck::kChecked) {
+    if constexpr (C == fisk::InputCheck::kChecked) {
         return oracle_kmers_skipping_invalid<E, L>(seq, k);
     } else {
         return oracle_kmers_all_windows<E, L>(seq, k);
@@ -106,7 +102,7 @@ struct SpacedKmerRecorder
 };
 
 // The events of each mask in the order of emission, one mask after the other: the order that all
-// algorithms guarantee, see SpacedKmerExtractor.
+// algorithms guarantee, see for_each_spaced_kmer().
 inline std::vector<SpacedEvent> by_mask(std::vector<SpacedEvent> events)
 {
     stable_sort_spaced_events(events, [](SpacedEvent const& e) { return e.mask_idx; });
@@ -176,4 +172,36 @@ inline std::string estimate_simd_arch_name()
     }
     #endif
     return "";
+}
+
+// The estimate of for_each_kmer(): the SIMD loop of the arch of estimate_simd_arch_name(), else the
+// scalar loop; `loop` is the name of the function of the loop for the input, such as
+// "for_each_kmer_ascii_checked_chunked".
+inline std::string expected_kmer_estimate(std::string const& loop)
+{
+    auto const arch = estimate_simd_arch_name();
+    return loop + (arch.empty() ? "_scalar" : "_simd_" + arch);
+}
+
+// The estimate of for_each_spaced_kmer(): PEXT where likely fast, else the butterfly in the SIMD
+// loop of the arch of estimate_simd_arch_name(), else in the scalar loop; `loop` as above.
+inline std::string expected_spaced_estimate(std::string const& loop)
+{
+    if (fisk::pext_likely_fast()) {
+        return loop + "_scalar_pext";
+    }
+    auto const arch = estimate_simd_arch_name();
+    return loop + (arch.empty() ? "_scalar_butterfly" : "_simd_butterfly_" + arch);
+}
+
+// Call `f` with each candidate of the TypeList that this build and CPU can run: the candidates of
+// the estimate, such as those of KmerExtractorPreference, which the estimate chooses from.
+template <typename... Candidates, typename F>
+inline void for_each_available_candidate(fisk::TypeList<Candidates...>, F&& f)
+{
+    ([&] {
+        if (Candidates::available()) {
+            f(Candidates{});
+        }
+    }(), ...);
 }

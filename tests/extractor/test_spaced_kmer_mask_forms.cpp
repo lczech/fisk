@@ -5,7 +5,7 @@
 
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
-#include "fisk/extractor/spaced_kmer_extractor.hpp"
+#include "fisk/extractor/for_each.hpp"
 #include "fisk/extractor/spaced_kmer_mask_forms.hpp"
 #include "fisk/spaced_kmer_extract/mask.hpp"
 #include "extractor/common.hpp"
@@ -99,23 +99,21 @@ TEST(SpacedKmerMaskForms, Forms)
 }
 
 // =================================================================================================
-//     Extractor
+//     Extraction
 // =================================================================================================
 
-// An extractor of a prepared set extracts the same as one of the strings of the masks.
-TEST(SpacedKmerMaskForms, Extractor)
+// A set made from mask objects extracts the same as one made from the strings of the masks.
+TEST(SpacedKmerMaskForms, Extraction)
 {
-    using Extractor = SpacedKmerExtractor<
-        InputFormat::kAscii, kChecked, kAcgt, kMsb, kMaxTestMasks
-    >;
     auto const strings = random_masks(kMaxTestMasks, 11, 3);
-    Extractor const from_masks(TestMaskForms{strings});
-    Extractor const from_strings(strings);
+    auto const masks = make_spaced_kmer_masks<kMsb>(strings);
+    TestMaskForms const from_masks(masks);
+    TestMaskForms const from_strings(strings);
     for (auto const& seq : extractor_test_sequences<kChecked>()) {
         SpacedKmerRecorder expected;
-        from_strings.for_each(seq, expected);
+        for_each_spaced_kmer<kChecked, kAcgt, kMsb>(seq, from_strings, expected);
         SpacedKmerRecorder result;
-        from_masks.for_each(seq, result);
+        for_each_spaced_kmer<kChecked, kAcgt, kMsb>(seq, from_masks, result);
         check_spaced_events(result.events, expected.events);
     }
 }

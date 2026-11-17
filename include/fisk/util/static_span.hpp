@@ -63,7 +63,7 @@ inline void throw_invalid_static_span_size_(std::size_t n, std::size_t max_n)
  * which is then returned from here.
  *
  * Forced inline, so that `f`, and the loops that it runs, can inline into the caller together with
- * the dispatch, see SpacedKmerExtractor::for_each().
+ * the dispatch, see for_each_spaced_kmer().
  *
  * @throws std::invalid_argument if `n` is 0 or larger than `MaxN`.
  */

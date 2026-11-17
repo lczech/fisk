@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -12,49 +13,42 @@
 #include "testing.hpp"
 
 // =================================================================================================
-//     Spaced K-mer Extractor Checks
+//     Spaced K-mer Candidate Checks
 // =================================================================================================
 
-// Every algorithm of the extractor, for sets of one and three masks, and for the wide sets of
-// extractor_wide_mask_sets(), run with a callback of single spaced k-mers, and with one that also
-// takes vectors. The extractor takes up to kMaxTestMasks
-// masks, which keeps the compile time down; the largest sets are checked on their own, see
-// test_spaced_kmer_extractor.cpp.
-template <fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layout L>
-inline void check_spaced_kmer_extractor_algorithms()
-{
+// Every candidate of the estimate of for_each_spaced_kmer() that this CPU can run, run directly,
+// for each of the `mask_sets`, with a callback of single spaced k-mers, and with one that also
+// takes vectors. The masks are prepared for up to `MaxMasks` masks of up to `MaxSpan`.
+template <
+    fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layout L,
+    std::size_t MaxMasks = kMaxTestMasks, std::size_t MaxSpan = fisk::kDefaultMaxSpan
+>
+inline void check_spaced_kmer_candidates(
+    std::vector<std::vector<std::string>> const& mask_sets
+) {
     using namespace fisk;
-    using Extractor = SpacedKmerExtractor<I, C, E, L, kMaxTestMasks>;
+    using Candidates = typename SpacedKmerExtractorPreference<I, C, E, L, MaxMasks>::List;
     auto const seqs = extractor_test_sequences<C>();
-    std::vector<std::vector<std::string>> mask_sets = {
-        {"1101101"},
-        random_masks(kMaxTestMasks, 11, 1),
-    };
-    for (auto& set : extractor_wide_mask_sets()) {
-        mask_sets.push_back(std::move(set));
-    }
 
     for (auto const& masks : mask_sets) {
-        Extractor extractor(masks);
-        auto const names = extractor.algorithm_names();
-        EXPECT_FALSE(names.empty());
-
-        for (auto const& name : names) {
-            extractor.set_algorithm(name);
-            EXPECT_EQ(extractor.algorithm_name(), name);
+        SpacedKmerMaskForms<L, MaxMasks, MaxSpan> const mask_forms(masks);
+        std::size_t count = 0;
+        for_each_available_candidate(Candidates{}, [&](auto const& candidate) {
+            ++count;
+            auto const name = std::remove_cvref_t<decltype(candidate)>::name();
 
             for (auto const& seq : seqs) {
                 auto const expected = by_mask(oracle_spaced_events<E, L>(seq, masks));
-                auto const input = extractor_test_input<Extractor>(seq);
+                auto const input = extractor_test_input<I, C, E, L>(seq);
 
                 SpacedKmerRecorder single;
-                extractor.for_each(input, single);
+                candidate.run(mask_forms, input, single);
                 check_spaced_events(by_mask(single.events), expected);
 
                 // The SIMD algorithms hand their vectors to a callback that takes them.
                 SpacedKmerRecorder unpacked;
                 std::size_t vectors = 0;
-                auto const both = callback_overload{
+                auto both = callback_overload{
                     [&](std::size_t pos, std::size_t mask_idx, SpacedKmer<E, L> kmer) {
                         unpacked(pos, mask_idx, kmer);
                     },
@@ -67,11 +61,28 @@ inline void check_spaced_kmer_extractor_algorithms()
                         );
                     }
                 };
-                extractor.for_each(input, both);
+                candidate.run(mask_forms, input, both);
                 check_spaced_events(by_mask(unpacked.events), expected);
                 bool const simd = name.find("simd") != std::string::npos;
                 EXPECT_TRUE(simd ? (vectors > 0 || expected.empty()) : vectors == 0);
             }
-        }
+        });
+        EXPECT_NE(count, 0u);
     }
+}
+
+// The candidates as above, for sets of one and three masks, and for the wide sets of
+// extractor_wide_mask_sets(), which keeps the compile time down; the largest sets are checked on
+// their own, see test_spaced_kmer_candidates.cpp.
+template <fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layout L>
+inline void check_spaced_kmer_candidates()
+{
+    std::vector<std::vector<std::string>> mask_sets = {
+        {"1101101"},
+        random_masks(kMaxTestMasks, 11, 1),
+    };
+    for (auto& set : extractor_wide_mask_sets()) {
+        mask_sets.push_back(std::move(set));
+    }
+    check_spaced_kmer_candidates<I, C, E, L>(mask_sets);
 }

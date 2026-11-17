@@ -18,9 +18,9 @@ namespace fisk {
 //     For Each K-mer
 // =================================================================================================
 
-// The k-mer extraction with the estimate of KmerExtractor: the algorithm that is likely the
-// fastest by what this build and CPU support, without tuning. Each overload takes one kind of
-// input; the internal functions do the work for all of them.
+// The k-mer extraction with the estimate: the algorithm that is likely the fastest by what this
+// build and CPU support, see KmerExtractorPreference. Each overload takes one kind of input; the
+// internal functions do the work for all of them.
 
 template <InputFormat I, InputCheck C, Encoding E, Layout L, typename Seq, typename Callback>
 FISK_ALWAYS_INLINE inline void for_each_kmer_estimate_(
@@ -65,11 +65,12 @@ inline constexpr void for_each_packed_checked_assert_()
 }
 
 /**
- * @brief Call `callback` with each k-mer of `seq`, with the algorithm that KmerExtractor estimates
- * to be the fastest on this hardware, without tuning.
+ * @brief Call `callback` with each k-mer of `seq`, with the algorithm that is likely the fastest on
+ * this hardware.
  *
- * This is the easy start: one call, with the choices that change the result as template
- * arguments, and the algorithm chosen by what this build and CPU support:
+ * One call, with the choices that change the result as template arguments, and the algorithm
+ * chosen by what this build and CPU support, the estimate: the SIMD loop of the widest SIMD arch
+ * that the build and the CPU have, AVX-512, AVX2, SSE2, or Neon, else the scalar loop:
  *
  *     using namespace fisk;
  *     for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
@@ -77,12 +78,18 @@ inline constexpr void for_each_packed_checked_assert_()
  *     );
  *
  * The overloads for packed input take the Encoding, Layout, and InputCheck from the type of the
- * sequence. for_each_kmer_algorithm_name() names the algorithm. To measure the fastest algorithm
- * instead, see KmerExtractor; to call one of them directly, see the functions in kmer_extract/,
- * such as for_each_kmer_ascii_checked_chunked_scalar().
+ * sequence. for_each_kmer_algorithm_name() names the algorithm. To call another algorithm, see the
+ * functions in kmer_extract/, such as for_each_kmer_ascii_checked_chunked_scalar().
  *
- * The callback takes single k-mers, and can in addition take vectors of them, as for
- * KmerExtractor::for_each(). The k-mers are handed out in order of their positions.
+ * The callback takes single k-mers, as `callback(pos, kmer)` or `callback(kmer)`, see
+ * KmerCallback. It can in addition take the vectors of k-mers of the SIMD algorithms, see
+ * KmerVectorCallback and KmerVectorValidLanesCallback, for instance as a callback_overload, or a
+ * struct with several `operator()`. The SIMD algorithms then hand it their vectors, and else their
+ * k-mers one by one. The callback is a template parameter, so that it can be inlined into the
+ * loop; each callback type compiles all algorithms that the estimate can choose.
+ *
+ * The k-mers are handed out in order of their positions. The function can run on several threads
+ * at once; ASCII input is packed chunk by chunk into a buffer per thread.
  *
  * @tparam C InputCheck: kChecked skips the k-mers with invalid characters; kUnchecked trusts the
  *         input to be valid.
@@ -128,8 +135,8 @@ FISK_ALWAYS_INLINE inline void for_each_kmer(
 
 /**
  * @brief The name of the algorithm that for_each_kmer() runs with these arguments, which are
- * not used otherwise: the name of the k-mer extraction function, followed by the SIMD arch, as in
- * KmerExtractor::algorithm_name().
+ * not used otherwise: the name of the k-mer extraction function, followed by the SIMD arch, such
+ * as "for_each_kmer_ascii_checked_chunked_simd_avx2".
  */
 template <InputCheck C, Encoding E, Layout L, typename Callback>
     requires KmerCallback<std::remove_reference_t<Callback>&, E, L>
@@ -166,7 +173,8 @@ inline std::string for_each_kmer_algorithm_name(
 //     For Each Spaced K-mer
 // =================================================================================================
 
-// The spaced k-mer extraction with the estimate of SpacedKmerExtractor, as for for_each_kmer().
+// The spaced k-mer extraction with the estimate, see SpacedKmerExtractorPreference, as for
+// for_each_kmer().
 // The overloads take masks of any Layout `MasksLayout`, so that masks of another Layout than the
 // spaced k-mers fail here, with a message, instead of leaving no overload to match. The extraction
 // then only runs with matching ones, so that a failed check is the only error.
@@ -217,8 +225,7 @@ inline std::string for_each_spaced_kmer_estimate_name_()
 
 /**
  * @brief Call `callback` with each spaced k-mer of `seq` for each of the masks of `mask_forms`,
- * with the algorithm that SpacedKmerExtractor estimates to be the fastest on this hardware, without
- * tuning.
+ * with the algorithm that is likely the fastest on this hardware.
  *
  * As for_each_kmer(), for a set of spaced k-mer masks instead of a k-mer size, prepared in all
  * forms of the algorithms, see SpacedKmerMaskForms. The set is prepared once, and can then be used
@@ -234,14 +241,26 @@ inline std::string for_each_spaced_kmer_estimate_name_()
  *         [&](std::size_t pos, std::size_t mask_idx, SpacedKmerAcgtMsb kmer) { ... }
  *     );
  *
- * for_each_spaced_kmer_algorithm_name() names the algorithm. To measure the fastest algorithm
- * instead, see SpacedKmerExtractor; to call one of them directly, see the functions in
+ * The estimate is the scalar loop with PEXT, unless the CPU is known for a slow PEXT, see
+ * pext_likely_fast(), else the SIMD loop with the butterfly bit extraction of the widest SIMD arch
+ * that the build and the CPU have, else the scalar loop with the butterfly.
+ * for_each_spaced_kmer_algorithm_name() names it. To call another algorithm, see the functions in
  * spaced_kmer_extract/.
  *
- * The callback takes single spaced k-mers with the index of their mask, and can in addition take
- * vectors of them, as for SpacedKmerExtractor::for_each(). The spaced k-mers of each mask are
- * handed out in order of their positions; the order between masks depends on the algorithm, see
- * SpacedKmerExtractor.
+ * The callback takes single spaced k-mers, as `callback(pos, mask_idx, spaced_kmer)`. It can in
+ * addition take the vectors of the SIMD algorithms, as
+ * `callback(pos, mask_idx, spaced_kmers, valid_count)` when unchecked, or
+ * `callback(pos, mask_idx, spaced_kmers, valid_lanes)` when checked, see SpacedKmerVectorCallback
+ * and SpacedKmerVectorValidLanesCallback. The SIMD algorithms then hand it their vectors, and else
+ * their spaced k-mers one by one.
+ *
+ * The spaced k-mers of each mask are handed out in order of their positions; the order between
+ * masks differs between the algorithms: the scalar loops hand out the spaced k-mers of all masks
+ * at one position before going on to the next position, while the SIMD loops hand out those of
+ * one mask for a whole vector of positions, then those of the next mask for the same positions.
+ * The callback is compiled for each algorithm that the estimate can choose, and each number of
+ * masks up to the `MaxMasks` of the SpacedKmerMaskForms; a smaller `MaxMasks`, such as the number
+ * of masks that are used, hence shortens the compile time.
  *
  * @tparam C InputCheck: kChecked skips the spaced k-mers with invalid characters at the kept
  *         positions; kUnchecked trusts the input to be valid.
@@ -305,7 +324,7 @@ FISK_ALWAYS_INLINE inline void for_each_spaced_kmer(
 /**
  * @brief The name of the algorithm that for_each_spaced_kmer() runs with these arguments, which
  * are not used otherwise: the name of the spaced k-mer extraction function, followed by the bit
- * extraction, as in SpacedKmerExtractor::algorithm_name().
+ * extraction, such as "for_each_spaced_kmer_ascii_checked_chunked_scalar_pext".
  */
 template <
     InputCheck C, Encoding E, Layout L, Layout MasksLayout, std::size_t MaxMasks,

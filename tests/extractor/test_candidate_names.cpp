@@ -39,12 +39,13 @@ constexpr auto kUnchecked = InputCheck::kUnchecked;
 //     Algorithm Tables
 // =================================================================================================
 
-// The names of the algorithms of the extractors are strings, written by hand in their candidates.
-// These tests tie each name to the function that it stands for: a table lists the algorithms of an
-// extractor, each by a macro that takes the function once, and makes of it both the name, as a
-// string, and a call. The compiler hence checks that each function of a table exists. The tests
-// then check that the names of the extractor are exactly those of its table, and that the
-// extractor, set to each name, gives the same k-mers as the function of that name.
+// The names of the candidate algorithms of the estimate are strings, written by hand in the
+// candidates, and returned by for_each_kmer_algorithm_name() and
+// for_each_spaced_kmer_algorithm_name(). These tests tie each name to the function that it stands
+// for: a table lists the candidates of an estimate, each by a macro that takes the function once,
+// and makes of it both the name, as a string, and a call. The compiler hence checks that each
+// function of a table exists. The tests then check that the names of the candidates are exactly
+// those of the table, and that each candidate gives the same k-mers as the function of its name.
 
 // An algorithm of a table: its name, and a call of it with a sequence and a callback, as a lambda
 // that takes the SIMD arch as a std::type_identity, for SIMD algorithms that stand for one per
@@ -71,7 +72,7 @@ TestAlgorithm<Simd, Call> make_test_algorithm(std::string name, Call call)
 
 // An algorithm: `function`, called with the `template_args` and the `call_args`, which can use the
 // `seq` and the `callback` of the test. Its name is the name of `function`, followed by the
-// `suffix` of its template arguments, as the extractors name it.
+// `suffix` of its template arguments, as the candidates name it.
 #define FISK_TEST_ALGORITHM(function, template_args, suffix, call_args)                       \
     make_test_algorithm<false>(                                                                \
         std::string(#function) + suffix,                                                       \
@@ -127,30 +128,42 @@ inline std::string sorted_names(std::vector<std::string> names)
     return result;
 }
 
-// Check the names of the `extractor` against the `table`, and that each name runs its function.
-// The tests are compiled for the CPU that they run on, so that all compiled algorithms are
-// available, and the names of the extractor are all of its candidates.
-template <typename Recorder, typename Extractor, typename Table>
-void check_algorithm_table(Extractor extractor, Table const& table)
+// Check the names of the `Candidates`, those of the estimate, against the `table`, and that each
+// candidate, run with the `settings`, extracts the same as the function of its name. The tests are
+// compiled for the CPU that they run on, so that all compiled candidates are available.
+template <
+    typename Recorder, InputFormat I, InputCheck C, Encoding E, Layout L, typename Candidates,
+    typename Settings, typename Table
+>
+void check_algorithm_table(Candidates, Settings const& settings, Table const& table)
 {
-    // The names of the extractor are exactly those of the table.
-    std::vector<std::string> names;
+    // The names of the candidates are exactly those of the table.
+    std::vector<std::string> table_names;
     for_each_test_algorithm(table, [&](std::string const& name, auto const&) {
-        names.push_back(name);
+        table_names.push_back(name);
     });
-    ASSERT_EQ(sorted_names(extractor.algorithm_names()), sorted_names(names));
+    std::vector<std::string> names;
+    for_each_available_candidate(Candidates{}, [&](auto const& candidate) {
+        names.push_back(std::remove_cvref_t<decltype(candidate)>::name());
+    });
+    ASSERT_EQ(sorted_names(names), sorted_names(table_names));
 
-    // Set to each name, the extractor extracts the same as the function of that name.
-    for_each_test_algorithm(table, [&](std::string const& name, auto const& call) {
-        extractor.set_algorithm(name);
-        for (auto const& seq : extractor_test_sequences<Extractor::input_check>()) {
-            auto const input = extractor_test_input<Extractor>(seq);
-            Recorder expected;
-            call(input, expected);
-            Recorder result;
-            extractor.for_each(input, result);
-            check_spaced_events(result.events, expected.events);
-        }
+    // Each candidate extracts the same as the function of its name.
+    for_each_available_candidate(Candidates{}, [&](auto const& candidate) {
+        auto const name = std::remove_cvref_t<decltype(candidate)>::name();
+        for_each_test_algorithm(table, [&](std::string const& table_name, auto const& call) {
+            if (table_name != name) {
+                return;
+            }
+            for (auto const& seq : extractor_test_sequences<C>()) {
+                auto const input = extractor_test_input<I, C, E, L>(seq);
+                Recorder expected;
+                call(input, expected);
+                Recorder result;
+                candidate.run(settings, input, result);
+                check_spaced_events(result.events, expected.events);
+            }
+        });
     });
 }
 
@@ -179,7 +192,7 @@ struct KmerTableRecorder
     }
 };
 
-TEST(ExtractorNames, KmerAsciiChecked)
+TEST(CandidateNames, KmerAsciiChecked)
 {
     ExtractorWordEncoder<kAcgt, kMsb> const encoder{};
     auto const table = std::tuple{
@@ -190,12 +203,13 @@ TEST(ExtractorNames, KmerAsciiChecked)
             for_each_kmer_ascii_checked_chunked_simd, <Simd>, "", (seq, kK, encoder, callback)
         ),
     };
-    check_algorithm_table<KmerTableRecorder>(
-        KmerExtractor<kAscii, kChecked, kAcgt, kMsb>(kK), table
+    check_algorithm_table<KmerTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
+        typename KmerExtractorPreference<kAscii, kChecked, kAcgt, kMsb>::List{},
+        make_kmer_extractor_settings_(kK), table
     );
 }
 
-TEST(ExtractorNames, KmerAsciiUnchecked)
+TEST(CandidateNames, KmerAsciiUnchecked)
 {
     ExtractorWordEncoder<kAcgt, kMsb> const encoder{};
     auto const table = std::tuple{
@@ -206,12 +220,13 @@ TEST(ExtractorNames, KmerAsciiUnchecked)
             for_each_kmer_ascii_unchecked_chunked_simd, <Simd>, "", (seq, kK, encoder, callback)
         ),
     };
-    check_algorithm_table<KmerTableRecorder>(
-        KmerExtractor<kAscii, kUnchecked, kAcgt, kMsb>(kK), table
+    check_algorithm_table<KmerTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
+        typename KmerExtractorPreference<kAscii, kUnchecked, kAcgt, kMsb>::List{},
+        make_kmer_extractor_settings_(kK), table
     );
 }
 
-TEST(ExtractorNames, KmerPackedChecked)
+TEST(CandidateNames, KmerPackedChecked)
 {
     auto const table = std::tuple{
         FISK_TEST_ALGORITHM(
@@ -221,12 +236,13 @@ TEST(ExtractorNames, KmerPackedChecked)
             for_each_kmer_packed_checked_bytewise_simd, <Simd>, "", (seq, kK, callback)
         ),
     };
-    check_algorithm_table<KmerTableRecorder>(
-        KmerExtractor<kPacked, kChecked, kAcgt, kMsb>(kK), table
+    check_algorithm_table<KmerTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
+        typename KmerExtractorPreference<kPacked, kChecked, kAcgt, kMsb>::List{},
+        make_kmer_extractor_settings_(kK), table
     );
 }
 
-TEST(ExtractorNames, KmerPackedUnchecked)
+TEST(CandidateNames, KmerPackedUnchecked)
 {
     auto const table = std::tuple{
         FISK_TEST_ALGORITHM(
@@ -236,8 +252,9 @@ TEST(ExtractorNames, KmerPackedUnchecked)
             for_each_kmer_packed_unchecked_bytewise_simd, <Simd>, "", (seq, kK, callback)
         ),
     };
-    check_algorithm_table<KmerTableRecorder>(
-        KmerExtractor<kPacked, kUnchecked, kAcgt, kMsb>(kK), table
+    check_algorithm_table<KmerTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
+        typename KmerExtractorPreference<kPacked, kUnchecked, kAcgt, kMsb>::List{},
+        make_kmer_extractor_settings_(kK), table
     );
 }
 
@@ -282,7 +299,7 @@ struct SpacedTableRecorder
 
 TableMaskForms const table_masks({"1101101", "1011011"});
 
-TEST(ExtractorNames, SpacedAsciiChecked)
+TEST(CandidateNames, SpacedAsciiChecked)
 {
     ExtractorWordEncoder<kAcgt, kMsb> const encoder{};
     auto const& masks = table_masks;
@@ -305,12 +322,15 @@ TEST(ExtractorNames, SpacedAsciiChecked)
             (seq, fixed_masks<BitExtractKernelButterfly<Simd>>(masks), encoder, callback)
         ),
     };
-    check_algorithm_table<SpacedTableRecorder>(
-        SpacedKmerExtractor<kAscii, kChecked, kAcgt, kMsb, kTableMasks>(masks), table
+    check_algorithm_table<SpacedTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
+        typename SpacedKmerExtractorPreference<
+            kAscii, kChecked, kAcgt, kMsb, kTableMasks
+        >::List{},
+        masks, table
     );
 }
 
-TEST(ExtractorNames, SpacedAsciiUnchecked)
+TEST(CandidateNames, SpacedAsciiUnchecked)
 {
     ExtractorWordEncoder<kAcgt, kMsb> const encoder{};
     auto const& masks = table_masks;
@@ -333,12 +353,15 @@ TEST(ExtractorNames, SpacedAsciiUnchecked)
             (seq, fixed_masks<BitExtractKernelButterfly<Simd>>(masks), encoder, callback)
         ),
     };
-    check_algorithm_table<SpacedTableRecorder>(
-        SpacedKmerExtractor<kAscii, kUnchecked, kAcgt, kMsb, kTableMasks>(masks), table
+    check_algorithm_table<SpacedTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
+        typename SpacedKmerExtractorPreference<
+            kAscii, kUnchecked, kAcgt, kMsb, kTableMasks
+        >::List{},
+        masks, table
     );
 }
 
-TEST(ExtractorNames, SpacedPackedChecked)
+TEST(CandidateNames, SpacedPackedChecked)
 {
     auto const& masks = table_masks;
     auto const table = std::tuple{
@@ -346,10 +369,6 @@ TEST(ExtractorNames, SpacedPackedChecked)
         FISK_TEST_ALGORITHM(
             for_each_spaced_kmer_packed_checked_bytewise_scalar, , "_pext",
             (seq, fixed_masks<BitExtractMask>(masks), bit_extract_pext, callback)
-        ),
-        FISK_TEST_ALGORITHM(
-            for_each_spaced_kmer_packed_checked_bytewise_simd, , "_pext",
-            (seq, fixed_masks<BitExtractKernelPext>(masks), callback)
         ),
         #endif
         FISK_TEST_ALGORITHM(
@@ -361,12 +380,15 @@ TEST(ExtractorNames, SpacedPackedChecked)
             (seq, fixed_masks<BitExtractKernelButterfly<Simd>>(masks), callback)
         ),
     };
-    check_algorithm_table<SpacedTableRecorder>(
-        SpacedKmerExtractor<kPacked, kChecked, kAcgt, kMsb, kTableMasks>(masks), table
+    check_algorithm_table<SpacedTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
+        typename SpacedKmerExtractorPreference<
+            kPacked, kChecked, kAcgt, kMsb, kTableMasks
+        >::List{},
+        masks, table
     );
 }
 
-TEST(ExtractorNames, SpacedPackedUnchecked)
+TEST(CandidateNames, SpacedPackedUnchecked)
 {
     auto const& masks = table_masks;
     auto const table = std::tuple{
@@ -374,10 +396,6 @@ TEST(ExtractorNames, SpacedPackedUnchecked)
         FISK_TEST_ALGORITHM(
             for_each_spaced_kmer_packed_unchecked_bytewise_scalar, , "_pext",
             (seq, fixed_masks<BitExtractMask>(masks), bit_extract_pext, callback)
-        ),
-        FISK_TEST_ALGORITHM(
-            for_each_spaced_kmer_packed_unchecked_bytewise_simd, , "_pext",
-            (seq, fixed_masks<BitExtractKernelPext>(masks), callback)
         ),
         #endif
         FISK_TEST_ALGORITHM(
@@ -389,7 +407,10 @@ TEST(ExtractorNames, SpacedPackedUnchecked)
             (seq, fixed_masks<BitExtractKernelButterfly<Simd>>(masks), callback)
         ),
     };
-    check_algorithm_table<SpacedTableRecorder>(
-        SpacedKmerExtractor<kPacked, kUnchecked, kAcgt, kMsb, kTableMasks>(masks), table
+    check_algorithm_table<SpacedTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
+        typename SpacedKmerExtractorPreference<
+            kPacked, kUnchecked, kAcgt, kMsb, kTableMasks
+        >::List{},
+        masks, table
     );
 }
