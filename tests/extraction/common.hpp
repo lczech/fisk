@@ -149,29 +149,21 @@ inline std::vector<std::vector<std::string>> extraction_wide_mask_sets()
     return sets;
 }
 
-// The SIMD arch of the estimates, see CandidateSimdArchs (extraction/estimate.hpp): the first of
-// the candidates' archs that the CPU has, or empty for none, as in the names of the algorithms.
+// The SIMD arch of the estimates, see CandidateSimdArchs (extraction/estimate.hpp): the widest
+// one compiled, where the CPU has it, else empty, as in the names of the algorithms.
 inline std::string estimate_simd_arch_name()
 {
     #if defined(FISK_HAS_AVX512)
-    if (fisk::avx512_enabled()) {
-        return "avx512";
-    }
-    #endif
-    #if defined(FISK_HAS_AVX2)
-    if (fisk::avx2_enabled()) {
-        return "avx2";
-    }
+    return fisk::avx512_enabled() ? "avx512" : "";
+    #elif defined(FISK_HAS_AVX2)
+    return fisk::avx2_enabled() ? "avx2" : "";
     #elif defined(FISK_HAS_NEON)
-    if (fisk::neon_enabled()) {
-        return "neon";
-    }
-    #elif defined(FISK_HAS_SSE2) && !defined(FISK_HAS_AVX512)
-    if (fisk::sse2_enabled()) {
-        return "sse2";
-    }
-    #endif
+    return fisk::neon_enabled() ? "neon" : "";
+    #elif defined(FISK_HAS_SSE2)
+    return fisk::sse2_enabled() ? "sse2" : "";
+    #else
     return "";
+    #endif
 }
 
 // The estimate of for_each_kmer(): the SIMD loop of the arch of estimate_simd_arch_name(), else the

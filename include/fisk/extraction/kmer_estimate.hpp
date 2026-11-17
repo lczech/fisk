@@ -172,9 +172,9 @@ struct KmerCandidatePackedBytewiseSimd
 //     Candidate Lists
 // -------------------------------------------------------------------------------------------------
 
-// The estimate of for_each_kmer(), see visit_estimate(): the SIMD loop of the first of the
-// `Simds`, a TypeList, that the CPU has, in the order of CandidateSimdArchs (AVX512, AVX2, and SSE2
-// or Neon), else the scalar loop, for all callbacks.
+// The estimate of for_each_kmer(), see visit_estimate(): the SIMD loop of the arch of the `Simds`,
+// a TypeList, see CandidateSimdArchs, where the CPU has it, else the scalar loop, for all
+// callbacks.
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L, typename Simds = CandidateSimdArchs
 >

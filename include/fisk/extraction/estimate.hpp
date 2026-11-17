@@ -63,14 +63,12 @@ struct TypeList
 {};
 
 /**
- * @brief The SIMD archs of the candidates that use SIMD: the best one compiled, and AVX2 next to
- * AVX512, for CPUs on which AVX512 is not enabled at runtime. SSE2 only when it is the best one.
- * The estimates prefer them in this order, before the scalar loops, see KmerEstimate
- * and SpacedKmerEstimate.
+ * @brief The SIMD arch of the candidates that use SIMD, as a TypeList: the widest one compiled,
+ * AVX512, AVX2, Neon, or SSE2, or none. A build with an arch runs only on CPUs that have it, as the
+ * compiler uses it elsewhere as well, so the narrower archs are not compiled as candidates. The
+ * estimates prefer it before the scalar loops, see KmerEstimate and SpacedKmerEstimate.
  */
-#if defined(FISK_HAS_AVX512) && defined(FISK_HAS_AVX2)
-using CandidateSimdArchs = TypeList<SimdAVX512, SimdAVX2>;
-#elif defined(FISK_HAS_AVX512)
+#if defined(FISK_HAS_AVX512)
 using CandidateSimdArchs = TypeList<SimdAVX512>;
 #elif defined(FISK_HAS_AVX2)
 using CandidateSimdArchs = TypeList<SimdAVX2>;

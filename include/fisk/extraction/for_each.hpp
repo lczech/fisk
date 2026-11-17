@@ -70,7 +70,7 @@ inline constexpr void for_each_packed_checked_assert_()
  *
  * One call, with the choices that change the result as template arguments, and the algorithm
  * chosen by what this build and CPU support, the estimate: the SIMD loop of the widest SIMD arch
- * that the build and the CPU have, AVX-512, AVX2, SSE2, or Neon, else the scalar loop:
+ * of the build, AVX-512, AVX2, SSE2, or Neon, where the CPU has it, else the scalar loop:
  *
  *     using namespace fisk;
  *     for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
@@ -232,7 +232,7 @@ inline std::string for_each_spaced_kmer_estimate_name_()
  *
  * The estimate is the scalar loop with PEXT, unless the CPU is known for a slow PEXT, see
  * pext_likely_fast(), else the SIMD loop with the butterfly bit extraction of the widest SIMD arch
- * that the build and the CPU have, else the scalar loop with the butterfly.
+ * of the build, where the CPU has it, else the scalar loop with the butterfly.
  * for_each_spaced_kmer_algorithm_name() names it. To call another algorithm, see the functions in
  * spaced_kmer_extract/.
  *

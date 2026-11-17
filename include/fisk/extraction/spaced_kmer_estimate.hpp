@@ -60,10 +60,7 @@ inline std::string spaced_kmer_candidate_bit_extract_name_()
         return "butterfly";
     }
     #if defined(FISK_HAS_BMI2)
-    else if constexpr (
-        std::same_as<BitExtractForm, BitExtractMask> ||
-        std::same_as<BitExtractForm, BitExtractKernelPext>
-    ) {
+    else if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
         return "pext";
     }
     #endif
@@ -79,9 +76,6 @@ inline bool spaced_kmer_candidate_bit_extract_available_()
         return true;
     } else if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
         return bmi2_enabled();
-    } else if constexpr (std::same_as<typename BitExtractForm::simd_arch, SimdScalar>) {
-        // BitExtractKernelPext, the only kernel of the scalar arch here.
-        return bmi2_enabled();
     } else {
         return simd_arch_enabled_<typename BitExtractForm::simd_arch>();
     }
@@ -94,10 +88,7 @@ template <typename BitExtractForm>
 inline bool spaced_kmer_candidate_bit_extract_preferred_()
 {
     #if defined(FISK_HAS_BMI2)
-    if constexpr (
-        std::same_as<BitExtractForm, BitExtractMask> ||
-        std::same_as<BitExtractForm, BitExtractKernelPext>
-    ) {
+    if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
         return pext_likely_fast();
     }
     #endif
@@ -308,9 +299,9 @@ struct SpacedKmerCandidatePackedBytewiseSimd
 // -------------------------------------------------------------------------------------------------
 
 // The estimate of for_each_spaced_kmer(), see visit_estimate(): the scalar loop with PEXT, where
-// it is likely fast, else the SIMD loop with the butterfly kernel of the first of the `Simds`, a
-// TypeList, that the CPU has, in the order of CandidateSimdArchs (AVX512, AVX2, and SSE2 or Neon),
-// else the scalar loop with the butterfly, for all callbacks.
+// it is likely fast, else the SIMD loop with the butterfly kernel of the arch of the `Simds`, a
+// TypeList, see CandidateSimdArchs, where the CPU has it, else the scalar loop with the butterfly,
+// for all callbacks.
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L, std::size_t MaxMasks,
     typename Simds = CandidateSimdArchs
