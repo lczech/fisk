@@ -84,8 +84,12 @@ inline constexpr void for_each_packed_checked_assert_()
  * KmerCallback. It can in addition take the vectors of k-mers of the SIMD algorithms, see
  * KmerVectorCallback and KmerVectorValidLanesCallback, for instance as a callback_overload, or a
  * struct with several `operator()`. The SIMD algorithms then hand it their vectors, and else their
- * k-mers one by one. The callback is a template parameter, so that it can be inlined into the
- * loop; each callback type compiles all algorithms that the estimate can choose.
+ * k-mers one by one. Positions and counts are std::size_t, as sequences can exceed 2^32
+ * nucleotides: a callback that takes them as a narrower integer, such as `int`, fails to compile,
+ * where its type tells its parameter types, which a lambda with an `auto` parameter and a struct
+ * with several `operator()` do not; take std::size_t (or `auto`) there as well. The callback is a
+ * template parameter, so that it can be inlined into the loop; each callback type compiles all
+ * algorithms that the estimate can choose.
  *
  * The k-mers are handed out in order of their positions. The function can run on several threads
  * at once; ASCII input is packed chunk by chunk into a buffer per thread.
@@ -240,7 +244,8 @@ inline std::string for_each_spaced_kmer_estimate_name_()
  * `callback(pos, mask_idx, spaced_kmers, valid_count)` when unchecked, or
  * `callback(pos, mask_idx, spaced_kmers, valid_lanes)` when checked, see SpacedKmerVectorCallback
  * and SpacedKmerVectorValidLanesCallback. The SIMD algorithms then hand it their vectors, and else
- * their spaced k-mers one by one.
+ * their spaced k-mers one by one. Positions, mask indices, and counts are std::size_t, see
+ * for_each_kmer().
  *
  * The spaced k-mers of each mask are handed out in order of their positions; the order between
  * masks differs between the algorithms: the scalar loops hand out the spaced k-mers of all masks

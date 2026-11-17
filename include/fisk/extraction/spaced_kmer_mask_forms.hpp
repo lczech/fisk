@@ -72,7 +72,8 @@ struct spaced_kmer_mask_forms_tuple_<L, MaxMasks, MaxSpan, TypeList<Simd...>>
  * @tparam L Layout of the spaced k-mers.
  * @tparam MaxMasks The largest number of masks of the set. The extraction compiles its loops for
  *         each number of masks up to it, so that a smaller `MaxMasks`, such as the number of masks
- *         that are used, shortens the compile time.
+ *         that are used, shortens the compile time. Where the users of a program choose the masks,
+ *         set it to the most that the program accepts.
  * @tparam MaxSpan The largest span of the masks, see SpacedKmerMask. Spans above 32 are cut into
  *         pieces, and the extraction compiles its loops for each number of pieces that a mask of
  *         this span can have, see kDefaultMaxCompiledPieces, so that a smaller `MaxSpan`, such
