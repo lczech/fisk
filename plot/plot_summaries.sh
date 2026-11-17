@@ -590,3 +590,25 @@ if [[ "$SINK" == "sum" ]] && build_file_args "DuoHash.csv"; then
     done
   done
 fi
+
+# ------------------------------------------------------------
+# The example on the human genome
+# ------------------------------------------------------------
+
+# One human_genome.csv per CPU and compiler, next to the sink folders, see
+# example/run_human_genome.sh; plotted once, with the sum mode, as DuoHash, and written as one
+# table.
+if [[ "$SINK" == "sum" ]] && build_file_args "human_genome.csv"; then
+  echo "Plotting the example on the human genome"
+  python ./plot/plot_human_genome.py "${args[@]}" --csv "${OUT}/human_genome.csv"
+  for ext in "${FORMATS[@]}"; do
+    for combo in "${COMBOS[@]}"; do
+      run_job python ./plot/plot_human_genome.py "${args[@]}" \
+        --unit "${combo%%:*}" --scale "${combo##*:}" --out "${OUT}/human_genome_per_cpu.${ext}"
+    done
+  done
+  wait
+  for combo in "${COMBOS[@]}"; do
+    svg_to_pdf "${OUT}/human_genome_per_cpu_${combo%%:*}_${combo##*:}.svg"
+  done
+fi
