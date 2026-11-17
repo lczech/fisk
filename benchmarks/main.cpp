@@ -27,7 +27,7 @@
 #include <filesystem>
 
 #include "arg_parser.hpp"
-#include "extractor_scaling/bench.hpp"
+#include "for_each_scaling/bench.hpp"
 #include "kmer_extract_ascii_checked/bench.hpp"
 #include "kmer_extract_ascii_unchecked/bench.hpp"
 #include "kmer_extract_packed_unchecked/bench.hpp"
@@ -87,7 +87,7 @@ struct Options
     // File with masks
     std::string masks_file;
 
-    // Largest input length of the extractor scaling, 4 Gi bases
+    // Largest input length of the for_each scaling, 4 Gi bases
     std::string scaling_max_length = "4294967296";
 
     // Output directory for benchmark results
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
 
     parser.add_option(
         "--scaling-max-length", "",
-        "Largest input length of the extractor scaling, a random sequence that is in memory as a "
+        "Largest input length of the for_each scaling, a random sequence that is in memory as a "
         "whole; 0 to skip it (default: 4294967296, i.e., 4 Gi bases)",
         opts.scaling_max_length
     );
@@ -470,10 +470,11 @@ int main(int argc, char **argv)
         bench_kmer_clark( sequences, os );
     }
 
-    // The extractors over the input length, last, as its input takes the most memory
+    // for_each_kmer() and for_each_spaced_kmer() over the input length, last, as its input takes
+    // the most memory
     {
-        auto os = get_ofstream(out_dir, "extractor_scaling.csv" );
-        bench_extractor_scaling(
+        auto os = get_ofstream(out_dir, "for_each_scaling.csv" );
+        bench_for_each_scaling(
             std::stoull(opts.scaling_max_length), std::stod(opts.n_prob), std::stoull(opts.seed),
             os
         );

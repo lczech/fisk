@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Plot the example on the human genome across CPUs and compilers: the throughput of the tuned
-extractors, one panel for the k-mers and one for the spaced k-mers, with the CPUs on the x-axis and
-a bar per compiler, colored by CPU and hatched by compiler, as in plot_bars_per_cpu.py. Each bar is
-labeled with the algorithm that the tuning picked. The time to read the genome is not shown.
+"""Plot the example on the human genome across CPUs and compilers: the throughput of for_each_kmer()
+and for_each_spaced_kmer(), one panel for the k-mers and one for the spaced k-mers, with the CPUs on
+the x-axis and a bar per compiler, colored by CPU and hatched by compiler, as in
+plot_bars_per_cpu.py. Each bar is labeled with the algorithm of the estimate. The time to read the
+genome is not shown.
 
 Reads the human_genome.csv of each CPU and compiler, which scripts/run_benchmarks.sh writes next to
 the sink folders, see example/run_human_genome.sh. With --csv, also writes all of them as one table,
 with the CPU and compiler first, and the time per k-mer and the k-mers per second added. Warns if the
-k-mer counts or checksums of an extractor differ between the files, as all runs read the same
+k-mer counts or checksums of an extraction differ between the files, as all runs read the same
 genome.
 
 Usage example:
@@ -48,8 +49,8 @@ from plot_common import (
 
 mpl.rcParams["hatch.linewidth"] = 0.7
 
-# The extractors of the example, as the panels, by their name in the CSV.
-EXTRACTORS = {
+# The extractions of the example, as the panels, by their name in the CSV.
+EXTRACTIONS = {
     "kmers"        : "k-mers",
     "spaced_kmers" : "Spaced k-mers",
 }
@@ -68,18 +69,18 @@ def load(csv_path: str) -> pd.DataFrame:
 
 
 def check_consistent(df: pd.DataFrame) -> None:
-    """Warn if the k-mer counts or checksums of an extractor differ between the runs."""
-    for extractor, rows in df.groupby("extractor"):
+    """Warn if the k-mer counts or checksums of an extraction differ between the runs."""
+    for extraction, rows in df.groupby("extraction"):
         for column, name in (("kmers", "k-mer counts"), ("checksum", "checksums")):
             if rows[column].nunique() > 1:
                 runs = ", ".join(
                     f"{r.cpu} {r.compiler}: {getattr(r, column)}" for r in rows.itertuples()
                 )
-                warn(f"The {name} of {extractor} differ between the runs: {runs}")
+                warn(f"The {name} of {extraction} differ between the runs: {runs}")
 
 
 def algorithm_label(algorithm: str) -> str:
-    """The short label of an algorithm of the extractors, such as "PEXT" for
+    """The short label of an algorithm of the extractions, such as "PEXT" for
     for_each_spaced_kmer_ascii_checked_chunked_scalar_pext, or "Butterfly AVX512" for the SIMD
     butterfly: the input and check are those of the example for all of them, all algorithms from
     ASCII are chunked, and the extraction of spaced k-mers names the technique."""
@@ -136,12 +137,12 @@ def main():
     compilers = order(df["compiler"].unique(), infer_compiler, COMPILER_ORDER)
 
     fig, axes = plt.subplots(
-        1, len(EXTRACTORS), figsize=(max(8, 2.2 * len(cpus) * len(EXTRACTORS)), 6), sharey=True
+        1, len(EXTRACTIONS), figsize=(max(8, 2.2 * len(cpus) * len(EXTRACTIONS)), 6), sharey=True
     )
     width = 0.8 / len(compilers)
     labels = []  # (axes, label, x, value) of each bar, to move the labels that do not fit
-    for ax, (extractor, title) in zip(axes, EXTRACTORS.items()):
-        part = df[df["extractor"] == extractor]
+    for ax, (extraction, title) in zip(axes, EXTRACTIONS.items()):
+        part = df[df["extraction"] == extraction]
         for i, cpu in enumerate(cpus):
             for j, compiler in enumerate(compilers):
                 row = part[(part["cpu"] == cpu) & (part["compiler"] == compiler)]
@@ -155,7 +156,7 @@ def main():
                     hatch=hatch_for_compiler(row["compiler_family"]),
                     edgecolor="white", linewidth=0, zorder=3,
                 )
-                # The algorithm that the tuning picked, upwards from the bottom of the bar.
+                # The algorithm of the estimate, upwards from the bottom of the bar.
                 label = ax.text(
                     x, 0.03, algorithm_label(row["algorithm"]), transform=ax.get_xaxis_transform(),
                     rotation=90, ha="center", va="bottom", fontsize=10, color="white", zorder=4,
@@ -186,8 +187,8 @@ def main():
         y_min /= 3
     axes[0].set_ylim(args.y_min if args.y_min is not None else y_min,
                      args.y_max if args.y_max is not None else y_max)
-    axes[0].set_ylabel(ylabel_for_unit(args.unit, "extractor_scaling"))
-    fig.suptitle("Example: tuned extractors on the human genome")
+    axes[0].set_ylabel(ylabel_for_unit(args.unit, "for_each_scaling"))
+    fig.suptitle("Example: k-mers of the human genome")
     fig.tight_layout()
 
     # The labels that are longer than their bar go above it, in black.

@@ -1042,7 +1042,7 @@ SUITE_UNIT_NOUN = {
     "kmer_extract_packed_unchecked"               : "k-mers",
     "kmer_extract_packed_checked"                 : "k-mers",
     "kmer_clark"                                  : "k-mers",
-    "extractor_scaling"                           : "k-mers",
+    "for_each_scaling"                            : "k-mers",
     "spaced_kmer_extract_ascii_checked_single"    : "k-mers",
     "spaced_kmer_extract_ascii_checked_multi"     : "k-mers",
     "spaced_kmer_extract_ascii_unchecked_single"  : "k-mers",

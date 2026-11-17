@@ -251,10 +251,10 @@ struct Sink
 
     // Store the whole register at once and advance the index of its width by its lane count. Each
     // width has an index of its own, so that it stays a multiple of the lane count also in a sink
-    // that takes single values and registers, such as the one of tune(), which calls the scalar
-    // and the SIMD algorithms with one callback (see extractor_scaling/variant.hpp). With buf's
-    // size a power of two, and so a multiple of every lane count below (2/4/8), a store then
-    // always has a full register's worth of room ahead of it before the next wrap.
+    // that takes single values and registers, such as one callback that takes single k-mers and
+    // vectors (see for_each_scaling/variant.hpp). With buf's size a power of two, and so a multiple
+    // of every lane count below (2/4/8), a store then always has a full register's worth of room
+    // ahead of it before the next wrap.
     #if defined(FISK_HAS_SSE2)
 
         void consume(__m128i v) noexcept

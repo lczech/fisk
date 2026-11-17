@@ -228,11 +228,11 @@ for EXT in png svg ; do
     done
 
 
-    # The extractors over the length of the input, with the cache sizes
+    # for_each_kmer() and for_each_spaced_kmer() over the length of the input, with the cache sizes
 
-    CSV="${DIR}/extractor_scaling.csv"
+    CSV="${DIR}/for_each_scaling.csv"
     run_plot "$CSV" python ./plot/plot_scaling.py --file "$CSV" "${US[@]}" \
-      --out "${DIR}/extractor_scaling.${EXT}"
+      --out "${DIR}/for_each_scaling.${EXT}"
 
   done
 done

@@ -14,7 +14,7 @@ usage() {
 Usage: example/run_human_genome.sh [options]
 
 Downloads a human genome, builds the example, and runs it on the genome, printing a CSV row per
-extractor.
+extraction.
 
 Options:
   --genome <name>       grch38: GRCh38, no-alt analysis set (default);

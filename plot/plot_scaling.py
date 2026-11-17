@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Plot the extractor scaling: the throughput of the tuned extractors over the length of the input,
-one panel for the callback of one k-mer at a time, and one for the callback that also takes the
-vectors of the SIMD algorithms.
+"""Plot the for_each scaling: the throughput of for_each_kmer() and for_each_spaced_kmer() over the
+length of the input, one panel for the callback of one k-mer at a time, and one for the callback
+that also takes the vectors of the SIMD algorithms.
 
 With one CSV, the plot of one run: a line per series (k-mers and spaced k-mers, checked and
 unchecked), and dashed lines at the sizes of the data caches, from the sys_info.txt next to the CSV.
@@ -9,11 +9,11 @@ The input is ASCII, so its length in bases is its size in bytes. With several CS
 series across CPUs and compilers, see --series, with a line per CSV.
 
 Usage examples:
-  python plot/plot_scaling.py --file results/Intel_Core_7_240H/GCC_15/sum/extractor_scaling.csv \\
-      --sink sum --out extractor_scaling.png
+  python plot/plot_scaling.py --file results/Intel_Core_7_240H/GCC_15/sum/for_each_scaling.csv \\
+      --sink sum --out for_each_scaling.png
 
-  python plot/plot_scaling.py --glob "results/*/*/sum/extractor_scaling.csv" \\
-      --series kmer_checked --sink sum --out extractor_scaling_kmer_checked_per_cpu.png
+  python plot/plot_scaling.py --glob "results/*/*/sum/for_each_scaling.csv" \\
+      --series kmer_checked --sink sum --out for_each_scaling_kmer_checked_per_cpu.png
 
 If --out is omitted, shows interactively.
 """
@@ -93,10 +93,10 @@ def length_label(length: int) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Plot the extractor scaling over the input length"
+        description="Plot the for_each scaling over the input length"
     )
     parser.add_argument(
-        "--file", action="append", default=[], help="extractor_scaling.csv (repeatable)"
+        "--file", action="append", default=[], help="for_each_scaling.csv (repeatable)"
     )
     parser.add_argument(
         "--glob", action="append", default=[], help="Glob pattern of CSVs (repeatable)"
@@ -182,7 +182,7 @@ def main():
     y_min, y_max = compute_axis_limits(df["display_value"], args.scale)
     axes[0].set_ylim(args.y_min if args.y_min is not None else y_min,
                      args.y_max if args.y_max is not None else y_max)
-    axes[0].set_ylabel(ylabel_for_unit(args.unit, "extractor_scaling"))
+    axes[0].set_ylabel(ylabel_for_unit(args.unit, "for_each_scaling"))
     fig.suptitle(SERIES[args.series][0] if across else platforms[0])
     if shortest < args.min_length:
         fig.text(

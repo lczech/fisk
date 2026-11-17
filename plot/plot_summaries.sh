@@ -527,23 +527,23 @@ if build_file_args "spaced_kmer_extract_ascii_checked_single.csv" \
 fi
 
 # ------------------------------------------------------------
-# Extractor scaling, one plot per series, with a line per CPU
+# for_each scaling, one plot per series, with a line per CPU
 # ------------------------------------------------------------
 
-echo "Plotting the extractor scaling"
-if build_file_args "extractor_scaling.csv"; then
+echo "Plotting the for_each scaling"
+if build_file_args "for_each_scaling.csv"; then
   for series in kmer_checked kmer_unchecked spaced_kmer_checked spaced_kmer_unchecked; do
     for ext in "${FORMATS[@]}"; do
       for combo in "${COMBOS[@]}"; do
         run_job python ./plot/plot_scaling.py "${args[@]}" --series "$series" \
           --unit "${combo%%:*}" --scale "${combo##*:}" --sink "$SINK" \
-          --out "${OUT}/extractor_scaling_${series}_per_cpu.${ext}"
+          --out "${OUT}/for_each_scaling_${series}_per_cpu.${ext}"
       done
     done
   done
   wait
   for series in kmer_checked kmer_unchecked spaced_kmer_checked spaced_kmer_unchecked; do
-    svgs_to_pdf "${OUT}/extractor_scaling_${series}_per_cpu"
+    svgs_to_pdf "${OUT}/for_each_scaling_${series}_per_cpu"
   done
 fi
 
