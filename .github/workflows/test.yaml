@@ -161,12 +161,13 @@ jobs:
 
       # Only the tests are built here; the benchmarks are built by the Benchmark workflow. The
       # sanitizers use a Debug build with -O1, for usable stack traces at a bearable speed, and fail
-      # on the first report.
+      # on the first report. -fno-var-tracking skips the locations of local variables, which only
+      # a debugger uses: GCC spends most of the compile time of the forced-inline tests on them.
       - name: Configure CMake
         run: |
           if [[ "${{ matrix.sanitize }}" == "true" ]]; then
             cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Debug -DFISK_BUILD_BENCHMARKS=OFF \
-              -DCMAKE_CXX_FLAGS="-O1 -fno-omit-frame-pointer ${SANITIZE_FLAGS}" \
+              -DCMAKE_CXX_FLAGS="-O1 -fno-omit-frame-pointer -fno-var-tracking ${SANITIZE_FLAGS}" \
               -DCMAKE_EXE_LINKER_FLAGS="${SANITIZE_FLAGS}"
           elif [[ "${{ matrix.sde }}" == "true" ]]; then
             cmake -G Ninja -B build -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -DFISK_BUILD_BENCHMARKS=OFF \
