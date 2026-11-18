@@ -3,7 +3,7 @@
 # Download a human genome, build the example, and run it on the genome, see README.md.
 #
 # Without options: GRCh38, downloaded into example/data/ and unpacked there, where later runs reuse
-# it, and built with the default C++ compiler of CMake, in example/build/. Requires CMake (3.20 or
+# it, and built with the default C++ compiler of CMake, in example/build/<compiler>/. Requires CMake (3.20 or
 # later), a C++20 compiler, curl, and about 5 GB of disk space and 4 GB of memory. Written for
 # bash 3.2, which macOS ships.
 

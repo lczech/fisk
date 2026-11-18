@@ -18,8 +18,8 @@ using namespace fisk;
 
 // The sequences of a FASTA file, without their names.
 // No error checking to keep this example simple. The functions take any string, such as
-// std::string. AlignedString is a std::string whose characters start at a cache line (64 bytes),
-// which the SIMD algorithms can read faster.
+// std::string. AlignedString is a string whose characters start at a cache line (64 bytes), which
+// the SIMD algorithms can read faster.
 std::vector<AlignedString> read_fasta(std::string const& path)
 {
     std::ifstream in(path);
