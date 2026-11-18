@@ -278,9 +278,9 @@ inline void for_each_kmer_ascii_checked_rolling_block_(
         Width >= 1 && Width <= 64,
         "for_each_kmer_ascii_checked_rolling_block_() supports 1 to 64 lanes"
     );
-    constexpr std::uint64_t all_valid = (Width == 64)
-        ? ~std::uint64_t{0}
-        : ((std::uint64_t{1} << Width) - 1u);
+    // A right shift, so that no width shifts by 64, also not in an untaken branch, which Clang 13
+    // warns about.
+    constexpr std::uint64_t all_valid = ~std::uint64_t{0} >> (64 - Width);
 
     // Fast path: whole block valid.
     if (valid_bits == all_valid) {
