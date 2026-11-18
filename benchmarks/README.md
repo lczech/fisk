@@ -1,36 +1,32 @@
 # Benchmarks
 
-The benchmark program `fisk_benchmarks`, which produced the results in the manuscript.
+The benchmark program `fisk_benchmarks`, which produced the results in the manuscript, see [results/](../results/README.md).
 
-## Reproducing the results
+## Running the benchmarks
 
-To build and run the benchmarks for all compilers and modes, call, in the main directory of the repository,
+To build and run the benchmarks as for the results, call, in the main directory of the repository,
 
 ```
 scripts/run_benchmarks.sh
 ```
 
-This needs CMake (3.20 or later) and a C++20 compiler; on macOS, the Xcode command line tools, and CMake, e.g., from Homebrew. For stable timings, run it on mains power, with other programs closed.
+This needs CMake (3.20 or later) and a C++20 compiler; on macOS, the Xcode command line tools, and CMake, e.g., from Homebrew. For stable timings, run it on mains power, with other programs closed. The script
 
-The script builds and runs the benchmarks with GCC and Clang on Linux, as far as they are installed, or with Apple Clang on macOS, each in the three modes of handling the results, see [Measurements](#measurements). Each run is pinned to one CPU core on Linux. On the human genome, which it downloads once into `example/data/`, it also runs the genome sweep (see [Suites](#suites)) in each mode, and the [example](../example/README.md) with each compiler; this needs curl, and about 5 GB of disk space and 4 GB of memory. `--skip-genome` leaves both out. `scripts/run_benchmarks.sh --help` lists all options.
+ - builds and runs the benchmarks with GCC and Clang on Linux, as far as they are installed, or with Apple Clang on macOS, each in the three modes of handling the results, see [Measurements](#measurements), pinned to one CPU core on Linux;
+ - runs the genome sweep (see [Suites](#suites)) in each mode, and the [example](../example/README.md) with each compiler, on the human genome, which it downloads once into `example/data/`; this needs curl, and about 5 GB of disk space and 4 GB of memory;
+ - writes the results to `results/<CPU>/<Compiler>_<version>/`, see [results/README.md](../results/README.md).
 
-The results go to `results/<CPU>/<Compiler>_<version>/`, such as `results/Intel_Core_7_240H/GCC_15/`:
+Its main options are `--compilers` (e.g., `gcc,clang`) and `--modes` (e.g., `sum,write`) to run only some of them, `--skip-genome` to leave out the genome sweep and the example, and `--genome-file` to use an existing copy of the human genome instead of the download; everything after `--` is passed on to the program, e.g., `-- -k 31 --sample-ms 5`. `scripts/run_benchmarks.sh --help` lists all options. The plots are not in git; to make them from the results, see [plot/README.md](../plot/README.md).
 
- - `<mode>/`: one CSV per suite, `sys_info.txt` with the system, the build, and the benchmark settings, and `log.txt` with the output; `genome_sweep.csv`, with its own `genome_sweep_sys_info.txt` and `genome_sweep_log.txt`.
- - `human_genome.csv`: the output of the example on the human genome.
- - `DuoHash.csv`: the results of the DuoHash benchmark, see [External comparisons](#external-comparisons), which is run separately.
+### Running the program directly
 
-Existing results of the same CPU, compiler, and mode are moved to `results/_archive/<date>/` first. The repository has these results for all CPUs that we tested, as CSV and text files. The plots are not in git; to make them, see [plot/README.md](../plot/README.md).
-
-## Running the program directly
-
-`make` in the main directory of the repository builds the benchmarks and the tests, as `bin/fisk_benchmarks` and `bin/fisk_tests`. The benchmarks are built in the mode of the CMake option `FISK_BENCHMARK_SINK_MODE` (`FISK_BENCHMARK_SINK_SUM` by default). A single run, pinned to one CPU on Linux:
+`make` in the main directory of the repository builds the benchmarks and the tests, as `bin/fisk_benchmarks` and `bin/fisk_tests`. Each build runs in one mode, set by the CMake option `FISK_BENCHMARK_SINK_MODE` (`FISK_BENCHMARK_SINK_SUM` by default). Without options, the program runs all suites except the genome sweep, with the settings of the results in `results/`, and writes its CSVs to `results/` in the current directory, or to `--output-dir`. A single run, pinned to one CPU on Linux:
 
 ```
 taskset -c 2 ./bin/fisk_benchmarks
 ```
 
-`./bin/fisk_benchmarks --help` lists its options, such as the input (`--input-fasta`, `--input-length`), the value of k (`-k`), the masks (`--masks-file`), and the timing (`--sample-ms`, `--repeats`). Without `--masks-file`, the program reads its masks from `masks/` in the repository, next to `bin/`.
+`./bin/fisk_benchmarks --help` lists its options, such as the input (`--input-fasta`, `--input-length`), the value of k (`-k`), the masks (`--masks-file`), and the timing (`--sample-ms`, `--repeats`). Without `--masks-file`, the program reads its masks from `masks/` in the repository, next to `bin/`. `--scaling-max-length 0` skips `for_each_scaling`, which takes the most memory, see [Suites](#suites).
 
 ## Measurements
 
@@ -42,6 +38,7 @@ The mode (`sink.hpp`) sets what each variant does with its results:
  - `barrier` passes each one through an optimization barrier, so that they cannot be combined.
  - `write` stores them in a small buffer, as a consumer that keeps its results does.
 
+These modes thus reflect different aspects that a compiler might utilize and optimize differently in real code with user callbacks as well.
 The `sequence_pack_*` and `kmer_clark` suites do not use the mode, and their `sink` column is always `sum`.
 
 ## Suites
@@ -77,4 +74,4 @@ The benchmarks compare against the code of other projects, in [external/](extern
 | [CLARK](https://github.com/rouni001/CLARK), spaced k-mers of CLARK-S (GPL v3) | `kmer_clark` |
 | [cute-nucleotides](https://github.com/Daniel-Liu-c0deb0t/cute-nucleotides) and [fastdna](https://github.com/eitanf/fastdna), packing of ASCII input | `sequence_pack_unchecked` |
 
-The spaced k-mer methods of [DuoHash](https://github.com/CominLab/DuoHash) are timed by a benchmark program of their own, in [our fork of DuoHash](https://github.com/lczech/DuoHash), whose results are the `DuoHash.csv` files in `results/`.
+The `missh` variant of `spaced_kmer_extract_ascii_checked_single` is a loose re-implementation of the extraction of [MISSH](https://github.com/CominLab/MISSH), as a baseline, and the `naive` variant of it and of `…_multi` is the same with a faster character encoder. The methods of the [DuoHash](https://github.com/CominLab/DuoHash) repository, such as MISSH itself, are timed by a benchmark program of their own, in [our fork of DuoHash](https://github.com/lczech/DuoHash), see [results/README.md](../results/README.md).
