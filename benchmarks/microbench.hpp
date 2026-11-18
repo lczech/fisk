@@ -70,6 +70,9 @@ struct Bench
 {
     std::string_view name;
     F fn;
+
+    // Whether the bench runs, see bench_if(); one that does not is left out of the results.
+    bool enabled = true;
 };
 
 // -----------------------------------------------------------------------------
@@ -178,6 +181,14 @@ template <class F>
 inline Bench<std::decay_t<F>> bench(std::string_view name, F&& fn)
 {
     return Bench<std::decay_t<F>>{name, std::forward<F>(fn)};
+}
+
+// As bench(), for a bench that only runs if `enabled`, such as one that is known to be slow on
+// this CPU.
+template <class F>
+inline Bench<std::decay_t<F>> bench_if(bool enabled, std::string_view name, F&& fn)
+{
+    return Bench<std::decay_t<F>>{name, std::forward<F>(fn), enabled};
 }
 
 // -----------------------------------------------------------------------------
@@ -321,13 +332,15 @@ private:
             auto const& inputs = next_inputs();
             double const units_per_run = compute_units_per_run(inputs);
             std::size_t i = 0;
-            (run_one_(inputs, units_per_run, bs, states[i++]), ...);
+            ((bs.enabled ? run_one_(inputs, units_per_run, bs, states[i]) : void(), ++i), ...);
 
             // The sinks are compared per repeat, as generated inputs differ between repeats.
             if (check_sinks_) {
                 std::vector<Result> sinks;
                 std::size_t j = 0;
-                ((sinks.push_back(Result{bs.name, 0.0, 0.0, 0.0, 0, 0, states[j++].sink})), ...);
+                ((bs.enabled
+                    ? sinks.push_back(Result{bs.name, 0.0, 0.0, 0.0, 0, 0, states[j].sink})
+                    : void(), ++j), ...);
                 require_same_sinks(sinks, /*fatal=*/true);
             }
         }
@@ -335,10 +348,12 @@ private:
         std::vector<Result> rs;
         rs.reserve(sizeof...(Benches));
         std::size_t i = 0;
-        (rs.push_back(make_result_(bs.name, states[i++])), ...);
+        ((bs.enabled ? rs.push_back(make_result_(bs.name, states[i])) : void(), ++i), ...);
 
         print_if_needed(rs);
-        std::cout << "\nSink: " << rs.front().sink << "\n";
+        if (!rs.empty()) {
+            std::cout << "\nSink: " << rs.front().sink << "\n";
+        }
         return rs;
     }
 
