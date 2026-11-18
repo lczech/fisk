@@ -31,7 +31,6 @@
 
 // Bit extraction
 #include "fisk/bit_extract/bit_extract.hpp"
-#include "fisk/bit_extract/selector.hpp"
 #include "fisk/bit_extract/simd.hpp"
 
 // Sequence packing

@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "bit_extract_blocks/bench.hpp"
-#include "fisk/bit_extract/selector.hpp"
 #include "microbench.hpp"
 #include "utils.hpp"
 
@@ -23,14 +22,6 @@ using namespace fisk;
 // keep small enough for the per-mask tables of all implementations to stay in L1.
 static constexpr std::size_t kBatchSize = 64;
 static constexpr std::size_t kInnerRounds = 1024;
-
-// Sample size for the selector survey below, per number of runs.
-static constexpr std::size_t kSelectorSamples = 16;
-
-// bit_extract_selector() runs its own internal self-tuning benchmark on every call. We reduce
-// its sample size here (from the default of 2^14) since the result is only used for informational
-// mode counts, not for any of the benched implementations.
-static constexpr std::size_t kTuneNumVals = 4096;
 
 namespace {
 
@@ -261,27 +252,6 @@ static std::vector<BitExtractBlocksBatch> make_input_blocks(
     return std::vector<BitExtractBlocksBatch>{ std::move(batch) };
 }
 
-/**
- * @brief Collect which selector mode is chosen how often, across the same range of run counts
- * that the benchmark below uses.
- *
- * This is not really important, but we are curious to see this. It is deliberately kept out of the
- * benchmark input generation: bit_extract_selector() runs a self-tuning benchmark per call, whose
- * cost would otherwise scale with the batch size and the number of repeats, and dominate the
- * runtime of the suite without contributing anything to its measurements.
- */
-static void survey_selector_modes(std::vector<std::size_t>& selector_counts)
-{
-    for (std::size_t runs = 0; runs <= 32; ++runs) {
-        auto seed = static_cast<std::uint64_t>(0x5E1EC7ULL) ^ static_cast<std::uint64_t>(runs);
-        std::mt19937_64 rng(seed);
-        for (std::size_t i = 0; i < kSelectorSamples; ++i) {
-            auto const mask = random_mask_with_runs<64>(runs, rng);
-            ++selector_counts[static_cast<std::size_t>(bit_extract_selector(mask, kTuneNumVals))];
-        }
-    }
-}
-
 void bench_bit_extract_blocks(std::ostream& csv_os)
 {
     std::size_t const n = kBatchSize;
@@ -294,9 +264,6 @@ void bench_bit_extract_blocks(std::ostream& csv_os)
 
     // Prepare csv output file with benchmark results
     write_csv_header(csv_os);
-
-    auto selector_counts = std::vector<std::size_t>( 6, 0 );
-    survey_selector_modes(selector_counts);
 
     // Run a benchmark for each weight of the mask.
     // Most of our bit extract software implementations have a runtime depending on that,
@@ -413,11 +380,4 @@ void bench_bit_extract_blocks(std::ostream& csv_os)
     if( stdout_is_terminal() ) {
         std::cout << "\n";
     }
-
-    std::cout << "selector bit extract counts:\n";
-    for( std::size_t i = 0; i < selector_counts.size(); ++i ) {
-        std::cout << "  " << selector_counts[i] << " <== "
-            << bit_extract_mode_name(static_cast<BitExtractMode>(i)) << "\n";
-    }
-    std::cout << "\n";
 }
