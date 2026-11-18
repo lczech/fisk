@@ -26,11 +26,12 @@ bool is_aligned_(void const* p, std::size_t alignment)
 TEST(UtilAlignedAllocator, VectorsAndStrings)
 {
     // Every size, also after growing, copying and with several allocations alive at once, which
-    // the heap would otherwise place at 16 bytes past a cache line as often as not.
+    // the heap would otherwise place at 16 bytes past a cache line as often as not. The strings are
+    // longer than the 22 characters that libc++ stores inside the string object itself, unaligned.
     for (std::size_t n = 1; n <= 200; ++n) {
         AlignedVector<std::uint8_t> bytes(n);
         AlignedVector<std::uint64_t> words(n);
-        AlignedString str(n + 16, 'A');
+        AlignedString str(n + 22, 'A');
         EXPECT_TRUE(is_aligned_(bytes.data(), 64));
         EXPECT_TRUE(is_aligned_(words.data(), 64));
         EXPECT_TRUE(is_aligned_(str.data(), 64));

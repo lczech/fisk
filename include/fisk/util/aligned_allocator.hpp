@@ -88,8 +88,8 @@ using AlignedVector = std::vector<T, AlignedAllocator<T>>;
  * @brief A `std::string` whose characters start at a multiple of 64 bytes, see AlignedAllocator.
  *
  * It converts to `std::string_view`, as the ASCII input of fisk takes it. Strings short enough to
- * be stored inside the object itself, at most 15 characters with the usual standard libraries, are
- * not aligned.
+ * be stored inside the object itself, at most 15 characters with libstdc++ and MSVC and 22 with
+ * libc++, are not aligned. fisk reads any input correctly: the alignment only affects the speed.
  */
 using AlignedString = std::basic_string<char, std::char_traits<char>, AlignedAllocator<char>>;
 
