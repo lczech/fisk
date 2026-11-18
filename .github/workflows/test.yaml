@@ -128,7 +128,11 @@ jobs:
     env:
       BUILD_TYPE: Release
       SANITIZE_FLAGS: -fsanitize=address,undefined -fno-sanitize-recover=all
-      SDE_URL: https://downloadmirror.intel.com/843185/sde-external-9.48.0-2024-11-25-lin.tar.xz
+      # Intel removes older SDE versions from its mirror. If the download fails, take the link of
+      # the current version from the download page, after accepting the license there, and the
+      # SHA256 listed with it: https://www.intel.com/content/www/us/en/download/684897/
+      SDE_URL: https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz
+      SDE_SHA256: 94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50
 
     defaults:
       run:
@@ -150,7 +154,9 @@ jobs:
         if: matrix.sde
         run: |
           mkdir -p "${RUNNER_TEMP}/sde"
-          curl -sSL "${SDE_URL}" | tar -xJ -C "${RUNNER_TEMP}/sde" --strip-components=1
+          curl -fsSL -o "${RUNNER_TEMP}/sde.tar.xz" "${SDE_URL}"
+          echo "${SDE_SHA256}  ${RUNNER_TEMP}/sde.tar.xz" | sha256sum -c -
+          tar -xJf "${RUNNER_TEMP}/sde.tar.xz" -C "${RUNNER_TEMP}/sde" --strip-components=1
           echo "SDE_PATH=${RUNNER_TEMP}/sde" >> "${GITHUB_ENV}"
 
       # Only the tests are built here; the benchmarks are built by the Benchmark workflow. The
