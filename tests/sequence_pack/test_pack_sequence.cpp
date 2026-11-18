@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -246,3 +247,53 @@ TEST(SequencePackPackSequence, CheckedNeon)
 }
 
 #endif
+
+// =================================================================================================
+//     Pack Sequence with the Default Word Encoder
+// =================================================================================================
+
+// Checks that the overloads without an encoder argument pack as DefaultWordEncoder does.
+template <Encoding E, Layout L>
+static void check_pack_sequence_default()
+{
+    static_assert(std::is_same_v<
+        decltype(pack_sequence_unchecked<E, L>("")), PackedSequence<E, L>
+    >);
+    static_assert(std::is_same_v<
+        decltype(pack_sequence_checked<E, L>("")), PackedSequenceWithValidity<E, L>
+    >);
+
+    using Plain = PackedSequence<E, L>;
+    using Checked = PackedSequenceWithValidity<E, L>;
+    DefaultWordEncoder<E, L> const encoder{};
+    Plain plain;
+    Checked checked;
+
+    for (auto const& seq : validity_sequences()) {
+        auto const expected_plain = pack_sequence_unchecked(seq, encoder);
+        auto const expected_checked = pack_sequence_checked(seq, encoder);
+
+        pack_sequence_unchecked(seq, plain);
+        pack_sequence_checked(seq, checked);
+        auto const plain2 = pack_sequence_unchecked<E, L>(seq);
+        auto const checked2 = pack_sequence_checked<E, L>(seq);
+
+        for (auto const* out : std::initializer_list<Plain const*>{&plain, &plain2}) {
+            EXPECT_EQ(out->length(), expected_plain.length());
+            EXPECT_TRUE(std::ranges::equal(out->codes(), expected_plain.codes()));
+        }
+        for (auto const* out : std::initializer_list<Checked const*>{&checked, &checked2}) {
+            EXPECT_EQ(out->length(), expected_checked.length());
+            EXPECT_TRUE(std::ranges::equal(out->codes(), expected_checked.codes()));
+            EXPECT_TRUE(std::ranges::equal(out->validity(), expected_checked.validity()));
+        }
+    }
+}
+
+TEST(SequencePackPackSequence, DefaultWordEncoder)
+{
+    check_pack_sequence_default<Encoding::kACGT, Layout::kLSB>();
+    check_pack_sequence_default<Encoding::kACGT, Layout::kMSB>();
+    check_pack_sequence_default<Encoding::kACTG, Layout::kLSB>();
+    check_pack_sequence_default<Encoding::kACTG, Layout::kMSB>();
+}

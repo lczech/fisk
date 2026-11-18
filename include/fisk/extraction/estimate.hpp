@@ -19,28 +19,6 @@
 namespace fisk {
 
 // =================================================================================================
-//     Estimate Types
-// =================================================================================================
-
-/**
- * @brief The word encoder with which the estimate packs ASCII input: WordEncoderDirectDouble with
- * AVX2 or Neon, else with SSE2 (whose double store needs SSSE3), else WordEncoderButterfly.
- */
-#if defined(FISK_HAS_AVX2)
-template <Encoding E, Layout L>
-using EstimateWordEncoder = WordEncoderDirectDouble<E, L, SimdAVX2>;
-#elif defined(FISK_HAS_NEON)
-template <Encoding E, Layout L>
-using EstimateWordEncoder = WordEncoderDirectDouble<E, L, SimdNEON>;
-#elif defined(FISK_HAS_SSSE3)
-template <Encoding E, Layout L>
-using EstimateWordEncoder = WordEncoderDirectDouble<E, L, SimdSSE2>;
-#else
-template <Encoding E, Layout L>
-using EstimateWordEncoder = WordEncoderButterfly<E, L>;
-#endif
-
-// =================================================================================================
 //     Candidate Lists
 // =================================================================================================
 

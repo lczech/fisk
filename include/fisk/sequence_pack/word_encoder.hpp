@@ -10,6 +10,9 @@
 #include "fisk/util/intrinsics.hpp"
 #include "fisk/simd/simd.hpp"
 #include "fisk/simd/scalar.hpp"
+#include "fisk/simd/sse2.hpp"
+#include "fisk/simd/avx2.hpp"
+#include "fisk/simd/neon.hpp"
 #include "fisk/core/types.hpp"
 #include "fisk/bit_extract/bit_extract.hpp"
 #include "fisk/bit_extract/simd.hpp"
@@ -702,5 +705,30 @@ struct WordEncoderDirectDouble : WordEncoderDirect<E, L, Simd>
     // The call operator on a single word.
     using WordEncoderDirect<E, L, Simd>::operator();
 };
+
+// =================================================================================================
+//     Default Word Encoder
+// =================================================================================================
+
+/**
+ * @brief The fastest word encoder of the build for long sequences: WordEncoderDirectDouble with
+ * AVX2 or Neon, else with SSE2 (whose double store needs SSSE3), else WordEncoderButterfly.
+ *
+ * The packing functions without an encoder argument and for_each_kmer() and
+ * for_each_spaced_kmer() pack with it.
+ */
+#if defined(FISK_HAS_AVX2)
+template <Encoding E, Layout L>
+using DefaultWordEncoder = WordEncoderDirectDouble<E, L, SimdAVX2>;
+#elif defined(FISK_HAS_NEON)
+template <Encoding E, Layout L>
+using DefaultWordEncoder = WordEncoderDirectDouble<E, L, SimdNEON>;
+#elif defined(FISK_HAS_SSSE3)
+template <Encoding E, Layout L>
+using DefaultWordEncoder = WordEncoderDirectDouble<E, L, SimdSSE2>;
+#else
+template <Encoding E, Layout L>
+using DefaultWordEncoder = WordEncoderButterfly<E, L>;
+#endif
 
 } // namespace fisk

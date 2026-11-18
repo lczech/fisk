@@ -171,7 +171,7 @@ struct SpacedKmerCandidateAsciiChunkedScalar
         Callback& callback
     ) const
     {
-        EstimateWordEncoder<E, L> const encoder{};
+        DefaultWordEncoder<E, L> const encoder{};
         auto const bit_extract = spaced_kmer_candidate_bit_extract_<BitExtractForm>();
         auto const& masks = mask_forms.template get<BitExtractForm>();
         dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
@@ -205,7 +205,7 @@ struct SpacedKmerCandidateAsciiChunkedSimd
         Callback& callback
     ) const
     {
-        EstimateWordEncoder<E, L> const encoder{};
+        DefaultWordEncoder<E, L> const encoder{};
         auto vector_callback = spaced_kmer_candidate_vector_callback_(callback);
         auto const& masks = mask_forms.template get<Kernel>();
         dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {

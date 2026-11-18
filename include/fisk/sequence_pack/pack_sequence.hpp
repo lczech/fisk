@@ -241,4 +241,48 @@ inline PackedSequenceWithValidity<Encoder::encoding, Encoder::layout> pack_seque
     return out;
 }
 
+// -----------------------------------------------------------------------------
+//     Pack Sequence with the Default Word Encoder
+// -----------------------------------------------------------------------------
+
+/**
+ * @brief Pack a whole ASCII sequence into a PackedSequence, with DefaultWordEncoder, reusing
+ * existing storage.
+ */
+template <Encoding E, Layout L>
+inline void pack_sequence_unchecked(std::string_view seq, PackedSequence<E, L>& out)
+{
+    pack_sequence_unchecked(seq, DefaultWordEncoder<E, L>{}, out);
+}
+
+/**
+ * @brief Pack a whole ASCII sequence into a freshly allocated PackedSequence, with
+ * DefaultWordEncoder.
+ */
+template <Encoding E, Layout L>
+inline PackedSequence<E, L> pack_sequence_unchecked(std::string_view seq)
+{
+    return pack_sequence_unchecked(seq, DefaultWordEncoder<E, L>{});
+}
+
+/**
+ * @brief Pack a whole ASCII sequence into a PackedSequenceWithValidity, with DefaultWordEncoder,
+ * reusing existing storage.
+ */
+template <Encoding E, Layout L>
+inline void pack_sequence_checked(std::string_view seq, PackedSequenceWithValidity<E, L>& out)
+{
+    pack_sequence_checked(seq, DefaultWordEncoder<E, L>{}, out);
+}
+
+/**
+ * @brief Pack a whole ASCII sequence into a freshly allocated PackedSequenceWithValidity, with
+ * DefaultWordEncoder.
+ */
+template <Encoding E, Layout L>
+inline PackedSequenceWithValidity<E, L> pack_sequence_checked(std::string_view seq)
+{
+    return pack_sequence_checked(seq, DefaultWordEncoder<E, L>{});
+}
+
 } // namespace fisk

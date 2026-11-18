@@ -65,7 +65,7 @@ void bench_genome_sweep(
             bench(
                 "pack_sequence_checked_estimate",
                 [](InputSequence const& seq) {
-                    return pack_sequence_checked(seq, EstimateWordEncoder<E, L>{}).length();
+                    return pack_sequence_checked(seq, DefaultWordEncoder<E, L>{}).length();
                 }
             )
         );

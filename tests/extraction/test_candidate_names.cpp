@@ -195,7 +195,7 @@ struct KmerTableRecorder
 
 TEST(CandidateNames, KmerAsciiChecked)
 {
-    EstimateWordEncoder<kAcgt, kMsb> const encoder{};
+    DefaultWordEncoder<kAcgt, kMsb> const encoder{};
     auto const table = std::tuple{
         FISK_TEST_ALGORITHM(
             for_each_kmer_ascii_checked_chunked_scalar, , "", (seq, kK, encoder, callback)
@@ -211,7 +211,7 @@ TEST(CandidateNames, KmerAsciiChecked)
 
 TEST(CandidateNames, KmerAsciiUnchecked)
 {
-    EstimateWordEncoder<kAcgt, kMsb> const encoder{};
+    DefaultWordEncoder<kAcgt, kMsb> const encoder{};
     auto const table = std::tuple{
         FISK_TEST_ALGORITHM(
             for_each_kmer_ascii_unchecked_chunked_scalar, , "", (seq, kK, encoder, callback)
@@ -298,7 +298,7 @@ TableMaskForms const table_masks({"1101101", "1011011"});
 
 TEST(CandidateNames, SpacedAsciiChecked)
 {
-    EstimateWordEncoder<kAcgt, kMsb> const encoder{};
+    DefaultWordEncoder<kAcgt, kMsb> const encoder{};
     auto const& masks = table_masks;
     auto const table = std::tuple{
         #if defined(FISK_HAS_BMI2)
@@ -329,7 +329,7 @@ TEST(CandidateNames, SpacedAsciiChecked)
 
 TEST(CandidateNames, SpacedAsciiUnchecked)
 {
-    EstimateWordEncoder<kAcgt, kMsb> const encoder{};
+    DefaultWordEncoder<kAcgt, kMsb> const encoder{};
     auto const& masks = table_masks;
     auto const table = std::tuple{
         #if defined(FISK_HAS_BMI2)

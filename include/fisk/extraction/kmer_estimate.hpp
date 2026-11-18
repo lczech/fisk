@@ -60,7 +60,7 @@ struct KmerCandidateAsciiChunkedScalar
         std::size_t k, std::string_view seq, Callback& callback
     ) const
     {
-        EstimateWordEncoder<E, L> const encoder{};
+        DefaultWordEncoder<E, L> const encoder{};
         if constexpr (C == InputCheck::kChecked) {
             for_each_kmer_ascii_checked_chunked_scalar(seq, k, encoder, callback);
         } else {
@@ -84,7 +84,7 @@ struct KmerCandidateAsciiChunkedSimd
         std::size_t k, std::string_view seq, Callback& callback
     ) const
     {
-        EstimateWordEncoder<E, L> const encoder{};
+        DefaultWordEncoder<E, L> const encoder{};
         auto vector_callback = kmer_candidate_vector_callback_(callback);
         if constexpr (C == InputCheck::kChecked) {
             for_each_kmer_ascii_checked_chunked_simd<Simd>(
