@@ -5,8 +5,8 @@ set -uo pipefail
 #   Fisk benchmark submission for the rubus cluster
 # ==============================================================================
 #
-# Runs scripts/run_benchmarks.sh, with all benchmark sink modes, on its own exclusive node for
-# each combination of CPU arch x compiler:
+# Runs scripts/run_benchmarks.sh, with all benchmark sink modes, on its own node for each
+# combination of CPU arch x compiler:
 #   - AMD EPYC 9684X (Zen 4)  x  Clang 21 / GCC 15
 #   - AMD EPYC 9655 (Zen 5)   x  Clang 21 / GCC 15
 #   - Intel Xeon 8568Y        x  Clang 21 / GCC 15
@@ -16,7 +16,14 @@ set -uo pipefail
 #   with exactly the source tree to build - either a fresh `git clone`, or an
 #   unzipped copy made by scripts/make_fisk_zip.sh.
 #
-#     ./fisk/scripts/submit_rubus_benchmarks.sh
+#     ./fisk/scripts/submit_rubus_benchmarks.sh [--shared]
+#
+# By default, each job has its node to itself (--exclusive). With --shared, each job takes
+# SHARED_CORES whole cores (both threads of each) of a node that is idle when the script starts,
+# a different one per job, and leaves the rest of the node to other jobs. The benchmarks then run
+# on one of these cores, but other jobs on the node share the memory bandwidth and the power
+# budget of the CPU with them. So the jobs log the CPUs allocated on their node, and its load, once
+# a minute into ./output/logs/<arch>-<compiler>.occupancy.txt; the CPUs of the job itself count.
 #
 # With FISK_GENOME_FILE set to a copy of the human genome, the example uses it instead of
 # downloading the genome on each node, see example/run_human_genome.sh. scripts/rubus_launch.sh
@@ -40,6 +47,20 @@ TIME_LIMIT="4:00:00"
 
 # CPUs per job: all of them build, and the benchmarks run pinned to one.
 CPUS_PER_TASK=64
+
+# With --shared: whole cores per job (--hint=nomultithread, which allocates both threads of each
+# core, while Slurm counts the cores), the memory, and a time limit for the slower build.
+SHARED_CORES=8
+SHARED_MEM="64G"
+SHARED_TIME_LIMIT="6:00:00"
+
+SHARED=0
+for arg in "$@"; do
+  case "$arg" in
+    --shared) SHARED=1 ;;
+    *) echo "Error: unknown argument '${arg}'." >&2; exit 1 ;;
+  esac
+done
 
 # A copy of the human genome for the example, which run_benchmarks.sh runs on it, see
 # example/run_human_genome.sh: used instead of the download if set, see the usage above.
@@ -72,8 +93,8 @@ declare -A CPU_LABEL=(
   [xeon]="Intel Xeon Platinum 8568Y"
 )
 
-# The combos to run. Each gets its own --exclusive node, so all of them
-# run fully in parallel with no timing interference between them.
+# The combos to run. Each gets its own node, so all of them run fully in parallel with no timing
+# interference between them.
 COMBOS=(
   "epyc:clang"
   "epyc:gcc"
@@ -111,6 +132,33 @@ mkdir -p "$RESULTS_ROOT" "$LOG_DIR"
 STATUS_DIR="$(mktemp -d)"
 trap 'rm -rf "$STATUS_DIR"' EXIT
 
+# With --shared: an idle node per combo, with all features of its constraint, each node once.
+declare -A NODE=()
+if [[ $SHARED -eq 1 ]]; then
+  idle_nodes="$(sinfo -N -h -t idle -o '%n %f')"
+  used_nodes=" "
+  for combo in "${COMBOS[@]}"; do
+    arch="${combo%%:*}"
+    slug="${arch}-${combo##*:}"
+    while read -r node features; do
+      [[ -n "$node" && "$used_nodes" != *" ${node} "* ]] || continue
+      fits=1
+      for feature in ${CONSTRAINT[$arch]//,/ }; do
+        [[ ",${features}," == *",${feature},"* ]] || fits=0
+      done
+      if [[ $fits -eq 1 ]]; then
+        NODE[$slug]="$node"
+        used_nodes+="${node} "
+        break
+      fi
+    done <<< "$idle_nodes"
+    if [[ -z "${NODE[$slug]:-}" ]]; then
+      echo "Error: no idle node left for ${slug} (${CONSTRAINT[$arch]})." >&2
+      exit 1
+    fi
+  done
+fi
+
 # ------------------------------------------------------------------------
 #   One combo: fresh copy, then build and run all modes on one node.
 # ------------------------------------------------------------------------
@@ -129,37 +177,63 @@ run_combo() {
     genome_arg="--genome-file '${GENOME_FILE}'"
   fi
 
-  # Archive any previous log for this combo instead of overwriting.
-  if [[ -f "$logfile" ]]; then
-    mkdir -p "${LOG_DIR}/_archive/${TIMESTAMP}"
-    mv "$logfile" "${LOG_DIR}/_archive/${TIMESTAMP}/${slug}.log"
-  fi
+  local occupancy="${LOG_DIR}/${slug}.occupancy.txt"
+
+  # Archive any previous log of this combo instead of overwriting it.
+  for f in "$logfile" "$occupancy"; do
+    if [[ -f "$f" ]]; then
+      mkdir -p "${LOG_DIR}/_archive/${TIMESTAMP}"
+      mv "$f" "${LOG_DIR}/_archive/${TIMESTAMP}/"
+    fi
+  done
 
   # Fresh working copy, built fresh on the node it will run on.
   rm -rf "$workdir"
   cp -r fisk "$workdir"
 
+  # Exclusive: --mem=0 asks for all memory of the node, without which Slurm refuses exclusive EPYC
+  # nodes. Shared: the node picked above, whole cores, and the occupancy log, in the background
+  # for as long as the job runs. The builds use all threads of the job, $(nproc) on the node.
+  local alloc=(--exclusive --mem=0 --cpus-per-task="${CPUS_PER_TASK}" --time="${TIME_LIMIT}")
+  local build_jobs="${CPUS_PER_TASK}"
+  local monitor=""
+  if [[ $SHARED -eq 1 ]]; then
+    alloc=(
+      --nodelist="${NODE[$slug]}" --mem="${SHARED_MEM}" --cpus-per-task="${SHARED_CORES}"
+      --hint=nomultithread --time="${SHARED_TIME_LIMIT}"
+    )
+    build_jobs='$(nproc)'
+    monitor="
+      while true; do
+        echo \"\$(date -Iseconds) \$(scontrol show node \"\$(hostname -s)\" \
+          | grep -oE 'CPUAlloc=[0-9]+|CPULoad=[0-9.]+' | tr '\n' ' ')\"
+        sleep 60
+      done >> '${occupancy}' &
+      trap \"kill \$! 2> /dev/null || true\" EXIT
+    "
+  fi
+
   {
     echo "=== ${slug} ==="
     echo "Start: $(date -Iseconds)"
+    if [[ $SHARED -eq 1 ]]; then echo "Shared: ${NODE[$slug]}, ${SHARED_CORES} cores"; fi
   } > "$logfile"
 
-  # --mem=0 asks for all memory of the node, without which Slurm refuses exclusive EPYC nodes.
   srun \
     --job-name="fisk-${slug}" \
-    --exclusive --mem=0 \
-    --nodes=1 --ntasks=1 --cpus-per-task="${CPUS_PER_TASK}" \
+    "${alloc[@]}" \
+    --nodes=1 --ntasks=1 \
     --constraint="${constraint}" \
     --account="${ACCOUNT}" \
     --qos="${QOS}" \
-    --time="${TIME_LIMIT}" \
     bash -lc "
       set -e
+      ${monitor}
       module load '${module}'
       ${compiler_path:+export PATH=\"${compiler_path}:\$PATH\"}
       cd '${workdir}'
       scripts/run_benchmarks.sh --compilers '${compiler}' --cpu-label '${cpu_label}' \
-        --jobs '${CPUS_PER_TASK}' --results-dir '${RESULTS_ROOT}' ${genome_arg}
+        --jobs ${build_jobs} --results-dir '${RESULTS_ROOT}' ${genome_arg}
     " >> "$logfile" 2>&1
   local rc=$?
 
@@ -201,9 +275,9 @@ for combo in "${COMBOS[@]}"; do
   slug="${arch}-${compiler}"
   rc="$(cat "${STATUS_DIR}/${slug}" 2>/dev/null || echo "?")"
   if [[ "$rc" == "0" ]]; then
-    printf "  %-45s OK      output/logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}.log"
+    printf "  %-45s OK      output/logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}"
   else
-    printf "  %-45s FAILED  output/logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}.log"
+    printf "  %-45s FAILED  output/logs/%s.log\n" "${CPU_LABEL[$arch]}, ${compiler}" "${slug}"
     overall_rc=1
   fi
 done

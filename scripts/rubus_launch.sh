@@ -11,11 +11,12 @@ set -euo pipefail
 # each copy of a new fisk.zip there, run it from there, in tmux or screen, as the submission waits
 # for its jobs:
 #
-#     ./rubus_launch.sh
+#     ./rubus_launch.sh [--shared]
 #
 # It replaces fisk/ with the contents of fisk.zip, gets the human genome into genome/ once (see
-# example/run_human_genome.sh), and runs the submit_rubus_benchmarks.sh of the new zip with it.
-# It does nothing else, so that a copy of it keeps working with newer zips.
+# example/run_human_genome.sh), and runs the submit_rubus_benchmarks.sh of the new zip with it,
+# and with the arguments given here (--shared: see there). It does nothing else, so that a copy of
+# it keeps working with newer zips.
 
 cd "$(dirname "$0")"
 if [[ ! -f fisk.zip ]]; then
@@ -28,4 +29,4 @@ unzip -q fisk.zip
 
 FISK_GENOME_FILE="$(fisk/example/run_human_genome.sh --data-dir "$(pwd)/genome" --download-only)"
 export FISK_GENOME_FILE
-exec bash fisk/scripts/submit_rubus_benchmarks.sh
+exec bash fisk/scripts/submit_rubus_benchmarks.sh "$@"
