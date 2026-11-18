@@ -14,9 +14,11 @@
 # Each build writes its benchmark program to bin/ under a name of its own, such as
 # bin/fisk_benchmarks_gcc_15_sum, the same as its build folder build-bench/gcc_15_sum/.
 #
-# After the modes of each compiler, this runs the example on the human genome GRCh38 with that
-# compiler, see example/README.md, into results/<CPU>/<Compiler>_<version>/human_genome.csv. The
-# first run downloads the genome into example/data/ (0.9 GB, 3.1 GB unpacked).
+# After the suites of each mode, the same program runs the genome sweep, see --genome-sweep of the
+# benchmarks, on the human genome GRCh38, into genome_sweep.csv of the mode. After the modes of
+# each compiler, this runs the example on the genome with that compiler, see example/README.md,
+# into results/<CPU>/<Compiler>_<version>/human_genome.csv. The first run downloads the genome
+# into example/data/ (0.9 GB, 3.1 GB unpacked); --skip-genome skips the sweep and the example.
 #
 # Requires CMake (3.20 or later) and a C++20 compiler. Written for bash 3.2, which macOS ships.
 
@@ -43,7 +45,7 @@ Options:
   --genome-file <path>
                       A copy of the human genome to use instead of the download, see
                       example/run_human_genome.sh.
-  --skip-genome       Do not run the example on the human genome.
+  --skip-genome       Do not run the genome sweep and the example on the human genome.
   -h, --help          Show this help.
 
 Everything after -- is passed to fisk_benchmarks, e.g. -- -k 31 --sample-ms 5.
@@ -250,6 +252,20 @@ if [ ${#PIN[@]} -gt 0 ]; then echo "Pinning:    ${PIN[*]}"; fi
 SUMMARY=""
 FAILED=0
 
+# The genome as plain FASTA, for the genome sweeps, from the script of the example, which downloads
+# and unpacks it as for the example itself.
+GENOME_FASTA=""
+if [ "$SKIP_GENOME" -eq 0 ]; then
+    fasta_args=( --download-only )
+    if [ -n "$GENOME_FILE" ]; then
+        fasta_args+=( --genome-file "$GENOME_FILE" )
+    fi
+    if ! GENOME_FASTA="$("${REPO_ROOT}/example/run_human_genome.sh" "${fasta_args[@]}")"; then
+        echo "Error: the genome is not available, see above, or use --skip-genome." >&2
+        exit 1
+    fi
+fi
+
 for compiler in $COMPILERS; do
     cxx="$(cxx_driver "$compiler")"
     if ! command -v "$cxx" > /dev/null 2>&1; then
@@ -307,6 +323,24 @@ for compiler in $COMPILERS; do
             echo "Run failed: ${label}, ${mode} (exit code ${rc})" >&2
             SUMMARY="${SUMMARY}  ${label}, ${mode}: run failed (exit code ${rc})\n"
             FAILED=1
+        fi
+
+        # The genome sweep, with the same program, into the same folder.
+        if [ -n "$GENOME_FASTA" ]; then
+            echo
+            echo "=== ${label}, ${mode}, genome sweep ==="
+            ${PIN[@]+"${PIN[@]}"} "${REPO_ROOT}/bin/fisk_benchmarks_${build_name}" \
+                --genome-sweep --input-fasta "$GENOME_FASTA" --output-dir "$result_dir" 2>&1 \
+                | tee "${result_dir}/genome_sweep_log.txt"
+            rc=${PIPESTATUS[0]}
+            echo "End:   $(date +%Y-%m-%dT%H:%M:%S)"
+            if [ "$rc" -eq 0 ]; then
+                SUMMARY="${SUMMARY}  ${label}, ${mode}, genome sweep: OK\n"
+            else
+                echo "Run failed: ${label}, ${mode}, genome sweep (exit code ${rc})" >&2
+                SUMMARY="${SUMMARY}  ${label}, ${mode}, genome sweep: failed (exit code ${rc})\n"
+                FAILED=1
+            fi
         fi
     done
 

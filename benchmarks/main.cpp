@@ -28,6 +28,7 @@
 
 #include "arg_parser.hpp"
 #include "for_each_scaling/bench.hpp"
+#include "genome_sweep/bench.hpp"
 #include "kmer_extract_ascii_checked/bench.hpp"
 #include "kmer_extract_ascii_unchecked/bench.hpp"
 #include "kmer_extract_packed_unchecked/bench.hpp"
@@ -92,6 +93,9 @@ struct Options
 
     // Output directory for benchmark results
     std::string output_dir = "results";
+
+    // Run only the genome sweep on the --input-fasta, see bench_genome_sweep()
+    bool genome_sweep = false;
 };
 
 int main(int argc, char **argv)
@@ -170,6 +174,13 @@ int main(int argc, char **argv)
         "--output-dir", "-o",
         "Output directory for benchmark CSV files (default: results)",
         opts.output_dir
+    );
+
+    parser.add_flag(
+        "--genome-sweep", "",
+        "Run only the genome sweep on the --input-fasta, such as a genome: the algorithms of "
+        "practical use, the best of 3 single passes each, into genome_sweep.csv",
+        opts.genome_sweep
     );
 
     // ------------------------------------------------------------------------
@@ -302,6 +313,33 @@ int main(int argc, char **argv)
     // ------------------------------------------------------------------------
     //     Main
     // ------------------------------------------------------------------------
+
+    // The genome sweep, on its own: a single pass over the whole input per repeat, as the input
+    // is large, and no warm-up beyond the single pass that Microbench always runs before a timing.
+    if (opts.genome_sweep) {
+        if (opts.input_file.empty()) {
+            std::cerr << "Error: --genome-sweep needs --input-fasta.\n";
+            return 1;
+        }
+        microbench_settings.sample_seconds = 1e-9;
+        microbench_settings.warmup_seconds = 0.0;
+        microbench_settings.repeats = 3;
+        {
+            auto os_info = get_ofstream(out_dir, "genome_sweep_sys_info.txt" );
+            info_print_system(os_info);
+            info_print_host(os_info);
+            info_print_benchmark_build(os_info, FISK_BENCHMARK_SOURCE_REVISION);
+            info_print_power(os_info);
+            os_info << "Genome sweep:\n";
+            os_info << "  input      : " << input_info << "\n";
+            os_info << "  repeats    : " << microbench_settings.repeats
+                    << ", one pass each, after one pass of warm-up\n";
+            os_info << "  mask       : " << single_masks.front() << "\n";
+        }
+        auto os = get_ofstream(out_dir, "genome_sweep.csv" );
+        bench_genome_sweep(sequences, single_masks.front(), os);
+        return 0;
+    }
 
     // User output of system information
     {
