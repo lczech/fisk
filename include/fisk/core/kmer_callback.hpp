@@ -74,6 +74,16 @@ struct callback_narrow_parameters_<R (C::*)(Args...) const noexcept>
     : callback_narrow_parameters_<R(Args...)>
 {};
 
+// Whether `F` has one `operator()` that is not a template. A trait instead of a requires-expression:
+// Clang 13 reports the address of a template or overloaded `operator()` as a hard error there.
+template <typename F, typename = void>
+struct callback_has_single_call_operator_ : std::false_type {};
+
+template <typename F>
+struct callback_has_single_call_operator_<F, std::void_t<decltype(&F::operator())>>
+    : std::true_type
+{};
+
 // Whether `Callback` takes an integer narrower than 64 bits, as far as its type tells, see above.
 template <typename Callback>
 consteval bool callback_has_narrow_parameters_()
@@ -81,7 +91,7 @@ consteval bool callback_has_narrow_parameters_()
     using F = std::remove_pointer_t<std::remove_cvref_t<Callback>>;
     if constexpr (std::is_function_v<F>) {
         return callback_narrow_parameters_<F>::value;
-    } else if constexpr (requires { &F::operator(); }) {
+    } else if constexpr (callback_has_single_call_operator_<F>::value) {
         return callback_narrow_parameters_<decltype(&F::operator())>::value;
     } else {
         return false;
