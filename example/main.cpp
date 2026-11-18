@@ -17,10 +17,9 @@
 using namespace fisk;
 
 // The sequences of a FASTA file, without their names.
-// No error checking to keep this example simple.
-// The functions take any string, such as std::string. AlignedString is a std::string whose
-// characters start at a cache line (64 bytes), which the SIMD algorithms can read faster, mostly
-// with AVX-512, see fisk/util/aligned_allocator.hpp.
+// No error checking to keep this example simple. The functions take any string, such as
+// std::string. AlignedString is a std::string whose characters start at a cache line (64 bytes),
+// which the SIMD algorithms can read faster.
 std::vector<AlignedString> read_fasta(std::string const& path)
 {
     std::ifstream in(path);
@@ -39,9 +38,9 @@ std::vector<AlignedString> read_fasta(std::string const& path)
     return sequences;
 }
 
-// The callback, i.e., the function that is executed for each k-mer: here, it simply counts
+// The user callback, i.e., the function that is executed for each k-mer: here, it simply counts
 // the k-mers, and sums their values as a checksum. It is called with each k-mer and its position,
-// and with each spaced k-mer, its position, and the index of its mask.
+// and with each spaced k-mer, its position, and the index of its mask (all ignored here).
 struct MyCounter
 {
     std::uint64_t count = 0;
@@ -66,15 +65,16 @@ struct MyCounter
 // G = 2, T = 3 (ACGT), with the first base in the lowest bits (LSB), and print a CSV row. Checked:
 // the k-mers that contain other characters than ACGT, in upper or lower case, such as N, are
 // skipped. for_each_kmer() runs the algorithm that is likely the fastest on this CPU, which
-// for_each_kmer_algorithm_name() names. It is called directly in the timed loop: behind a lambda
-// that the compiler does not inline, the loop can be slower.
+// for_each_kmer_algorithm_name() names.
 void extract_kmers(
     std::vector<AlignedString> const& sequences, std::size_t bases, double read_seconds
 ) {
+    // Get the name of the algorithm that for_each_kmer() will use, for the CSV output.
     std::string const algorithm = for_each_kmer_algorithm_name<
         InputCheck::kChecked, Encoding::kACGT, Layout::kLSB
     >(std::string_view{}, 31);
 
+    // Count the k-mers and their checksum, and measure the time it took.
     MyCounter counter;
     auto const start = std::chrono::steady_clock::now();
     for (auto const& seq : sequences) {
@@ -84,6 +84,7 @@ void extract_kmers(
     }
     std::chrono::duration<double> const seconds = std::chrono::steady_clock::now() - start;
 
+    // Print a CSV row with the results.
     std::cout << "kmers," << algorithm << "," << sequences.size() << "," << bases << ","
               << counter.count << "," << counter.checksum << "," << read_seconds << ","
               << seconds.count() << "\n";
@@ -94,13 +95,17 @@ void extract_kmers(
 void extract_spaced_kmers(
     std::vector<AlignedString> const& sequences, std::size_t bases, double read_seconds
 ) {
+    // The spaced k-mer mask, here only one, but could be several.
     SpacedKmerMaskForms<Layout::kLSB> const mask_forms(
         std::vector<std::string>{ "1111011101110010111001011011111" }
     );
+
+    // Get the name of the algorithm that for_each_spaced_kmer() will use, for the CSV output.
     std::string const algorithm = for_each_spaced_kmer_algorithm_name<
         InputCheck::kChecked, Encoding::kACGT, Layout::kLSB
     >(std::string_view{}, mask_forms);
 
+    // Count the spaced k-mers and their checksum, and measure the time it took.
     MyCounter counter;
     auto const start = std::chrono::steady_clock::now();
     for (auto const& seq : sequences) {
@@ -110,6 +115,7 @@ void extract_spaced_kmers(
     }
     std::chrono::duration<double> const seconds = std::chrono::steady_clock::now() - start;
 
+    // Print a CSV row with the results.
     std::cout << "spaced_kmers," << algorithm << "," << sequences.size() << "," << bases << ","
               << counter.count << "," << counter.checksum << "," << read_seconds << ","
               << seconds.count() << "\n";
@@ -122,6 +128,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    // Read the sequences of the FASTA file, and measure the time it took.
     auto const start = std::chrono::steady_clock::now();
     auto const sequences = read_fasta(argv[1]);
     std::chrono::duration<double> const read_seconds = std::chrono::steady_clock::now() - start;
@@ -130,6 +137,7 @@ int main(int argc, char** argv)
         bases += seq.size();
     }
 
+    // Print the CSV header, and extract the k-mers and spaced k-mers.
     std::cout << "extraction,algorithm,sequences,bases,kmers,checksum,"
               << "read_seconds,extract_seconds\n";
     extract_kmers(sequences, bases, read_seconds.count());
