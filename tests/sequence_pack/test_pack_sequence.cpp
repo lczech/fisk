@@ -269,6 +269,11 @@ static void check_pack_sequence_default()
     Plain plain;
     Checked checked;
 
+    // std::ranges::equal is missing from libc++ before LLVM 16.
+    auto const equal = [](auto const& a, auto const& b) {
+        return std::equal(a.begin(), a.end(), b.begin(), b.end());
+    };
+
     for (auto const& seq : validity_sequences()) {
         auto const expected_plain = pack_sequence_unchecked(seq, encoder);
         auto const expected_checked = pack_sequence_checked(seq, encoder);
@@ -280,12 +285,12 @@ static void check_pack_sequence_default()
 
         for (auto const* out : std::initializer_list<Plain const*>{&plain, &plain2}) {
             EXPECT_EQ(out->length(), expected_plain.length());
-            EXPECT_TRUE(std::ranges::equal(out->codes(), expected_plain.codes()));
+            EXPECT_TRUE(equal(out->codes(), expected_plain.codes()));
         }
         for (auto const* out : std::initializer_list<Checked const*>{&checked, &checked2}) {
             EXPECT_EQ(out->length(), expected_checked.length());
-            EXPECT_TRUE(std::ranges::equal(out->codes(), expected_checked.codes()));
-            EXPECT_TRUE(std::ranges::equal(out->validity(), expected_checked.validity()));
+            EXPECT_TRUE(equal(out->codes(), expected_checked.codes()));
+            EXPECT_TRUE(equal(out->validity(), expected_checked.validity()));
         }
     }
 }
