@@ -54,7 +54,7 @@ inline constexpr std::array<std::uint8_t, 256> bit_map = [] {
 }();
 
 /**
- * @brief Encode four bases per byte via the paper's LUT loop, with a consistent partial byte.
+ * @brief Encode four nucleotides per byte via the paper's LUT loop, with a consistent partial byte.
  * @pre Output has room for ceil(seq.size() / 4) bytes.
  */
 template <fisk::Layout L>
@@ -104,7 +104,7 @@ inline void encode_lut(std::string_view seq, std::uint8_t* out) noexcept
 #endif
 
 /**
- * @brief Encode eight bases per PEXT, preserving the original loop and unroll boundary.
+ * @brief Encode eight nucleotides per PEXT, preserving the original loop and unroll boundary.
  * @pre Output has room for ceil(seq.size() / 4) bytes.
  */
 template <fisk::Layout L, int Unroll = 1>

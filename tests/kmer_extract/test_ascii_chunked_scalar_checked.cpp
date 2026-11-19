@@ -34,7 +34,7 @@ TEST(KmerExtractAsciiChunkedScalar, Checked)
     check_ascii_chunked_all<true>(checked);
 }
 
-// The checks of the checked extraction from ASCII, with chunks of 7 bases.
+// The checks of the checked extraction from ASCII, with chunks of 7 nucleotides.
 TEST(KmerExtractAsciiChunkedScalar, CheckedAsciiChecks)
 {
     auto const extract = ascii_chunked_as_ascii_extractor(checked);

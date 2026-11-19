@@ -97,7 +97,7 @@ In `core/types.hpp`:
 In `core/kmer.hpp`:
 
  - `kmer_encode()` builds a k-mer from a string of nucleotides, and `kmer_decode()` turns it back into one.
- - `base_at()` returns the code of the nucleotide at a position of a k-mer.
+ - `nucleotide_at()` returns the code of the nucleotide at a position of a k-mer.
  - `complement()` complements each nucleotide of a k-mer, `reverse()` reverses their order, and `reverse_complement()` does both.
  - `canonical()` returns the smaller of a k-mer and its reverse complement.
  - `kmer_convert()` converts a k-mer to another Encoding, Layout, or both.

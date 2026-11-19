@@ -18,17 +18,17 @@ namespace fisk {
 
 // Unlike the extraction from ASCII input (ascii_*.hpp), which checks character validity, the
 // extraction from a PackedSequence (sequence_pack/pack_sequence.hpp), in packed_*.hpp, reads the
-// already-encoded bases directly. Unchecked, it assumes that `seq` holds only valid bases,
-// allowing for higher performance.
+// already-encoded nucleotides directly. Unchecked, it assumes that `seq` holds only valid
+// nucleotides, allowing for higher performance.
 //
 // `L` (see Layout in core/types.hpp) selects both which packed layout is read and the
 // resulting k-mer's own bit convention. `kMSB` produces the left-rolling convention
 // (`kmer = (kmer << 2) | code`), preserving lexicographic string order as integer order.
-// `kLSB` produces the mirrored right-rolling convention (newest base in the high bits), which does
-// not preserve lexicographic order but is cheaper to produce from LSB-packed data.
+// `kLSB` produces the mirrored right-rolling convention (newest nucleotide in the high bits), which
+// does not preserve lexicographic order but is cheaper to produce from LSB-packed data.
 //
 // `E` (see Encoding in core/types.hpp) is carried through unchanged: extraction only moves
-// 2-bit codes around and never depends on which base a code stands for, but keeping it in the
+// 2-bit codes around and never depends on which nucleotide a code stands for, but keeping it in the
 // type prevents a sequence packed under one encoding from reaching code that expects another.
 //
 // Both conventions are handed on to the callback, which receives a Kmer<E, L> (core/kmer.hpp)

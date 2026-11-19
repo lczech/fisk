@@ -39,8 +39,8 @@ static SpacedKmerMask<Layout::kMSB, BitExtractMask> raw_spaced_kmer_mask(
 //     Spaced K-mer Encoding
 // =================================================================================================
 
-// Encoding a window with a mask keeps exactly the bases at the mask's '1' positions, in order, and
-// must agree with the oracle under every convention.
+// Encoding a window with a mask keeps exactly the nucleotides at the mask's '1' positions, in
+// order, and must agree with the oracle under every convention.
 template <typename K>
 static void check_spaced_encode(std::string const& mask)
 {

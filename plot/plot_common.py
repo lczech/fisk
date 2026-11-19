@@ -1055,9 +1055,9 @@ SUITE_UNIT_NOUN = {
     "spaced_kmer_extract_packed_checked_spans"    : "k-mers",
     "spaced_kmer_extract_ascii_unchecked_spans"   : "k-mers",
     "spaced_kmer_extract_ascii_checked_spans"     : "k-mers",
-    "char_encoder"                                : "bases",
-    "sequence_pack_unchecked"                     : "bases",
-    "sequence_pack_checked"                       : "bases",
+    "char_encoder"                                : "nucleotides",
+    "sequence_pack_unchecked"                     : "nucleotides",
+    "sequence_pack_checked"                       : "nucleotides",
     "bit_extract_weights"                         : "ops",
     "bit_extract_blocks"                          : "ops",
 }
@@ -1065,7 +1065,7 @@ SUITE_UNIT_NOUN = {
 # The singular of each noun, for the time per unit: "Time per k-mer [ns]".
 UNIT_NOUN_SINGULAR = {
     "k-mers" : "k-mer",
-    "bases"  : "base",
+    "nucleotides"  : "nucleotide",
     "ops"    : "operation",
 }
 
@@ -1076,8 +1076,8 @@ THROUGHPUT_PREFIX = "G"
 
 
 def unit_noun_for_suite(suite: str | None) -> str:
-    """Return the throughput noun (e.g. "k-mers", "bases", "ops") for a suite name, falling back
-    to the generic "ops" for anything not in SUITE_UNIT_NOUN (unknown/missing suite)."""
+    """Return the throughput noun (e.g. "k-mers", "nucleotides", "ops") for a suite name, falling
+    back to the generic "ops" for anything not in SUITE_UNIT_NOUN (unknown/missing suite)."""
     if suite is None:
         return "ops"
     if suite in SUITE_UNIT_NOUN:

@@ -38,8 +38,8 @@ namespace fisk {
 // its mask, see SpacedKmerMask (core/types.hpp): piece `j` of the spans in a vector is taken from
 // the words loaded `7 * j` bytes after those of the first piece, and the spaced k-mer is the OR of
 // the bits extracted from each piece, shifted to its place by the mask shift of the piece. The
-// windows still hold the neighboring bases above each piece, which the bit extraction does not
-// take.
+// windows still hold the neighboring nucleotides above each piece, which the bit extraction does
+// not take.
 //
 // The callback is called with vectors, as `callback(pos, mask_idx, spaced_kmers, valid_count)`,
 // or, for a single kernel, also as `callback(pos, spaced_kmers, valid_count)`: lane `j` of the
@@ -66,11 +66,12 @@ namespace fisk {
 
 // The loop over the spans of `Count` pieces, or of the piece count of the kernels at runtime if
 // `Count` is 0, see above. The windows of a vector of positions are a SimdVectorSet, one vector per
-// piece: the leading pieces of 28 bases are within the words loaded at their byte, which a shift
-// per lane moves to the lowest bits, and so is a tail of up to 29. With `Full`, a single piece of
-// 30 to 32 can reach into a ninth byte, whose bases are shifted in from the words of the next step,
-// which that step starts with, as in for_each_kmer_packed_bytewise_simd_full_width_(). Checked, a
-// lane is valid if each piece is valid by the validity window at its own start.
+// piece: the leading pieces of 28 nucleotides are within the words loaded at their byte, which a
+// shift per lane moves to the lowest bits, and so is a tail of up to 29. With `Full`, a single
+// piece of 30 to 32 can reach into a ninth byte, whose nucleotides are shifted in from the words of
+// the next step, which that step starts with, as in
+// for_each_kmer_packed_bytewise_simd_full_width_(). Checked, a lane is valid if each piece is valid
+// by the validity window at its own start.
 template <
     std::size_t Count, bool Full, PackedSequenceType Seq, typename KernelMask, std::size_t N,
     typename Callback
@@ -252,7 +253,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
         >(seq, span_k, step_);
     } else {
         // The word of the starting byte, shifted by `2 * local` so that the span starts at its
-        // first base, and the word `step_bytes` after it, shifted the other way, as in
+        // first nucleotide, and the word `step_bytes` after it, shifted the other way, as in
         // for_each_kmer_packed_bytewise_simd_full_width_(). kMSB then moves the span down by
         // `64 - 2 * span_k`.
         unsigned const span32 = static_cast<unsigned>(span_k);
@@ -367,9 +368,9 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_(
  * @brief Iterate a PackedSequence, extract all spaced k-mers from it with SIMD bit extraction, and
  * call a callback on them, for a set of kernels.
  *
- * As the sequence holds only valid bases, a spaced k-mer is emitted at every position, for every
- * kernel. It has the Encoding and Layout of the sequence. See above for the form of the callback.
- * A PackedSequenceWithValidity is taken as well, ignoring its validity bits.
+ * As the sequence holds only valid nucleotides, a spaced k-mer is emitted at every position, for
+ * every kernel. It has the Encoding and Layout of the sequence. See above for the form of the
+ * callback. A PackedSequenceWithValidity is taken as well, ignoring its validity bits.
  *
  * @tparam MaxCompiledPieces Largest number of pieces of the kernels, see SpacedKmerMask, for which
  *                  the loop has a copy of its own, see kDefaultMaxCompiledPieces.

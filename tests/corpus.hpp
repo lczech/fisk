@@ -19,7 +19,7 @@
 // =================================================================================================
 
 // Valid nucleotides, both cases.
-inline constexpr std::string_view kValidBases = "ACGTacgt";
+inline constexpr std::string_view kValidNucleotides = "ACGTacgt";
 
 // Invalid characters for hand-picked placement tests, where readable failures matter: N, the usual
 // gap and padding markers, and the IUPAC ambiguity codes, both cases.
@@ -34,7 +34,7 @@ inline std::string const& all_invalid_bytes()
         std::string out;
         for (int i = 0; i < 256; ++i) {
             auto const c = static_cast<char>(i);
-            if (kValidBases.find(c) == std::string_view::npos) {
+            if (kValidNucleotides.find(c) == std::string_view::npos) {
                 out += c;
             }
         }
@@ -49,7 +49,7 @@ inline std::string const& all_invalid_bytes()
 
 // Random sequence of `len` characters, drawn uniformly from `alphabet`.
 inline std::string random_sequence(
-    fisk::Splitmix64& rng, std::size_t len, std::string_view alphabet = kValidBases
+    fisk::Splitmix64& rng, std::size_t len, std::string_view alphabet = kValidNucleotides
 ) {
     std::string s;
     s.reserve(len);

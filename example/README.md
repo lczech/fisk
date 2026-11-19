@@ -1,6 +1,6 @@
 # Example
 
-[main.cpp](main.cpp) extracts all k-mers and spaced k-mers of the sequences of a FASTA file, such as a human genome, with `for_each_kmer()` (k = 31) and `for_each_spaced_kmer()` (a mask of span 31 and weight 22). Both are checked: they skip the k-mers with characters other than ACGT, such as N. Each runs the algorithm that is likely the fastest on this CPU, with a callback that counts the k-mers and sums them up as a checksum. The program prints, as CSV, per extraction: the algorithm, the number of sequences, bases, and k-mers, the checksum, and the time to read the file and to extract the k-mers.
+[main.cpp](main.cpp) extracts all k-mers and spaced k-mers of the sequences of a FASTA file, such as a human genome, with `for_each_kmer()` (k = 31) and `for_each_spaced_kmer()` (a mask of span 31 and weight 22). Both are checked: they skip the k-mers with characters other than ACGT, such as N. Each runs the algorithm that is likely the fastest on this CPU, with a callback that counts the k-mers and sums them up as a checksum. The program prints, as CSV, per extraction: the algorithm, the number of sequences, nucleotides, and k-mers, the checksum, and the time to read the file and to extract the k-mers.
 
 ## Running it on a human genome
 

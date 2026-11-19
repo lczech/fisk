@@ -24,24 +24,25 @@ namespace fisk {
 
 // Unlike for_each_spaced_kmer_ascii_checked_rolling_scalar() (ascii_rolling_scalar.hpp), which
 // takes ASCII input and checks character validity, the functions here read directly from a
-// PackedSequence (sequence_pack/pack_sequence.hpp), and assume that it holds only valid bases.
-// Their checked counterparts take a PackedSequenceWithValidity, and emit only the spaced k-mers
-// whose kept positions are valid by its validity bits, as for ASCII input: an invalid nucleotide at
-// a position that the mask skips does not make the spaced k-mer invalid. The masks need to have the
-// Layout of the sequence, and the spaced k-mers are emitted with its Encoding and Layout.
+// PackedSequence (sequence_pack/pack_sequence.hpp), and assume that it holds only valid
+// nucleotides. Their checked counterparts take a PackedSequenceWithValidity, and emit only the
+// spaced k-mers whose kept positions are valid by its validity bits, as for ASCII input: an invalid
+// nucleotide at a position that the mask skips does not make the spaced k-mer invalid. The masks
+// need to have the Layout of the sequence, and the spaced k-mers are emitted with its Encoding and
+// Layout.
 //
-// Each byte of the sequence holds four bases, and a span starts at each of them. A span is taken in
-// the pieces of its mask, see SpacedKmerMask (core/types.hpp): piece `j` of the span that starts at
-// base `local` of byte `b` starts at base `local` of byte `b + 7 * j`, so that each piece is taken
-// from the word of the 8 bytes loaded there, as a window whose lowest bits hold the piece, as for
-// the rolling window of for_each_spaced_kmer_ascii_checked_rolling_scalar(). The bit extraction
-// masks of the pieces are hence used as they are. The leading pieces of 28 bases are within their
-// word for all four bases of the byte, and so is a tail of up to 29. A span of 30 to 32 is one
-// piece, which can reach past its word, and takes the bases after it from the next bytes. Above
-// each piece, the window still holds the neighboring bases. They need no clearing, as the bit
-// extraction only takes the bits of the bit extraction mask of the piece, see `bit_ext` below. The
-// spaced k-mer is the OR of the bits extracted from each piece, each shifted to its place by the
-// mask shift of the piece.
+// Each byte of the sequence holds four nucleotides, and a span starts at each of them. A span is
+// taken in the pieces of its mask, see SpacedKmerMask (core/types.hpp): piece `j` of the span that
+// starts at nucleotide `local` of byte `b` starts at nucleotide `local` of byte `b + 7 * j`, so
+// that each piece is taken from the word of the 8 bytes loaded there, as a window whose lowest bits
+// hold the piece, as for the rolling window of for_each_spaced_kmer_ascii_checked_rolling_scalar().
+// The bit extraction masks of the pieces are hence used as they are. The leading pieces of 28
+// nucleotides are within their word for all four nucleotides of the byte, and so is a tail of up to
+// 29. A span of 30 to 32 is one piece, which can reach past its word, and takes the nucleotides
+// after it from the next bytes. Above each piece, the window still holds the neighboring
+// nucleotides. They need no clearing, as the bit extraction only takes the bits of the bit
+// extraction mask of the piece, see `bit_ext` below. The spaced k-mer is the OR of the bits
+// extracted from each piece, each shifted to its place by the mask shift of the piece.
 //
 // For kMSB, each load needs a byte swap, see load_packed_word_() (kmer_extract/internal.hpp),
 // which on Intel competes with PEXT for the same port. A step hence covers 8 bytes with one load
@@ -85,12 +86,13 @@ inline void emit_spaced_kmers_packed_bytewise_scalar_(
     });
 }
 
-// The window of a span of 30 to 32 starting at base `Local` (0 to 3) of its byte, from the
-// `word` loaded at that byte, and the bases after it in `next`: for kMSB the ninth byte, and for
-// kLSB the word loaded at the byte after `word`. Where the span reaches past `word`, the bases from
-// `next` are shifted in, such that the two shifts do not add up to 64, which compilers would turn
-// into a double shift (shld, shrd), which on Intel competes with PEXT for the same port. For kLSB,
-// the bases of `next` that overlap with `word` are the same, so that the OR keeps them.
+// The window of a span of 30 to 32 starting at nucleotide `Local` (0 to 3) of its byte, from the
+// `word` loaded at that byte, and the nucleotides after it in `next`: for kMSB the ninth byte, and
+// for kLSB the word loaded at the byte after `word`. Where the span reaches past `word`, the
+// nucleotides from `next` are shifted in, such that the two shifts do not add up to 64, which
+// compilers would turn into a double shift (shld, shrd), which on Intel competes with PEXT for the
+// same port. For kLSB, the nucleotides of `next` that overlap with `word` are the same, so that the
+// OR keeps them.
 template <Layout L, unsigned K, unsigned Local>
 FISK_ALWAYS_INLINE
 inline std::uint64_t spaced_kmer_packed_bytewise_full_width_window_(
@@ -124,10 +126,10 @@ inline std::uint64_t spaced_kmer_packed_bytewise_full_width_window_(
 
 // The loop over the spans of `Count` pieces, or of the piece count of the masks at runtime if
 // `Count` is 0, see above. `Tail` is the span of a single piece of 30 to 32, known at compile time,
-// so that it is known which positions need the bases after their word; otherwise it is 0, and the
-// tail, of up to 29 bases, has its span at runtime, as the shifts per position do not depend on
-// it. With validity bits, see PackedSequenceWithValidityType, only the valid spaced k-mers are
-// emitted.
+// so that it is known which positions need the nucleotides after their word; otherwise it is 0, and
+// the tail, of up to 29 nucleotides, has its span at runtime, as the shifts per position do not
+// depend on it. With validity bits, see PackedSequenceWithValidityType, only the valid spaced
+// k-mers are emitted.
 template <
     std::size_t Count, unsigned Tail, bool SingleMask, PackedSequenceType Seq,
     typename MaskOrMasks, typename BitExtract, typename Callback
@@ -194,8 +196,8 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
                 }
             };
 
-            // The window of the tail at base `Local` of the byte, computed where it is used, so
-            // that the bit extraction has the registers for its tables. The base is passed as a
+            // The window of the tail at nucleotide `Local` of the byte, computed where it is used,
+            // so that the bit extraction has the registers for its tables. `Local` is passed as a
             // std::integral_constant, not as a template parameter, as Clang 13 fails on lambdas
             // with template parameters here.
             std::uint64_t const tail_word = word_(lead);
@@ -222,11 +224,11 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
                 }
             };
 
-            // For more than one piece, the spaced k-mers of all masks at the four bases of the
-            // byte, computed here ahead of emit_() below, from the tail and the leading pieces of
-            // 28, one piece after the other, so that the word and the bit extraction mask of each
-            // piece serve all four bases at once. The windows of the leading pieces end at bit
-            // `8 - 2 * local` of their word for kMSB, and start at bit `2 * local` for kLSB.
+            // For more than one piece, the spaced k-mers of all masks at the four nucleotides of
+            // the byte, computed here ahead of emit_() below, from the tail and the leading pieces
+            // of 28, one piece after the other, so that the word and the bit extraction mask of
+            // each piece serve all four nucleotides at once. The windows of the leading pieces end
+            // at bit `8 - 2 * local` of their word for kMSB, and start at bit `2 * local` for kLSB.
             std::array<std::array<std::uint64_t, 4>, AccumulatedMasks> spaced_kmers;
             if constexpr (Count != 1) {
                 std::size_t m = 0;
@@ -252,9 +254,9 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
                 });
             }
 
-            // The spaced k-mers at base `local` of the byte, from the `window` of a single piece.
-            // Not a template over `local`, so that the four calls share one instantiation; each
-            // call is inlined, with the extraction and the callbacks.
+            // The spaced k-mers at nucleotide `local` of the byte, from the `window` of a single
+            // piece. Not a template over `local`, so that the four calls share one instantiation;
+            // each call is inlined, with the extraction and the callbacks.
             auto const emit_ = [&](
                 unsigned local, [[maybe_unused]] std::uint64_t window
             ) FISK_ALWAYS_INLINE_LAMBDA {
@@ -423,9 +425,9 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
  * spaced k-mer, for a single mask.
  *
  * The packed counterpart of for_each_spaced_kmer_ascii_checked_rolling_scalar() for ASCII input. As
- * the sequence holds only valid bases, a spaced k-mer is emitted at every position. It has the
- * Encoding and Layout of the sequence. A PackedSequenceWithValidity is taken as well, ignoring its
- * validity bits, see for_each_spaced_kmer_packed_checked_bytewise_scalar() for its valid spaced
+ * the sequence holds only valid nucleotides, a spaced k-mer is emitted at every position. It has
+ * the Encoding and Layout of the sequence. A PackedSequenceWithValidity is taken as well, ignoring
+ * its validity bits, see for_each_spaced_kmer_packed_checked_bytewise_scalar() for its valid spaced
  * k-mers only.
  *
  * @tparam MaxCompiledPieces Largest number of pieces of the mask, see SpacedKmerMask, for which

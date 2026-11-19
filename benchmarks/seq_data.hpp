@@ -87,11 +87,11 @@ inline std::vector<InputSequence> load_fasta_clean(std::string const& path)
 }
 
 /**
- * @brief Generate a string of random `ACGT` letters of a given length @p len,
- * and a probability @p n_prob in [0.0, 1.0] of generating invalid `N` bases.
+ * @brief Generate a string of random `ACGT` nucleotides of a given length @p len,
+ * and a probability @p n_prob in [0.0, 1.0] of generating invalid `N` nucleotides.
  *
- * The same @p seed gives the same string on every platform: the bases and the `N`s are taken from
- * the raw output of the engine, which the standard specifies, instead of from the std
+ * The same @p seed gives the same string on every platform: the nucleotides and the `N`s are taken
+ * from the raw output of the engine, which the standard specifies, instead of from the std
  * distributions, whose algorithms differ between standard libraries.
  */
 inline InputSequence random_acgt(std::size_t len, double n_prob, std::uint64_t seed)
@@ -100,10 +100,10 @@ inline InputSequence random_acgt(std::size_t len, double n_prob, std::uint64_t s
         throw std::invalid_argument("Invalid probability not in [0.0, 1.0]");
     }
     std::mt19937_64 rng{seed};
-    static constexpr std::array<char, 4> bases{'A','C','G','T'};
+    static constexpr std::array<char, 4> nucleotides{'A','C','G','T'};
 
     // An N if the upper 53 bits of a draw are below n_prob * 2^53, which is exact for any double
-    // in [0.0, 1.0]; else the base from the lowest two bits.
+    // in [0.0, 1.0]; else the nucleotide from the lowest two bits.
     auto const n_threshold = static_cast<std::uint64_t>(std::ldexp(n_prob, 53));
 
     // Fill the result string
@@ -114,7 +114,7 @@ inline InputSequence random_acgt(std::size_t len, double n_prob, std::uint64_t s
         if( (r >> 11) < n_threshold ) {
             s[i] = 'N';
         } else {
-            s[i] = bases[static_cast<std::size_t>(r & 3u)];
+            s[i] = nucleotides[static_cast<std::size_t>(r & 3u)];
         }
     }
     return s;

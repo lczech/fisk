@@ -99,8 +99,8 @@ enum class PackedValidity
     kNucleotides
 };
 
-// The 8 bytes at `p` as a word with the bases in order: the first base is in the lowest bits for
-// kLSB, and in the highest bits for kMSB.
+// The 8 bytes at `p` as a word with the nucleotides in order: the first nucleotide is in the lowest
+// bits for kLSB, and in the highest bits for kMSB.
 template <Layout L>
 FISK_ALWAYS_INLINE
 inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept

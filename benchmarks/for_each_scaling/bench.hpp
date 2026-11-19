@@ -15,13 +15,13 @@ using ScalingMaskForms = fisk::SpacedKmerMaskForms<fisk::Layout::kLSB>;
 
 /**
  * @brief Benchmark for_each_kmer() and for_each_spaced_kmer() over the length of the input, from 64
- * bases to `max_length`, in steps of powers of two, to see where the caches and the memory set
- * their speed, and what a call costs on short input.
+ * nucleotides to `max_length`, in steps of powers of two, to see where the caches and the memory
+ * set their speed, and what a call costs on short input.
  *
  * The k-mers have k = 31, and the spaced k-mers the mask W22L31, the common sizes, each checked and
  * unchecked, and each with a callback of one k-mer at a time and with one that also takes the
  * vectors of the SIMD algorithms, see variant.hpp. Each runs the algorithm of the estimate, which
- * names the benchmark. The input is a random sequence of `max_length` bases, generated as the
+ * names the benchmark. The input is a random sequence of `max_length` nucleotides, generated as the
  * input of the other suites, see random_acgt(), and each length is a prefix of it, so that it is in
  * memory once.
  */

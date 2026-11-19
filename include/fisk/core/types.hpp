@@ -20,17 +20,17 @@ namespace fisk {
 //     Conventions
 // =================================================================================================
 
-// Packed 2-bit data can differ along two independent axes: which base each 2-bit code stands for
-// (Encoding), and in which order bases are laid out within a word (Layout). Both are
+// Packed 2-bit data can differ along two independent axes: which nucleotide each 2-bit code stands
+// for (Encoding), and in which order nucleotides are laid out within a word (Layout). Both are
 // tracked as template parameters on the types that carry such data, so that the compiler can
 // enforce consistency between producer and consumer.
 
 /**
- * @brief Encoding for which base each 2-bit code stands for.
+ * @brief Encoding for which nucleotide each 2-bit code stands for.
  *
- * `kACGT`: A=0, C=1, G=2, T=3 (alphabetical). Complementary bases are bitwise complements of each
- * other, which makes reverse-complement handling cheap. Use this if you need to compute reverse
- * complements, or if you need lexicographic string order to match integer order.
+ * `kACGT`: A=0, C=1, G=2, T=3 (alphabetical). Complementary nucleotides are bitwise complements of
+ * each other, which makes reverse-complement handling cheap. Use this if you need to compute
+ * reverse complements, or if you need lexicographic string order to match integer order.
  *
  * `kACTG`: A=0, C=1, T=2, G=3. Falls out directly of bits 1-2 of the ASCII code, making it cheaper
  * to encode, at the cost of the cheap-complement property. Use this if performance matters, but
@@ -43,13 +43,13 @@ enum class Encoding
 };
 
 /**
- * @brief Layout in which order bases are stored within the bits of a packed word.
+ * @brief Layout in which order nucleotides are stored within the bits of a packed word.
  *
- * `kMSB`: earlier bases of the input sequence occupy the most significant bits, matching the
+ * `kMSB`: earlier nucleotides of the input sequence occupy the most significant bits, matching the
  * left-rolling k-mer convention `kmer = (kmer << 2) | code`, and hence preserving lexicographic
  * string order as integer order.
  *
- * `kLSB`: earlier bases of the input sequence occupy the least significant bits, matching the
+ * `kLSB`: earlier nucleotides of the input sequence occupy the least significant bits, matching the
  * right-rolling k-mer convention `kmer = (kmer >> 2) | (code << (2 * (k - 1)))`. This is the order
  * that falls out directly of a little-endian bit extraction via batch encode of 8 bytes treated
  * as one 64 bit word with no extra transformation, and is therefore cheaper to produce with PEXT,
@@ -399,12 +399,12 @@ concept PackedSequenceWithValidityType = PackedSequenceType<T> && requires(T con
 // =================================================================================================
 
 /**
- * @brief A single k-mer, densely encoded at 2 bits per base, tagged with its conventions.
+ * @brief A single k-mer, densely encoded at 2 bits per nucleotide, tagged with its conventions.
  *
  * The 2-bit codes occupy the lowest `2 * width` bits of `value`; all higher bits are zero.
- * `E` states which base each code stands for (see Encoding), `L` in which order the bases are
- * laid out within the word (see Layout). Both are also exposed as the `encoding` and `layout`
- * static members, and as the `rebind` alias for expressing a change of convention.
+ * `E` states which nucleotide each code stands for (see Encoding), `L` in which order the
+ * nucleotides are laid out within the word (see Layout). Both are also exposed as the `encoding`
+ * and `layout` static members, and as the `rebind` alias for expressing a change of convention.
  *
  * Deliberately an aggregate with a public member and no user-declared constructors: that keeps it
  * trivially copyable and standard layout, which is what makes the ABI pass it in a register
@@ -415,10 +415,10 @@ concept PackedSequenceWithValidityType = PackedSequenceType<T> && requires(T con
  * interoperating with code that needs raw words; kmer_value() is the same thing under a name that
  * can be grepped for. To convert from raw words into typed k-mers, use kmer_cast().
  *
- * Note that the number of bases (`k`), here more generally called the `width`, is not part of the
- * type. It is a runtime parameter of the extraction loops, and templating on it would force every
- * caller that takes k at runtime to template its own code and dispatch 32 ways. It is therefore
- * passed alongside the k-mer to every operation that needs it.
+ * Note that the number of nucleotides (`k`), here more generally called the `width`, is not part of
+ * the type. It is a runtime parameter of the extraction loops, and templating on it would force
+ * every caller that takes k at runtime to template its own code and dispatch 32 ways. It is
+ * therefore passed alongside the k-mer to every operation that needs it.
  */
 template <Encoding E, Layout L>
 struct Kmer
@@ -457,14 +457,14 @@ struct Kmer
 // -------------------------------------------------------------------------------------------------
 
 /**
- * @brief A k-mer with A=0, C=1, G=2, T=3, earliest base in the most significant bits.
+ * @brief A k-mer with A=0, C=1, G=2, T=3, earliest nucleotide in the most significant bits.
  *
  * The only combination whose integer order matches lexicographic order of the decoded string.
  */
 using KmerAcgtMsb = Kmer<Encoding::kACGT, Layout::kMSB>;
 
 /**
- * @brief A k-mer with A=0, C=1, G=2, T=3, earliest base in the least significant bits.
+ * @brief A k-mer with A=0, C=1, G=2, T=3, earliest nucleotide in the least significant bits.
  *
  * Keeps the cheap complement of the ACGT encoding, and allows to use the more performant extraction
  * from (little-endian) bit packed sequences in PackedSequence.
@@ -472,7 +472,7 @@ using KmerAcgtMsb = Kmer<Encoding::kACGT, Layout::kMSB>;
 using KmerAcgtLsb = Kmer<Encoding::kACGT, Layout::kLSB>;
 
 /**
- * @brief A k-mer with A=0, C=1, T=2, G=3, earliest base in the most significant bits.
+ * @brief A k-mer with A=0, C=1, T=2, G=3, earliest nucleotide in the most significant bits.
  *
  * The ACTG encoding is cheaper to produce from ASCII, at the cost of no longer ordering
  * lexicographically.
@@ -480,7 +480,7 @@ using KmerAcgtLsb = Kmer<Encoding::kACGT, Layout::kLSB>;
 using KmerActgMsb = Kmer<Encoding::kACTG, Layout::kMSB>;
 
 /**
- * @brief A k-mer with A=0, C=1, T=2, G=3, earliest base in the least significant bits.
+ * @brief A k-mer with A=0, C=1, T=2, G=3, earliest nucleotide in the least significant bits.
  *
  * The cheapest combination to produce: both the encoding and the layout fall directly out of a
  * little-endian batch encode from ASCII with no further transformation.
@@ -505,7 +505,7 @@ concept KmerType = requires(T kmer) {
 /**
  * @brief A contiguous k-mer, i.e. a Kmer itself and not a look-alike such as SpacedKmer.
  *
- * Used to constrain the operations that depend on the bases being contiguous: reverse(), and
+ * Used to constrain the operations that depend on the nucleotides being contiguous: reverse(), and
  * everything built on it, only mean something for a contiguous k-mer. The exact-type check is what
  * separates the two, as their shape is the same and so KmerType cannot.
  */
@@ -525,14 +525,14 @@ using kmer_type_of = Kmer<Tagged::encoding, Tagged::layout>;
 // =================================================================================================
 
 /**
- * @brief A spaced k-mer: the bases kept as selected by a spaced seed mask, densely packed,
+ * @brief A spaced k-mer: the nucleotides kept as selected by a spaced seed mask, densely packed,
  * tagged with its Encoding and Layout conventions.
  *
- * Same representation and conventions as Kmer. Operations that depend only on the bases themselves
- * (complement, decoding, convention conversion, comparison, hashing) apply unchanged. The mask
- * weight, i.e. the number of kept bases, takes the place of Kmer's width. The operations that
- * would need the mask (reverse, reverse_complement, canonical) are not available for it, see
- * ContiguousKmerType.
+ * Same representation and conventions as Kmer. Operations that depend only on the nucleotides
+ * themselves (complement, decoding, convention conversion, comparison, hashing) apply unchanged.
+ * The mask weight, i.e. the number of kept nucleotides, takes the place of Kmer's width. The
+ * operations that would need the mask (reverse, reverse_complement, canonical) are not available
+ * for it, see ContiguousKmerType.
  */
 template <Encoding E, Layout L>
 struct SpacedKmer

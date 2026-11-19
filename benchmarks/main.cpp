@@ -71,7 +71,7 @@ struct Options
     // Input sequence length to randomly generate
     std::string input_length;
 
-    // Probability to randomly generate an N base instead of ACGT
+    // Probability to randomly generate an N nucleotide instead of ACGT
     std::string n_prob = "0.001";
 
     // Seed of the random input, fixed so that every machine measures the same input
@@ -88,7 +88,7 @@ struct Options
     // File with masks
     std::string masks_file;
 
-    // Largest input length of the for_each scaling, 4 Gi bases
+    // Largest input length of the for_each scaling, 4 Gi nucleotides
     std::string scaling_max_length = "4294967296";
 
     // Output directory for benchmark results
@@ -122,7 +122,7 @@ int main(int argc, char **argv)
 
     parser.add_option(
         "--n-prob", "-p",
-        "Probability to randomly generate an N base instead of ACGT",
+        "Probability to randomly generate an N nucleotide instead of ACGT",
         opts.n_prob
     );
 
@@ -166,7 +166,7 @@ int main(int argc, char **argv)
     parser.add_option(
         "--scaling-max-length", "",
         "Largest input length of the for_each scaling, a random sequence that is in memory as a "
-        "whole; 0 to skip it (default: 4294967296, i.e., 4 Gi bases)",
+        "whole; 0 to skip it (default: 4294967296, i.e., 4 Gi nucleotides)",
         opts.scaling_max_length
     );
 
@@ -230,7 +230,7 @@ int main(int argc, char **argv)
         input_info = "file " + opts.input_file + ", " + std::to_string(sequences.size())
             + " sequences, " + std::to_string(sum) + " nucleotides";
     } else {
-        // By default 256 Ki bases, which fit the L2 cache of the CPUs we benchmark, so that
+        // By default 256 Ki nucleotides, which fit the L2 cache of the CPUs we benchmark, so that
         // the measurements show the algorithms rather than memory throughput.
         size_t inp_len = 0;
         if(opts.input_length.size()) {
@@ -353,7 +353,7 @@ int main(int argc, char **argv)
         os_info << "  sample     : " << opts.sample_ms << " ms\n";
         os_info << "  warm-up    : " << opts.warmup_ms << " ms\n";
         os_info << "  repeats    : " << opts.repeats << "\n";
-        os_info << "  scaling    : up to " << opts.scaling_max_length << " bases\n";
+        os_info << "  scaling    : up to " << opts.scaling_max_length << " nucleotides\n";
     }
 
     // Run the benchmarks

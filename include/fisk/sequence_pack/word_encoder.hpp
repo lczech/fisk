@@ -302,9 +302,10 @@ struct WordEncoderPext
         return x;
     }
 
-    // Each code holds the 8 bases of its word in its low 16 bits, see write_two_bit_chunk_(). Two
-    // or four of them make up one store. For MSB, the two bytes of each code have to be swapped:
-    // putting the codes together in reverse order and swapping all bytes does that at once.
+    // Each code holds the 8 nucleotides of its word in its low 16 bits, see write_two_bit_chunk_().
+    // Two or four of them make up one store. For MSB, the two bytes of each code have to be
+    // swapped: putting the codes together in reverse order and swapping all bytes does that at
+    // once.
     static void store_packed(std::array<std::uint64_t, lanes> const& codes, char* out) noexcept
     {
         constexpr std::size_t group = lanes < 4 ? lanes : 4;
@@ -388,8 +389,8 @@ struct WordEncoderPext
  *
  * With a SIMD arch other than SimdScalar (see simd/simd.hpp), the call operator on a whole
  * `simd_vector` encodes `lanes` words at once, applying the same steps to each lane. The call
- * operator on a single word remains, for sequences shorter than a vector, and for the last bases
- * of a sequence that do not fill a whole word.
+ * operator on a single word remains, for sequences shorter than a vector, and for the last
+ * nucleotides of a sequence that do not fill a whole word.
  *
  * The encoder is stateless: its butterfly mask is a compile-time constant, so that the compiler
  * can keep it in registers. A mask in the encoder object instead would have to be reloaded after
@@ -412,7 +413,7 @@ struct WordEncoderButterfly
         return Simd::load_unaligned(a);
     }
 
-    // Each lane holds the 8 bases of its chunk in its low 16 bits, see write_two_bit_chunk_().
+    // Each lane holds its 8 nucleotides in its low 16 bits, see write_two_bit_chunk_().
     static void store_packed(simd_vector const& v, char* out) noexcept
     {
         if constexpr (L == Layout::kMSB) {
@@ -439,7 +440,7 @@ struct WordEncoderButterfly
         if constexpr (L == Layout::kMSB) {
             x = Simd::byte_swap_lanes(x);
         } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
+            // A little-endian load already has the nucleotides in order.
         } else {
             static_assert(
                 dependent_false_v<L>, "Unhandled Layout in WordEncoderButterfly::operator()"
@@ -498,7 +499,7 @@ struct WordEncoderFold
         return Simd::load_unaligned(a);
     }
 
-    // Each lane holds the 8 bases of its chunk in its low 16 bits, see write_two_bit_chunk_().
+    // Each lane holds its 8 nucleotides in its low 16 bits, see write_two_bit_chunk_().
     static void store_packed(simd_vector const& v, char* out) noexcept
     {
         if constexpr (L == Layout::kMSB) {
@@ -541,7 +542,7 @@ private:
         if constexpr (L == Layout::kMSB) {
             x = S::byte_swap_lanes(x);
         } else if constexpr (L == Layout::kLSB) {
-            // A little-endian load already has the bases in order.
+            // A little-endian load already has the nucleotides in order.
         } else {
             static_assert(dependent_false_v<L>, "Unhandled Layout in WordEncoderFold");
         }
@@ -603,7 +604,7 @@ struct WordEncoderDirect
         return Simd::load_unaligned(a);
     }
 
-    // Each byte holds the code of its base, see the call operator below.
+    // Each byte holds the code of its nucleotide, see the call operator below.
     static void store_packed(simd_vector const& v, char* out) noexcept
     {
         if constexpr (L == Layout::kMSB) {

@@ -158,9 +158,10 @@ static_assert(!CanExtractWith<BitExtractMask>);
 // =================================================================================================
 
 // Emitted values are typed k-mers under the encoder's encoding and the mask's layout. Decoding one
-// with the weight of its mask must give exactly the bases kept by that mask, with no bits above the
-// weight, and it must equal spaced_kmer_encode() of the same window and mask, given as string or as
-// the tagged mask used for extraction. Decoding it with its mask gives the window, with gaps.
+// with the weight of its mask must give exactly the nucleotides kept by that mask, with no bits
+// above the weight, and it must equal spaced_kmer_encode() of the same window and mask, given as
+// string or as the tagged mask used for extraction. Decoding it with its mask gives the window,
+// with gaps.
 template <Layout L>
 static void check_emitted_kmers()
 {
@@ -187,13 +188,13 @@ static void check_emitted_kmers()
                 std::string expected;
                 std::string expected_span;
                 for (std::size_t p = 0; p < span_k; ++p) {
-                    char const base = static_cast<char>(
+                    char const nucleotide = static_cast<char>(
                         std::toupper(static_cast<unsigned char>(seq[pos + p]))
                     );
                     if (mask_strings[mask_idx][p] == '1') {
-                        expected += base;
+                        expected += nucleotide;
                     }
-                    expected_span += (mask_strings[mask_idx][p] == '1') ? base : '-';
+                    expected_span += (mask_strings[mask_idx][p] == '1') ? nucleotide : '-';
                 }
                 EXPECT_EQ(kmer_decode(kmer, weight), expected);
                 EXPECT_EQ(spaced_kmer_decode(kmer, mask_strings[mask_idx]), expected_span);
@@ -205,7 +206,7 @@ static void check_emitted_kmers()
     EXPECT_TRUE(emitted > 0);
 }
 
-TEST(SpacedKmerExtractAsciiRollingScalar, EmittedKmersAreTypedAndDecodeToKeptBases)
+TEST(SpacedKmerExtractAsciiRollingScalar, EmittedKmersAreTypedAndDecodeToKeptNucleotides)
 {
     check_emitted_kmers<Layout::kMSB>();
     check_emitted_kmers<Layout::kLSB>();

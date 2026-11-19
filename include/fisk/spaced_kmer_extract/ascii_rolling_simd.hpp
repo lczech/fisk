@@ -37,8 +37,8 @@ namespace fisk {
 #endif
 
 // Shift the next character into the rolling k-mer, and its validity into the rolling valid bits,
-// in Layout `L`. MSB shifts in at the bottom, and keeps the old bases above the span, as the bit
-// extraction and the validity check only look at the bits of the mask. LSB shifts in at
+// in Layout `L`. MSB shifts in at the bottom, and keeps the old nucleotides above the span, as the
+// bit extraction and the validity check only look at the bits of the mask. LSB shifts in at
 // `top_shift`, i.e., the top of the span.
 template<Layout L, typename Enc>
 FISK_ALWAYS_INLINE
@@ -51,11 +51,12 @@ inline void spaced_kmer_ascii_rolling_simd_shift_in_(
 ) {
     std::uint8_t const code = static_cast<std::uint8_t>(enc(c));
 
-    // Shift in the next base, and 11 for valid or 00 for invalid into the valid bits. For invalid
-    // bases, the low 2 bits are irrelevant, because validity is checked separately before
-    // emission. This ensures that spaced k-mers which contain an invalid base in them (which was
-    // not masked out) will be skipped. GCC is sensitive to the exact form here: computing `valid`
-    // inline in the expression below made the SIMD extraction up to 30% slower with GCC 14.
+    // Shift in the next nucleotide, and 11 for valid or 00 for invalid into the valid bits. For
+    // invalid nucleotides, the low 2 bits are irrelevant, because validity is checked separately
+    // before emission. This ensures that spaced k-mers which contain an invalid nucleotide in them
+    // (which was not masked out) will be skipped. GCC is sensitive to the exact form here:
+    // computing `valid` inline in the expression below made the SIMD extraction up to 30% slower
+    // with GCC 14.
     std::uint64_t const valid = static_cast<std::uint64_t>(code < 4) * 0x03u;
     if constexpr (L == Layout::kMSB) {
         rolling_kmer      = (rolling_kmer      << 2) | (code & 0x03u);
@@ -144,7 +145,7 @@ inline void for_each_lane_ct_(F&& f)
  *                   must be the same, and in [1, 32].
  * @tparam NMasks    Number of kernels, fixed at compile time; see dispatch_static_span() for a
  *                   std::vector of kernels.
- * @tparam Enc       Encoder functor, returns 0..3 for valid bases, >=4 for invalid.
+ * @tparam Enc       Encoder functor, returns 0..3 for valid nucleotides, >=4 for invalid.
  * @tparam Callback  Callback function, called with vectors of spaced k-mers, see above.
  */
 template<typename KernelMask, std::size_t NMasks, typename Enc, typename Callback>

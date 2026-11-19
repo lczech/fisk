@@ -35,8 +35,8 @@ namespace fisk {
 // that use the same type of scratch, see ascii_chunked_buffer_(); their callback hence must not
 // call any of them again with the thread-local buffer.
 //
-// `ChunkSize` is the number of bases processed per chunk, and must be > 0. A multiple of 32, such
-// as a power of two, keeps each chunk in whole blocks of the packed loops, see
+// `ChunkSize` is the number of nucleotides processed per chunk, and must be > 0. A multiple of 32,
+// such as a power of two, keeps each chunk in whole blocks of the packed loops, see
 // run_packed_bytewise_blocks_() (kmer_extract/internal.hpp).
 // `MaxCompiledPieces` is that of the extraction from packed sequences, for spans above 32, see
 // packed_bytewise_scalar.hpp. The spans of the masks can be up to their maximum span.

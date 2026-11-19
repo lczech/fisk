@@ -35,8 +35,8 @@ FISK_ALWAYS_INLINE inline constexpr void assert_width_(
 }
 
 /**
- * @brief Whether a word holds no bits above `width` bases, i.e. it is a valid k-mer or spaced k-mer
- * of that width.
+ * @brief Whether a word holds no bits above `width` nucleotides, i.e. it is a valid k-mer or spaced
+ * k-mer of that width.
  */
 inline constexpr bool fits_width_(std::uint64_t word, std::size_t width) noexcept
 {
@@ -44,7 +44,7 @@ inline constexpr bool fits_width_(std::uint64_t word, std::size_t width) noexcep
 }
 
 /**
- * @brief Debug check that a word is a valid k-mer or spaced k-mer of `width` bases.
+ * @brief Debug check that a word is a valid k-mer or spaced k-mer of `width` nucleotides.
  *
  * Producers of k-mer words call this with the word they emit.
  */
@@ -100,8 +100,8 @@ template <Encoding E, Layout L>
  * says which convention produced it. It is therefore a named function, so that every point where a
  * value enters the type system can be easily found. Its counterpart on the way out is kmer_value().
  *
- * The caller asserts that `raw` really is in convention `E`/`L` and holds `width` bases. Both are
- * checked only by assert(), so that release builds pay nothing; `width` is unused there.
+ * The caller asserts that `raw` really is in convention `E`/`L` and holds `width` nucleotides. Both
+ * are checked only by assert(), so that release builds pay nothing; `width` is unused there.
  */
 template <Encoding E, Layout L>
 [[nodiscard]] inline constexpr Kmer<E, L> kmer_cast(
@@ -162,7 +162,7 @@ template <Encoding E, Layout L, SimdArch Simd>
  * @brief Adopt a SIMD vector of raw words as a vector of k-mers of a given convention.
  *
  * The vector counterpart of kmer_cast(), with the same caveat that the caller asserts the
- * convention, and that every lane holds a k-mer of `width` bases, both checked by assert() only.
+ * convention, and that every lane holds `width` nucleotides, both checked by assert() only.
  */
 template <Encoding E, Layout L, SimdArch Simd>
 [[nodiscard]] inline KmerVector<E, L, Simd> kmer_vector_cast(
@@ -186,7 +186,7 @@ template <KmerVectorType V>
 // =================================================================================================
 
 /**
- * @brief Adopt a raw word of kept bases as a spaced k-mer, without checking it against the weight.
+ * @brief Adopt a raw word of kept nucleotides as a spaced k-mer, unchecked against the weight.
  *
  * For words that the caller already knows to be valid, such as the output of an extractor.
  * Otherwise use spaced_kmer_cast(), which asserts the weight in debug builds.
@@ -207,10 +207,10 @@ template <Encoding E, Layout L>
 }
 
 /**
- * @brief Adopt a raw 2-bit-packed word of kept bases as a spaced k-mer of a given convention.
+ * @brief Adopt a raw 2-bit-packed word of kept nucleotides as a spaced k-mer of a given convention.
  *
- * The spaced counterpart of kmer_cast(): `weight` is the mask weight, i.e. the number of kept bases
- * in `raw`. Same caveat as kmer_cast(), that the caller asserts the convention and the weight.
+ * The spaced counterpart of kmer_cast(): `weight` is the mask weight, i.e. the number of kept
+ * nucleotides in `raw`. Same caveat as kmer_cast(): the caller asserts the convention and weight.
  */
 template <Encoding E, Layout L>
 [[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast(

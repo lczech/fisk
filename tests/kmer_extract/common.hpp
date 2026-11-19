@@ -139,7 +139,7 @@ inline void check_ascii_length_boundaries(Extract const& extract)
 
 // Hand-crafted placements: invalid at the very start/middle/end, a run of several in a row,
 // alternating valid/invalid, and a sequence that is entirely invalid. Every k-mer overlapping an
-// invalid symbol must be suppressed, and the window must fully refill before emitting again.
+// invalid nucleotide must be suppressed, and the window must fully refill before emitting again.
 // Written with 'N' for readability, and then checked with every hand-picked invalid character in
 // its place.
 template <typename Extract>
@@ -173,7 +173,7 @@ inline void check_ascii_invalid_character_placement(Extract const& extract)
     }
 }
 
-// Custom encoder whose invalid sentinel is not exactly 4 (255 here, and lowercase bases are
+// Custom encoder whose invalid sentinel is not exactly 4 (255 here, and lowercase nucleotides are
 // deliberately "invalid" under it), for the loops that take an encoder, which honor the documented
 // ">= 4 is invalid" contract rather than special-casing the value 4. Also shows the shape a
 // user-defined encoder takes: a functor that states its encoding.
@@ -194,13 +194,13 @@ struct SentinelNotFourEncoder
 };
 
 // Checks `extract_with` with SentinelNotFourEncoder on the valid-only sequences, whose lowercase
-// bases it deems invalid.
+// nucleotides it deems invalid.
 template <typename ExtractWith>
 inline void check_ascii_invalid_sentinel_not_four(ExtractWith const& extract_with)
 {
     SentinelNotFourEncoder const enc;
     for (auto const& seq : valid_sequences()) {
-        // What the encoder sees as invalid, spelled out for the oracle: every lowercase base.
+        // What the encoder sees as invalid, spelled out for the oracle: every lowercase nucleotide.
         std::string as_seen = seq;
         for (auto& c : as_seen) {
             if (std::islower(static_cast<unsigned char>(c))) {
@@ -269,10 +269,10 @@ inline void check_ascii_block_boundaries(Extract const& extract)
         };
 
         for (auto const len : lens) {
-            std::string const base = random_sequence(rng, len, "ACGT");
+            std::string const original = random_sequence(rng, len, "ACGT");
 
             for (auto const& markers : marker_sets) {
-                std::string seq = base;
+                std::string seq = original;
                 char const marker = kHandPickedInvalid[marker_idx++ % kHandPickedInvalid.size()];
                 bool any_in_range = false;
                 for (auto const pos : markers) {
@@ -448,9 +448,9 @@ inline void check_checked_single_invalid(Check const& check)
     fisk::Splitmix64 rng(8008);
     std::size_t const lengths[] = {64, 97, 130};
     for (std::size_t len : lengths) {
-        std::string const base = random_sequence(rng, len);
+        std::string const original = random_sequence(rng, len);
         for (std::size_t at = 0; at < len; ++at) {
-            std::string seq = base;
+            std::string seq = original;
             seq[at] = 'N';
             check_checked_sequence<E, L>(seq, check);
         }

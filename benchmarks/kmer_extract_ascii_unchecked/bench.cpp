@@ -111,8 +111,8 @@ void bench_kmer_extract_ascii_unchecked(
         std::string const k_label = "k=" + std::to_string(k);
 
         // The variants without checks encode invalid characters (see --n-prob in main.cpp) as
-        // some valid base, so they emit other k-mers than the checked ones, and run in a suite of
-        // their own. One suite.run() call per Encoding and Layout, as Microbench::run()
+        // some valid nucleotide, so they emit other k-mers than the checked ones, and run in a
+        // suite of their own. One suite.run() call per Encoding and Layout, as Microbench::run()
         // cross-validates the sinks of all benches in one call, and those produce different
         // k-mer values; within each call, all variants use the same word encoder, so they still
         // agree exactly.

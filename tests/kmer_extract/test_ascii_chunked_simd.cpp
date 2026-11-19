@@ -72,7 +72,7 @@ static constexpr auto checked = []<std::size_t ChunkSize>(
 };
 
 // Both functions with the arch `Simd`: the checks of the chunked loops, and for the checked one
-// also those of the checked extraction from ASCII, with chunks of 7 bases.
+// also those of the checked extraction from ASCII, with chunks of 7 nucleotides.
 template <SimdArch Simd>
 static void check_chunked_simd()
 {

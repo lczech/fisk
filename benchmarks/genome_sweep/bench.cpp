@@ -18,7 +18,7 @@
 
 using namespace fisk;
 
-// The number of k-mer positions of a sequence of `n` bases, the unit of all cases.
+// The number of k-mer positions of a sequence of `n` nucleotides, the unit of all cases.
 static double genome_sweep_units_(std::size_t n, std::size_t k)
 {
     return n >= k ? static_cast<double>(n - k + 1) : 0.0;
@@ -50,7 +50,7 @@ void bench_genome_sweep(
     // -------------------------------------------------------------------------
 
     // The packing of the packed cases below, and that of the estimate's word encoder, which the
-    // chunked loops use for their chunks. The sink is the number of bases, the same for both.
+    // chunked loops use for their chunks. The sink is the number of nucleotides, the same for both.
     {
         Microbench<InputSequence> suite(suite_title);
         suite.units_fn([](InputSequence const& seq) { return static_cast<double>(seq.size()); });

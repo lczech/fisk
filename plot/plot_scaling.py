@@ -5,8 +5,8 @@ that also takes the vectors of the SIMD algorithms.
 
 With one CSV, the plot of one run: a line per series (k-mers and spaced k-mers, checked and
 unchecked), and dashed lines at the sizes of the data caches, from the sys_info.txt next to the CSV.
-The input is ASCII, so its length in bases is its size in bytes. With several CSVs, the plot of one
-series across CPUs and compilers, see --series, with a line per CSV.
+The input is ASCII, so its length in nucleotides is its size in bytes. With several CSVs, the plot
+of one series across CPUs and compilers, see --series, with a line per CSV.
 
 Usage examples:
   python plot/plot_scaling.py --file results/Intel_Core_7_240H/GCC_15/sum/for_each_scaling.csv \\
@@ -173,7 +173,7 @@ def main():
             if df["length"].min() <= (1 << s) <= df["length"].max()
         ][::2]
         ax.set_xticks(ticks, [length_label(t) for t in ticks])
-        ax.set_xlabel("Input length [bases]")
+        ax.set_xlabel("Input length [nucleotides]")
         ax.set_title(title)
         ax.grid(True, which="major", linestyle="--", alpha=0.5)
         ax.legend(fontsize=9, loc="best")
@@ -186,8 +186,8 @@ def main():
     fig.suptitle(SERIES[args.series][0] if across else platforms[0])
     if shortest < args.min_length:
         fig.text(
-            0.5, 0.01, f"From {length_label(args.min_length)} bases on; for shorter inputs, the "
-            "fixed cost per call lowers the throughput.", ha="center", va="bottom", fontsize=11,
+            0.5, 0.01, f"From {length_label(args.min_length)} nucleotides on; for shorter inputs, "
+            "the fixed cost per call lowers the throughput.", ha="center", va="bottom", fontsize=11,
             color="gray",
         )
     fig.tight_layout(rect=(0, 0.04, 1, 1))

@@ -225,7 +225,7 @@ public:
     }
 
     // Custom units function, e.g. `[](auto const& in){ return in.seq.size(); }`
-    // so ns_per_op becomes ns per base.
+    // so ns_per_op becomes ns per nucleotide.
     Microbench& units_fn(std::function<double(Input const&)> fn) {
         units_fn_ = std::move(fn);
         return *this;

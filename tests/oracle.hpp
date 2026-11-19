@@ -65,7 +65,7 @@ inline std::uint8_t oracle_code(char c)
 // =================================================================================================
 
 // Character-level nucleotide operations used to derive expected decoded strings without invoking
-// the k-mer operations being tested. Their callers pass upper-case bases.
+// the k-mer operations being tested. Their callers pass upper-case nucleotides.
 inline char oracle_complement_char(char c)
 {
     switch (c) {
@@ -224,7 +224,7 @@ inline void check_kmer_callbacks(
 // =================================================================================================
 
 // One expected emission of a spaced k-mer extractor: the start position of the full span, the
-// index of the mask, and the selected bases.
+// index of the mask, and the selected nucleotides.
 struct SpacedEvent
 {
     std::size_t pos;
@@ -233,9 +233,9 @@ struct SpacedEvent
 };
 
 // Builds the public spaced-k-mer contract from characters, without any rolling word or bit-extract
-// helper: each output event is (full-span start position, mask index, packed selected bases), with
-// the first selected base in the highest bits for MSB, and in the lowest bits for LSB. Spans in
-// which a selected base is not a nucleotide are skipped.
+// helper: each output event is (full-span start position, mask index, packed selected nucleotides),
+// with the first selected nucleotide in the highest bits for MSB, and in the lowest bits for LSB.
+// Spans in which a selected character is not a nucleotide are skipped.
 template <fisk::Encoding E, fisk::Layout L>
 inline std::vector<SpacedEvent> oracle_spaced_events(
     std::string const& seq, std::span<std::string const> masks
@@ -414,7 +414,7 @@ inline void sweep_packed_extractors(
         check_sequence(seq);
     }
 
-    // All-zero/all-one windows and isolated nonzero bases expose lost high bits and bad masks.
+    // All-zero/all-one windows and isolated nonzero nucleotides expose lost high bits, bad masks.
     check_sequence(std::string(129, 'A'));
     check_sequence(std::string(129, 'T'));
     for (std::size_t p = 0; p < 40; ++p) {

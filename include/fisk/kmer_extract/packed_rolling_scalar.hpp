@@ -55,8 +55,8 @@ inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
         valid = seq.validity().data();
     }
 
-    // Shift a byte of codes in at the end of the newest bases: the low bits for kMSB, and the high
-    // bits for kLSB, whose bytes hold their first base in the low bits.
+    // Shift a byte of codes in at the end of the newest nucleotides: the low bits for kMSB, and the
+    // high bits for kLSB, whose bytes hold their first nucleotide in the low bits.
     auto fold_byte_ = [&](std::uint8_t byte) FISK_ALWAYS_INLINE_LAMBDA {
         if constexpr (L == Layout::kMSB) {
             acc = (acc << 8) | byte;
@@ -90,7 +90,7 @@ inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
 
         // The 4 k-mers ending within this byte, oldest (local 0) to newest (local 3).
         for (unsigned local = 0; local < 4; ++local) {
-            std::size_t const e = 4 * b + local; // base end position of this k-mer
+            std::size_t const e = 4 * b + local; // position of the last nucleotide of this k-mer
             if (e >= seq.length()) {
                 break;
             }
@@ -102,8 +102,8 @@ inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
                 continue;
             }
 
-            // Shift the k-mer to the low bits: its last base is at bit `6 - 2 * local` for kMSB,
-            // and its first base at bit `58 - 2k + 2 * local` for kLSB.
+            // Shift the k-mer to the low bits: its last nucleotide is at bit `6 - 2 * local` for
+            // kMSB, and its first nucleotide at bit `58 - 2k + 2 * local` for kLSB.
             unsigned const s = 6 - 2 * local;
             unsigned shift;
             if constexpr (L == Layout::kMSB) {

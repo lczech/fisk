@@ -87,7 +87,7 @@ inline std::vector<SpacedKmerMask<L, BitExtractForm, MaxSpan>> convert_spaced_km
  * The span is cut into pieces, see SpacedKmerMask. In each piece, the first position is in the
  * highest bits of its bit extraction mask for kMSB, and in the lowest bits for kLSB, matching the
  * window of the extraction in that Layout. As bit extraction keeps the order of the bits, the kept
- * bases then end up in that Layout as well.
+ * nucleotides then end up in that Layout as well.
  */
 template <Layout L = Layout::kMSB, std::size_t MaxSpan = kDefaultMaxSpan>
 inline SpacedKmerMask<L, BitExtractMask, MaxSpan> make_spaced_kmer_mask(std::string const& mask)

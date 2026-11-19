@@ -93,7 +93,7 @@ static_assert(
 // -------------------------------------------------------------------------------------------------
 
 // Only ACGT combined with MSB orders k-mers the way the decoded strings order: ACTG because its
-// codes are not alphabetical, LSB because the first base sits in the low bits.
+// codes are not alphabetical, LSB because the first nucleotide sits in the low bits.
 TEST(CoreTypes, LexicographicOrderOnlyForAcgtMsb)
 {
     std::size_t const width = 8;

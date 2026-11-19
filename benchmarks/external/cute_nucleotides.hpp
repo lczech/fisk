@@ -17,13 +17,13 @@
 // fisk::PackedSequence instead of 64-bit words, writing only the bytes of the tail word that it
 // holds; alias-safe loads and stores.
 //
-// Their encoding, A=00, C=01, T=10, G=11 with the first base in the low bits, is fisk's ACTG
+// Their encoding, A=00, C=01, T=10, G=11 with the first nucleotide in the low bits, is fisk's ACTG
 // encoding with LSB layout, so that the kernels are compared in that group. The table maps all of
 // their algorithms to fisk. Only the two that differ from fisk's word encoders are ported here:
 //
-//   cute-nucleotides Method fisk ----------------------- ------------------------------------------
-//   ----------------------------- n_to_bits_lut Scalar table, OR into 64-bit words
-//   WordEncoderDirect<SimdScalar>;
+//   cute-nucleotides         Method                                      fisk
+//   -----------------------  ------------------------------------------  -----------------------------
+//   n_to_bits_lut            Scalar table, OR into 64-bit words          WordEncoderDirect<SimdScalar>;
 //                                                                        tails of the ported kernels
 //   n_to_bits_pext           Four PEXT on the words of a 32-byte vector  WordEncoderPext<SimdAVX2>
 //   n_to_bits_shift          Mask, two shift-OR rounds, byte shuffle     WordEncoderFold
@@ -31,10 +31,10 @@
 //                                                                        same idea as
 //                                                                        WordEncoderDirect, which
 //                                                                        multiplies with vpmaddubsw
-//   n_to_bits_movemask vpermq, byte unpacks, two vpmovmskb Ported: encode_movemask() bits_to_n_*
-//   Decoding packed bases to ASCII None, not ported n_to_bits2_*, bits_to_n2_* Five-letter alphabet
-//   with N, 7 bits per None, not ported: fisk keeps
-//                            3 bases                                     validity bits instead
+//   n_to_bits_movemask       vpermq, byte unpacks, two vpmovmskb         Ported: encode_movemask()
+//   bits_to_n_*              Decoding packed nucleotides to ASCII        None, not ported
+//   n_to_bits2_*, bits_to_n2_*  Five-letter alphabet with N, 7 bits per  None, not ported: fisk keeps
+//                            3 nucleotides                               validity bits instead
 //
 // MIT License
 // Copyright (c) 2020 Daniel Liu
@@ -75,8 +75,8 @@ inline constexpr std::array<std::uint8_t, 256> byte_lut = [] {
 }();
 
 /**
- * @brief Encode the fewer than 32 bases after the last full vector, as the original does via its
- * LUT loop, into the one word that they fill.
+ * @brief Encode the fewer than 32 nucleotides after the last full vector, as the original does via
+ * its LUT loop, into the one word that they fill.
  * @pre `seq.size() < 32`, and output has room for ceil(seq.size() / 4) bytes.
  */
 inline void encode_lut_tail(std::string_view seq, std::uint8_t* out) noexcept
@@ -96,8 +96,8 @@ inline void encode_lut_tail(std::string_view seq, std::uint8_t* out) noexcept
 #if defined(FISK_HAS_AVX2)
 
 /**
- * @brief Encode 32 bases per vector via multiplication by a constant that moves the code bits of
- * each 32-bit element into its top byte.
+ * @brief Encode 32 nucleotides per vector via multiplication by a constant that moves the code bits
+ * of each 32-bit element into its top byte.
  * @pre Output has room for ceil(seq.size() / 4) bytes.
  */
 inline void encode_mul(std::string_view seq, std::uint8_t* out) noexcept
@@ -143,8 +143,8 @@ inline void encode_mul(std::string_view seq, std::uint8_t* out) noexcept
 }
 
 /**
- * @brief Encode 32 bases per vector by gathering both bits of each code with `vpmovmskb`, after
- * interleaving them bytewise.
+ * @brief Encode 32 nucleotides per vector by gathering both bits of each code with `vpmovmskb`,
+ * after interleaving them bytewise.
  * @pre Output has room for ceil(seq.size() / 4) bytes.
  */
 inline void encode_movemask(std::string_view seq, std::uint8_t* out) noexcept

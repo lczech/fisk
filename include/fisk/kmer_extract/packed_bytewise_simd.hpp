@@ -326,7 +326,7 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
 /**
  * @brief Extracts k in [1, 32] as vectors of k-mers.
  *
- * A k-mer of more than 29 bases can reach into a ninth byte, so that this combines two words.
+ * A k-mer of more than 29 nucleotides can reach into a ninth byte, so that this combines two words.
  * `emit` is as for for_each_kmer_packed_bytewise_simd_narrow_width_().
  */
 template <SimdArch Simd, PackedSequenceType Seq, typename Emit>
@@ -355,12 +355,12 @@ inline void for_each_kmer_packed_bytewise_simd_full_width_(
     // starting byte, and a ninth byte, for which we take the word `step_bytes` after it. That is
     // the word of the same lane in the next iteration, so that each iteration only loads one
     // vector of words. The word is shifted by `2 * local`, so that the k-mer starts at the first
-    // base, and the next word by the remaining `8 * step_bytes - 2 * local` in the other
-    // direction, which fills in the bases that the first shift made room for. Where the two
-    // overlap, they hold the same bases.
+    // nucleotide, and the next word by the remaining `8 * step_bytes - 2 * local` in the other
+    // direction, which fills in the nucleotides that the first shift made room for. Where the two
+    // overlap, they hold the same nucleotides.
     //
-    // kLSB has the first base in the lowest bits, and masks what exceeds the k-mer. kMSB has it
-    // in the highest bits, and moves the k-mer down by `64 - 2k`, which leaves nothing above it.
+    // kLSB has the first nucleotide in the lowest bits, and masks what exceeds the k-mer. kMSB has
+    // it in the highest bits, and moves the k-mer down by `64 - 2k`, which leaves nothing above it.
     simd_vector const mask_v = Simd::broadcast(mask);
     auto const word_counts = make_packed_bytewise_simd_counts_<Simd>(
         [](std::size_t local) -> std::uint64_t { return 2 * local; }

@@ -22,23 +22,23 @@ namespace fisk {
 // -----------------------------------------------------------------------------
 
 /**
- * @brief Write the packed bases of one encoder call to `dest`, respecting `L`.
+ * @brief Write the packed nucleotides of one encoder call to `dest`, respecting `L`.
  */
 template <Layout L, int Bytes = 2>
 inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
 {
-    // Each word encoder packs 8 bases (16 bits) into the low bits of its return value. A byte is
-    // the smallest addressable unit of PackedSequence's storage, so those 16 bits become 2
+    // Each word encoder packs 8 nucleotides (16 bits) into the low bits of its return value. A byte
+    // is the smallest addressable unit of PackedSequence's storage, so those 16 bits become 2
     // sequential output bytes. For `kLSB`, the encoder already produces those 2 bytes in the
-    // right relative order for free (the first of the 8 bases ends up in the low bits of the first
-    // byte, and so on); for `kMSB`, the two bytes come out address-reversed relative to base order
-    // (the byte holding the later 4 bases lands first), so they need a fix-up swap before the
-    // sequential write.
+    // right relative order for free (the first of the 8 nucleotides ends up in the low bits of the
+    // first byte, and so on); for `kMSB`, the two bytes come out address-reversed relative to
+    // nucleotide order (the byte holding the later 4 nucleotides lands first), so they need a
+    // fix-up swap before the sequential write.
     //
     // `Bytes` (1 or 2) is a template parameter rather than a runtime one so that the hot full-chunk
     // call sites below (always 2) keep a fixed-width store with no added branch; only the ragged
-    // tail chunk (<=4 real bases) ever instantiates the 1-byte write, and byte 0 -- the first of
-    // the two output bytes post-swap -- is the one holding those bases in both layouts.
+    // tail chunk (<=4 real nucleotides) ever instantiates the 1-byte write, and byte 0 -- the first
+    // of the two output bytes post-swap -- is the one holding those nucleotides in both layouts.
 
     static_assert(Bytes == 1 || Bytes == 2, "write_two_bit_chunk_() only supports 1 or 2 bytes");
     assert(dest != nullptr);
@@ -91,12 +91,12 @@ inline void pack_sequence_(
     // byte offset into seq. Each 8 bytes of it give one byte of validity bits, at offset `i / 8`.
     std::size_t i = 0;
 
-    // End of the full 8-base chunks.
+    // End of the full 8-nucleotide chunks.
     std::size_t const words_end = seq_len - (seq_len % 8);
 
-    // The main work for encoders with more than one lane: all full 8-base chunks of sequences of
-    // at least one vector, `lanes` of them at a time. What they leave is at most the last bases
-    // that do not fill a chunk.
+    // The main work for encoders with more than one lane: all full 8-nucleotide chunks of sequences
+    // of at least one vector, `lanes` of them at a time. What they leave is at most the last
+    // nucleotides that do not fill a chunk.
     if constexpr (Encoder::lanes > 1) {
         constexpr std::size_t vec_bytes = Encoder::lanes * 8;
         auto pack_vector = [&](std::size_t off) {
@@ -120,7 +120,7 @@ inline void pack_sequence_(
         }
     }
 
-    // Full 8-base chunks one at a time: all of them for encoders on SimdScalar, and those of
+    // Full 8-nucleotide chunks one at a time: all of them for encoders on SimdScalar, and those of
     // sequences shorter than one vector for the others. As the remainder below, this is scalar
     // code for the codes as well as the validity.
     for (; i < words_end; i += 8) {
@@ -131,11 +131,11 @@ inline void pack_sequence_(
         }
     }
 
-    // Remaining < 8 bases: the last 8 bytes of the sequence, shifted down to the bases that remain,
-    // with zeros above them. If the sequence is shorter than that, they are copied instead. A
-    // remainder of at most 4 bases writes only its one byte of codes, as the byte after it is not
-    // part of `codes`. Zero gets code 0 and is not a valid nucleotide, which keeps the bits beyond
-    // the end zero.
+    // Remaining < 8 nucleotides: the last 8 bytes of the sequence, shifted down to the nucleotides
+    // that remain, with zeros above them. If the sequence is shorter than that, they are copied
+    // instead. A remainder of at most 4 nucleotides writes only its one byte of codes, as the byte
+    // after it is not part of `codes`. Zero gets code 0 and is not a valid nucleotide, which keeps
+    // the bits beyond the end zero.
     if (i < seq_len) {
         std::size_t const remaining = seq_len - i;
         std::uint64_t word = 0;

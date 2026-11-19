@@ -167,9 +167,9 @@ inline bool clark_isFwdValid(
         if( !m_mask[c] ) {
             // This is a weird case: It triggers for positions that are 0 in the mask,
             // which will be filtered out when extracting the spaced k-mer later anyway.
-            // So it seems it might not be needed. But for `N` bases for instance, it should
-            // still move the k-mer forward by left shifting, so that the base is not forgotten.
-            // Not sure what is going on here, and it seems to work, so let's keep it.
+            // So it seems it might not be needed. But for `N` nucleotides for instance, it should
+            // still move the k-mer forward by left shifting, so that the nucleotide is not
+            // forgotten. Not sure what is going on here, and it seems to work, so let's keep it.
             out_kmer <<= 2;
             out_kmer ^= 0;
             ic++;
@@ -430,7 +430,7 @@ inline std::uint64_t clark_improved(
     char const* data = seq.data();
 
     // Iterate all k-mers.
-    // Clark seems to ignore invalid bases during the extraction, and just pretent they are A.
+    // Clark seems to ignore invalid nucleotides during the extraction, and just pretent they are A.
     // So that's what we are doing here as well. Our table gives value 4 = 0x100, which gets
     // reduced to 0x00.
     std::uint64_t kmer_word  = 0;
@@ -440,7 +440,7 @@ inline std::uint64_t clark_improved(
             fisk::CharEncoderTable<fisk::Encoding::kACGT>{}(data[i])
         );
 
-        // Shift in the base. For invalid bases, the low 2 bits are irrelevant,
+        // Shift in the nucleotide. For invalid nucleotides, the low 2 bits are irrelevant,
         // because validity is tested separately before emission.
         kmer_word = ((kmer_word << 2) & span_mask) | (code & 0x03u);
 

@@ -62,12 +62,12 @@ struct MyCounter
 };
 
 // Extract all k-mers with k = 31 from the characters of the sequences, encoded as A = 0, C = 1,
-// G = 2, T = 3 (ACGT), with the first base in the lowest bits (LSB), and print a CSV row. Checked:
-// the k-mers that contain other characters than ACGT, in upper or lower case, such as N, are
-// skipped. for_each_kmer() runs the algorithm that is likely the fastest on this CPU, which
+// G = 2, T = 3 (ACGT), with the first nucleotide in the lowest bits (LSB), and print a CSV row.
+// Checked: the k-mers that contain other characters than ACGT, in upper or lower case, such as N,
+// are skipped. for_each_kmer() runs the algorithm that is likely the fastest on this CPU, which
 // for_each_kmer_algorithm_name() names.
 void extract_kmers(
-    std::vector<AlignedString> const& sequences, std::size_t bases, double read_seconds
+    std::vector<AlignedString> const& sequences, std::size_t nucleotides, double read_seconds
 ) {
     // Get the name of the algorithm that for_each_kmer() will use, for the CSV output.
     std::string const algorithm = for_each_kmer_algorithm_name<
@@ -85,7 +85,7 @@ void extract_kmers(
     std::chrono::duration<double> const seconds = std::chrono::steady_clock::now() - start;
 
     // Print a CSV row with the results.
-    std::cout << "kmers," << algorithm << "," << sequences.size() << "," << bases << ","
+    std::cout << "kmers," << algorithm << "," << sequences.size() << "," << nucleotides << ","
               << counter.count << "," << counter.checksum << "," << read_seconds << ","
               << seconds.count() << "\n";
 }
@@ -93,7 +93,7 @@ void extract_kmers(
 // Extract all spaced k-mers with a mask of span 31 and weight 22, with the same encoding and
 // checks, and print a CSV row. The masks are prepared once, for all sequences.
 void extract_spaced_kmers(
-    std::vector<AlignedString> const& sequences, std::size_t bases, double read_seconds
+    std::vector<AlignedString> const& sequences, std::size_t nucleotides, double read_seconds
 ) {
     // The spaced k-mer mask, here only one, but could be several.
     SpacedKmerMaskForms<Layout::kLSB> const mask_forms(
@@ -116,9 +116,9 @@ void extract_spaced_kmers(
     std::chrono::duration<double> const seconds = std::chrono::steady_clock::now() - start;
 
     // Print a CSV row with the results.
-    std::cout << "spaced_kmers," << algorithm << "," << sequences.size() << "," << bases << ","
-              << counter.count << "," << counter.checksum << "," << read_seconds << ","
-              << seconds.count() << "\n";
+    std::cout << "spaced_kmers," << algorithm << "," << sequences.size() << ","
+              << nucleotides << "," << counter.count << "," << counter.checksum << ","
+              << read_seconds << "," << seconds.count() << "\n";
 }
 
 int main(int argc, char** argv)
@@ -132,14 +132,14 @@ int main(int argc, char** argv)
     auto const start = std::chrono::steady_clock::now();
     auto const sequences = read_fasta(argv[1]);
     std::chrono::duration<double> const read_seconds = std::chrono::steady_clock::now() - start;
-    std::size_t bases = 0;
+    std::size_t nucleotides = 0;
     for (auto const& seq : sequences) {
-        bases += seq.size();
+        nucleotides += seq.size();
     }
 
     // Print the CSV header, and extract the k-mers and spaced k-mers.
-    std::cout << "extraction,algorithm,sequences,bases,kmers,checksum,"
+    std::cout << "extraction,algorithm,sequences,nucleotides,kmers,checksum,"
               << "read_seconds,extract_seconds\n";
-    extract_kmers(sequences, bases, read_seconds.count());
-    extract_spaced_kmers(sequences, bases, read_seconds.count());
+    extract_kmers(sequences, nucleotides, read_seconds.count());
+    extract_spaced_kmers(sequences, nucleotides, read_seconds.count());
 }

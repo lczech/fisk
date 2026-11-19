@@ -24,7 +24,7 @@ namespace fisk {
 // they run on each chunk.
 
 /**
- * @brief Default chunk size, in bases, of the chunked k-mer extraction from ASCII.
+ * @brief Default chunk size, in nucleotides, of the chunked k-mer extraction from ASCII.
  *
  * Packs down to a 16 KiB buffer, which fits comfortably in L1 cache.
  */
@@ -80,12 +80,12 @@ inline auto ascii_chunk_callback_(Func& func, std::size_t offset)
  * @brief Pack `seq` chunk by chunk into `scratch`, and call `run(scratch, chunk_func)` for each
  * chunk, where `chunk_func` forwards to `func` with positions in `seq`.
  *
- * Each chunk packs its `ChunkSize` new bases plus the next `span - 1`, so that the packed loop that
- * `run` calls emits exactly the k-mers (or spaced k-mers of span `span`) that start within its own
- * new bases: across chunks, every k-mer is emitted once, in order. To the packed loop, the end of
- * the scratch is the end of the sequence, so that it emits nothing that starts after the new bases
- * of the chunk; with validity, the positions after them have no valid lanes. The chunks after the
- * last k-mer start are not packed.
+ * Each chunk packs its `ChunkSize` new nucleotides plus the next `span - 1`, so that the packed
+ * loop that `run` calls emits exactly the k-mers (or spaced k-mers of span `span`) that start
+ * within its own new nucleotides: across chunks, every k-mer is emitted once, in order. To the
+ * packed loop, the end of the scratch is the end of the sequence, so that it emits nothing that
+ * starts after the new nucleotides of the chunk; with validity, the positions after them have no
+ * valid lanes. The chunks after the last k-mer start are not packed.
  *
  * With a PackedSequenceWithValidity as `scratch`, the chunks are packed with
  * pack_sequence_checked(), and otherwise with pack_sequence_unchecked().

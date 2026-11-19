@@ -49,7 +49,7 @@ namespace {
 
 static_assert(kmer_value(acg) == 0x06);
 static_assert(kmer_encode("ACG") == acg);
-static_assert(base_at(acg, 0, 3) == 0 && base_at(acg, 2, 3) == 2);
+static_assert(nucleotide_at(acg, 0, 3) == 0 && nucleotide_at(acg, 2, 3) == 2);
 static_assert(complement(acg, 3) == KmerAcgtMsb{0x39});          // TGC
 static_assert(reverse(acg, 3) == KmerAcgtMsb{0x24});             // GCA
 static_assert(reverse_complement(acg, 3) == KmerAcgtMsb{0x1B});  // CGT
@@ -58,7 +58,7 @@ static_assert(kmer_convert<Layout::kLSB>(acg, 3) == KmerAcgtLsb{0x24});
 static_assert(kmer_convert<Encoding::kACTG>(acg, 3) == KmerActgMsb{0x07});
 
 // -------------------------------------------------------------------------------------------------
-//     Decoding and Base Access
+//     Decoding and Nucleotide Access
 // -------------------------------------------------------------------------------------------------
 
 // kmer_decode() must return the string the k-mer was built from, under every convention.
@@ -118,16 +118,16 @@ TEST(CoreKmer, DecodeOracleWindows)
     }
 }
 
-// base_at() must agree with indexing the decoded string, so callers never need the shift.
+// nucleotide_at() must agree with indexing the decoded string, so callers never need the shift.
 template <typename K>
-static void check_base_at()
+static void check_nucleotide_at()
 {
     for (std::size_t width = 1; width <= 32; ++width) {
         for (auto const& seq : random_seqs(width, 4, 424242 + width)) {
             auto const kmer = oracle_kmer<K>(seq);
             for (std::size_t i = 0; i < width; ++i) {
                 EXPECT_EQ(
-                    static_cast<int>(base_at(kmer, i, width)),
+                    static_cast<int>(nucleotide_at(kmer, i, width)),
                     static_cast<int>(oracle_code<K::encoding>(seq[i]))
                 );
             }
@@ -135,12 +135,12 @@ static void check_base_at()
     }
 }
 
-TEST(CoreKmer, BaseAt)
+TEST(CoreKmer, NucleotideAt)
 {
-    check_base_at<KmerAcgtMsb>();
-    check_base_at<KmerAcgtLsb>();
-    check_base_at<KmerActgMsb>();
-    check_base_at<KmerActgLsb>();
+    check_nucleotide_at<KmerAcgtMsb>();
+    check_nucleotide_at<KmerAcgtLsb>();
+    check_nucleotide_at<KmerActgMsb>();
+    check_nucleotide_at<KmerActgLsb>();
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -212,7 +212,7 @@ TEST(CoreKmer, Canonical)
     check_canonical<KmerActgLsb>();
 }
 
-// Within one layout, reversing the bases yields the same bit pattern as reading the unchanged
+// Within one layout, reversing the nucleotides yields the same bit pattern as reading the unchanged
 // word under the opposite layout. Documented in core/kmer.hpp as the clearest illustration of
 // why a bare word cannot be interpreted without knowing its conventions.
 TEST(CoreKmer, ReverseMirrorsLayout)
@@ -476,7 +476,7 @@ namespace {
 static_assert(spaced_kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(0x06) == spaced_acg);
 static_assert(kmer_cast_unchecked<Encoding::kACGT, Layout::kMSB>(0x06) == KmerAcgtMsb{0x06});
 static_assert(kmer_value(spaced_acg) == 0x06);
-static_assert(base_at(spaced_acg, 0, 3) == 0 && base_at(spaced_acg, 2, 3) == 2);
+static_assert(nucleotide_at(spaced_acg, 0, 3) == 0 && nucleotide_at(spaced_acg, 2, 3) == 2);
 static_assert(complement(spaced_acg, 3) == SpacedKmerAcgtMsb{0x39});
 static_assert(kmer_convert<Layout::kLSB>(spaced_acg, 3) == SpacedKmerAcgtLsb{0x24});
 static_assert(kmer_convert<Encoding::kACTG>(spaced_acg, 3) == SpacedKmerActgMsb{0x07});
@@ -484,9 +484,10 @@ static_assert(std::is_same_v<
     decltype(kmer_convert<Encoding::kACTG, Layout::kLSB>(spaced_acg, 3)), SpacedKmerActgLsb
 >);
 
-// Bases kept by a spaced mask carry the same meaning as the contiguous k-mer of the same bases, so
-// decoding and the convention-only operations must agree with the contiguous results.
-TEST(CoreKmer, SpacedAgreesWithContiguousOnBaseOps)
+// Nucleotides kept by a spaced mask carry the same meaning as the contiguous k-mer of the same
+// nucleotides, so decoding and the convention-only operations must agree with the contiguous
+// results.
+TEST(CoreKmer, SpacedAgreesWithContiguousOnNucleotideOps)
 {
     std::size_t const width = 9;
     for (auto const& seq : random_seqs(width, 32, 4242)) {

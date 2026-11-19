@@ -92,7 +92,9 @@ static std::vector<std::string> const& nucleotide_test_backgrounds()
         for (int i = 0; i < 256; ++i) {
             any_byte += static_cast<char>(i);
         }
-        return std::vector<std::string>{std::string(kValidBases), all_invalid_bytes(), any_byte};
+        return std::vector<std::string>{
+            std::string(kValidNucleotides), all_invalid_bytes(), any_byte
+        };
     }();
     return backgrounds;
 }

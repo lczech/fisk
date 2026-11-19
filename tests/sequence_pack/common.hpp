@@ -18,10 +18,10 @@
 // Ground truth two-bit codes come from oracle_code() in oracle.hpp, independent of the encoders
 // under test.
 
-// Decode base `i` per PackedSequence's documented contract (see Layout in core/types.hpp),
+// Decode nucleotide `i` per PackedSequence's documented contract (see Layout in core/types.hpp),
 // independent of pack_sequence_unchecked()'s internals.
 template <fisk::PackedSequenceType Seq>
-inline int decode_base(Seq const& s, std::size_t i)
+inline int decode_nucleotide(Seq const& s, std::size_t i)
 {
     std::uint8_t const byte = s.codes()[i / 4];
     std::size_t const in_byte = i % 4;
@@ -33,7 +33,7 @@ inline int decode_base(Seq const& s, std::size_t i)
 }
 
 // Checks a packed sequence against `seq` and the oracle: length, number of bytes of codes, the
-// code of every valid base, and zeros beyond the length.
+// code of every valid nucleotide, and zeros beyond the length.
 template <fisk::PackedSequenceType Seq>
 inline void check_packed(std::string const& seq, Seq const& packed)
 {
@@ -43,7 +43,7 @@ inline void check_packed(std::string const& seq, Seq const& packed)
     for (std::size_t i = 0; i < seq.size(); ++i) {
         std::uint8_t const code = oracle_code<Seq::encoding>(seq[i]);
         if (code < fisk::kInvalidNucleotide) {
-            EXPECT_EQ(decode_base(packed, i), static_cast<int>(code));
+            EXPECT_EQ(decode_nucleotide(packed, i), static_cast<int>(code));
         }
     }
     check_zero_beyond_length(packed);
@@ -55,5 +55,5 @@ inline void check_packed(std::string const& seq, Seq const& packed)
 
 inline bool is_valid_nucleotide(char c)
 {
-    return kValidBases.find(c) != std::string_view::npos;
+    return kValidNucleotides.find(c) != std::string_view::npos;
 }

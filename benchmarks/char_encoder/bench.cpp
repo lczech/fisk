@@ -24,7 +24,7 @@ void bench_char_encoder(std::vector<InputSequence> const& sequences, std::ostrea
         Microbench<InputSequence> suite(suite_title);
         suite
             .units_fn([](InputSequence const& in) {
-                // 1 unit per base
+                // 1 unit per nucleotide
                 return static_cast<double>(in.size());
             });
 
@@ -81,7 +81,7 @@ void bench_char_encoder(std::vector<InputSequence> const& sequences, std::ostrea
         Microbench<InputSequence> suite(suite_title);
         suite
             .units_fn([](InputSequence const& in) {
-                // 1 unit per base
+                // 1 unit per nucleotide
                 return static_cast<double>(in.size());
             });
 

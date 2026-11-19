@@ -80,8 +80,8 @@ inline void for_each_kmer_ascii_chunked_simd_(
  * arch.
  *
  * @tparam Simd      SIMD arch, such as SimdAVX2, to be given explicitly.
- * @tparam ChunkSize Number of bases processed per chunk; must be > 0. A multiple of 32, such as a
- *                   power of two, keeps each chunk in whole blocks of the packed loops, see
+ * @tparam ChunkSize Number of nucleotides processed per chunk; must be > 0. A multiple of 32, such
+ *                   as a power of two, keeps each chunk in whole blocks of the packed loops, see
  *                   run_packed_bytewise_blocks_().
  *
  * @param seq        Input sequence.

@@ -25,8 +25,8 @@ namespace fisk {
 //   G -> 0b10
 //   T -> 0b11
 //
-//   Complementary bases (A<->T, C<->G) are bitwise complements of each other under this ordering
-//   (XOR with 0b11), which makes reverse-complement handling cheap.
+//   Complementary nucleotides (A<->T, C<->G) are bitwise complements of each other under this
+//   ordering (XOR with 0b11), which makes reverse-complement handling cheap.
 //
 // ACTG:
 //   A -> 0b00

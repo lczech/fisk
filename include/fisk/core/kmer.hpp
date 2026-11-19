@@ -50,17 +50,17 @@ inline constexpr std::uint64_t complement_xor_() noexcept
 }
 
 /**
- * @brief Right-shift that brings the 2-bit code of base `index` down into the lowest bits.
+ * @brief Right-shift that brings the 2-bit code of nucleotide `index` down into the lowest bits.
  */
 template <Layout L>
-inline constexpr unsigned base_shift_(std::size_t index, std::size_t width) noexcept
+inline constexpr unsigned nucleotide_shift_(std::size_t index, std::size_t width) noexcept
 {
     if constexpr (L == Layout::kMSB) {
         return static_cast<unsigned>(2 * (width - 1 - index));
     } else if constexpr (L == Layout::kLSB) {
         return static_cast<unsigned>(2 * index);
     } else {
-        static_assert(dependent_false_v<L>, "Unhandled Layout in base_shift_()");
+        static_assert(dependent_false_v<L>, "Unhandled Layout in nucleotide_shift_()");
         return 0;
     }
 }
@@ -137,23 +137,25 @@ inline constexpr std::uint64_t reverse_bit_pairs_(std::uint64_t value) noexcept
 // =================================================================================================
 
 /**
- * @brief Get the 2-bit code of the base at position `index`, counted from the start of the k-mer.
+ * @brief Get the 2-bit code of the nucleotide at position `index`, from the start of the k-mer.
  *
  * Layout-aware, so that callers never have to work out the shift themselves.
  */
 template <KmerType K>
-[[nodiscard]] inline constexpr std::uint8_t base_at(
+[[nodiscard]] inline constexpr std::uint8_t nucleotide_at(
     K kmer, std::size_t index, std::size_t width
 ) noexcept {
     assert_width_(width);
     assert(index < width);
-    return static_cast<std::uint8_t>((kmer.value >> base_shift_<K::layout>(index, width)) & 0x3u);
+    return static_cast<std::uint8_t>(
+        (kmer.value >> nucleotide_shift_<K::layout>(index, width)) & 0x3u
+    );
 }
 
 /**
  * @brief Get the string representation of a k-mer, as a sequence of upper case nucleotides.
  *
- * `width` is the number of bases to decode: k for a Kmer, the mask weight for a SpacedKmer.
+ * `width` is the number of nucleotides to decode: k for a Kmer, the mask weight for a SpacedKmer.
  * The inverse of kmer_encode().
  */
 template <KmerType K>
@@ -168,7 +170,7 @@ template <KmerType K>
     std::string str;
     str.resize(width);
     for (std::size_t i = 0; i < width; ++i) {
-        str[i] = code_to_char_<K::encoding>(base_at(kmer, i, width));
+        str[i] = code_to_char_<K::encoding>(nucleotide_at(kmer, i, width));
     }
     return str;
 }
@@ -185,7 +187,7 @@ template <KmerType K>
  * also takes the mask, see core/kmer_spaced.hpp.
  *
  * Unlike the operations around it this throws rather than asserting, on an empty sequence, one
- * longer than 32 bases, or any character that is not a nucleotide. Loud failure is the right
+ * longer than 32 nucleotides, or any character that is not a nucleotide. Loud failure is the right
  * trade for a function used to construct known inputs, where a silently wrong k-mer would
  * undermine whatever is being checked with it. Upper and lower case are both accepted.
  */
@@ -206,7 +208,7 @@ template <ContiguousKmerType K = KmerAcgtMsb>
                 "Invalid call to kmer_encode() with a non-nucleotide character in the sequence"
             );
         }
-        value |= std::uint64_t{code} << base_shift_<K::layout>(i, seq.size());
+        value |= std::uint64_t{code} << nucleotide_shift_<K::layout>(i, seq.size());
     }
     return K{value};
 }
@@ -216,7 +218,7 @@ template <ContiguousKmerType K = KmerAcgtMsb>
 // =================================================================================================
 
 /**
- * @brief Complement each base of a k-mer in place, without reversing their order.
+ * @brief Complement each nucleotide of a k-mer in place, without reversing their order.
  *
  * Its own inverse: complementing twice returns the original k-mer.
  */
@@ -228,9 +230,9 @@ template <KmerType K>
 }
 
 /**
- * @brief Reverse the order of the bases of a k-mer, without complementing them.
+ * @brief Reverse the order of the nucleotides of a k-mer, without complementing them.
  *
- * Its own inverse. Worth noting for orientation: within a fixed layout, reversing the bases
+ * Its own inverse. Worth noting for orientation: within a fixed layout, reversing the nucleotides
  * produces the same bit pattern as leaving them alone and reinterpreting the word under the
  * opposite layout. The two mean entirely different things, which is precisely why both the
  * convention and the operation are spelled out in the type system rather than left to the reader
@@ -244,11 +246,11 @@ template <ContiguousKmerType K>
 }
 
 /**
- * @brief Get the reverse complement of a k-mer: bases in reverse order, each complemented.
+ * @brief Get the reverse complement of a k-mer: nucleotides in reverse order, each complemented.
  *
  * Its own inverse. Fused rather than composed out of reverse() and complement(): the complement
- * XOR is applied to the full reversed word, and the shift that brings the k-mer's own bases down
- * then discards the complemented garbage above them, so no separate masking step is needed.
+ * XOR is applied to the full reversed word, and the shift that brings the k-mer's own nucleotides
+ * down then discards the complemented garbage above them, so no separate masking step is needed.
  */
 template <ContiguousKmerType K>
 [[nodiscard]] inline constexpr K reverse_complement(K kmer, std::size_t width) noexcept
@@ -313,8 +315,8 @@ inline constexpr std::uint64_t relayout_(std::uint64_t value, std::size_t width)
         (From == Layout::kMSB && To == Layout::kLSB) ||
         (From == Layout::kLSB && To == Layout::kMSB)
     ) {
-        // The two layouts differ in which end of the word the first base sits at, so converting
-        // is simply reversing the order of the bases. Self-inverse, as for the encodings above.
+        // The two layouts differ in which end of the word the first nucleotide sits at, so
+        // converting reverses the order of the nucleotides. Self-inverse, as the encodings above.
         return reverse_bit_pairs_(value) >> (64 - 2 * width);
     } else {
         static_assert(dependent_false_v<From>, "Unhandled Layout pair in relayout_()");

@@ -52,10 +52,11 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
     std::size_t const seq_len = seq.size();
     char const*       data    = seq.data();
 
-    // MSB shifts new bases in at the bottom, and keeps the old ones above the span, as the bit
-    // extraction and the validity check below only look at the bits of the mask. Hence, the masks
-    // must not have bits above the span, and `bit_ext` must ignore all bits outside of the mask.
-    // LSB shifts new bases in at the top of the span instead, and shifts them out below.
+    // MSB shifts new nucleotides in at the bottom, and keeps the old ones above the span, as the
+    // bit extraction and the validity check below only look at the bits of the mask. Hence, the
+    // masks must not have bits above the span, and `bit_ext` must ignore all bits outside of the
+    // mask. LSB shifts new nucleotides in at the top of the span instead, and shifts them out
+    // below.
     for_each_mask_(masks, [&]([[maybe_unused]] auto const& mask) {
         assert(is_valid_spaced_kmer_mask(mask));
         assert(
@@ -81,8 +82,8 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
     for( std::size_t i = 0; i < seq_len; ++i ) {
         std::uint8_t const code = static_cast<std::uint8_t>(enc(data[i]));
 
-        // Shift in the base, and 11 for valid or 00 for invalid into the validity word.
-        // For invalid bases, the low 2 bits are irrelevant, because validity is tested
+        // Shift in the nucleotide, and 11 for valid or 00 for invalid into the validity word.
+        // For invalid nucleotides, the low 2 bits are irrelevant, because validity is tested
         // separately before emission.
         if constexpr (L == Layout::kMSB) {
             kmer_bits = (kmer_bits << 2) | (code & 0x03u);

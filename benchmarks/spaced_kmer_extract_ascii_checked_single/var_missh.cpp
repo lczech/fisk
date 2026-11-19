@@ -30,8 +30,8 @@ std::uint64_t compute_spaced_kmer_missh(
         );
         valid &= (c < 4);
 
-        // The original code builds the kmer backwards, with the last base at the highest bits.
-        // result |= (c << (2 * i));
+        // The original code builds the kmer backwards, with the last nucleotide at the highest
+        // bits. result |= (c << (2 * i));
 
         // We instead keep it in order, so that sorting of kmers etc works as expected.
         // The speed of this is not significantly different from the above, in our tests.

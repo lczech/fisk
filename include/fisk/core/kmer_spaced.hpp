@@ -275,8 +275,8 @@ inline std::string spaced_kmer_mask_string(Mask const& mask)
  * The spaced counterpart of kmer_encode() for contiguous k-mers, with the same purpose and the same
  * loud failure: it throws on an invalid mask (see spaced_kmer_mask_positions()), on a window whose
  * length differs from the mask's, and on any non-nucleotide at a kept position. Skipped positions
- * are not inspected, as during extraction. The result decodes to the kept bases, with the mask
- * weight as its width.
+ * are not inspected, as during extraction. The result decodes to the kept nucleotides, with the
+ * mask weight as its width.
  */
 template <SpacedKmerType K = SpacedKmerAcgtMsb>
 [[nodiscard]] inline K spaced_kmer_encode(std::string_view window, std::string const& mask)
@@ -313,11 +313,11 @@ template <Encoding E = Encoding::kACGT, SpacedKmerMaskType Mask>
 
 /**
  * @brief Get the string representation of a spaced k-mer over the full span of its mask, with the
- * kept bases at their positions, and `-` at the skipped ones.
+ * kept nucleotides at their positions, and `-` at the skipped ones.
  *
  * The inverse of spaced_kmer_encode(), up to the skipped positions: for instance, `ACGTA` under the
  * mask `10101` encodes and decodes to `A-G-A`. Use kmer_decode() with the mask weight to get the
- * kept bases only. Throws on an invalid mask, see spaced_kmer_mask_positions().
+ * kept nucleotides only. Throws on an invalid mask, see spaced_kmer_mask_positions().
  */
 template <SpacedKmerType K>
 [[nodiscard]] inline std::string spaced_kmer_decode(K const& kmer, std::string const& mask)

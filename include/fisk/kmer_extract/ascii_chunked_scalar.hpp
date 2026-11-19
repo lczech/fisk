@@ -103,8 +103,8 @@ inline void for_each_kmer_ascii_chunked_scalar_(
  *
  * Faster than the checked extraction from text, such as
  * for_each_kmer_ascii_checked_rolling_scalar(), as it does no validity checking, and encodes the
- * input a whole word at a time. The sequence is processed in chunks of `ChunkSize` bases, so that
- * memory use stays small and constant regardless of sequence length. Each chunk is packed into
+ * input a whole word at a time. The sequence is processed in chunks of `ChunkSize` nucleotides, so
+ * that memory use stays small and constant regardless of sequence length. Each chunk is packed into
  * `scratch`, and its k-mers are extracted with for_each_kmer_packed_unchecked_bytewise_scalar().
  *
  * The input should only consist of the characters `ACGT` (upper or lower case). Any other character
@@ -118,8 +118,8 @@ inline void for_each_kmer_ascii_chunked_scalar_(
  * contents after the call are unspecified. Overlapping, nested, or concurrent calls must use
  * distinct scratch buffers.
  *
- * @tparam ChunkSize Number of bases processed per chunk; must be > 0. A multiple of 32, such as a
- *                   power of two, keeps each chunk in whole blocks of the packed loops, see
+ * @tparam ChunkSize Number of nucleotides processed per chunk; must be > 0. A multiple of 32, such
+ *                   as a power of two, keeps each chunk in whole blocks of the packed loops, see
  *                   run_packed_bytewise_blocks_().
  *
  * @param seq        Input sequence.
