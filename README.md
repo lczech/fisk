@@ -19,6 +19,8 @@ For questions or bugs, please [open an issue](https://github.com/lczech/fisk/iss
 
 ## Quick start
 
+### Setup
+
 Add fisk to your CMake project, either via `FetchContent`:
 
 ```cmake
@@ -35,6 +37,8 @@ target_link_libraries(your_target PRIVATE fisk::fisk)
 
 or as a subdirectory, e.g., a git submodule, via `add_subdirectory(path/to/fisk)` and the same `target_link_libraries()`. Then `#include "fisk/fisk.hpp"` for the whole library, or just the headers you need, see the [library reference](include/fisk/README.md).
 
+### Extracting k-mers
+
 `for_each_kmer()` calls back with each k-mer of a sequence (and its position), with the algorithm that is likely the fastest by what your build and CPU support, here for a given sequence `seq` and `k=31`:
 
 ```cpp
@@ -48,6 +52,7 @@ for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
     }
 );
 ```
+### Extracting spaced k-mers
 
 `for_each_spaced_kmer()` does the same for a set of spaced k-mer masks, prepared once in all forms of its algorithms as `SpacedKmerMaskForms`, and calls back as `callback(pos, mask_idx, spaced_kmer)`:
 
@@ -68,7 +73,7 @@ The input is a `std::string_view` (or anything that converts to one, such as a `
 By default, fisk runs on any CPU of its architecture, using SSE2 on x86-64 and Neon on Apple Silicon. For the faster algorithms of AVX2 and PEXT, build for recent x86-64 CPUs, see [Performance and build options](#performance-and-build-options). The [example](example/README.md) is a complete program that uses both functions.
 
 
-## K-mer extraction
+## Details of the extraction
 
 **Encoding and Layout.** `Encoding::kACGT` and `kACTG` set the 2-bit codes of the nucleotides, in that order from 0 to 3. `kACGT` is alphabetical, and its complementary nucleotides are bitwise complements, which makes reverse complements cheap; `kACTG` is cheaper to encode. `Layout::kMSB` puts the first nucleotide of a k-mer in its highest bits, so that with `kACGT` the k-mers sort as their strings do; `kLSB` puts it in the lowest bits, which is cheaper to produce with PEXT. Both are template parameters of the k-mer types, such as `KmerAcgtMsb` for `Kmer<Encoding::kACGT, Layout::kMSB>`.
 
