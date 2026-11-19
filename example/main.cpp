@@ -46,6 +46,7 @@ struct MyCounter
     std::uint64_t count = 0;
     std::uint64_t checksum = 0;
 
+    // For k-mers, the callback is expected to take the position and the k-mer value.
     template <typename Kmer>
     void operator()(std::size_t /*pos*/, Kmer kmer)
     {
@@ -53,6 +54,8 @@ struct MyCounter
         checksum += kmer_value(kmer);
     }
 
+    // For spaced k-mers, the callback is expected to also take the mask index (to allow for
+    // extraction with multiple masks at the same time).
     template <typename Kmer>
     void operator()(std::size_t /*pos*/, std::size_t /*mask_idx*/, Kmer kmer)
     {
