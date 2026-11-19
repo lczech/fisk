@@ -23,6 +23,8 @@ namespace fisk {
 //     Helper Functions
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 /**
  * @brief Get the raw two-bit mask of piece @p piece of a spaced k-mer mask, in whichever form it
  * is, see SpacedKmerMask.
@@ -31,7 +33,7 @@ namespace fisk {
  * BitExtractButterflyMask, and the bit extraction mask of a SIMD kernel, which holds it in turn.
  */
 template <SpacedKmerMaskType Mask>
-inline std::uint64_t spaced_kmer_mask_bits_(Mask const& mask, std::size_t piece = 0) noexcept
+inline std::uint64_t spaced_kmer_mask_bits(Mask const& mask, std::size_t piece = 0) noexcept
 {
     auto const& m = mask.mask_pieces[piece];
     if constexpr (std::is_convertible_v<decltype(m.mask), std::uint64_t>) {
@@ -45,13 +47,15 @@ inline std::uint64_t spaced_kmer_mask_bits_(Mask const& mask, std::size_t piece 
  * @brief Get the span of piece @p piece of a spaced k-mer mask of span @p span_k, see
  * SpacedKmerMask.
  */
-inline constexpr std::size_t spaced_kmer_mask_piece_span_(
+inline constexpr std::size_t spaced_kmer_mask_piece_span(
     std::size_t span_k, std::size_t piece
 ) noexcept
 {
     return piece + 1 == spaced_kmer_mask_piece_count(span_k)
         ? spaced_kmer_mask_tail_span(span_k) : 28;
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     Position Mask
@@ -123,8 +127,8 @@ template <SpacedKmerMaskType Mask>
 inline std::size_t spaced_kmer_weight(Mask const& mask)
 {
     std::size_t weight = 0;
-    for (std::size_t j = 0; j < spaced_kmer_mask_piece_count(mask.span_k); ++j) {
-        weight += spaced_kmer_weight(spaced_kmer_mask_bits_(mask, j));
+    for (std::size_t j = 0; j < detail::spaced_kmer_mask_piece_count(mask.span_k); ++j) {
+        weight += spaced_kmer_weight(detail::spaced_kmer_mask_bits(mask, j));
     }
     return weight;
 }
@@ -186,7 +190,7 @@ inline bool is_valid_spaced_kmer_mask(Mask const& mask)
     if (span_k == 0 || span_k > Mask::max_span) {
         return false;
     }
-    std::size_t const count = spaced_kmer_mask_piece_count(span_k);
+    std::size_t const count = detail::spaced_kmer_mask_piece_count(span_k);
 
     // The weight up front, as the shifts for kMSB place each piece by the kept positions after it.
     // With a lane that is neither 00 nor 11, this is off, but the check of its piece below fails.
@@ -199,8 +203,8 @@ inline bool is_valid_spaced_kmer_mask(Mask const& mask)
     // of 0 for the pieces beyond the count, which then have to be empty.
     std::size_t before = 0;
     for (std::size_t j = 0; j < Mask::max_pieces; ++j) {
-        std::uint64_t const bits = spaced_kmer_mask_bits_(mask, j);
-        std::size_t const len = j < count ? spaced_kmer_mask_piece_span_(span_k, j) : 0;
+        std::uint64_t const bits = detail::spaced_kmer_mask_bits(mask, j);
+        std::size_t const len = j < count ? detail::spaced_kmer_mask_piece_span(span_k, j) : 0;
         std::uint32_t validity = 0;
         for (std::size_t i = 0; i < len; ++i) {
             std::size_t const lane = Mask::layout == Layout::kMSB ? len - 1 - i : i;
@@ -225,7 +229,7 @@ inline bool is_valid_spaced_kmer_mask(Mask const& mask)
     }
 
     // The first and last position of the span, in the order of the span in the validity pieces.
-    std::size_t const tail = spaced_kmer_mask_tail_span(span_k);
+    std::size_t const tail = detail::spaced_kmer_mask_tail_span(span_k);
     return (mask.validity_pieces[0] & 1u) && ((mask.validity_pieces[count - 1] >> (tail - 1)) & 1u);
 }
 
@@ -243,9 +247,9 @@ inline std::string spaced_kmer_mask_string(Mask const& mask)
     // Each position of each piece, whose first position is in the highest two bits for kMSB, and in
     // the lowest two bits for kLSB.
     std::string result;
-    for (std::size_t j = 0; j < spaced_kmer_mask_piece_count(mask.span_k); ++j) {
-        std::uint64_t const bits = spaced_kmer_mask_bits_(mask, j);
-        std::size_t const len = spaced_kmer_mask_piece_span_(mask.span_k, j);
+    for (std::size_t j = 0; j < detail::spaced_kmer_mask_piece_count(mask.span_k); ++j) {
+        std::uint64_t const bits = detail::spaced_kmer_mask_bits(mask, j);
+        std::size_t const len = detail::spaced_kmer_mask_piece_span(mask.span_k, j);
         for (std::size_t i = 0; i < len; ++i) {
             std::size_t const lane = Mask::layout == Layout::kMSB ? len - 1 - i : i;
             std::uint64_t const lane_bits = (bits >> (2 * lane)) & 0x3u;

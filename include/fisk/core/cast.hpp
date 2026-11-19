@@ -15,10 +15,12 @@ namespace fisk {
 //     Width Checks
 // =================================================================================================
 
+namespace detail {
+
 /**
  * @brief Mask of the lowest `2 * width` bits, i.e. the bits a k-mer of that width may occupy.
  */
-inline constexpr std::uint64_t width_mask_(std::size_t width) noexcept
+inline constexpr std::uint64_t width_mask(std::size_t width) noexcept
 {
     return (width >= 32) ? ~std::uint64_t{0} : ((std::uint64_t{1} << (2 * width)) - 1u);
 }
@@ -28,7 +30,7 @@ inline constexpr std::uint64_t width_mask_(std::size_t width) noexcept
  *
  * Compiled out in release builds, as are all debug checks in this file.
  */
-FISK_ALWAYS_INLINE inline constexpr void assert_width_(
+FISK_ALWAYS_INLINE inline constexpr void assert_width(
     [[maybe_unused]] std::size_t width
 ) noexcept {
     assert(width >= 1 && width <= 32);
@@ -38,9 +40,9 @@ FISK_ALWAYS_INLINE inline constexpr void assert_width_(
  * @brief Whether a word holds no bits above `width` nucleotides, i.e. it is a valid k-mer or spaced
  * k-mer of that width.
  */
-inline constexpr bool fits_width_(std::uint64_t word, std::size_t width) noexcept
+inline constexpr bool fits_width(std::uint64_t word, std::size_t width) noexcept
 {
-    return (word & ~width_mask_(width)) == 0;
+    return (word & ~width_mask(width)) == 0;
 }
 
 /**
@@ -48,12 +50,14 @@ inline constexpr bool fits_width_(std::uint64_t word, std::size_t width) noexcep
  *
  * Producers of k-mer words call this with the word they emit.
  */
-FISK_ALWAYS_INLINE inline constexpr void assert_fits_width_(
+FISK_ALWAYS_INLINE inline constexpr void assert_fits_width(
     [[maybe_unused]] std::uint64_t word, [[maybe_unused]] std::size_t width
 ) noexcept {
-    assert_width_(width);
-    assert(fits_width_(word, width));
+    assert_width(width);
+    assert(fits_width(word, width));
 }
+
+} // namespace detail
 
 // =================================================================================================
 //     K-mer Cast
@@ -107,7 +111,7 @@ template <Encoding E, Layout L>
 [[nodiscard]] inline constexpr Kmer<E, L> kmer_cast(
     std::uint64_t raw, [[maybe_unused]] std::size_t width
 ) noexcept {
-    assert_fits_width_(raw, width);
+    detail::assert_fits_width(raw, width);
     return kmer_cast_unchecked<E, L>(raw);
 }
 
@@ -115,9 +119,11 @@ template <Encoding E, Layout L>
 //     K-mer Vector Cast
 // =================================================================================================
 
+namespace detail {
+
 // Adopt a SIMD vector of raw words as a KmerVector or SpacedKmerVector `V`, without checking them.
 template <KmerVectorType V>
-[[nodiscard]] inline V kmer_vector_cast_unchecked_(typename V::simd::simd_vector vec) noexcept
+[[nodiscard]] inline V make_kmer_vector_unchecked(typename V::simd::simd_vector vec) noexcept
 {
     // A bare vector as far as the ABI is concerned, as Kmer is a bare word (see
     // kmer_cast_unchecked()), so that it is passed in a vector register.
@@ -132,17 +138,19 @@ template <KmerVectorType V>
 // Adopt a SIMD vector of raw words as a KmerVector or SpacedKmerVector `V`, asserting that every
 // lane fits `width` nucleotides.
 template <KmerVectorType V>
-[[nodiscard]] inline V kmer_vector_cast_(
+[[nodiscard]] inline V make_kmer_vector(
     typename V::simd::simd_vector vec, [[maybe_unused]] std::size_t width
 ) noexcept {
     static_assert(sizeof(vec) == V::lanes * sizeof(std::uint64_t));
     std::uint64_t words[V::lanes];
     std::memcpy(words, &vec, sizeof(vec));
     for (std::uint64_t const word : words) {
-        assert_fits_width_(word, width);
+        assert_fits_width(word, width);
     }
-    return kmer_vector_cast_unchecked_<V>(vec);
+    return make_kmer_vector_unchecked<V>(vec);
 }
+
+} // namespace detail
 
 /**
  * @brief Adopt a SIMD vector of raw words as a vector of k-mers of a given convention, without
@@ -155,7 +163,7 @@ template <Encoding E, Layout L, SimdArch Simd>
 [[nodiscard]] inline KmerVector<E, L, Simd> kmer_vector_cast_unchecked(
     typename Simd::simd_vector vec
 ) noexcept {
-    return kmer_vector_cast_unchecked_<KmerVector<E, L, Simd>>(vec);
+    return detail::make_kmer_vector_unchecked<KmerVector<E, L, Simd>>(vec);
 }
 
 /**
@@ -168,7 +176,7 @@ template <Encoding E, Layout L, SimdArch Simd>
 [[nodiscard]] inline KmerVector<E, L, Simd> kmer_vector_cast(
     typename Simd::simd_vector vec, std::size_t width
 ) noexcept {
-    return kmer_vector_cast_<KmerVector<E, L, Simd>>(vec, width);
+    return detail::make_kmer_vector<KmerVector<E, L, Simd>>(vec, width);
 }
 
 /**
@@ -216,7 +224,7 @@ template <Encoding E, Layout L>
 [[nodiscard]] inline constexpr SpacedKmer<E, L> spaced_kmer_cast(
     std::uint64_t raw, [[maybe_unused]] std::size_t weight
 ) noexcept {
-    assert_fits_width_(raw, weight);
+    detail::assert_fits_width(raw, weight);
     return spaced_kmer_cast_unchecked<E, L>(raw);
 }
 
@@ -232,7 +240,7 @@ template <Encoding E, Layout L, SimdArch Simd>
 [[nodiscard]] inline SpacedKmerVector<E, L, Simd> spaced_kmer_vector_cast_unchecked(
     typename Simd::simd_vector vec
 ) noexcept {
-    return kmer_vector_cast_unchecked_<SpacedKmerVector<E, L, Simd>>(vec);
+    return detail::make_kmer_vector_unchecked<SpacedKmerVector<E, L, Simd>>(vec);
 }
 
 /**
@@ -246,7 +254,7 @@ template <Encoding E, Layout L, SimdArch Simd>
 [[nodiscard]] inline SpacedKmerVector<E, L, Simd> spaced_kmer_vector_cast(
     typename Simd::simd_vector vec, std::size_t weight
 ) noexcept {
-    return kmer_vector_cast_<SpacedKmerVector<E, L, Simd>>(vec, weight);
+    return detail::make_kmer_vector<SpacedKmerVector<E, L, Simd>>(vec, weight);
 }
 
 } // namespace fisk

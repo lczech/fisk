@@ -18,7 +18,7 @@ std::uint64_t run_var_checked_bytewise_simd_full_width_scalar_msb(
     ) FISK_ALWAYS_INLINE_LAMBDA {
         consume_valid_lanes<SimdScalar>(sink, v, lanes);
     };
-    for_each_kmer_packed_bytewise_simd_full_width_<SimdScalar>(seq, k, consume);
+    detail::for_each_kmer_packed_bytewise_simd_full_width<SimdScalar>(seq, k, consume);
     return sink.finalize();
 }
 

@@ -147,6 +147,8 @@ namespace fisk {
 //   3) A fully portable hand-rolled shift-mask-or fallback. This only collapses to a single
 //      instruction once the optimizer's idiom-recognition kicks in (reliably the case for GCC,
 //      Clang, and MSVC at -O2/-O3), kept as last resort.
+namespace detail {
+
 #if defined(__cpp_lib_byteswap) && __cpp_lib_byteswap >= 202110L
 
     inline constexpr std::uint16_t byte_swap_16(std::uint16_t x) noexcept
@@ -236,6 +238,8 @@ namespace fisk {
 
 #endif
 
+} // namespace detail
+
 // =================================================================================================
 //     Compiler Optimization Barrier
 // =================================================================================================
@@ -246,6 +250,8 @@ namespace fisk {
 // Offered for all integer widths, so that a value already held in a sub-register (e.g. the
 // single-byte result of a char encoder) does not need a zero-extend just to fit the uint64_t
 // overload; the "r" constraint binds directly to a register of the argument's own width.
+
+namespace detail {
 
 FISK_ALWAYS_INLINE
 inline void do_not_optimize(std::uint8_t v)
@@ -372,5 +378,7 @@ inline void clobber_memory(void const* ptr)
         std::atomic_signal_fence(std::memory_order_acq_rel);
     #endif
 }
+
+} // namespace detail
 
 } // namespace fisk

@@ -385,7 +385,7 @@ TEST(CoreKmer, EncodeDefaultsMatchForEachKmer)
 }
 
 // The char-to-code table inside kmer_encode() is a deliberate duplication of the encoders in
-// core/char_encoder.hpp (see char_to_code_() in core/kmer.hpp for why). This is what keeps the two
+// core/char_encoder.hpp (see char_to_code() in core/kmer.hpp for why). This is what keeps the two
 // from silently drifting apart: every code kmer_encode() assigns must be the one the ACGT/ACTG
 // lookup tables would assign to the same character, upper and lower case alike.
 TEST(CoreKmer, EncodeAgreesWithSeqEnc)

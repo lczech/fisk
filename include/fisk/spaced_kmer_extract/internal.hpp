@@ -26,15 +26,17 @@ namespace fisk {
 
 inline constexpr std::size_t kDefaultMaxCompiledPieces = FISK_DEFAULT_MAX_COMPILED_PIECES;
 
+namespace detail {
+
 /**
- * @brief Throw for a mask span not in [1, max_span], for check_spaced_kmer_span_().
+ * @brief Throw for a mask span not in [1, max_span], for check_spaced_kmer_span().
  *
- * Kept out of line and cold, as throw_invalid_kmer_k_() (kmer_extract/internal.hpp), so that
+ * Kept out of line and cold, as throw_invalid_kmer_k() (kmer_extract/internal.hpp), so that
  * building the message adds no code to the extraction loops into which the check is inlined: such
  * code changes how the compilers inline and allocate registers in these loops.
  */
 FISK_NOINLINE_COLD
-inline void throw_invalid_spaced_kmer_span_(std::size_t span_k, std::size_t max_span)
+inline void throw_invalid_spaced_kmer_span(std::size_t span_k, std::size_t max_span)
 {
     std::string message =
         "Invalid call to spaced k-mer extraction with a mask span of " +
@@ -55,38 +57,38 @@ inline void throw_invalid_spaced_kmer_span_(std::size_t span_k, std::size_t max_
  */
 template <std::size_t MaxSpan = 32>
 FISK_ALWAYS_INLINE
-inline std::size_t check_spaced_kmer_span_(std::size_t span_k)
+inline std::size_t check_spaced_kmer_span(std::size_t span_k)
 {
     if (span_k == 0 || span_k > MaxSpan) {
-        throw_invalid_spaced_kmer_span_(span_k, MaxSpan);
+        throw_invalid_spaced_kmer_span(span_k, MaxSpan);
     }
     return span_k;
 }
 
 // The mask type of a single mask, or of a std::span of masks, and their number.
 template <typename MaskOrMasks>
-struct spaced_kmer_mask_of_
+struct spaced_kmer_mask_of
 {
     using type = MaskOrMasks;
     static constexpr std::size_t count = 1;
 };
 
 template <typename Mask, std::size_t N>
-struct spaced_kmer_mask_of_<std::span<Mask, N>>
+struct spaced_kmer_mask_of<std::span<Mask, N>>
 {
     using type = std::remove_const_t<Mask>;
     static constexpr std::size_t count = N;
 };
 
 template <typename MaskOrMasks>
-using spaced_kmer_mask_of_t_ = typename spaced_kmer_mask_of_<MaskOrMasks>::type;
+using spaced_kmer_mask_of_t = typename spaced_kmer_mask_of<MaskOrMasks>::type;
 
 /**
- * @brief Throw for masks of different spans, for common_spaced_kmer_span_(), out of line and cold
- * as throw_invalid_spaced_kmer_span_().
+ * @brief Throw for masks of different spans, for common_spaced_kmer_span(), out of line and cold
+ * as throw_invalid_spaced_kmer_span().
  */
 FISK_NOINLINE_COLD
-inline void throw_spaced_kmer_spans_differ_()
+inline void throw_spaced_kmer_spans_differ()
 {
     throw std::invalid_argument(
         "Invalid call to spaced k-mer extraction with masks of different spans"
@@ -96,22 +98,22 @@ inline void throw_spaced_kmer_spans_differ_()
 /**
  * @brief Get the span of a non-empty set of masks, checking that it is the same for all of them.
  *
- * Always inlined, as check_spaced_kmer_span_(). Takes the std::span by value for where a compiler
+ * Always inlined, as check_spaced_kmer_span(). Takes the std::span by value for where a compiler
  * still keeps it as a call, as MSVC can: with a reference, the address of the caller's span would
  * escape into the call, so that the extraction loops would have to reload the span from memory
  * after every store that the compiler cannot see through, such as one in the callback.
  */
 template <std::size_t MaxSpan = 32, typename Mask, std::size_t N>
 FISK_ALWAYS_INLINE
-inline std::size_t common_spaced_kmer_span_(std::span<Mask, N> masks)
+inline std::size_t common_spaced_kmer_span(std::span<Mask, N> masks)
 {
     std::size_t const span_k = masks[0].span_k;
     for (auto const& mask : masks) {
         if (mask.span_k != span_k) {
-            throw_spaced_kmer_spans_differ_();
+            throw_spaced_kmer_spans_differ();
         }
     }
-    return check_spaced_kmer_span_<MaxSpan>(span_k);
+    return check_spaced_kmer_span<MaxSpan>(span_k);
 }
 
 /**
@@ -119,7 +121,7 @@ inline std::size_t common_spaced_kmer_span_(std::span<Mask, N> masks)
  */
 template<typename Mask, typename F>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_mask_(Mask const& mask, F&& f)
+inline void for_each_mask(Mask const& mask, F&& f)
 {
     f(mask);
 }
@@ -132,11 +134,13 @@ inline void for_each_mask_(Mask const& mask, F&& f)
  */
 template<typename Mask, std::size_t N, typename F>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_mask_(std::span<Mask, N> masks, F&& f)
+inline void for_each_mask(std::span<Mask, N> masks, F&& f)
 {
     for (std::size_t i = 0; i < N; ++i) {
         f(masks[i]);
     }
 }
+
+} // namespace detail
 
 } // namespace fisk

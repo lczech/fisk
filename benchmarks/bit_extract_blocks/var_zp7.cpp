@@ -16,7 +16,7 @@ std::uint64_t run_var_zp7(
 ) {
     auto sink = make_sink(sink_buffer);
     for (std::size_t r = 0; r < rounds; ++r) {
-        clobber_memory(batch.values.data());
+        detail::clobber_memory(batch.values.data());
         for (std::size_t i = 0; i < batch.values.size(); ++i) {
             sink.consume(zp7::zp7_pext_64(batch.values[i], batch.masks[i].mask));
         }

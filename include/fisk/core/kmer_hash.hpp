@@ -33,7 +33,7 @@ struct KmerHashIdentity
 /**
  * @brief Hash a k-mer through the splitmix64 finalizer.
  *
- * The same mix64_() that Splitmix64::get_uint64() applies to its counter (see util/random.hpp),
+ * The same mix64() that Splitmix64::get_uint64() applies to its counter (see util/random.hpp),
  * applied to the k-mer word instead. A handful of cycles, against the cache miss that the hash
  * table lookup around it costs anyway, in exchange for full avalanche.
  *
@@ -44,7 +44,7 @@ struct KmerHashMix
     template <KmerType K>
     [[nodiscard]] std::size_t operator()(K kmer) const noexcept
     {
-        return static_cast<std::size_t>(mix64_(kmer.value));
+        return static_cast<std::size_t>(detail::mix64(kmer.value));
     }
 };
 

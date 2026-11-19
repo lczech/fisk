@@ -177,7 +177,7 @@ static void check_simd_store_truncated(Lanes<Simd> const& in)
     for (std::size_t i = 0; i < Simd::lanes; ++i) {
         std::uint16_t expected = static_cast<std::uint16_t>(in[i]);
         if constexpr (ByteSwap) {
-            expected = byte_swap_16(expected);
+            expected = detail::byte_swap_16(expected);
         }
         std::uint16_t actual;
         std::memcpy(&actual, out + 2 * i, sizeof(actual));
@@ -373,7 +373,7 @@ static void check_simd_arch()
 
         auto const swapped = to_lanes<Simd>(Simd::byte_swap_lanes(from_lanes<Simd>(in)));
         for (std::size_t i = 0; i < Simd::lanes; ++i) {
-            EXPECT_EQ(swapped[i], byte_swap_64(in[i]));
+            EXPECT_EQ(swapped[i], detail::byte_swap_64(in[i]));
         }
 
         check_simd_store_truncated<Simd, false>(in);
@@ -438,7 +438,7 @@ TEST(SimdSimd, SSE2ByteHelpers)
     auto const check_swap = [](auto const& swap, Lanes<Simd> const& in) {
         auto const out = to_lanes<Simd>(swap(from_lanes<Simd>(in)));
         for (std::size_t i = 0; i < Simd::lanes; ++i) {
-            EXPECT_EQ(out[i], byte_swap_64(in[i]));
+            EXPECT_EQ(out[i], detail::byte_swap_64(in[i]));
         }
     };
     auto const check_store = [](auto const& store, bool byte_swap, Lanes<Simd> const& in) {
@@ -448,7 +448,7 @@ TEST(SimdSimd, SSE2ByteHelpers)
             std::uint16_t const low = static_cast<std::uint16_t>(in[i]);
             std::uint16_t actual;
             std::memcpy(&actual, out + 2 * i, sizeof(actual));
-            EXPECT_EQ(actual, byte_swap ? byte_swap_16(low) : low);
+            EXPECT_EQ(actual, byte_swap ? detail::byte_swap_16(low) : low);
         }
     };
 

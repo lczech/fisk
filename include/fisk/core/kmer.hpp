@@ -28,6 +28,8 @@ namespace fisk {
 // Each chain therefore ends in a static_assert on dependent_false_v (core/types.hpp) rather than
 // an unguarded `else`.
 
+namespace detail {
+
 /**
  * @brief XOR constant that complements every 2-bit code in a word at once.
  *
@@ -37,14 +39,14 @@ namespace fisk {
  * are A=0,C=1,T=2,G=3, so the pairs are 0<->2 and 1<->3, which is XOR with 0b10.
  */
 template <Encoding E>
-inline constexpr std::uint64_t complement_xor_() noexcept
+inline constexpr std::uint64_t complement_xor() noexcept
 {
     if constexpr (E == Encoding::kACGT) {
         return ~std::uint64_t{0};
     } else if constexpr (E == Encoding::kACTG) {
         return 0xAAAAAAAAAAAAAAAAull;
     } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in complement_xor_()");
+        static_assert(dependent_false_v<E>, "Unhandled Encoding in complement_xor()");
         return 0;
     }
 }
@@ -53,14 +55,14 @@ inline constexpr std::uint64_t complement_xor_() noexcept
  * @brief Right-shift that brings the 2-bit code of nucleotide `index` down into the lowest bits.
  */
 template <Layout L>
-inline constexpr unsigned nucleotide_shift_(std::size_t index, std::size_t width) noexcept
+inline constexpr unsigned nucleotide_shift(std::size_t index, std::size_t width) noexcept
 {
     if constexpr (L == Layout::kMSB) {
         return static_cast<unsigned>(2 * (width - 1 - index));
     } else if constexpr (L == Layout::kLSB) {
         return static_cast<unsigned>(2 * index);
     } else {
-        static_assert(dependent_false_v<L>, "Unhandled Layout in nucleotide_shift_()");
+        static_assert(dependent_false_v<L>, "Unhandled Layout in nucleotide_shift()");
         return 0;
     }
 }
@@ -69,7 +71,7 @@ inline constexpr unsigned nucleotide_shift_(std::size_t index, std::size_t width
  * @brief The nucleotide character that a 2-bit code stands for under a given encoding.
  */
 template <Encoding E>
-inline constexpr char code_to_char_(std::uint8_t code) noexcept
+inline constexpr char code_to_char(std::uint8_t code) noexcept
 {
     if constexpr (E == Encoding::kACGT) {
         constexpr char lut[4] = {'A', 'C', 'G', 'T'};
@@ -78,7 +80,7 @@ inline constexpr char code_to_char_(std::uint8_t code) noexcept
         constexpr char lut[4] = {'A', 'C', 'T', 'G'};
         return lut[code];
     } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in code_to_char_()");
+        static_assert(dependent_false_v<E>, "Unhandled Encoding in code_to_char()");
         return '\0';
     }
 }
@@ -88,7 +90,7 @@ inline constexpr char code_to_char_(std::uint8_t code) noexcept
  * anything that is not a nucleotide.
  */
 template <Encoding E>
-inline constexpr std::uint8_t char_to_code_(char c) noexcept
+inline constexpr std::uint8_t char_to_code(char c) noexcept
 {
     if constexpr (E == Encoding::kACGT) {
         switch (c) {
@@ -107,7 +109,7 @@ inline constexpr std::uint8_t char_to_code_(char c) noexcept
             default:            return 4;
         }
     } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in char_to_code_()");
+        static_assert(dependent_false_v<E>, "Unhandled Encoding in char_to_code()");
         return 4;
     }
 }
@@ -123,7 +125,7 @@ inline constexpr std::uint8_t char_to_code_(char c) noexcept
  * Note that this reverses the full 64-bit word, leaving the result in the high bits. Callers
  * shift it down by `64 - 2 * width` to recover the groups they care about.
  */
-inline constexpr std::uint64_t reverse_bit_pairs_(std::uint64_t value) noexcept
+inline constexpr std::uint64_t reverse_bit_pairs(std::uint64_t value) noexcept
 {
     // Reverse bits (leaving bit pairs intact, as those represent nucleotides):
     // Swap consecutive pairs, then nibbles, then the whole byte order.
@@ -131,6 +133,8 @@ inline constexpr std::uint64_t reverse_bit_pairs_(std::uint64_t value) noexcept
     value = ((value & 0xF0F0F0F0F0F0F0F0ull) >> 4) | ((value & 0x0F0F0F0F0F0F0F0Full) << 4);
     return byte_swap_64(value);
 }
+
+} // namespace detail
 
 // =================================================================================================
 //     String Conversion
@@ -145,10 +149,10 @@ template <KmerType K>
 [[nodiscard]] inline constexpr std::uint8_t nucleotide_at(
     K kmer, std::size_t index, std::size_t width
 ) noexcept {
-    assert_width_(width);
+    detail::assert_width(width);
     assert(index < width);
     return static_cast<std::uint8_t>(
-        (kmer.value >> nucleotide_shift_<K::layout>(index, width)) & 0x3u
+        (kmer.value >> detail::nucleotide_shift<K::layout>(index, width)) & 0x3u
     );
 }
 
@@ -165,12 +169,12 @@ template <KmerType K>
     // predate full support for constexpr std::string (P0980), which makes std::string not a literal
     // type there, and a constexpr function's return type must be a literal type. No caller needs
     // compile-time evaluation here anyway.
-    assert_width_(width);
+    detail::assert_width(width);
 
     std::string str;
     str.resize(width);
     for (std::size_t i = 0; i < width; ++i) {
-        str[i] = code_to_char_<K::encoding>(nucleotide_at(kmer, i, width));
+        str[i] = detail::code_to_char<K::encoding>(nucleotide_at(kmer, i, width));
     }
     return str;
 }
@@ -202,13 +206,13 @@ template <ContiguousKmerType K = KmerAcgtMsb>
 
     std::uint64_t value = 0;
     for (std::size_t i = 0; i < seq.size(); ++i) {
-        std::uint8_t const code = char_to_code_<K::encoding>(seq[i]);
+        std::uint8_t const code = detail::char_to_code<K::encoding>(seq[i]);
         if (code > 3) {
             throw std::invalid_argument(
                 "Invalid call to kmer_encode() with a non-nucleotide character in the sequence"
             );
         }
-        value |= std::uint64_t{code} << nucleotide_shift_<K::layout>(i, seq.size());
+        value |= std::uint64_t{code} << detail::nucleotide_shift<K::layout>(i, seq.size());
     }
     return K{value};
 }
@@ -225,8 +229,8 @@ template <ContiguousKmerType K = KmerAcgtMsb>
 template <KmerType K>
 [[nodiscard]] inline constexpr K complement(K kmer, std::size_t width) noexcept
 {
-    assert_width_(width);
-    return K{(kmer.value ^ complement_xor_<K::encoding>()) & width_mask_(width)};
+    detail::assert_width(width);
+    return K{(kmer.value ^ detail::complement_xor<K::encoding>()) & detail::width_mask(width)};
 }
 
 /**
@@ -241,8 +245,8 @@ template <KmerType K>
 template <ContiguousKmerType K>
 [[nodiscard]] inline constexpr K reverse(K kmer, std::size_t width) noexcept
 {
-    assert_width_(width);
-    return K{reverse_bit_pairs_(kmer.value) >> (64 - 2 * width)};
+    detail::assert_width(width);
+    return K{detail::reverse_bit_pairs(kmer.value) >> (64 - 2 * width)};
 }
 
 /**
@@ -255,8 +259,9 @@ template <ContiguousKmerType K>
 template <ContiguousKmerType K>
 [[nodiscard]] inline constexpr K reverse_complement(K kmer, std::size_t width) noexcept
 {
-    assert_width_(width);
-    auto const reversed = reverse_bit_pairs_(kmer.value) ^ complement_xor_<K::encoding>();
+    detail::assert_width(width);
+    auto const reversed =
+        detail::reverse_bit_pairs(kmer.value) ^ detail::complement_xor<K::encoding>();
     return K{reversed >> (64 - 2 * width)};
 }
 
@@ -280,11 +285,13 @@ template <ContiguousKmerType K>
 //     Convention Conversion
 // =================================================================================================
 
+namespace detail {
+
 /**
  * @brief Re-map the 2-bit codes of a word from one encoding to another.
  */
 template <Encoding From, Encoding To>
-inline constexpr std::uint64_t recode_(std::uint64_t value) noexcept
+inline constexpr std::uint64_t recode(std::uint64_t value) noexcept
 {
     if constexpr (From == To) {
         return value;
@@ -298,7 +305,7 @@ inline constexpr std::uint64_t recode_(std::uint64_t value) noexcept
         // operation is its own inverse, hence one expression covering both directions.
         return value ^ ((value >> 1) & 0x5555555555555555ull);
     } else {
-        static_assert(dependent_false_v<From>, "Unhandled Encoding pair in recode_()");
+        static_assert(dependent_false_v<From>, "Unhandled Encoding pair in recode()");
         return 0;
     }
 }
@@ -307,7 +314,7 @@ inline constexpr std::uint64_t recode_(std::uint64_t value) noexcept
  * @brief Re-order the 2-bit codes of a word from one layout to another.
  */
 template <Layout From, Layout To>
-inline constexpr std::uint64_t relayout_(std::uint64_t value, std::size_t width) noexcept
+inline constexpr std::uint64_t relayout(std::uint64_t value, std::size_t width) noexcept
 {
     if constexpr (From == To) {
         return value;
@@ -317,12 +324,14 @@ inline constexpr std::uint64_t relayout_(std::uint64_t value, std::size_t width)
     ) {
         // The two layouts differ in which end of the word the first nucleotide sits at, so
         // converting reverses the order of the nucleotides. Self-inverse, as the encodings above.
-        return reverse_bit_pairs_(value) >> (64 - 2 * width);
+        return reverse_bit_pairs(value) >> (64 - 2 * width);
     } else {
-        static_assert(dependent_false_v<From>, "Unhandled Layout pair in relayout_()");
+        static_assert(dependent_false_v<From>, "Unhandled Layout pair in relayout()");
         return 0;
     }
 }
+
+} // namespace detail
 
 // Converting between conventions is spelled kmer_convert() in all three cases, distinguished only
 // by which template arguments are supplied. Giving an Encoding selects the first overload, a
@@ -347,8 +356,8 @@ template <Encoding E2, KmerType K, typename = Encoding>
 [[nodiscard]] inline constexpr typename K::template rebind<E2, K::layout> kmer_convert(
     K kmer, [[maybe_unused]] std::size_t width
 ) noexcept {
-    assert_width_(width);
-    return typename K::template rebind<E2, K::layout>{recode_<K::encoding, E2>(kmer.value)};
+    detail::assert_width(width);
+    return typename K::template rebind<E2, K::layout>{detail::recode<K::encoding, E2>(kmer.value)};
 }
 
 /**
@@ -362,9 +371,9 @@ template <Layout L2, KmerType K, typename = Layout>
 [[nodiscard]] inline constexpr typename K::template rebind<K::encoding, L2> kmer_convert(
     K kmer, std::size_t width
 ) noexcept {
-    assert_width_(width);
+    detail::assert_width(width);
     return typename K::template rebind<K::encoding, L2>{
-        relayout_<K::layout, L2>(kmer.value, width)
+        detail::relayout<K::layout, L2>(kmer.value, width)
     };
 }
 
@@ -380,9 +389,9 @@ template <Encoding E2, Layout L2, KmerType K>
 [[nodiscard]] inline constexpr typename K::template rebind<E2, L2> kmer_convert(
     K kmer, std::size_t width
 ) noexcept {
-    assert_width_(width);
-    auto const recoded = recode_<K::encoding, E2>(kmer.value);
-    return typename K::template rebind<E2, L2>{relayout_<K::layout, L2>(recoded, width)};
+    detail::assert_width(width);
+    auto const recoded = detail::recode<K::encoding, E2>(kmer.value);
+    return typename K::template rebind<E2, L2>{detail::relayout<K::layout, L2>(recoded, width)};
 }
 
 } // namespace fisk

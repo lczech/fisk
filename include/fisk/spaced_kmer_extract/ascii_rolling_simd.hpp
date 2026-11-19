@@ -36,13 +36,15 @@ namespace fisk {
     #define FISK_PRAGMA_UNROLL_16
 #endif
 
+namespace detail {
+
 // Shift the next character into the rolling k-mer, and its validity into the rolling valid bits,
 // in Layout `L`. MSB shifts in at the bottom, and keeps the old nucleotides above the span, as the
 // bit extraction and the validity check only look at the bits of the mask. LSB shifts in at
 // `top_shift`, i.e., the top of the span.
 template<Layout L, typename Enc>
 FISK_ALWAYS_INLINE
-inline void spaced_kmer_ascii_rolling_simd_shift_in_(
+inline void spaced_kmer_ascii_rolling_simd_shift_in(
     char c,
     Enc&& enc,
     std::size_t top_shift,
@@ -69,7 +71,7 @@ inline void spaced_kmer_ascii_rolling_simd_shift_in_(
             | (static_cast<std::uint64_t>(code < 4) * (std::uint64_t{0x03u} << top_shift));
     } else {
         static_assert(
-            dependent_false_v<L>, "Unhandled Layout in spaced_kmer_ascii_rolling_simd_shift_in_()"
+            dependent_false_v<L>, "Unhandled Layout in spaced_kmer_ascii_rolling_simd_shift_in()"
         );
     }
 }
@@ -79,7 +81,7 @@ inline void spaced_kmer_ascii_rolling_simd_shift_in_(
 // SIMD extraction below. The lanes from `count` on hold zero, and are not valid.
 template<typename KernelMask, typename Enc>
 FISK_ALWAYS_INLINE
-inline void spaced_kmer_ascii_rolling_simd_fill_lanes_(
+inline void spaced_kmer_ascii_rolling_simd_fill_lanes(
     char const* data,
     std::size_t count,
     Enc&& enc,
@@ -92,7 +94,7 @@ inline void spaced_kmer_ascii_rolling_simd_fill_lanes_(
     FISK_PRAGMA_UNROLL_16
     for (std::size_t lane = 0; lane < KernelMask::bit_extract_form::lanes; ++lane) {
         if (lane < count) {
-            spaced_kmer_ascii_rolling_simd_shift_in_<KernelMask::layout>(
+            spaced_kmer_ascii_rolling_simd_shift_in<KernelMask::layout>(
                 data[lane], enc, top_shift, rolling_kmer, rolling_valid_pos
             );
             lane_kmers[lane]  = rolling_kmer;
@@ -108,7 +110,7 @@ inline void spaced_kmer_ascii_rolling_simd_fill_lanes_(
 // lane loops of the SIMD extraction functions below are fully unrolled.
 template <std::size_t L, typename F>
 FISK_ALWAYS_INLINE
-inline void for_each_lane_ct_(F&& f)
+inline void for_each_lane_ct(F&& f)
 {
     if constexpr (L >= 1) { f(std::integral_constant<std::size_t, 0>{}); }
     if constexpr (L >= 2) { f(std::integral_constant<std::size_t, 1>{}); }
@@ -119,6 +121,8 @@ inline void for_each_lane_ct_(F&& f)
     if constexpr (L >= 7) { f(std::integral_constant<std::size_t, 6>{}); }
     if constexpr (L >= 8) { f(std::integral_constant<std::size_t, 7>{}); }
 }
+
+} // namespace detail
 
 // =================================================================================================
 //     Spaced K-mer Extraction from ASCII, Rolling, SIMD
@@ -164,8 +168,8 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     constexpr std::size_t lanes = KernelMask::bit_extract_form::lanes;
 
     // Input boundary checks. The masks must not have bits above the span, see
-    // spaced_kmer_ascii_rolling_simd_shift_in_().
-    std::size_t const span_k = common_spaced_kmer_span_(kernels);
+    // spaced_kmer_ascii_rolling_simd_shift_in().
+    std::size_t const span_k = detail::common_spaced_kmer_span(kernels);
     for ([[maybe_unused]] auto const& kernel : kernels) {
         assert(is_valid_spaced_kmer_mask(kernel));
     }
@@ -183,7 +187,7 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     std::uint64_t rolling_valid_pos = 0;
     std::size_t i = 0;
     for (; i + 1 < span_k; ++i) {
-        spaced_kmer_ascii_rolling_simd_shift_in_<L>(
+        detail::spaced_kmer_ascii_rolling_simd_shift_in<L>(
             data[i], enc, top_shift, rolling_kmer, rolling_valid_pos
         );
     }
@@ -196,7 +200,7 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
     // Emit the spaced k-mers of all masks for the lanes of the `count` characters at `i`. A lane
     // is valid for a mask if its valid bits cover all bits of the mask.
     auto const emit = [&](std::size_t count) FISK_ALWAYS_INLINE_LAMBDA {
-        spaced_kmer_ascii_rolling_simd_fill_lanes_<KernelMask>(
+        detail::spaced_kmer_ascii_rolling_simd_fill_lanes<KernelMask>(
             data + i, count, enc, top_shift, rolling_kmer, rolling_valid_pos, lane_kmers,
             lane_valids
         );
@@ -204,13 +208,13 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_simd(
         std::size_t const pos = i + 1 - span_k;
         FISK_PRAGMA_UNROLL_16
         for (std::size_t m = 0; m < NMasks; ++m) {
-            std::uint64_t const mm = spaced_kmer_mask_bits_(kernels[m]);
+            std::uint64_t const mm = detail::spaced_kmer_mask_bits(kernels[m]);
             std::uint64_t bits = 0;
-            for_each_lane_ct_<lanes>([&](auto lane_ic) FISK_ALWAYS_INLINE_LAMBDA {
+            detail::for_each_lane_ct<lanes>([&](auto lane_ic) FISK_ALWAYS_INLINE_LAMBDA {
                 constexpr std::size_t lane = lane_ic;
                 bits |= static_cast<std::uint64_t>((lane_valids[lane] & mm) == mm) << lane;
             });
-            invoke_spaced_kmer_vector_valid_lanes_callback<E, L, Simd, NMasks == 1>(
+            detail::invoke_spaced_kmer_vector_valid_lanes_callback<E, L, Simd, NMasks == 1>(
                 callback, m, pos,
                 spaced_kmer_vector_cast_unchecked<E, L, Simd>(
                     kernels[m].mask_pieces[0].bit_extract(x)

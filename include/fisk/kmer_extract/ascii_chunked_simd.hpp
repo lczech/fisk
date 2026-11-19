@@ -30,22 +30,24 @@ namespace fisk {
 //     Internal Helpers
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 // The shared implementation of the unchecked and checked functions below: with a
 // PackedSequenceWithValidity as `scratch`, the chunks are packed with their validity, and the
-// packed loop calls back with the valid lanes of its vectors, see for_each_ascii_chunk_().
+// packed loop calls back with the valid lanes of its vectors, see for_each_ascii_chunk().
 template <
     SimdArch Simd, std::size_t ChunkSize, WordEncoder Encoder,
     PackedSequenceType PackedSequenceChunk, typename Func
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_ascii_chunked_simd_(
+inline void for_each_kmer_ascii_chunked_simd(
     std::string_view seq, std::size_t k, Encoder const& encoder, PackedSequenceChunk& scratch,
     Func& func
 ) {
     if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
+        throw_invalid_kmer_k(32);
     }
-    for_each_ascii_chunk_<ChunkSize>(
+    for_each_ascii_chunk<ChunkSize>(
         seq, k, encoder, scratch, func,
         [k](auto const& chunk, auto const& chunk_func) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (PackedSequenceWithValidityType<PackedSequenceChunk>) {
@@ -56,6 +58,8 @@ inline void for_each_kmer_ascii_chunked_simd_(
         }
     );
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     for_each_kmer_ascii_unchecked_chunked_simd()
@@ -82,7 +86,7 @@ inline void for_each_kmer_ascii_chunked_simd_(
  * @tparam Simd      SIMD arch, such as SimdAVX2, to be given explicitly.
  * @tparam ChunkSize Number of nucleotides processed per chunk; must be > 0. A multiple of 32, such
  *                   as a power of two, keeps each chunk in whole blocks of the packed loops, see
- *                   run_packed_bytewise_blocks_().
+ *                   run_packed_bytewise_blocks().
  *
  * @param seq        Input sequence.
  * @param k          K-mer size, in [1, 32].
@@ -102,14 +106,14 @@ inline void for_each_kmer_ascii_unchecked_chunked_simd(
     Func&& func
 ) {
     // `func` is called from every chunk, so it is passed on as an lvalue, never forwarded.
-    for_each_kmer_ascii_chunked_simd_<Simd, ChunkSize>(seq, k, encoder, scratch, func);
+    detail::for_each_kmer_ascii_chunked_simd<Simd, ChunkSize>(seq, k, encoder, scratch, func);
 }
 
 /**
  * @brief Same as above, using a thread-local buffer.
  *
  * The buffer is shared by all chunked functions on the same thread that use the same type of
- * scratch, see ascii_chunked_buffer_(). The callback hence must not call any of them again with
+ * scratch, see ascii_chunked_buffer(). The callback hence must not call any of them again with
  * the thread-local buffer. Use the overload taking `scratch` for nested calls.
  */
 template <
@@ -122,7 +126,7 @@ inline void for_each_kmer_ascii_unchecked_chunked_simd(
 ) {
     for_each_kmer_ascii_unchecked_chunked_simd<Simd, ChunkSize>(
         seq, k, encoder,
-        ascii_chunked_buffer_<PackedSequence<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<PackedSequence<Encoder::encoding, Encoder::layout>>(),
         std::forward<Func>(func)
     );
 }
@@ -158,7 +162,7 @@ inline void for_each_kmer_ascii_checked_chunked_simd(
     Func&& func
 ) {
     // `func` is called from every chunk, so it is passed on as an lvalue, never forwarded.
-    for_each_kmer_ascii_chunked_simd_<Simd, ChunkSize>(seq, k, encoder, scratch, func);
+    detail::for_each_kmer_ascii_chunked_simd<Simd, ChunkSize>(seq, k, encoder, scratch, func);
 }
 
 /**
@@ -175,7 +179,9 @@ inline void for_each_kmer_ascii_checked_chunked_simd(
 ) {
     for_each_kmer_ascii_checked_chunked_simd<Simd, ChunkSize>(
         seq, k, encoder,
-        ascii_chunked_buffer_<PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<
+            PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>
+        >(),
         std::forward<Func>(func)
     );
 }

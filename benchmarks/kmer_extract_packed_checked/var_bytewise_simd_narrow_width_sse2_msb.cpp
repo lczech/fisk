@@ -20,7 +20,7 @@ std::uint64_t run_var_checked_bytewise_simd_narrow_width_sse2_msb(
     ) FISK_ALWAYS_INLINE_LAMBDA {
         consume_valid_lanes<SimdSSE2>(sink, v, lanes);
     };
-    for_each_kmer_packed_bytewise_simd_narrow_width_<SimdSSE2>(seq, k, consume);
+    detail::for_each_kmer_packed_bytewise_simd_narrow_width<SimdSSE2>(seq, k, consume);
     return sink.finalize();
 }
 

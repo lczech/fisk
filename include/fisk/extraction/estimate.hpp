@@ -22,6 +22,8 @@ namespace fisk {
 //     Candidate Lists
 // =================================================================================================
 
+namespace detail {
+
 /**
  * @brief A list of types, for the candidate algorithms of the estimate.
  *
@@ -32,7 +34,7 @@ namespace fisk {
  *     for_each_kmer_ascii_checked_chunked_simd<SimdAVX2>(),
  *   - `static bool available()`, whether it can run in this build on this CPU,
  *   - optionally `static bool preferred()`, whether the estimate may run it, see
- *     candidate_preferred_(),
+ *     candidate_preferred(),
  *   - `void run(Param const& param, Seq const& seq, Cb& callback) const`, the extraction, with
  *     its parameter: the k-mer size `k`, which the extraction function that it calls checks, or
  *     the masks, a SpacedKmerMaskForms, which are checked when they are prepared.
@@ -65,14 +67,14 @@ using CandidateSimdArchs = TypeList<>;
 #endif
 
 // The input check in the names of the candidates.
-inline std::string input_check_name_(InputCheck input_check)
+inline std::string input_check_name(InputCheck input_check)
 {
     return (input_check == InputCheck::kChecked) ? "checked" : "unchecked";
 }
 
 // The name of a SIMD arch in the names of the candidates.
 template <SimdArch Simd>
-inline std::string simd_arch_name_()
+inline std::string simd_arch_name()
 {
     if constexpr (std::same_as<Simd, SimdScalar>) {
         return "scalar";
@@ -98,13 +100,13 @@ inline std::string simd_arch_name_()
     }
     #endif
     else {
-        static_assert(dependent_false_v<Simd::lanes>, "Unhandled SIMD arch in simd_arch_name_()");
+        static_assert(dependent_false_v<Simd::lanes>, "Unhandled SIMD arch in simd_arch_name()");
     }
 }
 
 // Whether a SIMD arch can be used in this build and on this CPU.
 template <SimdArch Simd>
-inline bool simd_arch_enabled_()
+inline bool simd_arch_enabled()
 {
     if constexpr (std::same_as<Simd, SimdScalar>) {
         return true;
@@ -131,20 +133,24 @@ inline bool simd_arch_enabled_()
     #endif
     else {
         static_assert(
-            dependent_false_v<Simd::lanes>, "Unhandled SIMD arch in simd_arch_enabled_()"
+            dependent_false_v<Simd::lanes>, "Unhandled SIMD arch in simd_arch_enabled()"
         );
     }
 }
+
+} // namespace detail
 
 // =================================================================================================
 //     Estimate
 // =================================================================================================
 
+namespace detail {
+
 // Whether the estimate may run `Candidate` on this CPU: its preferred(), where it has one, such as
 // the PEXT candidates, which are available wherever BMI2 is, but preferred only where PEXT is
 // likely fast; else its available().
 template <typename Candidate>
-inline bool candidate_preferred_()
+inline bool candidate_preferred()
 {
     if constexpr (requires { Candidate::preferred(); }) {
         return Candidate::preferred();
@@ -155,22 +161,22 @@ inline bool candidate_preferred_()
 
 // Call `f` with the first preferred candidate of the list, see visit_estimate().
 template <typename Candidate, typename... Rest, typename F>
-FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred_(F& f)
+FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred(F& f)
 {
     if constexpr (sizeof...(Rest) == 0) {
         return f(Candidate{});
     } else {
-        if (candidate_preferred_<Candidate>()) {
+        if (candidate_preferred<Candidate>()) {
             return f(Candidate{});
         }
-        return visit_first_preferred_<Rest...>(f);
+        return visit_first_preferred<Rest...>(f);
     }
 }
 
 template <typename... Candidates, typename F>
-FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred_(TypeList<Candidates...>, F& f)
+FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred(TypeList<Candidates...>, F& f)
 {
-    return visit_first_preferred_<Candidates...>(f);
+    return visit_first_preferred<Candidates...>(f);
 }
 
 /**
@@ -185,7 +191,9 @@ FISK_ALWAYS_INLINE inline decltype(auto) visit_first_preferred_(TypeList<Candida
 template <typename Preference, typename F>
 FISK_ALWAYS_INLINE inline decltype(auto) visit_estimate(F&& f)
 {
-    return visit_first_preferred_(Preference{}, f);
+    return visit_first_preferred(Preference{}, f);
 }
+
+} // namespace detail
 
 } // namespace fisk

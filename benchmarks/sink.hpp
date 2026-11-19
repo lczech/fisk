@@ -177,14 +177,14 @@ struct Sink
 {
     void consume(std::uint64_t v) const noexcept
     {
-        fisk::do_not_optimize(v);
+        fisk::detail::do_not_optimize(v);
     }
 
     #if defined(FISK_HAS_SSE2)
 
         void consume(__m128i v) const noexcept
         {
-            fisk::do_not_optimize(v);
+            fisk::detail::do_not_optimize(v);
         }
 
     #endif
@@ -192,7 +192,7 @@ struct Sink
 
         void consume(__m256i v) const noexcept
         {
-            fisk::do_not_optimize(v);
+            fisk::detail::do_not_optimize(v);
         }
 
     #endif
@@ -200,7 +200,7 @@ struct Sink
 
         void consume(__m512i v) const noexcept
         {
-            fisk::do_not_optimize(v);
+            fisk::detail::do_not_optimize(v);
         }
 
     #endif
@@ -208,7 +208,7 @@ struct Sink
 
         void consume(uint64x2_t v) const noexcept
         {
-            fisk::do_not_optimize(v);
+            fisk::detail::do_not_optimize(v);
         }
 
     #endif

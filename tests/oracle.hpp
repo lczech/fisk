@@ -55,7 +55,7 @@ inline std::uint8_t oracle_code(char c)
             default:            return fisk::kInvalidNucleotide;
         }
     } else {
-        static_assert(fisk::dependent_false_v<E>, "Unhandled Encoding in the test oracle");
+        static_assert(fisk::detail::dependent_false_v<E>, "Unhandled Encoding in the test oracle");
         return fisk::kInvalidNucleotide;
     }
 }
@@ -119,7 +119,9 @@ inline std::optional<std::uint64_t> oracle_encode(std::string_view window)
         } else if constexpr (L == fisk::Layout::kLSB) {
             slot = i;
         } else {
-            static_assert(fisk::dependent_false_v<L>, "Unhandled Layout in the test oracle");
+            static_assert(
+                fisk::detail::dependent_false_v<L>, "Unhandled Layout in the test oracle"
+            );
         }
         word |= std::uint64_t{code} << (2 * slot);
     }
@@ -370,7 +372,7 @@ inline void check_zero_beyond_length(Seq const& packed)
             unused_bits = static_cast<unsigned>(codes.back()) >> (2 * used);
         } else {
             static_assert(
-                fisk::dependent_false_v<Seq::layout>, "Unhandled Layout in the test oracle"
+                fisk::detail::dependent_false_v<Seq::layout>, "Unhandled Layout in the test oracle"
             );
         }
         EXPECT_EQ(unused_bits, 0u);

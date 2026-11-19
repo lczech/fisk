@@ -21,7 +21,7 @@ template <fisk::InputFormat I, fisk::InputCheck C, fisk::Encoding E, fisk::Layou
 inline void check_kmer_candidates()
 {
     using namespace fisk;
-    using Candidates = typename KmerEstimate<I, C, E, L>::type;
+    using Candidates = typename detail::KmerEstimate<I, C, E, L>::type;
     auto const seqs = extraction_test_sequences<C>();
 
     for (std::size_t k : std::initializer_list<std::size_t>{1, 7, 15, 31, 32}) {

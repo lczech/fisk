@@ -29,10 +29,12 @@ namespace fisk {
 // all bits invalid, so that the k-mers ending before position k - 1 are invalid without a test of
 // their own.
 
+namespace detail {
+
 // k <= 29 fits in a single 64-bit accumulator.
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
+inline void for_each_kmer_packed_rolling_scalar_narrow_width(
     Seq const& seq, std::size_t k, Func&& func
 ) {
     constexpr Encoding E = Seq::encoding;
@@ -40,10 +42,10 @@ inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
     constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
 
     // The 2k bits of a k-mer in the codes, and its k bits in the validity bits.
-    std::uint64_t const mask = width_mask_(k);
+    std::uint64_t const mask = width_mask(k);
     std::uint64_t const kbits = (std::uint64_t{1} << k) - 1u;
 
-    // The codes of the last 8 bytes folded, in the order of load_packed_word_(), and the validity
+    // The codes of the last 8 bytes folded, in the order of load_packed_word(), and the validity
     // bits, see above.
     std::uint64_t acc = 0;
     std::uint64_t valid_acc = 0;
@@ -65,7 +67,7 @@ inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_narrow_width_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_narrow_width()"
             );
         }
     };
@@ -113,11 +115,11 @@ inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
             } else {
                 static_assert(
                     dependent_false_v<L>,
-                    "Unhandled Layout in for_each_kmer_packed_rolling_scalar_narrow_width_()"
+                    "Unhandled Layout in for_each_kmer_packed_rolling_scalar_narrow_width()"
                 );
             }
             auto const word = (acc >> shift) & mask;
-            assert_fits_width_(word, k);
+            assert_fits_width(word, k);
             invoke_kmer_callback<E, L>(func, e + 1 - k, word);
         }
     }
@@ -129,7 +131,7 @@ inline void for_each_kmer_packed_rolling_scalar_narrow_width_(
 // for k <= 29.
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_scalar_full_width_(
+inline void for_each_kmer_packed_rolling_scalar_full_width(
     Seq const& seq, std::size_t k, Func&& func
 ) {
     constexpr Encoding E = Seq::encoding;
@@ -137,7 +139,7 @@ inline void for_each_kmer_packed_rolling_scalar_full_width_(
     constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
 
     // The 2k bits of a k-mer in the codes, and its k bits in the validity bits.
-    std::uint64_t const mask = width_mask_(k);
+    std::uint64_t const mask = width_mask(k);
     std::uint64_t const kbits = (std::uint64_t{1} << k) - 1u;
 
     // `start` and which of window_()'s 3 cases it falls into depend only on `k` and `local`, never
@@ -158,7 +160,7 @@ inline void for_each_kmer_packed_rolling_scalar_full_width_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_full_width_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_full_width()"
             );
         }
         int case_id;
@@ -197,7 +199,7 @@ inline void for_each_kmer_packed_rolling_scalar_full_width_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_full_width_()"
+                "Unhandled Layout in for_each_kmer_packed_rolling_scalar_full_width()"
             );
         }
     };
@@ -242,7 +244,7 @@ inline void for_each_kmer_packed_rolling_scalar_full_width_(
                 continue;
             }
             auto const word = window_(plans[local]);
-            assert_fits_width_(word, k);
+            assert_fits_width(word, k);
             invoke_kmer_callback<E, L>(func, e + 1 - k, word);
         }
     }
@@ -252,20 +254,22 @@ inline void for_each_kmer_packed_rolling_scalar_full_width_(
 // for_each_kmer_packed_checked_rolling_scalar().
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_rolling_scalar_(Seq const& seq, std::size_t k, Func&& func)
+inline void for_each_kmer_packed_rolling_scalar(Seq const& seq, std::size_t k, Func&& func)
 {
     if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
+        throw_invalid_kmer_k(32);
     }
     if (seq.length() < k) {
         return;
     }
     if (k <= 29) {
-        for_each_kmer_packed_rolling_scalar_narrow_width_(seq, k, func);
+        for_each_kmer_packed_rolling_scalar_narrow_width(seq, k, func);
     } else {
-        for_each_kmer_packed_rolling_scalar_full_width_(seq, k, func);
+        for_each_kmer_packed_rolling_scalar_full_width(seq, k, func);
     }
 }
+
+} // namespace detail
 
 /**
  * @brief Extract all k-mers for k in [1, 32] from a PackedSequence via a rolling
@@ -275,8 +279,8 @@ inline void for_each_kmer_packed_rolling_scalar_(Seq const& seq, std::size_t k, 
  * for_each_kmer_packed_unchecked_bytewise_scalar() for production use. As that, takes a
  * PackedSequenceWithValidity as well, ignoring its validity.
  *
- * For k <= 29, delegates to for_each_kmer_packed_rolling_scalar_narrow_width_() (single 64-bit
- * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_scalar_full_width_() (hi:lo
+ * For k <= 29, delegates to for_each_kmer_packed_rolling_scalar_narrow_width() (single 64-bit
+ * accumulator); for k in [30, 32], to for_each_kmer_packed_rolling_scalar_full_width() (hi:lo
  * pair) instead, since a single 64-bit accumulator no longer fits.
  *
  * Func may be called either as `func(pos, kmer)` or as `func(kmer)`, where `pos` is the start
@@ -287,7 +291,7 @@ FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_unchecked_rolling_scalar(
     Seq const& seq, std::size_t k, Func&& func
 ) {
-    for_each_kmer_packed_rolling_scalar_(without_validity_(seq), k, func);
+    detail::for_each_kmer_packed_rolling_scalar(detail::without_validity(seq), k, func);
 }
 
 /**
@@ -304,7 +308,7 @@ FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_checked_rolling_scalar(
     Seq const& seq, std::size_t k, Func&& func
 ) {
-    for_each_kmer_packed_rolling_scalar_(seq, k, func);
+    detail::for_each_kmer_packed_rolling_scalar(seq, k, func);
 }
 
 } // namespace fisk

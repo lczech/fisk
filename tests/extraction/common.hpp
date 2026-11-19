@@ -188,7 +188,7 @@ inline std::string expected_spaced_estimate(std::string const& loop)
 // Call `f` with each candidate of the TypeList that this build and CPU can run: the candidates of
 // the estimate, such as those of KmerEstimate, which the estimate chooses from.
 template <typename... Candidates, typename F>
-inline void for_each_available_candidate(fisk::TypeList<Candidates...>, F&& f)
+inline void for_each_available_candidate(fisk::detail::TypeList<Candidates...>, F&& f)
 {
     ([&] {
         if (Candidates::available()) {

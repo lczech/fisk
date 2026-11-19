@@ -15,7 +15,7 @@ std::uint64_t run_var_unchecked_bytewise_simd_full_width_neon_lsb(
     SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_bytewise_simd_full_width_<SimdNEON>(
+    detail::for_each_kmer_packed_bytewise_simd_full_width<SimdNEON>(
         seq, k,
         [&](std::size_t, uint64x2_t v, std::size_t valid_count) FISK_ALWAYS_INLINE_LAMBDA {
             consume_valid_lanes<SimdNEON>(sink, v, valid_count);

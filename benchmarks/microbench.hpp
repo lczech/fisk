@@ -376,7 +376,7 @@ private:
         double warmup_secs = 0.0;
         auto const w0 = clock::now();
         do {
-            clobber_memory(inputs.data());
+            detail::clobber_memory(inputs.data());
             std::uint64_t pass_acc = 0;
             for (auto const& in : inputs) {
                 pass_acc += static_cast<std::uint64_t>(b.fn(in));
@@ -388,7 +388,7 @@ private:
             ++passes;
             warmup_secs = std::chrono::duration<double>(clock::now() - w0).count();
         } while (warmup_secs < settings.warmup_seconds);
-        do_not_optimize(acc);
+        detail::do_not_optimize(acc);
 
         // The first repeat sets the passes per sample from the time per pass of its warm-up.
         if (state.rounds == 0) {
@@ -400,13 +400,13 @@ private:
 
         auto const t0 = clock::now();
         for (std::size_t r = 0; r < state.rounds; ++r) {
-            clobber_memory(inputs.data());
+            detail::clobber_memory(inputs.data());
             for (auto const& in : inputs) {
                 acc += static_cast<std::uint64_t>(b.fn(in));
             }
         }
         auto const t1 = clock::now();
-        do_not_optimize(acc);
+        detail::do_not_optimize(acc);
 
         double const secs        = std::chrono::duration<double>(t1 - t0).count();
         double const total_units = units_per_run * static_cast<double>(state.rounds);

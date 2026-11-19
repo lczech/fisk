@@ -15,7 +15,7 @@ std::uint64_t run_var_block_shift_unrolled2(
 ) {
     auto sink = make_sink(sink_buffer);
     for (std::size_t r = 0; r < rounds; ++r) {
-        clobber_memory(batch.values.data());
+        detail::clobber_memory(batch.values.data());
         for (std::size_t i = 0; i < batch.values.size(); ++i) {
             sink.consume(
                 bit_extract_block_shift_unrolled<2>(batch.values[i], batch.block_shift_masks[i])

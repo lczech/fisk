@@ -23,12 +23,14 @@ namespace fisk {
 //     Spaced K-mer Extraction from ASCII, Rolling, Scalar
 // =================================================================================================
 
+namespace detail {
+
 /**
  * @brief Shared implementation behind both for_each_spaced_kmer_ascii_checked_rolling_scalar()
  * overloads below.
  *
  * `SingleMask` is set by each overload, mirroring the single mask vs std::span<Mask, N> distinction
- * that for_each_mask_() (internal.hpp) is overloaded on. `L` is the Layout of the masks, and
+ * that for_each_mask() (internal.hpp) is overloaded on. `L` is the Layout of the masks, and
  * `span_k` their common span, as checked by the overloads.
  */
 template<
@@ -36,7 +38,7 @@ template<
     typename MaskOrMasks, typename Enc, typename BitExtract, typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
+inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_loop(
     std::string_view seq,
     std::size_t const span_k,
     MaskOrMasks const& masks,
@@ -57,11 +59,11 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
     // masks must not have bits above the span, and `bit_ext` must ignore all bits outside of the
     // mask. LSB shifts new nucleotides in at the top of the span instead, and shifts them out
     // below.
-    for_each_mask_(masks, [&]([[maybe_unused]] auto const& mask) {
+    for_each_mask(masks, [&]([[maybe_unused]] auto const& mask) {
         assert(is_valid_spaced_kmer_mask(mask));
         assert(
             bit_ext(~std::uint64_t{0}, mask.mask_pieces[0])
-            == bit_ext(spaced_kmer_mask_bits_(mask), mask.mask_pieces[0])
+            == bit_ext(spaced_kmer_mask_bits(mask), mask.mask_pieces[0])
         );
     });
     std::size_t const top_shift = 2 * (span_k - 1);
@@ -100,7 +102,7 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_spaced_kmer_ascii_checked_rolling_scalar_()"
+                "Unhandled Layout in for_each_spaced_kmer_ascii_checked_rolling_scalar_loop()"
             );
         }
 
@@ -111,11 +113,11 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
 
         // Apply the callback for all masks that are satisfied at this position.
         std::size_t mask_idx = 0;
-        for_each_mask_(masks, [&](auto const& mask) FISK_ALWAYS_INLINE_LAMBDA {
-            std::uint64_t const bits = spaced_kmer_mask_bits_(mask);
+        for_each_mask(masks, [&](auto const& mask) FISK_ALWAYS_INLINE_LAMBDA {
+            std::uint64_t const bits = spaced_kmer_mask_bits(mask);
             if ((valid_bits & bits) == bits) {
                 auto const word = bit_ext(kmer_bits, mask.mask_pieces[0]);
-                assert_fits_width_(word, spaced_kmer_weight(bits));
+                assert_fits_width(word, spaced_kmer_weight(bits));
                 invoke_spaced_kmer_callback<
                     std::remove_cvref_t<Enc>::encoding, L, SingleMask
                 >(callback, mask_idx, pos, word);
@@ -124,6 +126,8 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar_(
         });
     }
 }
+
+} // namespace detail
 
 /**
  * @brief Iterate a sequence, extract all valid spaced k-mers from it,
@@ -161,8 +165,8 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar(
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    for_each_spaced_kmer_ascii_checked_rolling_scalar_<true, Mask::layout>(
-        seq, check_spaced_kmer_span_(mask.span_k), mask, std::forward<Enc>(enc),
+    detail::for_each_spaced_kmer_ascii_checked_rolling_scalar_loop<true, Mask::layout>(
+        seq, detail::check_spaced_kmer_span(mask.span_k), mask, std::forward<Enc>(enc),
         std::forward<BitExtract>(bit_ext), std::forward<Callback>(callback)
     );
 }
@@ -189,8 +193,8 @@ inline void for_each_spaced_kmer_ascii_checked_rolling_scalar(
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one mask.");
-    for_each_spaced_kmer_ascii_checked_rolling_scalar_<false, Mask::layout>(
-        seq, common_spaced_kmer_span_(masks), masks, std::forward<Enc>(enc),
+    detail::for_each_spaced_kmer_ascii_checked_rolling_scalar_loop<false, Mask::layout>(
+        seq, detail::common_spaced_kmer_span(masks), masks, std::forward<Enc>(enc),
         std::forward<BitExtract>(bit_ext), std::forward<Callback>(callback)
     );
 }

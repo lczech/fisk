@@ -22,8 +22,10 @@ namespace fisk {
 // build and CPU support, see KmerEstimate. Each overload takes one kind of input; the
 // internal functions do the work for all of them.
 
+namespace detail {
+
 template <InputFormat I, InputCheck C, Encoding E, Layout L, typename Seq, typename Callback>
-FISK_ALWAYS_INLINE inline void for_each_kmer_estimate_(
+FISK_ALWAYS_INLINE inline void for_each_kmer_estimate(
     Seq const& seq, std::size_t k, Callback& callback
 ) {
     using Preference = typename KmerEstimate<I, C, E, L>::type;
@@ -33,7 +35,7 @@ FISK_ALWAYS_INLINE inline void for_each_kmer_estimate_(
 }
 
 template <InputFormat I, InputCheck C, Encoding E, Layout L>
-inline std::string for_each_kmer_estimate_name_()
+inline std::string for_each_kmer_estimate_name()
 {
     using Preference = typename KmerEstimate<I, C, E, L>::type;
     return visit_estimate<Preference>([](auto const& candidate) {
@@ -44,7 +46,7 @@ inline std::string for_each_kmer_estimate_name_()
 // The checks of the input of the overloads for packed sequences. These overloads then run with the
 // check that their input requires, so that a failed check is the only error.
 template <InputCheck C>
-inline constexpr void for_each_packed_unchecked_assert_()
+inline constexpr void for_each_packed_unchecked_assert()
 {
     static_assert(
         C == InputCheck::kUnchecked,
@@ -54,7 +56,7 @@ inline constexpr void for_each_packed_unchecked_assert_()
 }
 
 template <InputCheck C>
-inline constexpr void for_each_packed_checked_assert_()
+inline constexpr void for_each_packed_checked_assert()
 {
     static_assert(
         C == InputCheck::kChecked,
@@ -62,6 +64,8 @@ inline constexpr void for_each_packed_checked_assert_()
         "PackedSequence for unchecked input, see pack_sequence_unchecked()."
     );
 }
+
+} // namespace detail
 
 /**
  * @brief Call `callback` with each k-mer of `seq`, with the algorithm that is likely the fastest on
@@ -107,7 +111,7 @@ template <InputCheck C, Encoding E, Layout L, typename Callback>
 FISK_ALWAYS_INLINE inline void for_each_kmer(
     std::string_view seq, std::size_t k, Callback&& callback
 ) {
-    for_each_kmer_estimate_<InputFormat::kAscii, C, E, L>(seq, k, callback);
+    detail::for_each_kmer_estimate<InputFormat::kAscii, C, E, L>(seq, k, callback);
 }
 
 /**
@@ -120,8 +124,10 @@ template <InputCheck C = InputCheck::kUnchecked, Encoding E, Layout L, typename 
 FISK_ALWAYS_INLINE inline void for_each_kmer(
     PackedSequence<E, L> const& seq, std::size_t k, Callback&& callback
 ) {
-    for_each_packed_unchecked_assert_<C>();
-    for_each_kmer_estimate_<InputFormat::kPacked, InputCheck::kUnchecked, E, L>(seq, k, callback);
+    detail::for_each_packed_unchecked_assert<C>();
+    detail::for_each_kmer_estimate<InputFormat::kPacked, InputCheck::kUnchecked, E, L>(
+        seq, k, callback
+    );
 }
 
 /**
@@ -134,8 +140,10 @@ template <InputCheck C = InputCheck::kChecked, Encoding E, Layout L, typename Ca
 FISK_ALWAYS_INLINE inline void for_each_kmer(
     PackedSequenceWithValidity<E, L> const& seq, std::size_t k, Callback&& callback
 ) {
-    for_each_packed_checked_assert_<C>();
-    for_each_kmer_estimate_<InputFormat::kPacked, InputCheck::kChecked, E, L>(seq, k, callback);
+    detail::for_each_packed_checked_assert<C>();
+    detail::for_each_kmer_estimate<InputFormat::kPacked, InputCheck::kChecked, E, L>(
+        seq, k, callback
+    );
 }
 
 /**
@@ -146,22 +154,24 @@ FISK_ALWAYS_INLINE inline void for_each_kmer(
 template <InputCheck C, Encoding E, Layout L>
 inline std::string for_each_kmer_algorithm_name(std::string_view, std::size_t)
 {
-    return for_each_kmer_estimate_name_<InputFormat::kAscii, C, E, L>();
+    return detail::for_each_kmer_estimate_name<InputFormat::kAscii, C, E, L>();
 }
 
 template <InputCheck C = InputCheck::kUnchecked, Encoding E, Layout L>
 inline std::string for_each_kmer_algorithm_name(PackedSequence<E, L> const&, std::size_t)
 {
-    for_each_packed_unchecked_assert_<C>();
-    return for_each_kmer_estimate_name_<InputFormat::kPacked, InputCheck::kUnchecked, E, L>();
+    detail::for_each_packed_unchecked_assert<C>();
+    return detail::for_each_kmer_estimate_name<
+        InputFormat::kPacked, InputCheck::kUnchecked, E, L
+    >();
 }
 
 template <InputCheck C = InputCheck::kChecked, Encoding E, Layout L>
 inline std::string for_each_kmer_algorithm_name(
     PackedSequenceWithValidity<E, L> const&, std::size_t
 ) {
-    for_each_packed_checked_assert_<C>();
-    return for_each_kmer_estimate_name_<InputFormat::kPacked, InputCheck::kChecked, E, L>();
+    detail::for_each_packed_checked_assert<C>();
+    return detail::for_each_kmer_estimate_name<InputFormat::kPacked, InputCheck::kChecked, E, L>();
 }
 
 // =================================================================================================
@@ -174,8 +184,10 @@ inline std::string for_each_kmer_algorithm_name(
 // spaced k-mers fail here, with a message, instead of leaving no overload to match. The extraction
 // then only runs with matching ones, so that a failed check is the only error.
 
+namespace detail {
+
 template <Layout L, Layout MasksLayout>
-inline constexpr void for_each_spaced_kmer_layout_assert_()
+inline constexpr void for_each_spaced_kmer_layout_assert()
 {
     static_assert(
         MasksLayout == L,
@@ -188,11 +200,11 @@ template <
     InputFormat I, InputCheck C, Encoding E, Layout L, Layout MasksLayout, std::size_t MaxMasks,
     std::size_t MaxSpan, typename Seq, typename Callback
 >
-FISK_ALWAYS_INLINE inline void for_each_spaced_kmer_estimate_(
+FISK_ALWAYS_INLINE inline void for_each_spaced_kmer_estimate(
     Seq const& seq, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms,
     Callback& callback
 ) {
-    for_each_spaced_kmer_layout_assert_<L, MasksLayout>();
+    for_each_spaced_kmer_layout_assert<L, MasksLayout>();
     if constexpr (MasksLayout == L) {
         using Preference = typename SpacedKmerEstimate<I, C, E, L, MaxMasks>::type;
         visit_estimate<Preference>([&](auto const& candidate) FISK_ALWAYS_INLINE_LAMBDA {
@@ -204,9 +216,9 @@ FISK_ALWAYS_INLINE inline void for_each_spaced_kmer_estimate_(
 template <
     InputFormat I, InputCheck C, Encoding E, Layout L, Layout MasksLayout, std::size_t MaxMasks
 >
-inline std::string for_each_spaced_kmer_estimate_name_()
+inline std::string for_each_spaced_kmer_estimate_name()
 {
-    for_each_spaced_kmer_layout_assert_<L, MasksLayout>();
+    for_each_spaced_kmer_layout_assert<L, MasksLayout>();
     if constexpr (MasksLayout == L) {
         using Preference = typename SpacedKmerEstimate<I, C, E, L, MaxMasks>::type;
         return visit_estimate<Preference>([](auto const& candidate) {
@@ -216,6 +228,8 @@ inline std::string for_each_spaced_kmer_estimate_name_()
         return {};
     }
 }
+
+} // namespace detail
 
 /**
  * @brief Call `callback` with each spaced k-mer of `seq` for each of the masks of `mask_forms`,
@@ -272,7 +286,7 @@ FISK_ALWAYS_INLINE inline void for_each_spaced_kmer(
     std::string_view seq, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms,
     Callback&& callback
 ) {
-    for_each_spaced_kmer_estimate_<InputFormat::kAscii, C, E, L>(seq, mask_forms, callback);
+    detail::for_each_spaced_kmer_estimate<InputFormat::kAscii, C, E, L>(seq, mask_forms, callback);
 }
 
 /**
@@ -290,8 +304,8 @@ FISK_ALWAYS_INLINE inline void for_each_spaced_kmer(
     PackedSequence<E, L> const& seq,
     SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms, Callback&& callback
 ) {
-    for_each_packed_unchecked_assert_<C>();
-    for_each_spaced_kmer_estimate_<InputFormat::kPacked, InputCheck::kUnchecked, E, L>(
+    detail::for_each_packed_unchecked_assert<C>();
+    detail::for_each_spaced_kmer_estimate<InputFormat::kPacked, InputCheck::kUnchecked, E, L>(
         seq, mask_forms, callback
     );
 }
@@ -311,8 +325,8 @@ FISK_ALWAYS_INLINE inline void for_each_spaced_kmer(
     PackedSequenceWithValidity<E, L> const& seq,
     SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const& mask_forms, Callback&& callback
 ) {
-    for_each_packed_checked_assert_<C>();
-    for_each_spaced_kmer_estimate_<InputFormat::kPacked, InputCheck::kChecked, E, L>(
+    detail::for_each_packed_checked_assert<C>();
+    detail::for_each_spaced_kmer_estimate<InputFormat::kPacked, InputCheck::kChecked, E, L>(
         seq, mask_forms, callback
     );
 }
@@ -330,7 +344,7 @@ template <
 inline std::string for_each_spaced_kmer_algorithm_name(
     std::string_view, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&
 ) {
-    return for_each_spaced_kmer_estimate_name_<
+    return detail::for_each_spaced_kmer_estimate_name<
         InputFormat::kAscii, C, E, L, MasksLayout, MaxMasks
     >();
 }
@@ -342,8 +356,8 @@ template <
 inline std::string for_each_spaced_kmer_algorithm_name(
     PackedSequence<E, L> const&, SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&
 ) {
-    for_each_packed_unchecked_assert_<C>();
-    return for_each_spaced_kmer_estimate_name_<
+    detail::for_each_packed_unchecked_assert<C>();
+    return detail::for_each_spaced_kmer_estimate_name<
         InputFormat::kPacked, InputCheck::kUnchecked, E, L, MasksLayout, MaxMasks
     >();
 }
@@ -356,8 +370,8 @@ inline std::string for_each_spaced_kmer_algorithm_name(
     PackedSequenceWithValidity<E, L> const&,
     SpacedKmerMaskForms<MasksLayout, MaxMasks, MaxSpan> const&
 ) {
-    for_each_packed_checked_assert_<C>();
-    return for_each_spaced_kmer_estimate_name_<
+    detail::for_each_packed_checked_assert<C>();
+    return detail::for_each_spaced_kmer_estimate_name<
         InputFormat::kPacked, InputCheck::kChecked, E, L, MasksLayout, MaxMasks
     >();
 }

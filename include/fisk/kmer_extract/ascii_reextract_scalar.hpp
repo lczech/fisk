@@ -39,7 +39,7 @@ inline void for_each_kmer_ascii_checked_reextract_scalar(
 
     // Boundary checks
     if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
+        detail::throw_invalid_kmer_k(32);
     }
     if (seq.size() < k) {
         return;
@@ -64,7 +64,7 @@ inline void for_each_kmer_ascii_checked_reextract_scalar(
                 kmer |= std::uint64_t{code & 0x3u} << (2 * x);
             } else {
                 static_assert(
-                    dependent_false_v<L>,
+                    detail::dependent_false_v<L>,
                     "Unhandled Layout in for_each_kmer_ascii_checked_reextract_scalar()"
                 );
             }
@@ -72,8 +72,8 @@ inline void for_each_kmer_ascii_checked_reextract_scalar(
 
         if (valid) {
             // Here, i is already the start position of the k-mer.
-            assert_fits_width_(kmer, k);
-            invoke_kmer_callback<std::remove_cvref_t<Encoder>::encoding, L>(func, i, kmer);
+            detail::assert_fits_width(kmer, k);
+            detail::invoke_kmer_callback<std::remove_cvref_t<Encoder>::encoding, L>(func, i, kmer);
         }
     }
 }

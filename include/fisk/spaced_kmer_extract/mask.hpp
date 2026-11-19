@@ -44,11 +44,13 @@ inline constexpr std::size_t kDefaultMaxMasks = FISK_DEFAULT_MAX_MASKS;
 //     Helper Functions
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 // Convert the bits of each piece of a spaced k-mer mask into another form `BitExtractForm` via
 // `make`, keeping the Layout, span, and the other members. The bits are already arranged for the
 // Layout, and are hence used as they are. The pieces beyond the piece count are empty, and stay so.
 template <typename BitExtractForm, Layout L, std::size_t MaxSpan, typename Make>
-inline SpacedKmerMask<L, BitExtractForm, MaxSpan> convert_spaced_kmer_mask_(
+inline SpacedKmerMask<L, BitExtractForm, MaxSpan> convert_spaced_kmer_mask(
     SpacedKmerMask<L, BitExtractMask, MaxSpan> const& mask, Make&& make
 ) {
     SpacedKmerMask<L, BitExtractForm, MaxSpan> result;
@@ -62,16 +64,18 @@ inline SpacedKmerMask<L, BitExtractForm, MaxSpan> convert_spaced_kmer_mask_(
 }
 
 template <typename BitExtractForm, Layout L, std::size_t MaxSpan, typename Make>
-inline std::vector<SpacedKmerMask<L, BitExtractForm, MaxSpan>> convert_spaced_kmer_masks_(
+inline std::vector<SpacedKmerMask<L, BitExtractForm, MaxSpan>> convert_spaced_kmer_masks(
     std::vector<SpacedKmerMask<L, BitExtractMask, MaxSpan>> const& masks, Make&& make
 ) {
     std::vector<SpacedKmerMask<L, BitExtractForm, MaxSpan>> result;
     result.reserve(masks.size());
     for (auto const& mask : masks) {
-        result.push_back(convert_spaced_kmer_mask_<BitExtractForm>(mask, make));
+        result.push_back(convert_spaced_kmer_mask<BitExtractForm>(mask, make));
     }
     return result;
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     Make Spaced Masks
@@ -122,8 +126,8 @@ inline SpacedKmerMask<L, BitExtractMask, MaxSpan> make_spaced_kmer_mask(std::str
     SpacedKmerMask<L, BitExtractMask, MaxSpan> result;
     result.span_k = static_cast<std::uint16_t>(span_k);
     std::size_t before = 0;
-    for (std::size_t j = 0; j < spaced_kmer_mask_piece_count(span_k); ++j) {
-        std::size_t const len = spaced_kmer_mask_piece_span_(span_k, j);
+    for (std::size_t j = 0; j < detail::spaced_kmer_mask_piece_count(span_k); ++j) {
+        std::size_t const len = detail::spaced_kmer_mask_piece_span(span_k, j);
 
         // The kept positions of the piece: in its bits with the first position in the highest
         // bits for kMSB and in the lowest bits for kLSB, and in its validity piece in the order of
@@ -175,7 +179,7 @@ template <Layout L, std::size_t MaxSpan>
 inline SpacedKmerMask<L, BitExtractButterflyMask, MaxSpan> make_spaced_kmer_butterfly_mask(
     SpacedKmerMask<L, BitExtractMask, MaxSpan> const& mask
 ) {
-    return convert_spaced_kmer_mask_<BitExtractButterflyMask>(
+    return detail::convert_spaced_kmer_mask<BitExtractButterflyMask>(
         mask, make_bit_extract_butterfly_mask
     );
 }
@@ -199,7 +203,7 @@ inline std::vector<SpacedKmerMask<L, BitExtractButterflyMask, MaxSpan>>
 make_spaced_kmer_butterfly_masks(
     std::vector<SpacedKmerMask<L, BitExtractMask, MaxSpan>> const& masks
 ) {
-    return convert_spaced_kmer_masks_<BitExtractButterflyMask>(
+    return detail::convert_spaced_kmer_masks<BitExtractButterflyMask>(
         masks, make_bit_extract_butterfly_mask
     );
 }
@@ -212,7 +216,7 @@ template <Layout L, std::size_t MaxSpan>
 inline SpacedKmerMask<L, BitExtractBlockShiftMask, MaxSpan> make_spaced_kmer_block_shift_mask(
     SpacedKmerMask<L, BitExtractMask, MaxSpan> const& mask
 ) {
-    return convert_spaced_kmer_mask_<BitExtractBlockShiftMask>(
+    return detail::convert_spaced_kmer_mask<BitExtractBlockShiftMask>(
         mask, make_bit_extract_block_shift_mask
     );
 }
@@ -236,7 +240,7 @@ inline std::vector<SpacedKmerMask<L, BitExtractBlockShiftMask, MaxSpan>>
 make_spaced_kmer_block_shift_masks(
     std::vector<SpacedKmerMask<L, BitExtractMask, MaxSpan>> const& masks
 ) {
-    return convert_spaced_kmer_masks_<BitExtractBlockShiftMask>(
+    return detail::convert_spaced_kmer_masks<BitExtractBlockShiftMask>(
         masks, make_bit_extract_block_shift_mask
     );
 }
@@ -255,7 +259,7 @@ template <typename Kernel, Layout L, std::size_t MaxSpan>
 inline SpacedKmerMask<L, Kernel, MaxSpan> make_spaced_kmer_kernel(
     SpacedKmerMask<L, BitExtractMask, MaxSpan> const& mask
 ) {
-    return convert_spaced_kmer_mask_<Kernel>(mask, [](std::uint64_t bits) {
+    return detail::convert_spaced_kmer_mask<Kernel>(mask, [](std::uint64_t bits) {
         return Kernel(bits);
     });
 }
@@ -280,7 +284,7 @@ template <typename Kernel, Layout L, std::size_t MaxSpan>
 inline std::vector<SpacedKmerMask<L, Kernel, MaxSpan>> make_spaced_kmer_kernels(
     std::vector<SpacedKmerMask<L, BitExtractMask, MaxSpan>> const& masks
 ) {
-    return convert_spaced_kmer_masks_<Kernel>(masks, [](std::uint64_t bits) {
+    return detail::convert_spaced_kmer_masks<Kernel>(masks, [](std::uint64_t bits) {
         return Kernel(bits);
     });
 }

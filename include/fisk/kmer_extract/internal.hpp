@@ -18,6 +18,8 @@ namespace fisk {
 //     K-mer Extraction, Internal Helpers
 // =================================================================================================
 
+namespace detail {
+
 /**
  * @brief Throw for an invalid k-mer extraction precondition.
  *
@@ -26,7 +28,7 @@ namespace fisk {
  * can remain branch-free and avoid the runtime overhead of an inlined exception path.
  */
 FISK_NOINLINE_COLD
-inline void throw_invalid_kmer_k_(std::size_t k_max)
+inline void throw_invalid_kmer_k(std::size_t k_max)
 {
     // Keep the validity check out of the hot path: throwing here avoids a cold branch/landing pad
     // in otherwise branch-free extractors, which could prevent their inlining.
@@ -34,6 +36,8 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
         "Invalid call to k-mer extraction with k not in [1, " + std::to_string(k_max) + "]"
     );
 }
+
+} // namespace detail
 
 // =================================================================================================
 //     K-mer Extraction from a PackedSequence, Internal Helpers
@@ -47,7 +51,7 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
 //     Details
 // -------------------------------------------------------------------------------------------------
 
-// Precondition-check throws are routed through the shared throw_invalid_kmer_k_()
+// Precondition-check throws are routed through the shared throw_invalid_kmer_k()
 // (see above) rather than thrown directly, trying to keep these functions small enough for
 // the compiler to treat as inlining candidates.
 
@@ -72,11 +76,13 @@ inline void throw_invalid_kmer_k_(std::size_t k_max)
 // tests the k-mers of a window all at once, as its valid starts: bit `j` is set if the k-mer at
 // `pos + j` is valid.
 
+namespace detail {
+
 // The sequence of `seq` without its validity bits, for the extraction of all of its k-mers, which
 // ignores them.
 template <PackedSequenceType Seq>
 FISK_ALWAYS_INLINE
-inline auto const& without_validity_(Seq const& seq) noexcept
+inline auto const& without_validity(Seq const& seq) noexcept
 {
     if constexpr (PackedSequenceWithValidityType<Seq>) {
         return seq.sequence();
@@ -103,7 +109,7 @@ enum class PackedValidity
 // bits for kLSB, and in the highest bits for kMSB.
 template <Layout L>
 FISK_ALWAYS_INLINE
-inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
+inline std::uint64_t load_packed_word(std::uint8_t const* p) noexcept
 {
     std::uint64_t word;
     std::memcpy(&word, p, 8);
@@ -112,20 +118,24 @@ inline std::uint64_t load_packed_word_(std::uint8_t const* p) noexcept
     } else if constexpr (L == Layout::kLSB) {
         return word;
     } else {
-        static_assert(dependent_false_v<L>, "Unhandled Layout in load_packed_word_()");
+        static_assert(dependent_false_v<L>, "Unhandled Layout in load_packed_word()");
     }
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     Block Loop
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 // The main loop of the bytewise scalar and SIMD extraction, see packed_bytewise_scalar.hpp and
 // packed_bytewise_simd.hpp, and of the spaced k-mer extraction, see
 // spaced_kmer_extract/packed_bytewise_scalar.hpp and packed_bytewise_simd.hpp: `step(b,
 // validity_at)` extracts the k-mers that start in the `StepBytes` bytes from byte `b`, and
 // `validity_at(pos)` is the validity of the k-mers from `pos` on for them: either AllValid, or a
-// word whose bit 0 is set if the k-mer at `pos` is valid, see packed_kmer_is_valid_(). With
+// word whose bit 0 is set if the k-mer at `pos` is valid, see packed_kmer_is_valid(). With
 // PackedValidity::kNucleotides, the word is the validity window at `pos` instead, see Validity
 // above, which holds at least the k nucleotides from `pos`. The steps cover all bytes in which a
 // k-mer of length `k` starts, and `seq` has to have at least `k` nucleotides. The words that the
@@ -168,7 +178,7 @@ template <
     typename Step
 >
 FISK_ALWAYS_INLINE
-inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& step)
+inline void run_packed_bytewise_blocks(Seq const& seq, std::size_t k, Step&& step)
 {
     static_assert(8 % StepBytes == 0, "Steps have to fill a block.");
     static_assert(!Wide || Form == PackedValidity::kNucleotides);
@@ -302,11 +312,11 @@ inline void run_packed_bytewise_blocks_(Seq const& seq, std::size_t k, Step&& st
     }
 }
 
-// Whether the k-mer with the given `validity` is valid, see run_packed_bytewise_blocks_(): either
+// Whether the k-mer with the given `validity` is valid, see run_packed_bytewise_blocks(): either
 // AllValid, or a word whose bit 0 is set for a valid k-mer.
 template <typename Validity>
 FISK_ALWAYS_INLINE
-inline bool packed_kmer_is_valid_(Validity validity) noexcept
+inline bool packed_kmer_is_valid(Validity validity) noexcept
 {
     if constexpr (std::is_same_v<Validity, AllValid>) {
         (void) validity;
@@ -315,5 +325,7 @@ inline bool packed_kmer_is_valid_(Validity validity) noexcept
         return validity & 1u;
     }
 }
+
+} // namespace detail
 
 } // namespace fisk

@@ -141,7 +141,7 @@ struct SimdScalar
 
     static simd_vector byte_swap_lanes(simd_vector v) noexcept
     {
-        return byte_swap_64(v);
+        return detail::byte_swap_64(v);
     }
 
     template <bool ByteSwap>
@@ -149,7 +149,7 @@ struct SimdScalar
     {
         std::uint16_t v16 = static_cast<std::uint16_t>(v);
         if constexpr (ByteSwap) {
-            v16 = byte_swap_16(v16);
+            v16 = detail::byte_swap_16(v16);
         }
         std::memcpy(out, &v16, sizeof(v16));
     }
@@ -160,11 +160,11 @@ struct SimdScalar
     static void store_two_bit_codes(simd_vector v, char* out) noexcept
     {
         if constexpr (MsbFirst) {
-            v = byte_swap_64(v);
+            v = detail::byte_swap_64(v);
         }
         std::uint16_t v16 = static_cast<std::uint16_t>(pack_two_bit_codes_(v));
         if constexpr (MsbFirst) {
-            v16 = byte_swap_16(v16);
+            v16 = detail::byte_swap_16(v16);
         }
         std::memcpy(out, &v16, sizeof(v16));
     }

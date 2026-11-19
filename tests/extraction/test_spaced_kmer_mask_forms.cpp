@@ -62,7 +62,7 @@ static void check_forms(std::size_t span)
     }
 
     // The butterfly kernels of the SIMD arch of the candidates.
-    [&]<typename... Simd>(TypeList<Simd...>) {
+    [&]<typename... Simd>(detail::TypeList<Simd...>) {
         (
             [&] {
                 auto const kernels = masks.get<BitExtractKernelButterfly<Simd>>();
@@ -78,7 +78,7 @@ static void check_forms(std::size_t span)
             }(),
             ...
         );
-    }(CandidateSimdArchs{});
+    }(detail::CandidateSimdArchs{});
 }
 
 // One piece, and three, the most of the default MaxSpan.

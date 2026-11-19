@@ -47,13 +47,15 @@ namespace fisk {
 // for_each_kmer_packed_checked_rolling_scalar(), take a PackedSequenceWithValidity instead, and
 // emit only the k-mers whose nucleotides are all valid by its validity bits.
 
-// Emit the k-mer `kmer` at `pos`, if it is valid by its `validity`, see packed_kmer_is_valid_().
+namespace detail {
+
+// Emit the k-mer `kmer` at `pos`, if it is valid by its `validity`, see packed_kmer_is_valid().
 template <Encoding E, Layout L, typename Func, typename Validity>
 FISK_ALWAYS_INLINE
-inline void invoke_kmer_callback_if_valid_(
+inline void invoke_kmer_callback_if_valid(
     Func& func, std::size_t pos, std::uint64_t kmer, Validity validity
 ) {
-    if (packed_kmer_is_valid_(validity)) {
+    if (packed_kmer_is_valid(validity)) {
         invoke_kmer_callback<E, L>(func, pos, kmer);
     }
 }
@@ -66,26 +68,26 @@ inline void invoke_kmer_callback_if_valid_(
 // the call site, with one instantiation per K in for_each_kmer_packed_unchecked_bytewise_scalar()'s
 // dispatch.
 //
-// For a sequence with validity bits, see run_packed_bytewise_blocks_(), only the valid k-mers are
+// For a sequence with validity bits, see run_packed_bytewise_blocks(), only the valid k-mers are
 // emitted.
 template <unsigned K, PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_bytewise_scalar_narrow_width_(Seq const& seq, Func&& func)
+inline void for_each_kmer_packed_bytewise_scalar_narrow_width(Seq const& seq, Func&& func)
 {
     static_assert(K >= 1 && K <= 29, "K must be in [1, 29]");
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
 
     // The 2k bits of a k-mer in the codes.
-    std::uint64_t const mask = width_mask_(K);
+    std::uint64_t const mask = width_mask(K);
 
-    // The codes, read up into their padding, see run_packed_bytewise_blocks_().
+    // The codes, read up into their padding, see run_packed_bytewise_blocks().
     std::uint8_t const* const codes = seq.codes().data();
 
     // One step: the 4 k-mers that start in byte `b`, from one 8-byte load, each shifted to the low
-    // bits and masked. `validity_at` gives their validity, see run_packed_bytewise_blocks_().
+    // bits and masked. `validity_at` gives their validity, see run_packed_bytewise_blocks().
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
-        std::uint64_t word = load_packed_word_<L>(codes + b);
+        std::uint64_t word = load_packed_word<L>(codes + b);
         if constexpr (L == Layout::kMSB) {
             // 58-2K is in [0,56]; adding the local shift recovers 64-2K-2*local.
             word >>= 58 - 2 * K;
@@ -104,7 +106,7 @@ inline void for_each_kmer_packed_bytewise_scalar_narrow_width_(Seq const& seq, F
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_bytewise_scalar_narrow_width_()"
+                "Unhandled Layout in for_each_kmer_packed_bytewise_scalar_narrow_width()"
             );
         }
 
@@ -121,14 +123,14 @@ inline void for_each_kmer_packed_bytewise_scalar_narrow_width_(Seq const& seq, F
         do_not_optimize(v3);
         #endif
 
-        assert_fits_width_(v0, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 0, v0, validity_at(4 * b + 0));
-        assert_fits_width_(v1, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 1, v1, validity_at(4 * b + 1));
-        assert_fits_width_(v2, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2));
-        assert_fits_width_(v3, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
+        assert_fits_width(v0, K);
+        invoke_kmer_callback_if_valid<E, L>(func, 4 * b + 0, v0, validity_at(4 * b + 0));
+        assert_fits_width(v1, K);
+        invoke_kmer_callback_if_valid<E, L>(func, 4 * b + 1, v1, validity_at(4 * b + 1));
+        assert_fits_width(v2, K);
+        invoke_kmer_callback_if_valid<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2));
+        assert_fits_width(v3, K);
+        invoke_kmer_callback_if_valid<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
 
         // GCC only: with a callback without stores, such as one that keeps its state in registers,
         // GCC loads the codes of all steps of an unrolled block up front, and spills them. The
@@ -138,15 +140,15 @@ inline void for_each_kmer_packed_bytewise_scalar_narrow_width_(Seq const& seq, F
         #endif
     };
 
-    // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks_().
-    run_packed_bytewise_blocks_<1>(seq, K, step_);
+    // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks().
+    run_packed_bytewise_blocks<1>(seq, K, step_);
 }
 
 // k in [30, 32] needs a 9th margin byte beyond the main 8-byte word, which breaks the narrow-width
 // single-shift exploit above. These three cases instead get their own specializations, where every
 // shift is a compile-time constant via the K template parameter for best optimization potential.
 template <Layout L, unsigned K>
-inline std::uint64_t kmer_packed_bytewise_boundary_window_(
+inline std::uint64_t kmer_packed_bytewise_boundary_window(
     std::uint64_t hi, std::uint64_t lo, unsigned local, std::uint64_t mask
 ) {
     // Shift values are compile-time constants.
@@ -157,7 +159,7 @@ inline std::uint64_t kmer_packed_bytewise_boundary_window_(
         start = 2 * local;
     } else {
         static_assert(
-            dependent_false_v<L>, "Unhandled Layout in kmer_packed_bytewise_boundary_window_()"
+            dependent_false_v<L>, "Unhandled Layout in kmer_packed_bytewise_boundary_window()"
         );
     }
     std::uint64_t bits;
@@ -171,24 +173,24 @@ inline std::uint64_t kmer_packed_bytewise_boundary_window_(
     return bits & mask;
 }
 
-// As for_each_kmer_packed_bytewise_scalar_narrow_width_(), for k in [30, 32].
+// As for_each_kmer_packed_bytewise_scalar_narrow_width(), for k in [30, 32].
 template <unsigned K, PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_bytewise_scalar_full_width_(Seq const& seq, Func&& func)
+inline void for_each_kmer_packed_bytewise_scalar_full_width(Seq const& seq, Func&& func)
 {
     static_assert(K >= 30 && K <= 32, "K must be in [30, 32]");
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
 
     // As in the narrow-width loop.
-    std::uint64_t const mask = width_mask_(K);
+    std::uint64_t const mask = width_mask(K);
     std::uint8_t const* const codes = seq.codes().data();
 
     // One step: the 4 k-mers that start in byte `b`, from an 8-byte load and the byte after it,
-    // combined by kmer_packed_bytewise_boundary_window_(). `validity_at` as in the narrow-width
+    // combined by kmer_packed_bytewise_boundary_window(). `validity_at` as in the narrow-width
     // loop.
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
-        std::uint64_t const word = load_packed_word_<L>(codes + b);
+        std::uint64_t const word = load_packed_word<L>(codes + b);
         std::uint64_t const ninth = codes[b + 8];
         std::uint64_t hi;
         std::uint64_t lo;
@@ -201,14 +203,14 @@ inline void for_each_kmer_packed_bytewise_scalar_full_width_(Seq const& seq, Fun
         } else {
             static_assert(
                 dependent_false_v<L>,
-                "Unhandled Layout in for_each_kmer_packed_bytewise_scalar_full_width_()"
+                "Unhandled Layout in for_each_kmer_packed_bytewise_scalar_full_width()"
             );
         }
 
-        auto const v0 = kmer_packed_bytewise_boundary_window_<L, K>(hi, lo, 0, mask);
-        auto const v1 = kmer_packed_bytewise_boundary_window_<L, K>(hi, lo, 1, mask);
-        auto const v2 = kmer_packed_bytewise_boundary_window_<L, K>(hi, lo, 2, mask);
-        auto const v3 = kmer_packed_bytewise_boundary_window_<L, K>(hi, lo, 3, mask);
+        auto const v0 = kmer_packed_bytewise_boundary_window<L, K>(hi, lo, 0, mask);
+        auto const v1 = kmer_packed_bytewise_boundary_window<L, K>(hi, lo, 1, mask);
+        auto const v2 = kmer_packed_bytewise_boundary_window<L, K>(hi, lo, 2, mask);
+        auto const v3 = kmer_packed_bytewise_boundary_window<L, K>(hi, lo, 3, mask);
 
         #if defined(FISK_BENCHMARK_SINK_MODE)
         do_not_optimize(v0);
@@ -217,14 +219,14 @@ inline void for_each_kmer_packed_bytewise_scalar_full_width_(Seq const& seq, Fun
         do_not_optimize(v3);
         #endif
 
-        assert_fits_width_(v0, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 0, v0, validity_at(4 * b + 0));
-        assert_fits_width_(v1, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 1, v1, validity_at(4 * b + 1));
-        assert_fits_width_(v2, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2));
-        assert_fits_width_(v3, K);
-        invoke_kmer_callback_if_valid_<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
+        assert_fits_width(v0, K);
+        invoke_kmer_callback_if_valid<E, L>(func, 4 * b + 0, v0, validity_at(4 * b + 0));
+        assert_fits_width(v1, K);
+        invoke_kmer_callback_if_valid<E, L>(func, 4 * b + 1, v1, validity_at(4 * b + 1));
+        assert_fits_width(v2, K);
+        invoke_kmer_callback_if_valid<E, L>(func, 4 * b + 2, v2, validity_at(4 * b + 2));
+        assert_fits_width(v3, K);
+        invoke_kmer_callback_if_valid<E, L>(func, 4 * b + 3, v3, validity_at(4 * b + 3));
 
         // GCC only: with a callback without stores, such as one that keeps its state in registers,
         // GCC loads the codes of all steps of an unrolled block up front, and spills them. The
@@ -235,17 +237,17 @@ inline void for_each_kmer_packed_bytewise_scalar_full_width_(Seq const& seq, Fun
     };
 
     // As in the narrow-width loop.
-    run_packed_bytewise_blocks_<1>(seq, K, step_);
+    run_packed_bytewise_blocks<1>(seq, K, step_);
 }
 
 // The dispatch of for_each_kmer_packed_unchecked_bytewise_scalar() and
 // for_each_kmer_packed_checked_bytewise_scalar() to the loops of each k.
 template <PackedSequenceType Seq, typename Func>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_bytewise_scalar_(Seq const& seq, std::size_t k, Func&& func)
+inline void for_each_kmer_packed_bytewise_scalar(Seq const& seq, std::size_t k, Func&& func)
 {
     if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
+        throw_invalid_kmer_k(32);
     }
     if (seq.length() < k) {
         return;
@@ -255,7 +257,7 @@ inline void for_each_kmer_packed_bytewise_scalar_(Seq const& seq, std::size_t k,
     // from their K, and spelling each out longhand would bury that in repetition.
     #define FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(K_) \
         case K_: \
-            for_each_kmer_packed_bytewise_scalar_narrow_width_<K_>(seq, func); \
+            for_each_kmer_packed_bytewise_scalar_narrow_width<K_>(seq, func); \
             break;
 
     switch (k) {
@@ -289,21 +291,23 @@ inline void for_each_kmer_packed_bytewise_scalar_(Seq const& seq, std::size_t k,
         FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(28)
         FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_(29)
         case 30: {
-            for_each_kmer_packed_bytewise_scalar_full_width_<30>(seq, func);
+            for_each_kmer_packed_bytewise_scalar_full_width<30>(seq, func);
             break;
         }
         case 31: {
-            for_each_kmer_packed_bytewise_scalar_full_width_<31>(seq, func);
+            for_each_kmer_packed_bytewise_scalar_full_width<31>(seq, func);
             break;
         }
         case 32: {
-            for_each_kmer_packed_bytewise_scalar_full_width_<32>(seq, func);
+            for_each_kmer_packed_bytewise_scalar_full_width<32>(seq, func);
             break;
         }
     }
 
     #undef FISK_KMER_PACKED_BYTEWISE_SCALAR_NARROW_WIDTH_CASE_
 }
+
+} // namespace detail
 
 /**
  * @brief Extract all k-mers for k in [1, 32] directly from a PackedSequence, and call a
@@ -323,7 +327,7 @@ FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_unchecked_bytewise_scalar(
     Seq const& seq, std::size_t k, Func&& func
 ) {
-    for_each_kmer_packed_bytewise_scalar_(without_validity_(seq), k, func);
+    detail::for_each_kmer_packed_bytewise_scalar(detail::without_validity(seq), k, func);
 }
 
 /**
@@ -340,7 +344,7 @@ FISK_ALWAYS_INLINE_FOR_EACH
 inline void for_each_kmer_packed_checked_bytewise_scalar(
     Seq const& seq, std::size_t k, Func&& func
 ) {
-    for_each_kmer_packed_bytewise_scalar_(seq, k, func);
+    detail::for_each_kmer_packed_bytewise_scalar(seq, k, func);
 }
 
 } // namespace fisk

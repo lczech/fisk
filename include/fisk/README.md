@@ -76,6 +76,8 @@ The k-mers have the Encoding and Layout of the packed sequence, or of the encode
 
 ## Functions and types
 
+All of them are in namespace `fisk`. Namespace `fisk::detail` holds the internals.
+
 ### Extraction
 
  - `for_each_kmer()` and `for_each_spaced_kmer()` (`extraction/for_each.hpp`) call back with each k-mer or spaced k-mer of an ASCII or packed sequence, with the algorithm that is likely the fastest, see the [main README](../../README.md#quick-start).

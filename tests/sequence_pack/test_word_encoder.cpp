@@ -132,14 +132,14 @@ static void check_valid_nucleotide_bits_arch()
         return Simd::load_unaligned(p);
     };
     check_valid_nucleotide_bits<bytes>([&](char const* p) {
-        return valid_nucleotide_bits<Simd>(load(p));
+        return detail::valid_nucleotide_bits<Simd>(load(p));
     });
     check_valid_nucleotide_bits<bytes>([&](char const* p) {
-        return valid_nucleotide_bits_compare_<Simd>(load(p));
+        return detail::valid_nucleotide_bits_compare<Simd>(load(p));
     });
     if constexpr (SimdArchWithByteShuffle<Simd>) {
         check_valid_nucleotide_bits<bytes>([&](char const* p) {
-            return valid_nucleotide_bits_lookup_<Simd>(load(p));
+            return detail::valid_nucleotide_bits_lookup<Simd>(load(p));
         });
     }
 }
@@ -166,7 +166,7 @@ static void check_nucleotide_code_bytes_arch()
                 buffer[pos] = static_cast<char>(value);
                 alignas(64) std::array<std::uint64_t, Simd::lanes> words{};
                 Simd::store_aligned(
-                    nucleotide_code_bytes<E, Simd>(Simd::load_unaligned(buffer.data())),
+                    detail::nucleotide_code_bytes<E, Simd>(Simd::load_unaligned(buffer.data())),
                     words.data()
                 );
                 std::array<std::uint8_t, bytes> codes{};

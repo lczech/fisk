@@ -45,6 +45,8 @@ namespace fisk {
 // same count. Its lanes hold the words of two consecutive starting bytes instead, which are
 // shifted once per position, and then interleaved into the order of the k-mers.
 
+namespace detail {
+
 // Number of lanes that hold k-mers of the same starting byte, as far as the arch has that many.
 template <SimdArch Simd>
 inline constexpr std::size_t packed_bytewise_simd_lanes_per_byte_v
@@ -60,11 +62,11 @@ template <SimdArch Simd>
 inline constexpr std::size_t packed_bytewise_simd_step_vectors_v
     = 4 * packed_bytewise_simd_step_bytes_v<Simd> / Simd::lanes;
 
-// The words of the starting bytes of an iteration, see load_packed_word_() (internal.hpp): lane `j`
+// The words of the starting bytes of an iteration, see load_packed_word() (internal.hpp): lane `j`
 // has the word that starts `j / packed_bytewise_simd_lanes_per_byte_v` bytes after `p`.
 template <SimdArch Simd, Layout L>
 FISK_ALWAYS_INLINE
-inline typename Simd::simd_vector load_packed_words_(std::uint8_t const* p) noexcept
+inline typename Simd::simd_vector load_packed_words(std::uint8_t const* p) noexcept
 {
     constexpr std::size_t lanes_per_byte = packed_bytewise_simd_lanes_per_byte_v<Simd>;
 
@@ -74,11 +76,11 @@ inline typename Simd::simd_vector load_packed_words_(std::uint8_t const* p) noex
 
     typename Simd::simd_vector words;
     if constexpr (Simd::lanes <= lanes_per_byte) {
-        words = Simd::broadcast(load_packed_word_<load_layout>(p));
+        words = Simd::broadcast(load_packed_word<load_layout>(p));
     } else {
         std::array<std::uint64_t, Simd::lanes> lane_words;
         for (std::size_t j = 0; j < Simd::lanes; ++j) {
-            lane_words[j] = load_packed_word_<load_layout>(p + j / lanes_per_byte);
+            lane_words[j] = load_packed_word<load_layout>(p + j / lanes_per_byte);
         }
         words = Simd::from_values(lane_words);
     }
@@ -93,7 +95,7 @@ inline typename Simd::simd_vector load_packed_words_(std::uint8_t const* p) noex
 // `v` of the iteration. Otherwise, `at[local]` is the count for all lanes at that position.
 template <SimdArch Simd, typename CountOf>
 FISK_ALWAYS_INLINE
-inline auto make_packed_bytewise_simd_counts_(CountOf&& count_of)
+inline auto make_packed_bytewise_simd_counts(CountOf&& count_of)
 {
     constexpr std::size_t vectors = packed_bytewise_simd_step_vectors_v<Simd>;
     if constexpr (SimdArchWithLaneShifts<Simd>) {
@@ -117,10 +119,10 @@ inline auto make_packed_bytewise_simd_counts_(CountOf&& count_of)
     }
 }
 
-// Shift by a count of make_packed_bytewise_simd_counts_().
+// Shift by a count of make_packed_bytewise_simd_counts().
 template <SimdArch Simd, typename Count>
 FISK_ALWAYS_INLINE
-inline typename Simd::simd_vector packed_bytewise_simd_shift_right_(
+inline typename Simd::simd_vector packed_bytewise_simd_shift_right(
     typename Simd::simd_vector v, Count const& count
 ) noexcept {
     if constexpr (SimdArchWithLaneShifts<Simd>) {
@@ -132,7 +134,7 @@ inline typename Simd::simd_vector packed_bytewise_simd_shift_right_(
 
 template <SimdArch Simd, typename Count>
 FISK_ALWAYS_INLINE
-inline typename Simd::simd_vector packed_bytewise_simd_shift_left_(
+inline typename Simd::simd_vector packed_bytewise_simd_shift_left(
     typename Simd::simd_vector v, Count const& count
 ) noexcept {
     if constexpr (SimdArchWithLaneShifts<Simd>) {
@@ -143,7 +145,7 @@ inline typename Simd::simd_vector packed_bytewise_simd_shift_left_(
 }
 
 // A set of vectors of the same positions, which the steps below handle like a single vector, see
-// emit_packed_bytewise_simd_step_(), such as the windows of the pieces of spaced k-mer masks. Not
+// emit_packed_bytewise_simd_step(), such as the windows of the pieces of spaced k-mer masks. Not
 // a std::array, as GCC warns about vector types as template arguments.
 template <SimdArch Simd, std::size_t N>
 struct SimdVectorSet
@@ -152,16 +154,16 @@ struct SimdVectorSet
 };
 
 // Interleave the vectors `a` and `b`, or each vector of two SimdVectorSet, with the low or the
-// `High` lanes, for the archs without shifts per lane, see emit_packed_bytewise_simd_step_(). The
+// `High` lanes, for the archs without shifts per lane, see emit_packed_bytewise_simd_step(). The
 // set is told by its member, as GCC warns about vector types as template arguments.
 template <SimdArch Simd, bool High, typename Vector>
 FISK_ALWAYS_INLINE
-inline Vector interleave_packed_bytewise_simd_(Vector const& a, Vector const& b) noexcept
+inline Vector interleave_packed_bytewise_simd(Vector const& a, Vector const& b) noexcept
 {
     if constexpr (requires { a.at; }) {
         Vector out;
         for (std::size_t j = 0; j < std::size(a.at); ++j) {
-            out.at[j] = interleave_packed_bytewise_simd_<Simd, High>(a.at[j], b.at[j]);
+            out.at[j] = interleave_packed_bytewise_simd<Simd, High>(a.at[j], b.at[j]);
         }
         return out;
     } else {
@@ -171,14 +173,14 @@ inline Vector interleave_packed_bytewise_simd_(Vector const& a, Vector const& b)
 
 // Emit the vectors of the iteration that starts at position `pos` as `emit(pos, vec, validity)`,
 // where `kmers(i)` computes them from the shift counts at index `i`, see
-// make_packed_bytewise_simd_counts_(), and `validity_at(pos)` gives the validity of the k-mer in
-// lane 0, see run_packed_bytewise_blocks_() (internal.hpp). With shifts per lane, `kmers(i)` is
+// make_packed_bytewise_simd_counts(), and `validity_at(pos)` gives the validity of the k-mer in
+// lane 0, see run_packed_bytewise_blocks() (internal.hpp). With shifts per lane, `kmers(i)` is
 // vector `i` of the iteration. Otherwise, it has position `i` of two starting bytes, and is
 // interleaved with the next position to get consecutive k-mers. `kmers(i)` can also be a
 // SimdVectorSet, whose vectors are interleaved each.
 template <SimdArch Simd, typename Kmers, typename ValidityAt, typename Emit>
 FISK_ALWAYS_INLINE
-inline void emit_packed_bytewise_simd_step_(
+inline void emit_packed_bytewise_simd_step(
     std::size_t pos, Kmers&& kmers, ValidityAt const& validity_at, Emit&& emit
 ) {
     constexpr std::size_t lanes = Simd::lanes;
@@ -195,17 +197,17 @@ inline void emit_packed_bytewise_simd_step_(
         auto const k1 = kmers(1);
         auto const k2 = kmers(2);
         auto const k3 = kmers(3);
-        emit_at_(pos + 0, interleave_packed_bytewise_simd_<Simd, false>(k0, k1));
-        emit_at_(pos + 2, interleave_packed_bytewise_simd_<Simd, false>(k2, k3));
-        emit_at_(pos + 4, interleave_packed_bytewise_simd_<Simd, true>(k0, k1));
-        emit_at_(pos + 6, interleave_packed_bytewise_simd_<Simd, true>(k2, k3));
+        emit_at_(pos + 0, interleave_packed_bytewise_simd<Simd, false>(k0, k1));
+        emit_at_(pos + 2, interleave_packed_bytewise_simd<Simd, false>(k2, k3));
+        emit_at_(pos + 4, interleave_packed_bytewise_simd<Simd, true>(k0, k1));
+        emit_at_(pos + 6, interleave_packed_bytewise_simd<Simd, true>(k2, k3));
     }
 }
 
-// The emit of the steps of the loops below, see emit_packed_bytewise_simd_step_(), which passes
+// The emit of the steps of the loops below, see emit_packed_bytewise_simd_step(), which passes
 // each vector of the k-mers from `pos` on to `emit` with the validity of the k-mers from `pos` on.
 // With validity bits, the vector goes on with its valid lanes: all of them in a block of valid
-// nucleotides, and otherwise the low bits of the valid starts, see run_packed_bytewise_blocks_()
+// nucleotides, and otherwise the low bits of the valid starts, see run_packed_bytewise_blocks()
 // (internal.hpp). With PackedValidity::kNucleotides, the vector goes on with the validity as it is
 // instead, AllValid or the validity window from `pos` on, for the caller to test its lanes against.
 // Without validity bits, it goes on with its count of k-mers, which is below all lanes only in the
@@ -216,7 +218,7 @@ template <
     PackedSequenceType Seq, typename Emit
 >
 FISK_ALWAYS_INLINE
-inline auto packed_bytewise_simd_emit_(Seq const& seq, std::size_t k, Emit& emit)
+inline auto packed_bytewise_simd_emit(Seq const& seq, std::size_t k, Emit& emit)
 {
     std::size_t const p_max = seq.length() - k;
     return [&emit, p_max](
@@ -244,9 +246,13 @@ inline auto packed_bytewise_simd_emit_(Seq const& seq, std::size_t k, Emit& emit
     };
 }
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Narrow Width
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 /**
  * @brief Extracts k in [1, 29] as vectors of k-mers.
@@ -260,11 +266,11 @@ inline auto packed_bytewise_simd_emit_(Seq const& seq, std::size_t k, Emit& emit
  */
 template <SimdArch Simd, PackedSequenceType Seq, typename Emit>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
+inline void for_each_kmer_packed_bytewise_simd_narrow_width(
     Seq const& seq, std::size_t k, Emit&& emit
 ) {
     if (k == 0 || k > 29) {
-        throw_invalid_kmer_k_(29);
+        throw_invalid_kmer_k(29);
     }
     if (seq.length() < k) {
         return;
@@ -276,16 +282,16 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
     constexpr std::size_t step_bytes = packed_bytewise_simd_step_bytes_v<Simd>;
 
     // The 2k bits of a k-mer in the codes. The codes are read up into their padding, see
-    // run_packed_bytewise_blocks_() (internal.hpp).
+    // run_packed_bytewise_blocks() (internal.hpp).
     constexpr Layout L = Seq::layout;
-    std::uint64_t const mask = width_mask_(k);
+    std::uint64_t const mask = width_mask(k);
     unsigned const k32 = static_cast<unsigned>(k);
     std::uint8_t const* const codes = seq.codes().data();
-    auto const emit_ = packed_bytewise_simd_emit_<Simd>(seq, k, emit);
+    auto const emit_ = packed_bytewise_simd_emit<Simd>(seq, k, emit);
 
     // Right shift that moves the k-mer at position `local` of a starting byte to the low bits.
     simd_vector const mask_v = Simd::broadcast(mask);
-    auto const counts = make_packed_bytewise_simd_counts_<Simd>(
+    auto const counts = make_packed_bytewise_simd_counts<Simd>(
         [&](std::size_t local) -> std::uint64_t {
             if constexpr (L == Layout::kMSB) {
                 return (64u - 2u * k32) - 2u * local;
@@ -294,48 +300,52 @@ inline void for_each_kmer_packed_bytewise_simd_narrow_width_(
             } else {
                 static_assert(
                     dependent_false_v<L>,
-                    "Unhandled Layout in for_each_kmer_packed_bytewise_simd_narrow_width_()"
+                    "Unhandled Layout in for_each_kmer_packed_bytewise_simd_narrow_width()"
                 );
             }
         }
     );
 
     // One step: the k-mers that start in the `step_bytes` bytes from `b`, as vectors of consecutive
-    // k-mers, each with the validity of its k-mer in lane 0, see packed_bytewise_simd_emit_().
+    // k-mers, each with the validity of its k-mer in lane 0, see packed_bytewise_simd_emit().
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
-        simd_vector const words = load_packed_words_<Simd, L>(codes + b);
-        emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) FISK_ALWAYS_INLINE_LAMBDA {
+        simd_vector const words = load_packed_words<Simd, L>(codes + b);
+        emit_packed_bytewise_simd_step<Simd>(4 * b, [&](std::size_t i) FISK_ALWAYS_INLINE_LAMBDA {
             return Simd::bitwise_and(
-                packed_bytewise_simd_shift_right_<Simd>(words, counts.at[i]), mask_v
+                packed_bytewise_simd_shift_right<Simd>(words, counts.at[i]), mask_v
             );
         }, validity_at, emit_);
     };
 
-    // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks_()
+    // The steps over all bytes in which a k-mer starts, see run_packed_bytewise_blocks()
     // (internal.hpp). Without validity bits in blocks as well, so that the compiler can combine
     // the work of the steps, such as the sums of a callback over the lanes of their vectors.
-    run_packed_bytewise_blocks_<step_bytes, PackedValidity::kStarts, false, 0, true>(
+    run_packed_bytewise_blocks<step_bytes, PackedValidity::kStarts, false, 0, true>(
         seq, k, step_
     );
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     Full Width
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 /**
  * @brief Extracts k in [1, 32] as vectors of k-mers.
  *
  * A k-mer of more than 29 nucleotides can reach into a ninth byte, so that this combines two words.
- * `emit` is as for for_each_kmer_packed_bytewise_simd_narrow_width_().
+ * `emit` is as for for_each_kmer_packed_bytewise_simd_narrow_width().
  */
 template <SimdArch Simd, PackedSequenceType Seq, typename Emit>
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_kmer_packed_bytewise_simd_full_width_(
+inline void for_each_kmer_packed_bytewise_simd_full_width(
     Seq const& seq, std::size_t k, Emit&& emit
 ) {
     if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
+        throw_invalid_kmer_k(32);
     }
     if (seq.length() < k) {
         return;
@@ -346,10 +356,10 @@ inline void for_each_kmer_packed_bytewise_simd_full_width_(
     constexpr std::size_t step_bytes = packed_bytewise_simd_step_bytes_v<Simd>;
 
     constexpr Layout L = Seq::layout;
-    std::uint64_t const mask = width_mask_(k);
+    std::uint64_t const mask = width_mask(k);
     unsigned const k32 = static_cast<unsigned>(k);
     std::uint8_t const* const codes = seq.codes().data();
-    auto const emit_ = packed_bytewise_simd_emit_<Simd>(seq, k, emit);
+    auto const emit_ = packed_bytewise_simd_emit<Simd>(seq, k, emit);
 
     // The k-mer at position `local` of a starting byte spans up to nine bytes: the word at the
     // starting byte, and a ninth byte, for which we take the word `step_bytes` after it. That is
@@ -362,52 +372,54 @@ inline void for_each_kmer_packed_bytewise_simd_full_width_(
     // kLSB has the first nucleotide in the lowest bits, and masks what exceeds the k-mer. kMSB has
     // it in the highest bits, and moves the k-mer down by `64 - 2k`, which leaves nothing above it.
     simd_vector const mask_v = Simd::broadcast(mask);
-    auto const word_counts = make_packed_bytewise_simd_counts_<Simd>(
+    auto const word_counts = make_packed_bytewise_simd_counts<Simd>(
         [](std::size_t local) -> std::uint64_t { return 2 * local; }
     );
-    auto const next_counts = make_packed_bytewise_simd_counts_<Simd>(
+    auto const next_counts = make_packed_bytewise_simd_counts<Simd>(
         [](std::size_t local) -> std::uint64_t { return 8 * step_bytes - 2 * local; }
     );
-    auto const down_counts = make_packed_bytewise_simd_counts_<Simd>(
+    auto const down_counts = make_packed_bytewise_simd_counts<Simd>(
         [&](std::size_t) -> std::uint64_t { return 64u - 2u * k32; }
     );
 
     // One step, as in the narrow-width loop. `next` holds the words of the next step, which
     // the step loads for its ninth bytes, and which the next step then starts with.
-    simd_vector next = load_packed_words_<Simd, L>(codes);
+    simd_vector next = load_packed_words<Simd, L>(codes);
     auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         simd_vector const words = next;
-        next = load_packed_words_<Simd, L>(codes + b + step_bytes);
-        emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) FISK_ALWAYS_INLINE_LAMBDA {
+        next = load_packed_words<Simd, L>(codes + b + step_bytes);
+        emit_packed_bytewise_simd_step<Simd>(4 * b, [&](std::size_t i) FISK_ALWAYS_INLINE_LAMBDA {
             // Without shifts per lane, the first vector has position 0 of the starting bytes
             // in all lanes, where the words hold the whole k-mer already.
             bool const whole = !SimdArchWithLaneShifts<Simd> && i == 0;
             if constexpr (L == Layout::kMSB) {
                 simd_vector const kmers = whole ? words : Simd::bitwise_or(
-                    packed_bytewise_simd_shift_left_<Simd>(words, word_counts.at[i]),
-                    packed_bytewise_simd_shift_right_<Simd>(next, next_counts.at[i])
+                    packed_bytewise_simd_shift_left<Simd>(words, word_counts.at[i]),
+                    packed_bytewise_simd_shift_right<Simd>(next, next_counts.at[i])
                 );
-                return packed_bytewise_simd_shift_right_<Simd>(kmers, down_counts.at[i]);
+                return packed_bytewise_simd_shift_right<Simd>(kmers, down_counts.at[i]);
             } else if constexpr (L == Layout::kLSB) {
                 simd_vector const kmers = whole ? words : Simd::bitwise_or(
-                    packed_bytewise_simd_shift_right_<Simd>(words, word_counts.at[i]),
-                    packed_bytewise_simd_shift_left_<Simd>(next, next_counts.at[i])
+                    packed_bytewise_simd_shift_right<Simd>(words, word_counts.at[i]),
+                    packed_bytewise_simd_shift_left<Simd>(next, next_counts.at[i])
                 );
                 return Simd::bitwise_and(kmers, mask_v);
             } else {
                 static_assert(
                     dependent_false_v<L>,
-                    "Unhandled Layout in for_each_kmer_packed_bytewise_simd_full_width_()"
+                    "Unhandled Layout in for_each_kmer_packed_bytewise_simd_full_width()"
                 );
             }
         }, validity_at, emit_);
     };
 
     // As in the narrow-width loop.
-    run_packed_bytewise_blocks_<step_bytes, PackedValidity::kStarts, false, 0, true>(
+    run_packed_bytewise_blocks<step_bytes, PackedValidity::kStarts, false, 0, true>(
         seq, k, step_
     );
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     Dispatch
@@ -433,20 +445,24 @@ inline void for_each_kmer_packed_unchecked_bytewise_simd(Seq const& seq, std::si
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
     if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
+        detail::throw_invalid_kmer_k(32);
     }
     // Unchecked, all k-mers are valid, and the vectors go to `func` with their count of k-mers.
     auto const emit = [&](
         std::size_t pos, typename Simd::simd_vector vec, std::size_t valid_count
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        invoke_kmer_vector_callback(
+        detail::invoke_kmer_vector_callback(
             func, pos, kmer_vector_cast_unchecked<E, L, Simd>(vec), valid_count
         );
     };
     if (k <= 29) {
-        for_each_kmer_packed_bytewise_simd_narrow_width_<Simd>(without_validity_(seq), k, emit);
+        detail::for_each_kmer_packed_bytewise_simd_narrow_width<Simd>(
+            detail::without_validity(seq), k, emit
+        );
     } else {
-        for_each_kmer_packed_bytewise_simd_full_width_<Simd>(without_validity_(seq), k, emit);
+        detail::for_each_kmer_packed_bytewise_simd_full_width<Simd>(
+            detail::without_validity(seq), k, emit
+        );
     }
 }
 
@@ -481,19 +497,19 @@ inline void for_each_kmer_packed_checked_bytewise_simd(
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
     if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
+        detail::throw_invalid_kmer_k(32);
     }
     auto const emit = [&](
         std::size_t pos, typename Simd::simd_vector vec, SimdVectorValidLanes<Simd> valid_lanes
     ) FISK_ALWAYS_INLINE_LAMBDA {
-        invoke_kmer_vector_valid_lanes_callback(
+        detail::invoke_kmer_vector_valid_lanes_callback(
             func, pos, kmer_vector_cast_unchecked<E, L, Simd>(vec), valid_lanes
         );
     };
     if (k <= 29) {
-        for_each_kmer_packed_bytewise_simd_narrow_width_<Simd>(seq, k, emit);
+        detail::for_each_kmer_packed_bytewise_simd_narrow_width<Simd>(seq, k, emit);
     } else {
-        for_each_kmer_packed_bytewise_simd_full_width_<Simd>(seq, k, emit);
+        detail::for_each_kmer_packed_bytewise_simd_full_width<Simd>(seq, k, emit);
     }
 }
 

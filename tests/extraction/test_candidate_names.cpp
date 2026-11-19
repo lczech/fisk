@@ -102,14 +102,14 @@ void for_each_test_algorithm(Table const& table, F&& f)
 {
     auto const one = [&]<bool Simd, typename Call>(TestAlgorithm<Simd, Call> const& algorithm) {
         if constexpr (Simd) {
-            [&]<typename... Arch>(TypeList<Arch...>) {
+            [&]<typename... Arch>(detail::TypeList<Arch...>) {
                 (
                     call_test_algorithm<Arch>(
-                        algorithm.name + "_" + simd_arch_name_<Arch>(), algorithm, f
+                        algorithm.name + "_" + detail::simd_arch_name<Arch>(), algorithm, f
                     ),
                     ...
                 );
-            }(CandidateSimdArchs{});
+            }(detail::CandidateSimdArchs{});
         } else {
             call_test_algorithm<SimdScalar>(algorithm.name, algorithm, f);
         }
@@ -205,7 +205,7 @@ TEST(CandidateNames, KmerAsciiChecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
-        typename KmerEstimate<kAscii, kChecked, kAcgt, kMsb>::type{}, kK, table
+        typename detail::KmerEstimate<kAscii, kChecked, kAcgt, kMsb>::type{}, kK, table
     );
 }
 
@@ -221,7 +221,7 @@ TEST(CandidateNames, KmerAsciiUnchecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
-        typename KmerEstimate<kAscii, kUnchecked, kAcgt, kMsb>::type{}, kK, table
+        typename detail::KmerEstimate<kAscii, kUnchecked, kAcgt, kMsb>::type{}, kK, table
     );
 }
 
@@ -236,7 +236,7 @@ TEST(CandidateNames, KmerPackedChecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
-        typename KmerEstimate<kPacked, kChecked, kAcgt, kMsb>::type{}, kK, table
+        typename detail::KmerEstimate<kPacked, kChecked, kAcgt, kMsb>::type{}, kK, table
     );
 }
 
@@ -251,7 +251,7 @@ TEST(CandidateNames, KmerPackedUnchecked)
         ),
     };
     check_algorithm_table<KmerTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
-        typename KmerEstimate<kPacked, kUnchecked, kAcgt, kMsb>::type{}, kK, table
+        typename detail::KmerEstimate<kPacked, kUnchecked, kAcgt, kMsb>::type{}, kK, table
     );
 }
 
@@ -320,7 +320,7 @@ TEST(CandidateNames, SpacedAsciiChecked)
         ),
     };
     check_algorithm_table<SpacedTableRecorder, kAscii, kChecked, kAcgt, kMsb>(
-        typename SpacedKmerEstimate<
+        typename detail::SpacedKmerEstimate<
             kAscii, kChecked, kAcgt, kMsb, kTableMasks
         >::type{},
         masks, table
@@ -351,7 +351,7 @@ TEST(CandidateNames, SpacedAsciiUnchecked)
         ),
     };
     check_algorithm_table<SpacedTableRecorder, kAscii, kUnchecked, kAcgt, kMsb>(
-        typename SpacedKmerEstimate<
+        typename detail::SpacedKmerEstimate<
             kAscii, kUnchecked, kAcgt, kMsb, kTableMasks
         >::type{},
         masks, table
@@ -378,7 +378,7 @@ TEST(CandidateNames, SpacedPackedChecked)
         ),
     };
     check_algorithm_table<SpacedTableRecorder, kPacked, kChecked, kAcgt, kMsb>(
-        typename SpacedKmerEstimate<
+        typename detail::SpacedKmerEstimate<
             kPacked, kChecked, kAcgt, kMsb, kTableMasks
         >::type{},
         masks, table
@@ -405,7 +405,7 @@ TEST(CandidateNames, SpacedPackedUnchecked)
         ),
     };
     check_algorithm_table<SpacedTableRecorder, kPacked, kUnchecked, kAcgt, kMsb>(
-        typename SpacedKmerEstimate<
+        typename detail::SpacedKmerEstimate<
             kPacked, kUnchecked, kAcgt, kMsb, kTableMasks
         >::type{},
         masks, table

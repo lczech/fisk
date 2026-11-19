@@ -44,7 +44,7 @@ namespace fisk {
 // extraction mask of the piece, see `bit_ext` below. The spaced k-mer is the OR of the bits
 // extracted from each piece, each shifted to its place by the mask shift of the piece.
 //
-// For kMSB, each load needs a byte swap, see load_packed_word_() (kmer_extract/internal.hpp),
+// For kMSB, each load needs a byte swap, see load_packed_word() (kmer_extract/internal.hpp),
 // which on Intel competes with PEXT for the same port. A step hence covers 8 bytes with one load
 // per piece: the word of each following byte is the one of the byte before it, shifted by a byte,
 // with the byte after its end shifted in, see spaced_kmer_packed_bytewise_step_bytes_v. Each step
@@ -59,6 +59,8 @@ namespace fisk {
 //     Helpers
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 // The number of bytes of a step, see above. Other layouts than kMSB and kLSB fail the static_assert
 // of the loop below.
 template <Layout L>
@@ -71,15 +73,15 @@ template <
     typename MaskOrMasks, typename Extract, typename Valid, typename Callback
 >
 FISK_ALWAYS_INLINE
-inline void emit_spaced_kmers_packed_bytewise_scalar_(
+inline void emit_spaced_kmers_packed_bytewise_scalar(
     MaskOrMasks const& masks, std::size_t pos, Extract const& extract, Valid const& valid,
     Callback& callback
 ) {
     std::size_t mask_idx = 0;
-    for_each_mask_(masks, [&](auto const& mask) FISK_ALWAYS_INLINE_LAMBDA {
+    for_each_mask(masks, [&](auto const& mask) FISK_ALWAYS_INLINE_LAMBDA {
         if (valid(mask)) {
             auto const word = extract(mask, mask_idx);
-            assert_fits_width_(word, spaced_kmer_weight(mask));
+            assert_fits_width(word, spaced_kmer_weight(mask));
             invoke_spaced_kmer_callback<E, L, SingleMask>(callback, mask_idx, pos, word);
         }
         ++mask_idx;
@@ -95,7 +97,7 @@ inline void emit_spaced_kmers_packed_bytewise_scalar_(
 // OR keeps them.
 template <Layout L, unsigned K, unsigned Local>
 FISK_ALWAYS_INLINE
-inline std::uint64_t spaced_kmer_packed_bytewise_full_width_window_(
+inline std::uint64_t spaced_kmer_packed_bytewise_full_width_window(
     std::uint64_t word, std::uint64_t next
 ) {
     constexpr bool in_word = 2 * K + 2 * Local <= 64;
@@ -115,14 +117,18 @@ inline std::uint64_t spaced_kmer_packed_bytewise_full_width_window_(
     } else {
         static_assert(
             dependent_false_v<L>,
-            "Unhandled Layout in spaced_kmer_packed_bytewise_full_width_window_()"
+            "Unhandled Layout in spaced_kmer_packed_bytewise_full_width_window()"
         );
     }
 }
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Loop
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 // The loop over the spans of `Count` pieces, or of the piece count of the masks at runtime if
 // `Count` is 0, see above. `Tail` is the span of a single piece of 30 to 32, known at compile time,
@@ -135,23 +141,23 @@ template <
     typename MaskOrMasks, typename BitExtract, typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
+inline void for_each_spaced_kmer_packed_bytewise_scalar_loop(
     Seq const& seq, std::size_t span_k,
     MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
 ) {
-    using Mask = spaced_kmer_mask_of_t_<MaskOrMasks>;
+    using Mask = spaced_kmer_mask_of_t<MaskOrMasks>;
     static_assert(Tail == 0 || (Count == 1 && Tail >= 30 && Tail <= 32));
     constexpr Encoding E = Seq::encoding;
     constexpr Layout L = Seq::layout;
     static_assert(
         L == Layout::kMSB || L == Layout::kLSB,
-        "Unhandled Layout in for_each_spaced_kmer_packed_bytewise_scalar_loop_()"
+        "Unhandled Layout in for_each_spaced_kmer_packed_bytewise_scalar_loop()"
     );
     constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
     constexpr std::size_t StepBytes = spaced_kmer_packed_bytewise_step_bytes_v<L>;
     constexpr std::size_t Pieces = Count != 0 ? Count : Mask::max_pieces;
     constexpr std::size_t AccumulatedMasks
-        = Count != 1 ? spaced_kmer_mask_of_<MaskOrMasks>::count : 1;
+        = Count != 1 ? spaced_kmer_mask_of<MaskOrMasks>::count : 1;
     std::size_t const count = Count != 0 ? Count : spaced_kmer_mask_piece_count(span_k);
     std::size_t const lead = count - 1;
     assert(count == spaced_kmer_mask_piece_count(span_k) && count <= Pieces);
@@ -159,12 +165,12 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
     std::uint8_t const* const codes = seq.codes().data();
 
     // For kMSB, moves a tail of up to 29 at position 3 to the lowest bits, so that the shifts per
-    // position are constants, as in for_each_kmer_packed_bytewise_scalar_narrow_width_().
+    // position are constants, as in for_each_kmer_packed_bytewise_scalar_narrow_width().
     [[maybe_unused]] unsigned const tail_align = static_cast<unsigned>(
         58 - 2 * spaced_kmer_mask_tail_span(span_k)
     );
 
-    // One step of run_packed_bytewise_blocks_() (kmer_extract/internal.hpp): the spans that start
+    // One step of run_packed_bytewise_blocks() (kmer_extract/internal.hpp): the spans that start
     // in the `StepBytes` bytes from `b`, of which those that are valid by `validity_at` are
     // emitted. Unchecked, that is a test of the whole span, for all masks at once, and checked, a
     // test per mask, of each of its pieces.
@@ -174,7 +180,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
         [[maybe_unused]] std::array<std::uint64_t, Pieces> words;
         if constexpr (Rolling) {
             for (std::size_t j = 0; j < count; ++j) {
-                words[j] = load_packed_word_<L>(codes + b + 7 * j);
+                words[j] = load_packed_word<L>(codes + b + 7 * j);
             }
         }
         for (std::size_t i = 0; i < StepBytes; ++i) {
@@ -192,7 +198,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
                 if constexpr (Rolling) {
                     return words[j];
                 } else {
-                    return load_packed_word_<L>(codes + at + 7 * j);
+                    return load_packed_word<L>(codes + at + 7 * j);
                 }
             };
 
@@ -204,12 +210,12 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
             [[maybe_unused]] std::uint64_t next = 0;
             if constexpr (Tail != 0) {
                 next = L == Layout::kMSB
-                    ? std::uint64_t{codes[at + 8]} : load_packed_word_<L>(codes + at + 1);
+                    ? std::uint64_t{codes[at + 8]} : load_packed_word<L>(codes + at + 1);
             }
             auto const tail_window_ = [&](auto local) FISK_ALWAYS_INLINE_LAMBDA {
                 constexpr unsigned Local = decltype(local)::value;
                 if constexpr (Tail != 0) {
-                    return spaced_kmer_packed_bytewise_full_width_window_<L, Tail, Local>(
+                    return spaced_kmer_packed_bytewise_full_width_window<L, Tail, Local>(
                         tail_word, next
                     );
                 } else if constexpr (L == Layout::kMSB) {
@@ -219,7 +225,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
                 } else {
                     static_assert(
                         dependent_false_v<L>,
-                        "Unhandled Layout in for_each_spaced_kmer_packed_bytewise_scalar_loop_()"
+                        "Unhandled Layout in for_each_spaced_kmer_packed_bytewise_scalar_loop()"
                     );
                 }
             };
@@ -232,7 +238,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
             std::array<std::array<std::uint64_t, 4>, AccumulatedMasks> spaced_kmers;
             if constexpr (Count != 1) {
                 std::size_t m = 0;
-                for_each_mask_(masks, [&](auto const& mask) FISK_ALWAYS_INLINE_LAMBDA {
+                for_each_mask(masks, [&](auto const& mask) FISK_ALWAYS_INLINE_LAMBDA {
                     for (unsigned local = 0; local < 4; ++local) {
                         std::uint64_t const window = L == Layout::kMSB
                             ? (tail_word >> tail_align) >> (6 - 2 * local)
@@ -262,7 +268,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
             ) FISK_ALWAYS_INLINE_LAMBDA {
                 std::size_t const pos = 4 * at + local;
                 if constexpr (!Checked) {
-                    if (!packed_kmer_is_valid_(validity_at(pos))) {
+                    if (!packed_kmer_is_valid(validity_at(pos))) {
                         return;
                     }
                 }
@@ -300,7 +306,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
                         return all;
                     }
                 };
-                emit_spaced_kmers_packed_bytewise_scalar_<SingleMask, E, L>(
+                emit_spaced_kmers_packed_bytewise_scalar<SingleMask, E, L>(
                     masks, pos, extract, valid, callback
                 );
             };
@@ -324,21 +330,25 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_loop_(
     // For more than one piece, the block test covers the longest span of `Count` pieces in a
     // number of validity words that is known at compile time.
     constexpr std::size_t BlockWords = Count <= 1 ? 0 : (31 + 28 * Count + 1 + 63) / 64;
-    run_packed_bytewise_blocks_<StepBytes, PackedValidity::kNucleotides, Count != 1, BlockWords>(
+    run_packed_bytewise_blocks<StepBytes, PackedValidity::kNucleotides, Count != 1, BlockWords>(
         seq, span_k, step_
     );
 }
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Dispatch
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 /**
  * @brief Shared implementation behind the for_each_spaced_kmer_packed_unchecked_bytewise_scalar()
  * and for_each_spaced_kmer_packed_checked_bytewise_scalar() overloads below.
  *
  * `SingleMask` is set by each overload, as for
- * for_each_spaced_kmer_ascii_checked_rolling_scalar_(), and `span_k` is the common span of the
+ * for_each_spaced_kmer_ascii_checked_rolling_scalar_loop(), and `span_k` is the common span of the
  * masks, as checked by the overloads. Each piece count up to `MaxCompiledPieces` has a copy of the
  * loop of its own, and so does each span of 30 to 32. With validity bits, see
  * PackedSequenceWithValidityType, only the valid spaced k-mers are emitted.
@@ -348,17 +358,17 @@ template <
     typename MaskOrMasks, typename BitExtract, typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_packed_bytewise_scalar_(
+inline void for_each_spaced_kmer_packed_bytewise_scalar(
     Seq const& seq, std::size_t span_k,
     MaskOrMasks const& masks, BitExtract& bit_ext, Callback& callback
 ) {
-    using Mask = spaced_kmer_mask_of_t_<MaskOrMasks>;
+    using Mask = spaced_kmer_mask_of_t<MaskOrMasks>;
     static_assert(MaxCompiledPieces >= 1, "MaxCompiledPieces must be at least 1");
-    for_each_mask_(masks, [&]([[maybe_unused]] auto const& mask) {
+    for_each_mask(masks, [&]([[maybe_unused]] auto const& mask) {
         assert(is_valid_spaced_kmer_mask(mask));
         assert(
             bit_ext(~std::uint64_t{0}, mask.mask_pieces[0])
-            == bit_ext(spaced_kmer_mask_bits_(mask), mask.mask_pieces[0])
+            == bit_ext(spaced_kmer_mask_bits(mask), mask.mask_pieces[0])
         );
     });
     if (seq.length() < span_k) {
@@ -369,25 +379,25 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
     if (count == 1) {
         switch (span_k) {
             case 30: {
-                for_each_spaced_kmer_packed_bytewise_scalar_loop_<1, 30, SingleMask>(
+                for_each_spaced_kmer_packed_bytewise_scalar_loop<1, 30, SingleMask>(
                     seq, span_k, masks, bit_ext, callback
                 );
                 break;
             }
             case 31: {
-                for_each_spaced_kmer_packed_bytewise_scalar_loop_<1, 31, SingleMask>(
+                for_each_spaced_kmer_packed_bytewise_scalar_loop<1, 31, SingleMask>(
                     seq, span_k, masks, bit_ext, callback
                 );
                 break;
             }
             case 32: {
-                for_each_spaced_kmer_packed_bytewise_scalar_loop_<1, 32, SingleMask>(
+                for_each_spaced_kmer_packed_bytewise_scalar_loop<1, 32, SingleMask>(
                     seq, span_k, masks, bit_ext, callback
                 );
                 break;
             }
             default: {
-                for_each_spaced_kmer_packed_bytewise_scalar_loop_<1, 0, SingleMask>(
+                for_each_spaced_kmer_packed_bytewise_scalar_loop<1, 0, SingleMask>(
                     seq, span_k, masks, bit_ext, callback
                 );
                 break;
@@ -402,7 +412,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
     bool const done = [&]<std::size_t... Is>(std::index_sequence<Is...>) FISK_ALWAYS_INLINE_LAMBDA {
         return ((
             count == Is + 1 && (
-                for_each_spaced_kmer_packed_bytewise_scalar_loop_<Is + 1, 0, SingleMask>(
+                for_each_spaced_kmer_packed_bytewise_scalar_loop<Is + 1, 0, SingleMask>(
                     seq, span_k, masks, bit_ext, callback
                 ), true
             )
@@ -410,7 +420,7 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
     }(std::make_index_sequence<Compiled>{});
     if constexpr (Compiled < Mask::max_pieces) {
         if (!done) {
-            for_each_spaced_kmer_packed_bytewise_scalar_loop_<0, 0, SingleMask>(
+            for_each_spaced_kmer_packed_bytewise_scalar_loop<0, 0, SingleMask>(
                 seq, span_k, masks, bit_ext, callback
             );
         }
@@ -419,6 +429,8 @@ inline void for_each_spaced_kmer_packed_bytewise_scalar_(
         assert(done);
     }
 }
+
+} // namespace detail
 
 /**
  * @brief Iterate a PackedSequence, extract all spaced k-mers from it, and call a callback on each
@@ -459,9 +471,9 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    for_each_spaced_kmer_packed_bytewise_scalar_<MaxCompiledPieces, true>(
-        without_validity_(seq), check_spaced_kmer_span_<Mask::max_span>(mask.span_k), mask,
-        bit_ext, callback
+    detail::for_each_spaced_kmer_packed_bytewise_scalar<MaxCompiledPieces, true>(
+        detail::without_validity(seq), detail::check_spaced_kmer_span<Mask::max_span>(mask.span_k),
+        mask, bit_ext, callback
     );
 }
 
@@ -490,9 +502,9 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_scalar(
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one mask.");
-    for_each_spaced_kmer_packed_bytewise_scalar_<MaxCompiledPieces, false>(
-        without_validity_(seq), common_spaced_kmer_span_<Mask::max_span>(masks), masks, bit_ext,
-        callback
+    detail::for_each_spaced_kmer_packed_bytewise_scalar<MaxCompiledPieces, false>(
+        detail::without_validity(seq), detail::common_spaced_kmer_span<Mask::max_span>(masks),
+        masks, bit_ext, callback
     );
 }
 
@@ -519,8 +531,8 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_scalar(
     BitExtract&& bit_ext,
     Callback&& callback
 ) {
-    for_each_spaced_kmer_packed_bytewise_scalar_<MaxCompiledPieces, true>(
-        seq, check_spaced_kmer_span_<Mask::max_span>(mask.span_k), mask, bit_ext, callback
+    detail::for_each_spaced_kmer_packed_bytewise_scalar<MaxCompiledPieces, true>(
+        seq, detail::check_spaced_kmer_span<Mask::max_span>(mask.span_k), mask, bit_ext, callback
     );
 }
 
@@ -548,8 +560,8 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_scalar(
     Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one mask.");
-    for_each_spaced_kmer_packed_bytewise_scalar_<MaxCompiledPieces, false>(
-        seq, common_spaced_kmer_span_<Mask::max_span>(masks), masks, bit_ext, callback
+    detail::for_each_spaced_kmer_packed_bytewise_scalar<MaxCompiledPieces, false>(
+        seq, detail::common_spaced_kmer_span<Mask::max_span>(masks), masks, bit_ext, callback
     );
 }
 

@@ -64,20 +64,22 @@ namespace fisk {
 //     Loop
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 // The loop over the spans of `Count` pieces, or of the piece count of the kernels at runtime if
 // `Count` is 0, see above. The windows of a vector of positions are a SimdVectorSet, one vector per
 // piece: the leading pieces of 28 nucleotides are within the words loaded at their byte, which a
 // shift per lane moves to the lowest bits, and so is a tail of up to 29. With `Full`, a single
 // piece of 30 to 32 can reach into a ninth byte, whose nucleotides are shifted in from the words of
 // the next step, which that step starts with, as in
-// for_each_kmer_packed_bytewise_simd_full_width_(). Checked, a lane is valid if each piece is valid
+// for_each_kmer_packed_bytewise_simd_full_width(). Checked, a lane is valid if each piece is valid
 // by the validity window at its own start.
 template <
     std::size_t Count, bool Full, PackedSequenceType Seq, typename KernelMask, std::size_t N,
     typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
+inline void for_each_spaced_kmer_packed_bytewise_simd_loop(
     Seq const& seq, std::size_t span_k, std::span<KernelMask, N> kernels, Callback& callback
 ) {
     using Simd = typename KernelMask::bit_extract_form::simd_arch;
@@ -88,7 +90,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
     constexpr Layout L = Seq::layout;
     static_assert(
         L == Layout::kMSB || L == Layout::kLSB,
-        "Unhandled Layout in for_each_spaced_kmer_packed_bytewise_simd_loop_()"
+        "Unhandled Layout in for_each_spaced_kmer_packed_bytewise_simd_loop()"
     );
     constexpr bool Checked = PackedSequenceWithValidityType<Seq>;
     constexpr std::size_t lanes = Simd::lanes;
@@ -133,7 +135,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
             simd_vector out = Simd::zero();
             for (std::size_t j = 0; j < Pieces; ++j) {
                 if (j < count) {
-                    out = Simd::bitwise_or(out, packed_bytewise_simd_shift_left_<Simd>(
+                    out = Simd::bitwise_or(out, packed_bytewise_simd_shift_left<Simd>(
                         kernel.mask_pieces[j].bit_extract(windows.at[j]), shifts.at[m][j]
                     ));
                 }
@@ -167,9 +169,9 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
     };
 
     // Extract and emit the spaced k-mers of all kernels from the `windows` of the spans at `pos`
-    // and after, with their count or validity, see packed_bytewise_simd_emit_(), one kernel after
+    // and after, with their count or validity, see packed_bytewise_simd_emit(), one kernel after
     // the other: a loop with the compile-time trip count N, which the compiler unrolls where the
-    // kernels are cheap, as for_each_mask_() (internal.hpp).
+    // kernels are cheap, as for_each_mask() (internal.hpp).
     auto const emit = [&](
         std::size_t pos, Windows const& windows, auto validity
     ) FISK_ALWAYS_INLINE_LAMBDA {
@@ -185,12 +187,12 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
             }
         }
     };
-    auto const emit_ = packed_bytewise_simd_emit_<Simd, PackedValidity::kNucleotides>(
+    auto const emit_ = packed_bytewise_simd_emit<Simd, PackedValidity::kNucleotides>(
         seq, span_k, emit
     );
 
     // Checked, the validity windows at the start of each piece of the spans from `pos` on, from
-    // `validity_at`, see run_packed_bytewise_blocks_() (kmer_extract/internal.hpp), or AllValid.
+    // `validity_at`, see run_packed_bytewise_blocks() (kmer_extract/internal.hpp), or AllValid.
     auto const piece_validity_ = [&](auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
         return [&](std::size_t pos) FISK_ALWAYS_INLINE_LAMBDA {
             using Validity = decltype(validity_at(pos));
@@ -208,7 +210,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
         };
     };
 
-    // The steps over all bytes in which a span starts, see run_packed_bytewise_blocks_()
+    // The steps over all bytes in which a span starts, see run_packed_bytewise_blocks()
     // (kmer_extract/internal.hpp). Without validity bits in blocks as well, so that the compiler
     // can combine the work of the steps, such as the sums of a callback over the lanes of their
     // vectors; not on the scalar arch, whose loops are slower in blocks.
@@ -218,24 +220,24 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
         // Right shifts that move the piece at position `local` of a starting byte to the low bits:
         // for the tail, as for a span of its length, and for the leading pieces of 28, the same
         // for all spans, from bit `8 - 2 * local` for kMSB and from bit `2 * local` for kLSB.
-        auto const tail_counts = make_packed_bytewise_simd_counts_<Simd>(
+        auto const tail_counts = make_packed_bytewise_simd_counts<Simd>(
             [&](std::size_t local) -> std::uint64_t {
                 return L == Layout::kMSB ? (64u - 2u * tail) - 2u * local : 2u * local;
             }
         );
-        auto const lead_counts = make_packed_bytewise_simd_counts_<Simd>(
+        auto const lead_counts = make_packed_bytewise_simd_counts<Simd>(
             [](std::size_t local) -> std::uint64_t {
                 return L == Layout::kMSB ? 8u - 2u * local : 2u * local;
             }
         );
         auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
             // Not FISK_ALWAYS_INLINE_LAMBDA: forced inline, GCC compiles the SSE2 loops slower.
-            emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
+            emit_packed_bytewise_simd_step<Simd>(4 * b, [&](std::size_t i) {
                 Windows windows{};
                 for (std::size_t j = 0; j < Pieces; ++j) {
                     if (j < count) {
-                        windows.at[j] = packed_bytewise_simd_shift_right_<Simd>(
-                            load_packed_words_<Simd, L>(codes + b + 7 * j),
+                        windows.at[j] = packed_bytewise_simd_shift_right<Simd>(
+                            load_packed_words<Simd, L>(codes + b + 7 * j),
                             j == lead ? tail_counts.at[i] : lead_counts.at[i]
                         );
                     }
@@ -246,62 +248,66 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_loop_(
 
         // For more than one piece, the block test covers the longest span of `Count` pieces in a
         // number of validity words that is known at compile time, see
-        // for_each_spaced_kmer_packed_bytewise_scalar_loop_().
+        // for_each_spaced_kmer_packed_bytewise_scalar_loop().
         constexpr std::size_t BlockWords = Count <= 1 ? 0 : (31 + 28 * Count + 1 + 63) / 64;
-        run_packed_bytewise_blocks_<
+        run_packed_bytewise_blocks<
             step_bytes, PackedValidity::kNucleotides, Count != 1, BlockWords, UncheckedBlocks
         >(seq, span_k, step_);
     } else {
         // The word of the starting byte, shifted by `2 * local` so that the span starts at its
         // first nucleotide, and the word `step_bytes` after it, shifted the other way, as in
-        // for_each_kmer_packed_bytewise_simd_full_width_(). kMSB then moves the span down by
+        // for_each_kmer_packed_bytewise_simd_full_width(). kMSB then moves the span down by
         // `64 - 2 * span_k`.
         unsigned const span32 = static_cast<unsigned>(span_k);
-        auto const word_counts = make_packed_bytewise_simd_counts_<Simd>(
+        auto const word_counts = make_packed_bytewise_simd_counts<Simd>(
             [](std::size_t local) -> std::uint64_t { return 2 * local; }
         );
-        auto const next_counts = make_packed_bytewise_simd_counts_<Simd>(
+        auto const next_counts = make_packed_bytewise_simd_counts<Simd>(
             [](std::size_t local) -> std::uint64_t { return 8 * step_bytes - 2 * local; }
         );
-        auto const down_counts = make_packed_bytewise_simd_counts_<Simd>(
+        auto const down_counts = make_packed_bytewise_simd_counts<Simd>(
             [&](std::size_t) -> std::uint64_t { return 64u - 2u * span32; }
         );
-        simd_vector next = load_packed_words_<Simd, L>(codes);
+        simd_vector next = load_packed_words<Simd, L>(codes);
         auto const step_ = [&](std::size_t b, auto const& validity_at) FISK_ALWAYS_INLINE_LAMBDA {
             simd_vector const words = next;
-            next = load_packed_words_<Simd, L>(codes + b + step_bytes);
+            next = load_packed_words<Simd, L>(codes + b + step_bytes);
             // Not FISK_ALWAYS_INLINE_LAMBDA: forced inline, GCC compiles the SSE2 loops slower.
-            emit_packed_bytewise_simd_step_<Simd>(4 * b, [&](std::size_t i) {
+            emit_packed_bytewise_simd_step<Simd>(4 * b, [&](std::size_t i) {
                 // Without shifts per lane, the first vector has position 0 of the starting bytes
                 // in all lanes, where the words hold the whole span already.
                 bool const whole = !SimdArchWithLaneShifts<Simd> && i == 0;
                 Windows windows;
                 if constexpr (L == Layout::kMSB) {
                     simd_vector const span_words = whole ? words : Simd::bitwise_or(
-                        packed_bytewise_simd_shift_left_<Simd>(words, word_counts.at[i]),
-                        packed_bytewise_simd_shift_right_<Simd>(next, next_counts.at[i])
+                        packed_bytewise_simd_shift_left<Simd>(words, word_counts.at[i]),
+                        packed_bytewise_simd_shift_right<Simd>(next, next_counts.at[i])
                     );
-                    windows.at[0] = packed_bytewise_simd_shift_right_<Simd>(
+                    windows.at[0] = packed_bytewise_simd_shift_right<Simd>(
                         span_words, down_counts.at[i]
                     );
                 } else {
                     windows.at[0] = whole ? words : Simd::bitwise_or(
-                        packed_bytewise_simd_shift_right_<Simd>(words, word_counts.at[i]),
-                        packed_bytewise_simd_shift_left_<Simd>(next, next_counts.at[i])
+                        packed_bytewise_simd_shift_right<Simd>(words, word_counts.at[i]),
+                        packed_bytewise_simd_shift_left<Simd>(next, next_counts.at[i])
                     );
                 }
                 return windows;
             }, piece_validity_(validity_at), emit_);
         };
-        run_packed_bytewise_blocks_<
+        run_packed_bytewise_blocks<
             step_bytes, PackedValidity::kNucleotides, false, 0, UncheckedBlocks
         >(seq, span_k, step_);
     }
 }
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Dispatch
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 // The loop for the piece count of the kernels, whose common span is `span_k`, see above: a copy
 // for each piece count up to `MaxCompiledPieces`, and one for spans of 30 to 32, which can reach
@@ -311,7 +317,7 @@ template <
     typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_packed_bytewise_simd_(
+inline void for_each_spaced_kmer_packed_bytewise_simd(
     Seq const& seq, std::size_t span_k, std::span<KernelMask, N> kernels, Callback& callback
 ) {
     using Mask = std::remove_const_t<KernelMask>;
@@ -326,11 +332,11 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_(
     std::size_t const count = spaced_kmer_mask_piece_count(span_k);
     if (count == 1) {
         if (span_k <= 29) {
-            for_each_spaced_kmer_packed_bytewise_simd_loop_<1, false>(
+            for_each_spaced_kmer_packed_bytewise_simd_loop<1, false>(
                 seq, span_k, kernels, callback
             );
         } else {
-            for_each_spaced_kmer_packed_bytewise_simd_loop_<1, true>(
+            for_each_spaced_kmer_packed_bytewise_simd_loop<1, true>(
                 seq, span_k, kernels, callback
             );
         }
@@ -342,7 +348,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_(
     bool const done = [&]<std::size_t... Is>(std::index_sequence<Is...>) FISK_ALWAYS_INLINE_LAMBDA {
         return ((
             count == Is + 2 && (
-                for_each_spaced_kmer_packed_bytewise_simd_loop_<Is + 2, false>(
+                for_each_spaced_kmer_packed_bytewise_simd_loop<Is + 2, false>(
                     seq, span_k, kernels, callback
                 ), true
             )
@@ -350,7 +356,7 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_(
     }(std::make_index_sequence<Compiled - 1>{});
     if constexpr (Compiled < Mask::max_pieces) {
         if (!done) {
-            for_each_spaced_kmer_packed_bytewise_simd_loop_<0, false>(
+            for_each_spaced_kmer_packed_bytewise_simd_loop<0, false>(
                 seq, span_k, kernels, callback
             );
         }
@@ -359,6 +365,8 @@ inline void for_each_spaced_kmer_packed_bytewise_simd_(
         assert(done);
     }
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     Extraction
@@ -402,10 +410,10 @@ inline void for_each_spaced_kmer_packed_unchecked_bytewise_simd(
         "Callback must be callable as callback(pos, mask_idx, spaced_kmers, valid_count), or, "
         "for a single kernel, as callback(pos, spaced_kmers, valid_count)."
     );
-    for_each_spaced_kmer_packed_bytewise_simd_<MaxCompiledPieces>(
-        without_validity_(seq),
-        common_spaced_kmer_span_<std::remove_const_t<KernelMask>::max_span>(kernels), kernels,
-        callback
+    detail::for_each_spaced_kmer_packed_bytewise_simd<MaxCompiledPieces>(
+        detail::without_validity(seq),
+        detail::common_spaced_kmer_span<std::remove_const_t<KernelMask>::max_span>(kernels),
+        kernels, callback
     );
 }
 
@@ -477,9 +485,9 @@ inline void for_each_spaced_kmer_packed_checked_bytewise_simd(
         "Callback must be callable as callback(pos, mask_idx, spaced_kmers, valid_lanes), or, "
         "for a single kernel, as callback(pos, spaced_kmers, valid_lanes)."
     );
-    for_each_spaced_kmer_packed_bytewise_simd_<MaxCompiledPieces>(
-        seq, common_spaced_kmer_span_<std::remove_const_t<KernelMask>::max_span>(kernels), kernels,
-        callback
+    detail::for_each_spaced_kmer_packed_bytewise_simd<MaxCompiledPieces>(
+        seq, detail::common_spaced_kmer_span<std::remove_const_t<KernelMask>::max_span>(kernels),
+        kernels, callback
     );
 }
 

@@ -121,7 +121,7 @@ struct CharEncoderIfs
             if (ch == 't') return 2u;
             if (ch == 'g') return 3u;
         } else {
-            static_assert(dependent_false_v<E>, "Unhandled Encoding in CharEncoderIfs");
+            static_assert(detail::dependent_false_v<E>, "Unhandled Encoding in CharEncoderIfs");
         }
         return kInvalidNucleotide;
 
@@ -165,7 +165,7 @@ struct CharEncoderSwitch
                 default:            return kInvalidNucleotide;
             }
         } else {
-            static_assert(dependent_false_v<E>, "Unhandled Encoding in CharEncoderSwitch");
+            static_assert(detail::dependent_false_v<E>, "Unhandled Encoding in CharEncoderSwitch");
             return kInvalidNucleotide;
         }
     }
@@ -174,6 +174,8 @@ struct CharEncoderSwitch
 // -----------------------------------------------------------------------------
 //     ascii
 // -----------------------------------------------------------------------------
+
+namespace detail {
 
 /**
  * @brief Extract the two-bit code of a nucleotide from its ASCII byte, without validity check.
@@ -202,23 +204,25 @@ struct CharEncoderSwitch
  * ignored here anyway; callers may hence pass the raw or the case-folded byte.
  */
 template <Encoding E>
-inline constexpr std::uint8_t ascii_bits_to_code_(std::uint8_t value) noexcept
+inline constexpr std::uint8_t ascii_bits_to_code(std::uint8_t value) noexcept
 {
     if constexpr (E == Encoding::kACGT) {
         return static_cast<std::uint8_t>(((value >> 1) ^ (value >> 2)) & 0x03u);
     } else if constexpr (E == Encoding::kACTG) {
         return static_cast<std::uint8_t>((value >> 1) & 0x03u);
     } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in ascii_bits_to_code_()");
+        static_assert(dependent_false_v<E>, "Unhandled Encoding in ascii_bits_to_code()");
         return 0;
     }
 }
+
+} // namespace detail
 
 /**
  * @brief Get the two-bit encoding of a char, using bit twiddling to utilize a coincidence in the
  * ASCII code.
  *
- * See ascii_bits_to_code_() for how the bit trick works. `V` selects whether this actually checks
+ * See ascii_bits_to_code() for how the bit trick works. `V` selects whether this actually checks
  * validity (`kChecked`, returning kInvalidNucleotide if the char is not in `ACGT`) or trusts the
  * caller and skips the check entirely (`kUnchecked`, the fastest of the encoders offered here;
  * invalid characters then silently produce one of the four valid codes instead of
@@ -233,13 +237,13 @@ struct CharEncoderAscii
     {
         if constexpr (V == InputCheck::kUnchecked) {
             // No case fold needed: the bits the trick reads are unaffected by the case bit.
-            return ascii_bits_to_code_<E>(static_cast<std::uint8_t>(c));
+            return detail::ascii_bits_to_code<E>(static_cast<std::uint8_t>(c));
         } else if constexpr (V == InputCheck::kChecked) {
             // Fold to lowercase: 'A'..'Z' -> 'a'..'z', ASCII only.
             std::uint8_t const value = static_cast<std::uint8_t>(c) | 0x20u;
 
             // Extract the relevant bits to get two-bit code.
-            std::uint8_t const encoded = ascii_bits_to_code_<E>(value);
+            std::uint8_t const encoded = detail::ascii_bits_to_code<E>(value);
 
             // Use a bitset validator to check for correct char;
             // should be faster than actual character comparisons. Independent of the encoding,
@@ -254,7 +258,7 @@ struct CharEncoderAscii
             std::uint32_t const     is_valid   = low5_valid & hig3_valid;
             return is_valid ? encoded : kInvalidNucleotide;
         } else {
-            static_assert(dependent_false_v<V>, "Unhandled InputCheck in CharEncoderAscii");
+            static_assert(detail::dependent_false_v<V>, "Unhandled InputCheck in CharEncoderAscii");
         }
     }
 };
@@ -262,6 +266,8 @@ struct CharEncoderAscii
 // -----------------------------------------------------------------------------
 //     table
 // -----------------------------------------------------------------------------
+
+namespace detail {
 
 /**
  * @brief Build the ASCII lookup table for an encoding.
@@ -277,7 +283,7 @@ struct CharEncoderAscii
  * to avoid accidental misuse.
  */
 template <Encoding E>
-inline constexpr std::array<std::uint8_t, 256> make_nucleotide_table_() noexcept
+inline constexpr std::array<std::uint8_t, 256> make_nucleotide_table() noexcept
 {
     std::array<std::uint8_t, 256> table{};
     for( auto& entry : table ) {
@@ -299,10 +305,12 @@ inline constexpr std::array<std::uint8_t, 256> make_nucleotide_table_() noexcept
         set_char_('T', 't', 2);
         set_char_('G', 'g', 3);
     } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in make_nucleotide_table_()");
+        static_assert(dependent_false_v<E>, "Unhandled Encoding in make_nucleotide_table()");
     }
     return table;
 }
+
+} // namespace detail
 
 /**
  * @brief Get the two-bit encoding of a char, using an ASCII lookup table, non-throwing.
@@ -317,7 +325,8 @@ struct CharEncoderTable
 {
     static constexpr Encoding encoding = E;
 
-    static inline constexpr std::array<std::uint8_t, 256> table = make_nucleotide_table_<E>();
+    static inline constexpr std::array<std::uint8_t, 256> table =
+        detail::make_nucleotide_table<E>();
 
     inline constexpr std::uint8_t operator()(char c) const noexcept
     {

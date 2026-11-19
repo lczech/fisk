@@ -32,12 +32,12 @@ namespace fisk {
 // The scratch is reusable temporary packed storage; its contents after the call are unspecified.
 // Overlapping, nested, or concurrent calls must use distinct scratch buffers. The overloads without
 // a scratch use a thread-local buffer, which is shared by all chunked functions on the same thread
-// that use the same type of scratch, see ascii_chunked_buffer_(); their callback hence must not
+// that use the same type of scratch, see ascii_chunked_buffer(); their callback hence must not
 // call any of them again with the thread-local buffer.
 //
 // `ChunkSize` is the number of nucleotides processed per chunk, and must be > 0. A multiple of 32,
 // such as a power of two, keeps each chunk in whole blocks of the packed loops, see
-// run_packed_bytewise_blocks_() (kmer_extract/internal.hpp).
+// run_packed_bytewise_blocks() (kmer_extract/internal.hpp).
 // `MaxCompiledPieces` is that of the extraction from packed sequences, for spans above 32, see
 // packed_bytewise_scalar.hpp. The spans of the masks can be up to their maximum span.
 
@@ -45,20 +45,22 @@ namespace fisk {
 //     Internal Helpers
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 // The shared implementation of the functions below, for a single mask or a span of masks: with a
 // PackedSequenceWithValidity as `scratch`, the chunks are packed with their validity, and only
-// their valid spaced k-mers are emitted, see for_each_ascii_chunk_().
+// their valid spaced k-mers are emitted, see for_each_ascii_chunk().
 template <
     std::size_t ChunkSize, std::size_t MaxCompiledPieces, WordEncoder Encoder,
     PackedSequenceType PackedSequenceChunk, typename MaskOrMasks, typename BitExtract,
     typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_ascii_chunked_scalar_(
+inline void for_each_spaced_kmer_ascii_chunked_scalar(
     std::string_view seq, std::size_t span_k, MaskOrMasks const& masks, Encoder const& encoder,
     BitExtract& bit_ext, PackedSequenceChunk& scratch, Callback& callback
 ) {
-    for_each_ascii_chunk_<ChunkSize>(
+    for_each_ascii_chunk<ChunkSize>(
         seq, span_k, encoder, scratch, callback,
         [&](auto const& chunk, auto const& chunk_func) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (PackedSequenceWithValidityType<PackedSequenceChunk>) {
@@ -73,6 +75,8 @@ inline void for_each_spaced_kmer_ascii_chunked_scalar_(
         }
     );
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     for_each_spaced_kmer_ascii_unchecked_chunked_scalar()
@@ -113,9 +117,9 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_scalar(
     std::string_view seq, Mask const& mask, Encoder const& encoder, BitExtract&& bit_ext,
     PackedSequence<Encoder::encoding, Encoder::layout>& scratch, Callback&& callback
 ) {
-    for_each_spaced_kmer_ascii_chunked_scalar_<ChunkSize, MaxCompiledPieces>(
-        seq, check_spaced_kmer_span_<Mask::max_span>(mask.span_k), mask, encoder, bit_ext, scratch,
-        callback
+    detail::for_each_spaced_kmer_ascii_chunked_scalar<ChunkSize, MaxCompiledPieces>(
+        seq, detail::check_spaced_kmer_span<Mask::max_span>(mask.span_k), mask, encoder, bit_ext,
+        scratch, callback
     );
 }
 
@@ -138,9 +142,9 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_scalar(
     PackedSequence<Encoder::encoding, Encoder::layout>& scratch, Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one mask.");
-    for_each_spaced_kmer_ascii_chunked_scalar_<ChunkSize, MaxCompiledPieces>(
-        seq, common_spaced_kmer_span_<Mask::max_span>(masks), masks, encoder, bit_ext, scratch,
-        callback
+    detail::for_each_spaced_kmer_ascii_chunked_scalar<ChunkSize, MaxCompiledPieces>(
+        seq, detail::common_spaced_kmer_span<Mask::max_span>(masks), masks, encoder, bit_ext,
+        scratch, callback
     );
 }
 
@@ -160,7 +164,7 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_scalar(
 ) {
     for_each_spaced_kmer_ascii_unchecked_chunked_scalar<ChunkSize, MaxCompiledPieces>(
         seq, mask, encoder, std::forward<BitExtract>(bit_ext),
-        ascii_chunked_buffer_<PackedSequence<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<PackedSequence<Encoder::encoding, Encoder::layout>>(),
         std::forward<Callback>(callback)
     );
 }
@@ -182,7 +186,7 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_scalar(
 ) {
     for_each_spaced_kmer_ascii_unchecked_chunked_scalar<ChunkSize, MaxCompiledPieces>(
         seq, masks, encoder, std::forward<BitExtract>(bit_ext),
-        ascii_chunked_buffer_<PackedSequence<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<PackedSequence<Encoder::encoding, Encoder::layout>>(),
         std::forward<Callback>(callback)
     );
 }
@@ -212,9 +216,9 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_scalar(
     std::string_view seq, Mask const& mask, Encoder const& encoder, BitExtract&& bit_ext,
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& scratch, Callback&& callback
 ) {
-    for_each_spaced_kmer_ascii_chunked_scalar_<ChunkSize, MaxCompiledPieces>(
-        seq, check_spaced_kmer_span_<Mask::max_span>(mask.span_k), mask, encoder, bit_ext, scratch,
-        callback
+    detail::for_each_spaced_kmer_ascii_chunked_scalar<ChunkSize, MaxCompiledPieces>(
+        seq, detail::check_spaced_kmer_span<Mask::max_span>(mask.span_k), mask, encoder, bit_ext,
+        scratch, callback
     );
 }
 
@@ -236,9 +240,9 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_scalar(
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& scratch, Callback&& callback
 ) {
     static_assert(N > 0, "Need at least one mask.");
-    for_each_spaced_kmer_ascii_chunked_scalar_<ChunkSize, MaxCompiledPieces>(
-        seq, common_spaced_kmer_span_<Mask::max_span>(masks), masks, encoder, bit_ext, scratch,
-        callback
+    detail::for_each_spaced_kmer_ascii_chunked_scalar<ChunkSize, MaxCompiledPieces>(
+        seq, detail::common_spaced_kmer_span<Mask::max_span>(masks), masks, encoder, bit_ext,
+        scratch, callback
     );
 }
 
@@ -258,7 +262,9 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_scalar(
 ) {
     for_each_spaced_kmer_ascii_checked_chunked_scalar<ChunkSize, MaxCompiledPieces>(
         seq, mask, encoder, std::forward<BitExtract>(bit_ext),
-        ascii_chunked_buffer_<PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<
+            PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>
+        >(),
         std::forward<Callback>(callback)
     );
 }
@@ -280,7 +286,9 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_scalar(
 ) {
     for_each_spaced_kmer_ascii_checked_chunked_scalar<ChunkSize, MaxCompiledPieces>(
         seq, masks, encoder, std::forward<BitExtract>(bit_ext),
-        ascii_chunked_buffer_<PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<
+            PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>
+        >(),
         std::forward<Callback>(callback)
     );
 }

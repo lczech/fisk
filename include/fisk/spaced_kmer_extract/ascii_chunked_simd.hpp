@@ -39,20 +39,22 @@ namespace fisk {
 //     Internal Helpers
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 // The shared implementation of the functions below, see
-// for_each_spaced_kmer_ascii_chunked_scalar_() (ascii_chunked_scalar.hpp).
+// for_each_spaced_kmer_ascii_chunked_scalar() (ascii_chunked_scalar.hpp).
 template <
     std::size_t ChunkSize, std::size_t MaxCompiledPieces, WordEncoder Encoder,
     PackedSequenceType PackedSequenceChunk, typename KernelMask, std::size_t N, typename Callback
 >
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_spaced_kmer_ascii_chunked_simd_(
+inline void for_each_spaced_kmer_ascii_chunked_simd(
     std::string_view seq, std::span<KernelMask, N> kernels, Encoder const& encoder,
     PackedSequenceChunk& scratch, Callback& callback
 ) {
     static_assert(N > 0, "Need at least one kernel.");
-    for_each_ascii_chunk_<ChunkSize>(
-        seq, common_spaced_kmer_span_<std::remove_const_t<KernelMask>::max_span>(kernels), encoder,
+    for_each_ascii_chunk<ChunkSize>(
+        seq, common_spaced_kmer_span<std::remove_const_t<KernelMask>::max_span>(kernels), encoder,
         scratch, callback,
         [&](auto const& chunk, auto const& chunk_func) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (PackedSequenceWithValidityType<PackedSequenceChunk>) {
@@ -67,6 +69,8 @@ inline void for_each_spaced_kmer_ascii_chunked_simd_(
         }
     );
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     for_each_spaced_kmer_ascii_unchecked_chunked_simd()
@@ -104,7 +108,7 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_simd(
     std::string_view seq, std::span<KernelMask, N> kernels, Encoder const& encoder,
     PackedSequence<Encoder::encoding, Encoder::layout>& scratch, Callback&& callback
 ) {
-    for_each_spaced_kmer_ascii_chunked_simd_<ChunkSize, MaxCompiledPieces>(
+    detail::for_each_spaced_kmer_ascii_chunked_simd<ChunkSize, MaxCompiledPieces>(
         seq, kernels, encoder, scratch, callback
     );
 }
@@ -127,7 +131,7 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_simd(
     // A copy of the kernel of the caller, so that the loop can keep its values in registers: with
     // a reference, it would have to reload them after each store, which might change them.
     std::array<SpacedKmerMask<L, Kernel, MaxSpan>, 1> const kernels{{kernel}};
-    for_each_spaced_kmer_ascii_chunked_simd_<ChunkSize, MaxCompiledPieces>(
+    detail::for_each_spaced_kmer_ascii_chunked_simd<ChunkSize, MaxCompiledPieces>(
         seq, std::span{kernels}, encoder, scratch, callback
     );
 }
@@ -150,7 +154,7 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_simd(
 ) {
     for_each_spaced_kmer_ascii_unchecked_chunked_simd<ChunkSize, MaxCompiledPieces>(
         seq, kernels, encoder,
-        ascii_chunked_buffer_<PackedSequence<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<PackedSequence<Encoder::encoding, Encoder::layout>>(),
         std::forward<Callback>(callback)
     );
 }
@@ -171,7 +175,7 @@ inline void for_each_spaced_kmer_ascii_unchecked_chunked_simd(
 ) {
     for_each_spaced_kmer_ascii_unchecked_chunked_simd<ChunkSize, MaxCompiledPieces>(
         seq, kernel, encoder,
-        ascii_chunked_buffer_<PackedSequence<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<PackedSequence<Encoder::encoding, Encoder::layout>>(),
         std::forward<Callback>(callback)
     );
 }
@@ -203,7 +207,7 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_simd(
     std::string_view seq, std::span<KernelMask, N> kernels, Encoder const& encoder,
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& scratch, Callback&& callback
 ) {
-    for_each_spaced_kmer_ascii_chunked_simd_<ChunkSize, MaxCompiledPieces>(
+    detail::for_each_spaced_kmer_ascii_chunked_simd<ChunkSize, MaxCompiledPieces>(
         seq, kernels, encoder, scratch, callback
     );
 }
@@ -226,7 +230,7 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_simd(
     // A copy of the kernel of the caller, so that the loop can keep its values in registers: with
     // a reference, it would have to reload them after each store, which might change them.
     std::array<SpacedKmerMask<L, Kernel, MaxSpan>, 1> const kernels{{kernel}};
-    for_each_spaced_kmer_ascii_chunked_simd_<ChunkSize, MaxCompiledPieces>(
+    detail::for_each_spaced_kmer_ascii_chunked_simd<ChunkSize, MaxCompiledPieces>(
         seq, std::span{kernels}, encoder, scratch, callback
     );
 }
@@ -249,7 +253,9 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_simd(
 ) {
     for_each_spaced_kmer_ascii_checked_chunked_simd<ChunkSize, MaxCompiledPieces>(
         seq, kernels, encoder,
-        ascii_chunked_buffer_<PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<
+            PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>
+        >(),
         std::forward<Callback>(callback)
     );
 }
@@ -270,7 +276,9 @@ inline void for_each_spaced_kmer_ascii_checked_chunked_simd(
 ) {
     for_each_spaced_kmer_ascii_checked_chunked_simd<ChunkSize, MaxCompiledPieces>(
         seq, kernel, encoder,
-        ascii_chunked_buffer_<PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>>(),
+        detail::ascii_chunked_buffer<
+            PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>
+        >(),
         std::forward<Callback>(callback)
     );
 }

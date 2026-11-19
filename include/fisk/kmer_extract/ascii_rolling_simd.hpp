@@ -33,8 +33,8 @@ namespace fisk {
  *
  * Encodes and checks the characters in blocks of `8 * Simd::lanes`, then rolls the k-mers over
  * each block, with a tight inner loop for fully valid blocks, see
- * for_each_kmer_ascii_checked_rolling_block_(). The characters after the last whole block take the
- * scalar path, see for_each_kmer_ascii_checked_rolling_tail_().
+ * for_each_kmer_ascii_checked_rolling_block(). The characters after the last whole block take the
+ * scalar path, see for_each_kmer_ascii_checked_rolling_tail().
  *
  * Invalid characters reset the valid-window state and suppress any overlapping k-mers.
  *
@@ -56,7 +56,7 @@ inline void for_each_kmer_ascii_checked_rolling_simd(
     std::string_view seq, std::size_t k, Func&& func
 ) {
     if (k == 0 || k > 32) {
-        throw_invalid_kmer_k_(32);
+        detail::throw_invalid_kmer_k(32);
     }
     if (seq.size() < k) {
         return;
@@ -83,15 +83,15 @@ inline void for_each_kmer_ascii_checked_rolling_simd(
 
     for (; i + width <= seq_len; i += width) {
         typename Simd::simd_vector const chars = Simd::load_unaligned(data + i);
-        Simd::store_aligned(nucleotide_code_bytes<E, Simd>(chars), codes.data());
-        for_each_kmer_ascii_checked_rolling_block_<E, L, width>(
-            code_bytes, valid_nucleotide_bits<Simd>(chars), i, k, mask, top_shift, kmer, valid,
-            std::forward<Func>(func)
+        Simd::store_aligned(detail::nucleotide_code_bytes<E, Simd>(chars), codes.data());
+        detail::for_each_kmer_ascii_checked_rolling_block<E, L, width>(
+            code_bytes, detail::valid_nucleotide_bits<Simd>(chars), i, k, mask, top_shift, kmer,
+            valid, std::forward<Func>(func)
         );
     }
 
     // Scalar tail.
-    for_each_kmer_ascii_checked_rolling_tail_<E, L>(
+    detail::for_each_kmer_ascii_checked_rolling_tail<E, L>(
         data, i, seq_len, k, mask, top_shift, kmer, valid, std::forward<Func>(func)
     );
 }

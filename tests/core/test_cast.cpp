@@ -26,13 +26,15 @@ using KmerVectorScalar = KmerVector<Encoding::kACGT, Layout::kMSB, SimdScalar>;
 
 static_assert(std::is_same_v<decltype(kmer_value(KmerVectorScalar{})), std::uint64_t>);
 
+using detail::fits_width;
+
 // The predicate behind the debug check in kmer_cast(): a word fits a width iff it has no bits set
 // above it, including at the boundary widths 1 and 32.
-static_assert(fits_width_(0x06, 3) && fits_width_(0x3F, 3));
-static_assert(!fits_width_(0x40, 3));
-static_assert(fits_width_(0x3, 1) && !fits_width_(0x4, 1));
-static_assert(fits_width_(std::uint64_t{1} << 61, 31) && !fits_width_(std::uint64_t{1} << 62, 31));
-static_assert(fits_width_(~std::uint64_t{0}, 32));
+static_assert(fits_width(0x06, 3) && fits_width(0x3F, 3));
+static_assert(!fits_width(0x40, 3));
+static_assert(fits_width(0x3, 1) && !fits_width(0x4, 1));
+static_assert(fits_width(std::uint64_t{1} << 61, 31) && !fits_width(std::uint64_t{1} << 62, 31));
+static_assert(fits_width(~std::uint64_t{0}, 32));
 
 // -------------------------------------------------------------------------------------------------
 //     Value Round Trip

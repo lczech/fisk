@@ -22,6 +22,8 @@ namespace fisk {
 //     Forms Tuple
 // =================================================================================================
 
+namespace detail {
+
 /**
  * @brief The masks of a SpacedKmerMaskForms, as a std::tuple of one std::array of
  * `MaxMasks` spaced k-mer masks of a span up to `MaxSpan` per form: the masks as given, in the
@@ -31,10 +33,10 @@ namespace fisk {
 template <
     Layout L, std::size_t MaxMasks, std::size_t MaxSpan, typename Simds = CandidateSimdArchs
 >
-struct spaced_kmer_mask_forms_tuple_;
+struct spaced_kmer_mask_forms_tuple;
 
 template <Layout L, std::size_t MaxMasks, std::size_t MaxSpan, typename... Simd>
-struct spaced_kmer_mask_forms_tuple_<L, MaxMasks, MaxSpan, TypeList<Simd...>>
+struct spaced_kmer_mask_forms_tuple<L, MaxMasks, MaxSpan, TypeList<Simd...>>
 {
     template <typename BitExtractForm>
     using MaskForms = std::array<SpacedKmerMask<L, BitExtractForm, MaxSpan>, MaxMasks>;
@@ -45,6 +47,8 @@ struct spaced_kmer_mask_forms_tuple_<L, MaxMasks, MaxSpan, TypeList<Simd...>>
         MaskForms<BitExtractKernelButterfly<Simd>>...
     >;
 };
+
+} // namespace detail
 
 // =================================================================================================
 //     Spaced K-mer Mask Forms
@@ -86,11 +90,11 @@ class SpacedKmerMaskForms
 {
     static_assert(MaxMasks >= 1, "SpacedKmerMaskForms needs MaxMasks >= 1.");
 
-    using Forms = typename spaced_kmer_mask_forms_tuple_<L, MaxMasks, MaxSpan>::type;
+    using Forms = typename detail::spaced_kmer_mask_forms_tuple<L, MaxMasks, MaxSpan>::type;
 
     template <typename BitExtractForm>
     using MaskForms =
-        typename spaced_kmer_mask_forms_tuple_<L, MaxMasks, MaxSpan>::template MaskForms<
+        typename detail::spaced_kmer_mask_forms_tuple<L, MaxMasks, MaxSpan>::template MaskForms<
             BitExtractForm
         >;
 

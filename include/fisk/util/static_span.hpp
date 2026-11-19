@@ -15,17 +15,19 @@ namespace fisk {
 //     Static Span Dispatch
 // =================================================================================================
 
+namespace detail {
+
 /**
  * @brief Helper for dispatch_static_span(): call `f` with the span of size `N` if `n == N`, or go
  * on with `N + 1`, up to `MaxN`.
  */
 template <typename T, std::size_t N, std::size_t MaxN, typename F>
 FISK_ALWAYS_INLINE
-inline decltype(auto) dispatch_static_span_(T* data, std::size_t n, F& f)
+inline decltype(auto) dispatch_static_span_step(T* data, std::size_t n, F& f)
 {
     if constexpr (N < MaxN) {
         if (n != N) {
-            return dispatch_static_span_<T, N + 1, MaxN>(data, n, f);
+            return dispatch_static_span_step<T, N + 1, MaxN>(data, n, f);
         }
     }
     return f(std::span<T, N>(data, N));
@@ -38,7 +40,7 @@ inline decltype(auto) dispatch_static_span_(T* data, std::size_t n, F& f)
  * dispatch_static_span() and the loops that `f` runs are inlined.
  */
 FISK_NOINLINE_COLD
-inline void throw_invalid_static_span_size_(std::size_t n, std::size_t max_n)
+inline void throw_invalid_static_span_size(std::size_t n, std::size_t max_n)
 {
     if (n == 0) {
         throw std::invalid_argument("dispatch_static_span(): the range is empty");
@@ -50,6 +52,8 @@ inline void throw_invalid_static_span_size_(std::size_t n, std::size_t max_n)
         "CMake option or macro FISK_DEFAULT_MAX_MASKS."
     );
 }
+
+} // namespace detail
 
 /**
  * @brief Call a function with a span of compile-time size over the elements of a contiguous range.
@@ -76,9 +80,9 @@ inline decltype(auto) dispatch_static_span(Range const& range, F&& f)
 
     std::size_t const n = std::size(range);
     if (n == 0 || n > MaxN) {
-        throw_invalid_static_span_size_(n, MaxN);
+        detail::throw_invalid_static_span_size(n, MaxN);
     }
-    return dispatch_static_span_<T, 1, MaxN>(std::data(range), n, f);
+    return detail::dispatch_static_span_step<T, 1, MaxN>(std::data(range), n, f);
 }
 
 } // namespace fisk

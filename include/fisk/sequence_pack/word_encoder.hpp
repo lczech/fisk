@@ -64,27 +64,29 @@ concept WordEncoder = requires(T const encoder, std::uint64_t word) {
     { encoder(word) } -> std::convertible_to<std::uint64_t>;
 };
 
+namespace detail {
+
 /**
  * @brief Mask selecting the two code-bearing bits of every ASCII byte, for a given encoding.
  *
- * This is where the two bits end up after pack_prepare_codes_(): bits 0-1 of every byte for ACGT,
+ * This is where the two bits end up after pack_prepare_codes(): bits 0-1 of every byte for ACGT,
  * which it computes explicitly; bits 1-2 for ACTG, which sit there in the raw byte already.
  */
 template <Encoding E>
-inline constexpr std::uint64_t pack_mask_() noexcept
+inline constexpr std::uint64_t pack_mask() noexcept
 {
     if constexpr (E == Encoding::kACGT) {
         return 0x0303030303030303ULL;
     } else if constexpr (E == Encoding::kACTG) {
         return 0x0606060606060606ULL;
     } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in pack_mask_()");
+        static_assert(dependent_false_v<E>, "Unhandled Encoding in pack_mask()");
         return 0;
     }
 }
 
 template <Encoding E>
-inline constexpr std::uint64_t pack_mask_v = pack_mask_<E>();
+inline constexpr std::uint64_t pack_mask_v = pack_mask<E>();
 
 /**
  * @brief Apply the per-encoding pre-transform that puts the 2-bit codes under pack_mask_v.
@@ -95,14 +97,14 @@ inline constexpr std::uint64_t pack_mask_v = pack_mask_<E>();
  * together.
  */
 template <Encoding E>
-inline constexpr std::uint64_t pack_prepare_codes_(std::uint64_t word) noexcept
+inline constexpr std::uint64_t pack_prepare_codes(std::uint64_t word) noexcept
 {
     if constexpr (E == Encoding::kACGT) {
         return ((word >> 1) ^ (word >> 2)) & pack_mask_v<E>;
     } else if constexpr (E == Encoding::kACTG) {
         return word;
     } else {
-        static_assert(dependent_false_v<E>, "Unhandled Encoding in pack_prepare_codes_()");
+        static_assert(dependent_false_v<E>, "Unhandled Encoding in pack_prepare_codes()");
         return 0;
     }
 }
@@ -114,27 +116,31 @@ inline constexpr std::uint64_t pack_prepare_codes_(std::uint64_t word) noexcept
  * LSB, which is the order a little-endian load already gives.
  */
 template <Layout L>
-inline constexpr std::uint64_t pack_orient_chunk_(std::uint64_t word) noexcept
+inline constexpr std::uint64_t pack_orient_chunk(std::uint64_t word) noexcept
 {
     if constexpr (L == Layout::kMSB) {
         return byte_swap_64(word);
     } else if constexpr (L == Layout::kLSB) {
         return word;
     } else {
-        static_assert(dependent_false_v<L>, "Unhandled Layout in pack_orient_chunk_()");
+        static_assert(dependent_false_v<L>, "Unhandled Layout in pack_orient_chunk()");
         return 0;
     }
 }
+
+} // namespace detail
 
 // -----------------------------------------------------------------------------
 //     Nucleotide Validity
 // -----------------------------------------------------------------------------
 
+namespace detail {
+
 // For each value of the low four bits of a character, the one valid nucleotide with these bits,
 // in lower case, or zero if there is none. Setting bit 5 of a character, which turns upper case
 // into lower case, does not change its low four bits, so that a character is valid if it equals
 // its entry here after setting bit 5. Zero never equals a character with bit 5 set.
-inline constexpr std::array<std::uint8_t, 16> valid_nucleotide_table_ = [] {
+inline constexpr std::array<std::uint8_t, 16> valid_nucleotide_table = [] {
     std::array<std::uint8_t, 16> table{};
     for (char const c : {'a', 'c', 'g', 't'}) {
         table[static_cast<std::uint8_t>(c) & 0x0F] = static_cast<std::uint8_t>(c);
@@ -143,16 +149,16 @@ inline constexpr std::array<std::uint8_t, 16> valid_nucleotide_table_ = [] {
 }();
 
 // Form of valid_nucleotide_bits() for archs with a byte shuffle: compare each character, set to
-// lower case, to its entry in valid_nucleotide_table_.
+// lower case, to its entry in valid_nucleotide_table.
 template <SimdArchWithByteShuffle Simd>
 FISK_ALWAYS_INLINE
-inline std::uint64_t valid_nucleotide_bits_lookup_(typename Simd::simd_vector v) noexcept
+inline std::uint64_t valid_nucleotide_bits_lookup(typename Simd::simd_vector v) noexcept
 {
     typename Simd::simd_vector const lower = Simd::bitwise_or(
         v, Simd::broadcast(0x2020202020202020ULL)
     );
     return Simd::compare_eq_bytes_to_bits(
-        lower, Simd::lookup_low_nibbles(lower, valid_nucleotide_table_)
+        lower, Simd::lookup_low_nibbles(lower, valid_nucleotide_table)
     );
 }
 
@@ -160,7 +166,7 @@ inline std::uint64_t valid_nucleotide_bits_lookup_(typename Simd::simd_vector v)
 // each of the four nucleotides.
 template <SimdArch Simd>
 FISK_ALWAYS_INLINE
-inline std::uint64_t valid_nucleotide_bits_compare_(typename Simd::simd_vector v) noexcept
+inline std::uint64_t valid_nucleotide_bits_compare(typename Simd::simd_vector v) noexcept
 {
     typename Simd::simd_vector const lower = Simd::bitwise_or(
         v, Simd::broadcast(0x2020202020202020ULL)
@@ -176,7 +182,7 @@ inline std::uint64_t valid_nucleotide_bits_compare_(typename Simd::simd_vector v
 // The sum within its low seven bits then has no carry into bit 7, which keeps the test exact, and
 // it combines the four nucleotides with one AND before gathering the eight bits by multiplication.
 FISK_ALWAYS_INLINE
-inline std::uint64_t valid_nucleotide_bits_swar_(std::uint64_t word) noexcept
+inline std::uint64_t valid_nucleotide_bits_swar(std::uint64_t word) noexcept
 {
     constexpr std::uint64_t low7 = 0x7F7F7F7F7F7F7F7FULL;
     std::uint64_t const lower = word | 0x2020202020202020ULL;
@@ -201,12 +207,12 @@ FISK_ALWAYS_INLINE
 inline std::uint64_t valid_nucleotide_bits(typename Simd::simd_vector v) noexcept
 {
     if constexpr (SimdArchWithByteShuffle<Simd>) {
-        return valid_nucleotide_bits_lookup_<Simd>(v);
+        return valid_nucleotide_bits_lookup<Simd>(v);
     } else if constexpr (Simd::lanes > 1) {
-        return valid_nucleotide_bits_compare_<Simd>(v);
+        return valid_nucleotide_bits_compare<Simd>(v);
     } else {
         static_assert(std::same_as<Simd, SimdScalar>, "Unhandled SIMD arch with a single lane");
-        return valid_nucleotide_bits_swar_(v);
+        return valid_nucleotide_bits_swar(v);
     }
 }
 
@@ -214,23 +220,27 @@ inline std::uint64_t valid_nucleotide_bits(typename Simd::simd_vector v) noexcep
 // `store_valid_bits()` of the word encoders.
 template <SimdArch Simd>
 FISK_ALWAYS_INLINE
-inline void store_valid_nucleotide_bits_(typename Simd::simd_vector v, std::uint8_t* out) noexcept
+inline void store_valid_nucleotide_bits(typename Simd::simd_vector v, std::uint8_t* out) noexcept
 {
     std::uint64_t const bits = valid_nucleotide_bits<Simd>(v);
     std::memcpy(out, &bits, Simd::lanes);
 }
 
+} // namespace detail
+
 // -----------------------------------------------------------------------------
 //     Nucleotide Codes
 // -----------------------------------------------------------------------------
 
+namespace detail {
+
 // The code of Encoding `E` of a character, for each value of its low four bits, which are all that
 // the code depends on.
 template <Encoding E>
-inline constexpr std::array<std::uint8_t, 16> nucleotide_code_table_ = [] {
+inline constexpr std::array<std::uint8_t, 16> nucleotide_code_table = [] {
     std::array<std::uint8_t, 16> table{};
     for (std::uint64_t nibble = 0; nibble < table.size(); ++nibble) {
-        std::uint64_t const code = pack_prepare_codes_<E>(nibble) & pack_mask_v<E>;
+        std::uint64_t const code = pack_prepare_codes<E>(nibble) & pack_mask_v<E>;
         table[nibble] = static_cast<std::uint8_t>(code >> std::countr_zero(pack_mask_v<E>));
     }
     return table;
@@ -250,7 +260,7 @@ FISK_ALWAYS_INLINE
 inline typename Simd::simd_vector nucleotide_code_bytes(typename Simd::simd_vector v) noexcept
 {
     if constexpr (SimdArchWithByteShuffle<Simd>) {
-        return Simd::lookup_low_nibbles(v, nucleotide_code_table_<E>);
+        return Simd::lookup_low_nibbles(v, nucleotide_code_table<E>);
     } else {
         if constexpr (E == Encoding::kACGT) {
             v = Simd::bitwise_xor(
@@ -264,6 +274,8 @@ inline typename Simd::simd_vector nucleotide_code_bytes(typename Simd::simd_vect
         return Simd::bitwise_and(v, Simd::broadcast(0x0303030303030303ULL));
     }
 }
+
+} // namespace detail
 
 // =================================================================================================
 //     Word Encoder Pext
@@ -302,7 +314,7 @@ struct WordEncoderPext
         return x;
     }
 
-    // Each code holds the 8 nucleotides of its word in its low 16 bits, see write_two_bit_chunk_().
+    // Each code holds the 8 nucleotides of its word in its low 16 bits, see write_two_bit_chunk().
     // Two or four of them make up one store. For MSB, the two bytes of each code have to be
     // swapped: putting the codes together in reverse order and swapping all bytes does that at
     // once.
@@ -317,9 +329,9 @@ struct WordEncoderPext
                     packed |= codes[i + j] << (16 * (group - 1 - j));
                 }
                 if constexpr (group == 4) {
-                    packed = byte_swap_64(packed);
+                    packed = detail::byte_swap_64(packed);
                 } else {
-                    packed = byte_swap_32(static_cast<std::uint32_t>(packed));
+                    packed = detail::byte_swap_32(static_cast<std::uint32_t>(packed));
                 }
             } else if constexpr (L == Layout::kLSB) {
                 for (std::size_t j = 0; j < group; ++j) {
@@ -327,7 +339,8 @@ struct WordEncoderPext
                 }
             } else {
                 static_assert(
-                    dependent_false_v<L>, "Unhandled Layout in WordEncoderPext::store_packed()"
+                    detail::dependent_false_v<L>,
+                    "Unhandled Layout in WordEncoderPext::store_packed()"
                 );
             }
             std::memcpy(out + 2 * i, &packed, 2 * group);
@@ -336,10 +349,10 @@ struct WordEncoderPext
 
     static void store_valid_bits(simd_vector const& x, std::uint8_t* out) noexcept
     {
-        store_valid_nucleotide_bits_<Simd>(x.vector, out);
+        detail::store_valid_nucleotide_bits<Simd>(x.vector, out);
     }
 
-    // The steps of pack_orient_chunk_() and pack_prepare_codes_() are done for all words at once,
+    // The steps of pack_orient_chunk() and pack_prepare_codes() are done for all words at once,
     // and then replace the loaded words. The store forwards to the loads of the words.
     FISK_ALWAYS_INLINE
     std::array<std::uint64_t, lanes> operator()(simd_vector const& x) const noexcept
@@ -356,22 +369,22 @@ struct WordEncoderPext
                     Simd::bitwise_xor(
                         Simd::template shift_right<1>(v), Simd::template shift_right<2>(v)
                     ),
-                    Simd::broadcast(pack_mask_v<E>)
+                    Simd::broadcast(detail::pack_mask_v<E>)
                 );
             }
             Simd::store_aligned(v, words.data());
         }
         std::array<std::uint64_t, lanes> codes;
         for (std::size_t i = 0; i < lanes; ++i) {
-            codes[i] = bit_extract_pext(words[i], BitExtractMask(pack_mask_v<E>));
+            codes[i] = bit_extract_pext(words[i], BitExtractMask(detail::pack_mask_v<E>));
         }
         return codes;
     }
 
     inline std::uint64_t operator()(std::uint64_t word) const noexcept
     {
-        word = pack_prepare_codes_<E>(pack_orient_chunk_<L>(word));
-        return bit_extract_pext(word, BitExtractMask(pack_mask_v<E>));
+        word = detail::pack_prepare_codes<E>(detail::pack_orient_chunk<L>(word));
+        return bit_extract_pext(word, BitExtractMask(detail::pack_mask_v<E>));
     }
 };
 
@@ -406,14 +419,14 @@ struct WordEncoderButterfly
     using simd_vector = typename Simd::simd_vector;
 
     static constexpr BitExtractButterflyMask table =
-        make_bit_extract_butterfly_mask(pack_mask_v<E>);
+        make_bit_extract_butterfly_mask(detail::pack_mask_v<E>);
 
     static simd_vector load_unaligned(void const* a) noexcept
     {
         return Simd::load_unaligned(a);
     }
 
-    // Each lane holds its 8 nucleotides in its low 16 bits, see write_two_bit_chunk_().
+    // Each lane holds its 8 nucleotides in its low 16 bits, see write_two_bit_chunk().
     static void store_packed(simd_vector const& v, char* out) noexcept
     {
         if constexpr (L == Layout::kMSB) {
@@ -422,14 +435,15 @@ struct WordEncoderButterfly
             Simd::template store_truncated_u16<false>(v, out);
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in WordEncoderButterfly::store_packed()"
+                detail::dependent_false_v<L>,
+                "Unhandled Layout in WordEncoderButterfly::store_packed()"
             );
         }
     }
 
     static void store_valid_bits(simd_vector const& v, std::uint8_t* out) noexcept
     {
-        store_valid_nucleotide_bits_<Simd>(v, out);
+        detail::store_valid_nucleotide_bits<Simd>(v, out);
     }
 
     // For SimdScalar, the vector is a single word, which is encoded by the call operator below.
@@ -443,19 +457,20 @@ struct WordEncoderButterfly
             // A little-endian load already has the nucleotides in order.
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in WordEncoderButterfly::operator()"
+                detail::dependent_false_v<L>, "Unhandled Layout in WordEncoderButterfly::operator()"
             );
         }
         if constexpr (E == Encoding::kACGT) {
             simd_vector const s1 = Simd::template shift_right<1>(x);
             simd_vector const s2 = Simd::template shift_right<2>(x);
-            simd_vector const acgt_mask = Simd::broadcast(pack_mask_v<Encoding::kACGT>);
+            simd_vector const acgt_mask = Simd::broadcast(detail::pack_mask_v<Encoding::kACGT>);
             x = Simd::bitwise_and(Simd::bitwise_xor(s1, s2), acgt_mask);
         } else if constexpr (E == Encoding::kACTG) {
-            // The codes already sit in bits 1-2 of each byte, see pack_prepare_codes_().
+            // The codes already sit in bits 1-2 of each byte, see pack_prepare_codes().
         } else {
             static_assert(
-                dependent_false_v<E>, "Unhandled Encoding in WordEncoderButterfly::operator()"
+                detail::dependent_false_v<E>,
+                "Unhandled Encoding in WordEncoderButterfly::operator()"
             );
         }
         return BitExtractKernelButterfly<Simd>::bit_extract(x, table);
@@ -465,7 +480,7 @@ struct WordEncoderButterfly
     std::uint64_t operator()(std::uint64_t word) const noexcept
     {
         return bit_extract_butterfly(
-            pack_prepare_codes_<E>(pack_orient_chunk_<L>(word)), table
+            detail::pack_prepare_codes<E>(detail::pack_orient_chunk<L>(word)), table
         );
     }
 };
@@ -499,7 +514,7 @@ struct WordEncoderFold
         return Simd::load_unaligned(a);
     }
 
-    // Each lane holds its 8 nucleotides in its low 16 bits, see write_two_bit_chunk_().
+    // Each lane holds its 8 nucleotides in its low 16 bits, see write_two_bit_chunk().
     static void store_packed(simd_vector const& v, char* out) noexcept
     {
         if constexpr (L == Layout::kMSB) {
@@ -508,14 +523,14 @@ struct WordEncoderFold
             Simd::template store_truncated_u16<false>(v, out);
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in WordEncoderFold::store_packed()"
+                detail::dependent_false_v<L>, "Unhandled Layout in WordEncoderFold::store_packed()"
             );
         }
     }
 
     static void store_valid_bits(simd_vector const& v, std::uint8_t* out) noexcept
     {
-        store_valid_nucleotide_bits_<Simd>(v, out);
+        detail::store_valid_nucleotide_bits<Simd>(v, out);
     }
 
     // For SimdScalar, the vector is a single word, which is encoded by the call operator below.
@@ -544,19 +559,19 @@ private:
         } else if constexpr (L == Layout::kLSB) {
             // A little-endian load already has the nucleotides in order.
         } else {
-            static_assert(dependent_false_v<L>, "Unhandled Layout in WordEncoderFold");
+            static_assert(detail::dependent_false_v<L>, "Unhandled Layout in WordEncoderFold");
         }
         if constexpr (E == Encoding::kACGT) {
             x = S::bitwise_xor(S::template shift_right<1>(x), S::template shift_right<2>(x));
         } else if constexpr (E == Encoding::kACTG) {
-            // The codes already sit in bits 1-2 of each byte, see pack_prepare_codes_().
+            // The codes already sit in bits 1-2 of each byte, see pack_prepare_codes().
         } else {
-            static_assert(dependent_false_v<E>, "Unhandled Encoding in WordEncoderFold");
+            static_assert(detail::dependent_false_v<E>, "Unhandled Encoding in WordEncoderFold");
         }
 
         // Bit offset of the codes within their bytes, which the folded codes keep until the end.
-        constexpr int offset = std::countr_zero(pack_mask_v<E>);
-        x = S::bitwise_and(x, S::broadcast(pack_mask_v<E>));
+        constexpr int offset = std::countr_zero(detail::pack_mask_v<E>);
+        x = S::bitwise_and(x, S::broadcast(detail::pack_mask_v<E>));
         x = S::bitwise_and(
             S::bitwise_or(x, S::template shift_right<6>(x)),
             S::broadcast(0x000F000F000F000FULL << offset)
@@ -613,14 +628,15 @@ struct WordEncoderDirect
             Simd::template store_two_bit_codes<false>(v, out);
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in WordEncoderDirect::store_packed()"
+                detail::dependent_false_v<L>,
+                "Unhandled Layout in WordEncoderDirect::store_packed()"
             );
         }
     }
 
     static void store_valid_bits(simd_vector const& v, std::uint8_t* out) noexcept
     {
-        store_valid_nucleotide_bits_<Simd>(v, out);
+        detail::store_valid_nucleotide_bits<Simd>(v, out);
     }
 
     // For SimdScalar, the vector is a single word, which is encoded by the call operator below.
@@ -628,14 +644,14 @@ struct WordEncoderDirect
     simd_vector operator()(simd_vector x) const noexcept
     requires (lanes > 1)
     {
-        return nucleotide_code_bytes<E, Simd>(x);
+        return detail::nucleotide_code_bytes<E, Simd>(x);
     }
 
     FISK_ALWAYS_INLINE
     std::uint64_t operator()(std::uint64_t word) const noexcept
     {
         return SimdScalar::pack_two_bit_codes_(
-            nucleotide_code_bytes<E, SimdScalar>(pack_orient_chunk_<L>(word))
+            detail::nucleotide_code_bytes<E, SimdScalar>(detail::pack_orient_chunk<L>(word))
         );
     }
 };
@@ -683,23 +699,24 @@ struct WordEncoderDirectDouble : WordEncoderDirect<E, L, Simd>
             Simd::template store_two_bit_codes<false>(v.v[0], v.v[1], out);
         } else {
             static_assert(
-                dependent_false_v<L>, "Unhandled Layout in WordEncoderDirectDouble::store_packed()"
+                detail::dependent_false_v<L>,
+                "Unhandled Layout in WordEncoderDirectDouble::store_packed()"
             );
         }
     }
 
     static void store_valid_bits(simd_vector const& v, std::uint8_t* out) noexcept
     {
-        store_valid_nucleotide_bits_<Simd>(v.v[0], out);
-        store_valid_nucleotide_bits_<Simd>(v.v[1], out + Simd::lanes);
+        detail::store_valid_nucleotide_bits<Simd>(v.v[0], out);
+        detail::store_valid_nucleotide_bits<Simd>(v.v[1], out + Simd::lanes);
     }
 
     FISK_ALWAYS_INLINE
     simd_vector operator()(simd_vector const& x) const noexcept
     {
         return {{
-            nucleotide_code_bytes<E, Simd>(x.v[0]),
-            nucleotide_code_bytes<E, Simd>(x.v[1])
+            detail::nucleotide_code_bytes<E, Simd>(x.v[0]),
+            detail::nucleotide_code_bytes<E, Simd>(x.v[1])
         }};
     }
 

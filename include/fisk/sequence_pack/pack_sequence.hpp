@@ -21,11 +21,13 @@ namespace fisk {
 //     Chunk Write Helper
 // -----------------------------------------------------------------------------
 
+namespace detail {
+
 /**
  * @brief Write the packed nucleotides of one encoder call to `dest`, respecting `L`.
  */
 template <Layout L, int Bytes = 2>
-inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
+inline void write_two_bit_chunk(char* dest, std::uint64_t value) noexcept
 {
     // Each word encoder packs 8 nucleotides (16 bits) into the low bits of its return value. A byte
     // is the smallest addressable unit of PackedSequence's storage, so those 16 bits become 2
@@ -40,7 +42,7 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
     // tail chunk (<=4 real nucleotides) ever instantiates the 1-byte write, and byte 0 -- the first
     // of the two output bytes post-swap -- is the one holding those nucleotides in both layouts.
 
-    static_assert(Bytes == 1 || Bytes == 2, "write_two_bit_chunk_() only supports 1 or 2 bytes");
+    static_assert(Bytes == 1 || Bytes == 2, "write_two_bit_chunk() only supports 1 or 2 bytes");
     assert(dest != nullptr);
     assert(value <= 0xFFFF);
     std::uint16_t v16 = static_cast<std::uint16_t>(value);
@@ -49,14 +51,18 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
     } else if constexpr (L == Layout::kLSB) {
         // The bytes are already in output order.
     } else {
-        static_assert(dependent_false_v<L>, "Unhandled Layout in write_two_bit_chunk_()");
+        static_assert(dependent_false_v<L>, "Unhandled Layout in write_two_bit_chunk()");
     }
     std::memcpy(dest, &v16, Bytes);
 }
 
+} // namespace detail
+
 // -----------------------------------------------------------------------------
 //     Pack Loop
 // -----------------------------------------------------------------------------
+
+namespace detail {
 
 /**
  * @brief Pack `seq` into the codes at `codes`, and with `WithValidity`, also its validity bits
@@ -69,7 +75,7 @@ inline void write_two_bit_chunk_(char* dest, std::uint64_t value) noexcept
  */
 template <bool WithValidity, WordEncoder Encoder>
 FISK_ALWAYS_INLINE
-inline void pack_sequence_(
+inline void pack_sequence_loop(
     std::string_view seq,
     Encoder const& encoder,
     std::uint8_t* codes,
@@ -125,7 +131,7 @@ inline void pack_sequence_(
     // code for the codes as well as the validity.
     for (; i < words_end; i += 8) {
         std::uint64_t const word = read_chunk(i);
-        write_two_bit_chunk_<layout>(out_bytes + i / 4, encoder(word));
+        write_two_bit_chunk<layout>(out_bytes + i / 4, encoder(word));
         if constexpr (WithValidity) {
             valid[i / 8] = static_cast<std::uint8_t>(valid_nucleotide_bits<SimdScalar>(word));
         }
@@ -145,15 +151,17 @@ inline void pack_sequence_(
             std::memcpy(&word, data + i, remaining);
         }
         if (remaining <= 4) {
-            write_two_bit_chunk_<layout, 1>(out_bytes + i / 4, encoder(word));
+            write_two_bit_chunk<layout, 1>(out_bytes + i / 4, encoder(word));
         } else {
-            write_two_bit_chunk_<layout, 2>(out_bytes + i / 4, encoder(word));
+            write_two_bit_chunk<layout, 2>(out_bytes + i / 4, encoder(word));
         }
         if constexpr (WithValidity) {
             valid[i / 8] = static_cast<std::uint8_t>(valid_nucleotide_bits<SimdScalar>(word));
         }
     }
 }
+
+} // namespace detail
 
 // -----------------------------------------------------------------------------
 //     Pack Sequence Unchecked
@@ -164,7 +172,7 @@ inline void pack_sequence_(
  *
  * Processes the sequence in 8-byte chunks via `encoder` (see word_encoder.hpp), writing
  * each chunk's 16-bit result to its 2 sequential output bytes at `out.codes()[i/4 .. i/4+1]`, where
- * `i` is the chunk's starting byte offset into `seq` (see write_two_bit_chunk_() for the per-byte
+ * `i` is the chunk's starting byte offset into `seq` (see write_two_bit_chunk() for the per-byte
  * ordering). Encoders with more than one lane process `lanes` chunks at once, including the last
  * full chunks, in a vector that overlaps the previous one.
  *
@@ -185,7 +193,7 @@ inline void pack_sequence_unchecked(
 ) {
     // The storage of `out` is reused, without clearing the codes, which are all written below.
     out.resize(seq.size());
-    pack_sequence_<false>(seq, encoder, out.codes().data(), nullptr);
+    detail::pack_sequence_loop<false>(seq, encoder, out.codes().data(), nullptr);
 }
 
 /**
@@ -223,7 +231,7 @@ inline void pack_sequence_checked(
     PackedSequenceWithValidity<Encoder::encoding, Encoder::layout>& out
 ) {
     out.resize(seq.size());
-    pack_sequence_<true>(seq, encoder, out.codes().data(), out.validity().data());
+    detail::pack_sequence_loop<true>(seq, encoder, out.codes().data(), out.validity().data());
 }
 
 /**

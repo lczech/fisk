@@ -45,17 +45,19 @@ namespace fisk {
 // for the scalar loops, or a kernel for the SIMD loops: its name and availability. The masks in
 // these forms are in SpacedKmerMaskForms.
 
+namespace detail {
+
 template <typename BitExtractForm>
-struct is_bit_extract_kernel_butterfly_ : std::false_type {};
+struct is_bit_extract_kernel_butterfly : std::false_type {};
 
 template <typename Simd>
-struct is_bit_extract_kernel_butterfly_<BitExtractKernelButterfly<Simd>> : std::true_type {};
+struct is_bit_extract_kernel_butterfly<BitExtractKernelButterfly<Simd>> : std::true_type {};
 
 template <typename BitExtractForm>
-inline std::string spaced_kmer_candidate_bit_extract_name_()
+inline std::string spaced_kmer_candidate_bit_extract_name()
 {
-    if constexpr (is_bit_extract_kernel_butterfly_<BitExtractForm>::value) {
-        return "butterfly_" + simd_arch_name_<typename BitExtractForm::simd_arch>();
+    if constexpr (is_bit_extract_kernel_butterfly<BitExtractForm>::value) {
+        return "butterfly_" + simd_arch_name<typename BitExtractForm::simd_arch>();
     } else if constexpr (std::same_as<BitExtractForm, BitExtractButterflyMask>) {
         return "butterfly";
     }
@@ -70,34 +72,34 @@ inline std::string spaced_kmer_candidate_bit_extract_name_()
 }
 
 template <typename BitExtractForm>
-inline bool spaced_kmer_candidate_bit_extract_available_()
+inline bool spaced_kmer_candidate_bit_extract_available()
 {
     if constexpr (std::same_as<BitExtractForm, BitExtractButterflyMask>) {
         return true;
     } else if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
         return bmi2_enabled();
     } else {
-        return simd_arch_enabled_<typename BitExtractForm::simd_arch>();
+        return simd_arch_enabled<typename BitExtractForm::simd_arch>();
     }
 }
 
 // Whether the estimate may run the bit extraction of the masks of the form `BitExtractForm`, see
-// candidate_preferred_(): PEXT only where it is likely fast, as it is slow on some CPUs,
+// candidate_preferred(): PEXT only where it is likely fast, as it is slow on some CPUs,
 // see pext_likely_fast().
 template <typename BitExtractForm>
-inline bool spaced_kmer_candidate_bit_extract_preferred_()
+inline bool spaced_kmer_candidate_bit_extract_preferred()
 {
     #if defined(FISK_HAS_BMI2)
     if constexpr (std::same_as<BitExtractForm, BitExtractMask>) {
         return pext_likely_fast();
     }
     #endif
-    return spaced_kmer_candidate_bit_extract_available_<BitExtractForm>();
+    return spaced_kmer_candidate_bit_extract_available<BitExtractForm>();
 }
 
 // The scalar bit extraction of the masks of the form `BitExtractForm`.
 template <typename BitExtractForm>
-FISK_ALWAYS_INLINE inline auto spaced_kmer_candidate_bit_extract_()
+FISK_ALWAYS_INLINE inline auto spaced_kmer_candidate_bit_extract()
 {
     if constexpr (std::same_as<BitExtractForm, BitExtractButterflyMask>) {
         return bit_extract_butterfly;
@@ -112,14 +114,18 @@ FISK_ALWAYS_INLINE inline auto spaced_kmer_candidate_bit_extract_()
     }
 }
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Callbacks
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 // The callback that a SIMD candidate hands its vectors to: the vectors as they are, if `callback`
 // takes them, else their valid spaced k-mers one by one.
 template <typename Callback>
-FISK_ALWAYS_INLINE inline auto spaced_kmer_candidate_vector_callback_(Callback& callback)
+FISK_ALWAYS_INLINE inline auto spaced_kmer_candidate_vector_callback(Callback& callback)
 {
     return [&callback](
         std::size_t pos, std::size_t mask_idx, auto kmers, auto valid
@@ -139,6 +145,8 @@ FISK_ALWAYS_INLINE inline auto spaced_kmer_candidate_vector_callback_(Callback& 
     };
 }
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     ASCII
 // -------------------------------------------------------------------------------------------------
@@ -148,21 +156,23 @@ FISK_ALWAYS_INLINE inline auto spaced_kmer_candidate_vector_callback_(Callback& 
 // extraction inlines into for_each_spaced_kmer() (extraction/for_each.hpp). A callback that reaches
 // a function out of line keeps its state in memory in all of the extraction.
 
+namespace detail {
+
 template <InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename BitExtractForm>
 struct SpacedKmerCandidateAsciiChunkedScalar
 {
     static std::string name()
     {
-        return "for_each_spaced_kmer_ascii_" + input_check_name_(C) + "_chunked_scalar_" +
-            spaced_kmer_candidate_bit_extract_name_<BitExtractForm>();
+        return "for_each_spaced_kmer_ascii_" + input_check_name(C) + "_chunked_scalar_" +
+            spaced_kmer_candidate_bit_extract_name<BitExtractForm>();
     }
     static bool available()
     {
-        return spaced_kmer_candidate_bit_extract_available_<BitExtractForm>();
+        return spaced_kmer_candidate_bit_extract_available<BitExtractForm>();
     }
     static bool preferred()
     {
-        return spaced_kmer_candidate_bit_extract_preferred_<BitExtractForm>();
+        return spaced_kmer_candidate_bit_extract_preferred<BitExtractForm>();
     }
 
     template <std::size_t MaxSpan, typename Callback>
@@ -172,7 +182,7 @@ struct SpacedKmerCandidateAsciiChunkedScalar
     ) const
     {
         DefaultWordEncoder<E, L> const encoder{};
-        auto const bit_extract = spaced_kmer_candidate_bit_extract_<BitExtractForm>();
+        auto const bit_extract = spaced_kmer_candidate_bit_extract<BitExtractForm>();
         auto const& masks = mask_forms.template get<BitExtractForm>();
         dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (C == InputCheck::kChecked) {
@@ -193,11 +203,11 @@ struct SpacedKmerCandidateAsciiChunkedSimd
 {
     static std::string name()
     {
-        return "for_each_spaced_kmer_ascii_" + input_check_name_(C) + "_chunked_simd_" +
-            spaced_kmer_candidate_bit_extract_name_<Kernel>();
+        return "for_each_spaced_kmer_ascii_" + input_check_name(C) + "_chunked_simd_" +
+            spaced_kmer_candidate_bit_extract_name<Kernel>();
     }
-    static bool available() { return spaced_kmer_candidate_bit_extract_available_<Kernel>(); }
-    static bool preferred() { return spaced_kmer_candidate_bit_extract_preferred_<Kernel>(); }
+    static bool available() { return spaced_kmer_candidate_bit_extract_available<Kernel>(); }
+    static bool preferred() { return spaced_kmer_candidate_bit_extract_preferred<Kernel>(); }
 
     template <std::size_t MaxSpan, typename Callback>
     FISK_ALWAYS_INLINE void run(
@@ -206,7 +216,7 @@ struct SpacedKmerCandidateAsciiChunkedSimd
     ) const
     {
         DefaultWordEncoder<E, L> const encoder{};
-        auto vector_callback = spaced_kmer_candidate_vector_callback_(callback);
+        auto vector_callback = spaced_kmer_candidate_vector_callback(callback);
         auto const& masks = mask_forms.template get<Kernel>();
         dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (C == InputCheck::kChecked) {
@@ -222,25 +232,29 @@ struct SpacedKmerCandidateAsciiChunkedSimd
     }
 };
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Packed
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 template <InputCheck C, Encoding E, Layout L, std::size_t MaxMasks, typename BitExtractForm>
 struct SpacedKmerCandidatePackedBytewiseScalar
 {
     static std::string name()
     {
-        return "for_each_spaced_kmer_packed_" + input_check_name_(C) + "_bytewise_scalar_" +
-            spaced_kmer_candidate_bit_extract_name_<BitExtractForm>();
+        return "for_each_spaced_kmer_packed_" + input_check_name(C) + "_bytewise_scalar_" +
+            spaced_kmer_candidate_bit_extract_name<BitExtractForm>();
     }
     static bool available()
     {
-        return spaced_kmer_candidate_bit_extract_available_<BitExtractForm>();
+        return spaced_kmer_candidate_bit_extract_available<BitExtractForm>();
     }
     static bool preferred()
     {
-        return spaced_kmer_candidate_bit_extract_preferred_<BitExtractForm>();
+        return spaced_kmer_candidate_bit_extract_preferred<BitExtractForm>();
     }
 
     template <std::size_t MaxSpan, typename Seq, typename Callback>
@@ -249,7 +263,7 @@ struct SpacedKmerCandidatePackedBytewiseScalar
         Callback& callback
     ) const
     {
-        auto const bit_extract = spaced_kmer_candidate_bit_extract_<BitExtractForm>();
+        auto const bit_extract = spaced_kmer_candidate_bit_extract<BitExtractForm>();
         auto const& masks = mask_forms.template get<BitExtractForm>();
         dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (C == InputCheck::kChecked) {
@@ -270,11 +284,11 @@ struct SpacedKmerCandidatePackedBytewiseSimd
 {
     static std::string name()
     {
-        return "for_each_spaced_kmer_packed_" + input_check_name_(C) + "_bytewise_simd_" +
-            spaced_kmer_candidate_bit_extract_name_<Kernel>();
+        return "for_each_spaced_kmer_packed_" + input_check_name(C) + "_bytewise_simd_" +
+            spaced_kmer_candidate_bit_extract_name<Kernel>();
     }
-    static bool available() { return spaced_kmer_candidate_bit_extract_available_<Kernel>(); }
-    static bool preferred() { return spaced_kmer_candidate_bit_extract_preferred_<Kernel>(); }
+    static bool available() { return spaced_kmer_candidate_bit_extract_available<Kernel>(); }
+    static bool preferred() { return spaced_kmer_candidate_bit_extract_preferred<Kernel>(); }
 
     template <std::size_t MaxSpan, typename Seq, typename Callback>
     FISK_ALWAYS_INLINE void run(
@@ -282,7 +296,7 @@ struct SpacedKmerCandidatePackedBytewiseSimd
         Callback& callback
     ) const
     {
-        auto vector_callback = spaced_kmer_candidate_vector_callback_(callback);
+        auto vector_callback = spaced_kmer_candidate_vector_callback(callback);
         auto const& masks = mask_forms.template get<Kernel>();
         dispatch_static_span<MaxMasks>(masks, [&](auto span) FISK_ALWAYS_INLINE_LAMBDA {
             if constexpr (C == InputCheck::kChecked) {
@@ -294,9 +308,13 @@ struct SpacedKmerCandidatePackedBytewiseSimd
     }
 };
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Candidate Lists
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 // The estimate of for_each_spaced_kmer(), see visit_estimate(): the scalar loop with PEXT, where
 // it is likely fast, else the SIMD loop with the butterfly kernel of the arch of the `Simds`, a
@@ -333,5 +351,7 @@ struct SpacedKmerEstimate<I, C, E, L, MaxMasks, TypeList<Simd...>>
 
     using type = std::conditional_t<I == InputFormat::kAscii, Ascii, Packed>;
 };
+
+} // namespace detail
 
 } // namespace fisk

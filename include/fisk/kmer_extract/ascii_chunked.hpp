@@ -34,10 +34,12 @@ inline constexpr std::size_t kDefaultAsciiChunkSize = 65536;
 //     Internal Helpers
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 // One reused buffer per thread and type of scratch, shared by all chunked functions and callback
 // types that use it.
 template <PackedSequenceType PackedSequenceChunk>
-inline PackedSequenceChunk& ascii_chunked_buffer_()
+inline PackedSequenceChunk& ascii_chunked_buffer()
 {
     thread_local PackedSequenceChunk buffer;
     return buffer;
@@ -52,11 +54,11 @@ inline PackedSequenceChunk& ascii_chunked_buffer_()
 // not on the chunk size, and the packed loops are compiled once per callback.
 template <typename Func>
 FISK_ALWAYS_INLINE
-inline auto ascii_chunk_callback_(Func& func, std::size_t offset)
+inline auto ascii_chunk_callback(Func& func, std::size_t offset)
 {
     // `func` is checked here, as the packed loops see only this callback, see
-    // check_callback_parameters_() (core/kmer_callback.hpp).
-    check_callback_parameters_<Func>();
+    // check_callback_parameters() (core/kmer_callback.hpp).
+    check_callback_parameters<Func>();
     return [&func, offset]<typename First, typename... Args>(
         First&& first, Args&&... args
     ) FISK_ALWAYS_INLINE_LAMBDA requires std::invocable<Func&, First, Args...> {
@@ -72,9 +74,13 @@ inline auto ascii_chunk_callback_(Func& func, std::size_t offset)
     };
 }
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Driver
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 /**
  * @brief Pack `seq` chunk by chunk into `scratch`, and call `run(scratch, chunk_func)` for each
@@ -97,7 +103,7 @@ template <
     requires (PackedSequenceChunk::encoding == Encoder::encoding)
         && (PackedSequenceChunk::layout == Encoder::layout)
 FISK_ALWAYS_INLINE_FOR_EACH
-inline void for_each_ascii_chunk_(
+inline void for_each_ascii_chunk(
     std::string_view seq, std::size_t span, Encoder const& encoder, PackedSequenceChunk& scratch,
     Func& func, Run&& run
 ) {
@@ -113,12 +119,14 @@ inline void for_each_ascii_chunk_(
         } else {
             pack_sequence_unchecked(view, encoder, scratch);
         }
-        run(scratch, ascii_chunk_callback_(func, chunk_start));
+        run(scratch, ascii_chunk_callback(func, chunk_start));
 
         if (chunk_end == seq_len) {
             break;
         }
     }
 }
+
+} // namespace detail
 
 } // namespace fisk

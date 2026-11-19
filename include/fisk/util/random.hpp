@@ -9,17 +9,21 @@ namespace fisk {
 //     Random numbers
 // =================================================================================================
 
+namespace detail {
+
 /**
  * @brief The splitmix64 finalizer, mixing every input bit into every output bit.
  *
  * Shared by Splitmix64 below and the k-mer hashes in core/kmer_hash.hpp.
  */
-inline constexpr std::uint64_t mix64_( std::uint64_t z ) noexcept
+inline constexpr std::uint64_t mix64( std::uint64_t z ) noexcept
 {
     z = ( z ^ ( z >> 30 ) ) * 0xbf58476d1ce4e5b9ULL;
     z = ( z ^ ( z >> 27 ) ) * 0x94d049bb133111ebULL;
     return z ^ ( z >> 31 );
 }
+
+} // namespace detail
 
 /**
  * @brief Fast deterministic random bit generator via the splitmix64 algorithm.
@@ -59,7 +63,7 @@ public:
     inline std::uint64_t get_uint64()
     {
         state_ += 0x9e3779b97f4a7c15ULL;
-        return mix64_( state_ );
+        return detail::mix64( state_ );
     }
 
     inline double get_double()

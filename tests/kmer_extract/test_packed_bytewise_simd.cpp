@@ -74,10 +74,10 @@ template <SimdArch Simd, Encoding E, Layout L>
 static void check_simd_arch()
 {
     auto const narrow_width = [](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_bytewise_simd_narrow_width_<Simd>(seq, k, func);
+        detail::for_each_kmer_packed_bytewise_simd_narrow_width<Simd>(seq, k, func);
     };
     auto const full_width = [](auto const& seq, std::size_t k, auto const& func) {
-        for_each_kmer_packed_bytewise_simd_full_width_<Simd>(seq, k, func);
+        detail::for_each_kmer_packed_bytewise_simd_full_width<Simd>(seq, k, func);
     };
     // The dispatcher hands on the vectors as KmerVector<E, L, Simd>, checked here as raw vectors.
     auto const dispatch = [](auto const& seq, std::size_t k, auto const& func) {
@@ -120,7 +120,9 @@ static void check_simd_arch()
                         std::size_t const count = store_valid_lanes(kmers, n, stored);
                         EXPECT_EQ(count, n);
                         for (std::size_t i = 0; i < count; ++i) {
-                            invoke_kmer_callback<E, L>(callback, pos + i, kmer_value(stored[i]));
+                            detail::invoke_kmer_callback<E, L>(
+                                callback, pos + i, kmer_value(stored[i])
+                            );
                         }
                     }
                 );

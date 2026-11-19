@@ -92,6 +92,8 @@ enum class InputFormat
     kPacked
 };
 
+namespace detail {
+
 // Code that branches on these conventions does so with an `if constexpr` chain, and ends it in a
 // static_assert rather than an unguarded `else`, so that adding a third Encoding or Layout later
 // fails to compile at every site that has to be updated, instead of silently falling into whichever
@@ -101,6 +103,8 @@ enum class InputFormat
 // ternaries on them instead starts with a static_assert of the values that they handle.
 template <auto V>
 inline constexpr bool dependent_false_v = false;
+
+} // namespace detail
 
 // =================================================================================================
 //     Packed Sequence
@@ -219,7 +223,9 @@ public:
             } else if constexpr (L == Layout::kLSB) {
                 storage_[bytes - 1] &= static_cast<std::uint8_t>((1u << (2 * used)) - 1u);
             } else {
-                static_assert(dependent_false_v<L>, "Unhandled Layout in PackedSequence::resize()");
+                static_assert(
+                    detail::dependent_false_v<L>, "Unhandled Layout in PackedSequence::resize()"
+                );
             }
         }
     }
@@ -270,7 +276,7 @@ public:
      * @brief The number of zero bytes after the validity bits, for a length above 0.
      *
      * The loops whose steps cover 8 bytes of codes load validity words up to 31 positions past
-     * the last k-mer, see run_packed_bytewise_blocks_() (kmer_extract/internal.hpp).
+     * the last k-mer, see run_packed_bytewise_blocks() (kmer_extract/internal.hpp).
      */
     static constexpr std::size_t validity_padding = 16;
 
@@ -597,6 +603,8 @@ concept SpacedKmerType = KmerType<K> && std::same_as<K, SpacedKmer<K::encoding, 
 
 inline constexpr std::size_t kDefaultMaxSpan = FISK_DEFAULT_MAX_SPAN;
 
+namespace detail {
+
 /**
  * @brief The number of pieces of a spaced k-mer mask of span @p span_k, see SpacedKmerMask.
  */
@@ -613,6 +621,8 @@ inline constexpr std::size_t spaced_kmer_mask_tail_span(std::size_t span_k) noex
 {
     return span_k - 28 * (spaced_kmer_mask_piece_count(span_k) - 1);
 }
+
+} // namespace detail
 
 /**
  * @brief A spaced k-mer mask with its pieces in the form `BitExtractForm` of some bit extraction
@@ -647,7 +657,7 @@ struct SpacedKmerMask
 
     static constexpr Layout layout = L;
     static constexpr std::size_t max_span = MaxSpan;
-    static constexpr std::size_t max_pieces = spaced_kmer_mask_piece_count(MaxSpan);
+    static constexpr std::size_t max_pieces = detail::spaced_kmer_mask_piece_count(MaxSpan);
 
     // The form of each piece, such as BitExtractMask.
     using bit_extract_form = BitExtractForm;
@@ -674,17 +684,21 @@ struct SpacedKmerMask
     #pragma warning(pop)
 #endif
 
+namespace detail {
+
 template <typename T>
-struct is_spaced_kmer_mask_ : std::false_type {};
+struct is_spaced_kmer_mask : std::false_type {};
 
 template <Layout L, typename BitExtractForm, std::size_t MaxSpan>
-struct is_spaced_kmer_mask_<SpacedKmerMask<L, BitExtractForm, MaxSpan>> : std::true_type {};
+struct is_spaced_kmer_mask<SpacedKmerMask<L, BitExtractForm, MaxSpan>> : std::true_type {};
+
+} // namespace detail
 
 /**
  * @brief A spaced k-mer mask, i.e., a SpacedKmerMask, and not an untagged bit extraction mask.
  */
 template <typename T>
-concept SpacedKmerMaskType = is_spaced_kmer_mask_<T>::value;
+concept SpacedKmerMaskType = detail::is_spaced_kmer_mask<T>::value;
 
 // =================================================================================================
 //     K-mer Vectors

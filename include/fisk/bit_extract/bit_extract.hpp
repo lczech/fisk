@@ -361,12 +361,14 @@ struct BitExtractBlockShift
 
 inline constexpr BitExtractBlockShift bit_extract_block_shift{};
 
+namespace detail {
+
 /**
  * @brief Helper for bit_extract_block_shift_unrolled() to run the unrolled block shift for one
  * chunk.
  */
 template<std::size_t... Is>
-inline std::uint64_t bit_extract_block_shift_chunk_(
+inline std::uint64_t bit_extract_block_shift_chunk(
     std::uint64_t x,
     BitExtractBlockShiftMask const& bt,
     std::size_t i,
@@ -377,6 +379,8 @@ inline std::uint64_t bit_extract_block_shift_chunk_(
     ((res |= (x & bt.blocks[i + Is]) >> bt.shifts[i + Is]), ...);
     return res;
 }
+
+} // namespace detail
 
 /**
  * @brief Bit extract via block shift, with compile-time loop unrolling
@@ -403,7 +407,7 @@ struct BitExtractBlockShiftUnrolled
         std::uint64_t res = 0;
         std::size_t i = 0;
         while( bt.blocks[i] ) {
-            res |= bit_extract_block_shift_chunk_(x, bt, i, idx);
+            res |= detail::bit_extract_block_shift_chunk(x, bt, i, idx);
             i += UF;
         }
 

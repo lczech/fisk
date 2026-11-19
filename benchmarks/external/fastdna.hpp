@@ -120,7 +120,7 @@ inline void encode_pext(std::string_view seq, std::uint8_t* out) noexcept
         std::uint64_t word;
         std::memcpy(&word, seq.data() + i, sizeof(word));
         if constexpr (L == fisk::Layout::kMSB) {
-            auto const encoded = _pext_u64(fisk::byte_swap_64(word), mask);
+            auto const encoded = _pext_u64(fisk::detail::byte_swap_64(word), mask);
             *out++ = static_cast<std::uint8_t>(encoded >> 8);
             *out++ = static_cast<std::uint8_t>(encoded);
         } else {

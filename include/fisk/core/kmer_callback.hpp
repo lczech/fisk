@@ -30,7 +30,7 @@ namespace fisk {
 
 // Positions, mask indices, and counts are std::size_t, and a callback that takes one of them as a
 // narrower integer, such as `int` or `std::uint32_t`, would silently truncate it, for example the
-// positions beyond 2^32 of a long sequence. check_callback_parameters_() rejects such callbacks at
+// positions beyond 2^32 of a long sequence. check_callback_parameters() rejects such callbacks at
 // compile time, where their parameter types can be read from their type: functions, function
 // pointers, and classes with one `operator()` that is not a template, such as lambdas without
 // `auto` parameters and std::function. The parts of a callback_overload are checked each. Not
@@ -40,59 +40,61 @@ namespace fisk {
 // compile the bodies of generic lambdas with those types. An `auto` position takes the
 // std::size_t as it is passed.
 
+namespace detail {
+
 // Whether any parameter of a function type is an integer narrower than 64 bits.
 template <typename F>
-struct callback_narrow_parameters_ : std::false_type {};
+struct callback_narrow_parameters : std::false_type {};
 
 template <typename R, typename... Args>
-struct callback_narrow_parameters_<R(Args...)>
+struct callback_narrow_parameters<R(Args...)>
     : std::bool_constant<(
         (std::integral<std::remove_cvref_t<Args>> && sizeof(std::remove_cvref_t<Args>) < 8) || ...
     )>
 {};
 
 template <typename R, typename... Args>
-struct callback_narrow_parameters_<R(Args...) noexcept>
-    : callback_narrow_parameters_<R(Args...)>
+struct callback_narrow_parameters<R(Args...) noexcept>
+    : callback_narrow_parameters<R(Args...)>
 {};
 
 template <typename R, typename C, typename... Args>
-struct callback_narrow_parameters_<R (C::*)(Args...)> : callback_narrow_parameters_<R(Args...)> {};
+struct callback_narrow_parameters<R (C::*)(Args...)> : callback_narrow_parameters<R(Args...)> {};
 
 template <typename R, typename C, typename... Args>
-struct callback_narrow_parameters_<R (C::*)(Args...) const>
-    : callback_narrow_parameters_<R(Args...)>
+struct callback_narrow_parameters<R (C::*)(Args...) const>
+    : callback_narrow_parameters<R(Args...)>
 {};
 
 template <typename R, typename C, typename... Args>
-struct callback_narrow_parameters_<R (C::*)(Args...) noexcept>
-    : callback_narrow_parameters_<R(Args...)>
+struct callback_narrow_parameters<R (C::*)(Args...) noexcept>
+    : callback_narrow_parameters<R(Args...)>
 {};
 
 template <typename R, typename C, typename... Args>
-struct callback_narrow_parameters_<R (C::*)(Args...) const noexcept>
-    : callback_narrow_parameters_<R(Args...)>
+struct callback_narrow_parameters<R (C::*)(Args...) const noexcept>
+    : callback_narrow_parameters<R(Args...)>
 {};
 
 // Whether `F` has one `operator()` that is not a template. A trait instead of a requires-expression:
 // Clang 13 reports the address of a template or overloaded `operator()` as a hard error there.
 template <typename F, typename = void>
-struct callback_has_single_call_operator_ : std::false_type {};
+struct callback_has_single_call_operator : std::false_type {};
 
 template <typename F>
-struct callback_has_single_call_operator_<F, std::void_t<decltype(&F::operator())>>
+struct callback_has_single_call_operator<F, std::void_t<decltype(&F::operator())>>
     : std::true_type
 {};
 
 // Whether `Callback` takes an integer narrower than 64 bits, as far as its type tells, see above.
 template <typename Callback>
-consteval bool callback_has_narrow_parameters_()
+consteval bool callback_has_narrow_parameters()
 {
     using F = std::remove_pointer_t<std::remove_cvref_t<Callback>>;
     if constexpr (std::is_function_v<F>) {
-        return callback_narrow_parameters_<F>::value;
-    } else if constexpr (callback_has_single_call_operator_<F>::value) {
-        return callback_narrow_parameters_<decltype(&F::operator())>::value;
+        return callback_narrow_parameters<F>::value;
+    } else if constexpr (callback_has_single_call_operator<F>::value) {
+        return callback_narrow_parameters<decltype(&F::operator())>::value;
     } else {
         return false;
     }
@@ -101,14 +103,16 @@ consteval bool callback_has_narrow_parameters_()
 // Reject a callback that takes an integer narrower than 64 bits, see above.
 template <typename Callback>
 FISK_ALWAYS_INLINE
-constexpr void check_callback_parameters_() noexcept
+constexpr void check_callback_parameters() noexcept
 {
     static_assert(
-        !callback_has_narrow_parameters_<Callback>(),
+        !callback_has_narrow_parameters<Callback>(),
         "Callback parameters for positions, mask indices, and counts must be 64-bit integers, "
         "such as std::size_t: a narrower type would truncate them."
     );
 }
+
+} // namespace detail
 
 // -------------------------------------------------------------------------------------------------
 //     Contiguous K-mers
@@ -196,6 +200,8 @@ concept KmerVectorLaneCallback =
 //     Contiguous K-mers
 // -------------------------------------------------------------------------------------------------
 
+namespace detail {
+
 /**
  * @brief Invoke a k-mer extraction callback with the k-mer of a raw word, with or without a leading
  * position argument.
@@ -208,7 +214,7 @@ template <Encoding E, Layout L, typename Callback>
 FISK_ALWAYS_INLINE
 inline void invoke_kmer_callback(Callback&& callback, std::size_t pos, std::uint64_t raw)
 {
-    check_callback_parameters_<Callback>();
+    check_callback_parameters<Callback>();
     using Value = Kmer<E, L>;
     auto const value = kmer_cast_unchecked<E, L>(raw);
     if constexpr (std::invocable<Callback, std::size_t, Value const&>) {
@@ -235,7 +241,7 @@ FISK_ALWAYS_INLINE
 inline void invoke_kmer_vector_callback(
     Callback&& callback, std::size_t pos, KmerVector<E, L, Simd> kmers, std::size_t valid_count
 ) {
-    check_callback_parameters_<Callback>();
+    check_callback_parameters<Callback>();
     if constexpr (KmerVectorCallback<Callback, E, L, Simd>) {
         callback(pos, kmers, valid_count);
     } else {
@@ -259,7 +265,7 @@ inline void invoke_kmer_vector_valid_lanes_callback(
     Callback&& callback, std::size_t pos, KmerVector<E, L, Simd> kmers,
     SimdVectorValidLanes<Simd> valid_lanes
 ) {
-    check_callback_parameters_<Callback>();
+    check_callback_parameters<Callback>();
     if constexpr (KmerVectorValidLanesCallback<Callback, E, L, Simd>) {
         callback(pos, kmers, valid_lanes);
     } else {
@@ -270,9 +276,13 @@ inline void invoke_kmer_vector_valid_lanes_callback(
     }
 }
 
+} // namespace detail
+
 // -------------------------------------------------------------------------------------------------
 //     Spaced K-mers
 // -------------------------------------------------------------------------------------------------
+
+namespace detail {
 
 /**
  * @brief Invoke a spaced k-mer extraction callback with the spaced k-mer of a raw word, with
@@ -291,7 +301,7 @@ FISK_ALWAYS_INLINE
 inline void invoke_spaced_kmer_callback(
     Callback&& callback, std::size_t mask_idx, std::size_t pos, std::uint64_t raw
 ) {
-    check_callback_parameters_<Callback>();
+    check_callback_parameters<Callback>();
     using Value = SpacedKmer<E, L>;
     auto const value = spaced_kmer_cast_unchecked<E, L>(raw);
 
@@ -337,7 +347,7 @@ inline void invoke_spaced_kmer_vector_callback(
     Callback&& callback, std::size_t mask_idx, std::size_t pos,
     SpacedKmerVector<E, L, Simd> spaced_kmers, std::size_t valid_count
 ) {
-    check_callback_parameters_<Callback>();
+    check_callback_parameters<Callback>();
     using V = SpacedKmerVector<E, L, Simd>;
     if constexpr (std::invocable<Callback, std::size_t, std::size_t, V, std::size_t>) {
         callback(pos, mask_idx, spaced_kmers, valid_count);
@@ -367,7 +377,7 @@ inline void invoke_spaced_kmer_vector_valid_lanes_callback(
     Callback&& callback, std::size_t mask_idx, std::size_t pos,
     SpacedKmerVector<E, L, Simd> spaced_kmers, SimdVectorValidLanes<Simd> valid_lanes
 ) {
-    check_callback_parameters_<Callback>();
+    check_callback_parameters<Callback>();
     using V = SpacedKmerVector<E, L, Simd>;
     using Lanes = SimdVectorValidLanes<Simd>;
     if constexpr (std::invocable<Callback, std::size_t, std::size_t, V, Lanes>) {
@@ -383,16 +393,20 @@ inline void invoke_spaced_kmer_vector_valid_lanes_callback(
     }
 }
 
+} // namespace detail
+
 // =================================================================================================
 //     Valid Lanes of K-mer Vectors
 // =================================================================================================
 
+namespace detail {
+
 // Call `func` with the single k-mer or spaced k-mer `raw` of a vector `V`, with or without `pos`.
 template <KmerVectorType V, typename Func>
 FISK_ALWAYS_INLINE
-inline void invoke_kmer_vector_lane_callback_(Func& func, std::size_t pos, std::uint64_t raw)
+inline void invoke_kmer_vector_lane_callback(Func& func, std::size_t pos, std::uint64_t raw)
 {
-    check_callback_parameters_<Func>();
+    check_callback_parameters<Func>();
     using K = typename V::kmer_type;
     K const kmer{raw};
     if constexpr (std::invocable<Func&, std::size_t, K const&>) {
@@ -408,13 +422,15 @@ inline void invoke_kmer_vector_lane_callback_(Func& func, std::size_t pos, std::
 // which avoids that.
 template <KmerVectorType V>
 FISK_ALWAYS_INLINE
-inline void copy_kmer_vector_lanes_(V const& kmers, std::uint64_t (&words)[V::lanes])
+inline void copy_kmer_vector_lanes(V const& kmers, std::uint64_t (&words)[V::lanes])
 {
     std::memcpy(words, &kmers.value, sizeof(words));
     #if defined(__clang__) && !defined(__apple_build_version__) && __clang_major__ <= 16
     __asm__ volatile("" : "+m"(words));
     #endif
 }
+
+} // namespace detail
 
 /**
  * @brief Call `func` with each of the first `valid_count` k-mers of a vector of k-mers or spaced
@@ -431,9 +447,9 @@ inline void for_each_valid_lane(std::size_t pos, V kmers, std::size_t valid_coun
 {
     assert(valid_count <= V::lanes);
     std::uint64_t words[V::lanes];
-    copy_kmer_vector_lanes_(kmers, words);
+    detail::copy_kmer_vector_lanes(kmers, words);
     for (std::size_t j = 0; j < valid_count; ++j) {
-        invoke_kmer_vector_lane_callback_<V>(func, pos + j, words[j]);
+        detail::invoke_kmer_vector_lane_callback<V>(func, pos + j, words[j]);
     }
 }
 
@@ -452,14 +468,14 @@ inline void for_each_valid_lane(
     std::size_t pos, V kmers, SimdVectorValidLanes<typename V::simd> valid_lanes, Func&& func
 ) {
     std::uint64_t words[V::lanes];
-    copy_kmer_vector_lanes_(kmers, words);
+    detail::copy_kmer_vector_lanes(kmers, words);
     std::uint64_t const bits = valid_lanes.bits;
 
     // A loop with a fixed count over all lanes, which tests the bit of each, rather than a loop
     // over the set bits, whose number of iterations depends on the valid lanes.
     for (std::size_t j = 0; j < V::lanes; ++j) {
         if ((bits >> j) & 1u) {
-            invoke_kmer_vector_lane_callback_<V>(func, pos + j, words[j]);
+            detail::invoke_kmer_vector_lane_callback<V>(func, pos + j, words[j]);
         }
     }
 }
@@ -505,10 +521,10 @@ inline std::size_t store_valid_lanes(
 template <typename... Fs>
 struct callback_overload : Fs...
 {
-    // Each part on its own, see check_callback_parameters_(): the overload set as a whole has no
+    // Each part on its own, see check_callback_parameters(): the overload set as a whole has no
     // single `operator()`.
     static_assert(
-        (!callback_has_narrow_parameters_<Fs>() && ...),
+        (!detail::callback_has_narrow_parameters<Fs>() && ...),
         "Callback parameters for positions, mask indices, and counts must be 64-bit integers, "
         "such as std::size_t: a narrower type would truncate them."
     );

@@ -201,9 +201,9 @@ static void check_pieces()
         auto const mask = make_spaced_kmer_mask<L, 128>(mask_string);
         auto const butterfly_mask = make_spaced_kmer_butterfly_mask(mask);
         std::size_t const span_k = mask_string.size();
-        std::size_t const count = spaced_kmer_mask_piece_count(span_k);
+        std::size_t const count = detail::spaced_kmer_mask_piece_count(span_k);
         EXPECT_EQ(count, span_k <= 32 ? 1 : (span_k - 29 + 55) / 28);
-        EXPECT_EQ(spaced_kmer_mask_tail_span(span_k), span_k - 28 * (count - 1));
+        EXPECT_EQ(detail::spaced_kmer_mask_tail_span(span_k), span_k - 28 * (count - 1));
         EXPECT_TRUE(is_valid_spaced_kmer_mask(mask));
         EXPECT_TRUE(is_valid_spaced_kmer_mask(butterfly_mask));
         EXPECT_EQ(spaced_kmer_mask_string(mask), mask_string);
@@ -226,7 +226,8 @@ static void check_pieces()
             std::uint64_t value = 0;
             std::uint64_t butterfly_value = 0;
             for (std::size_t j = 0; j < count; ++j) {
-                std::size_t const len = j + 1 == count ? spaced_kmer_mask_tail_span(span_k) : 28;
+                std::size_t const len =
+                    j + 1 == count ? detail::spaced_kmer_mask_tail_span(span_k) : 28;
                 auto const piece = kmer_encode<Kmer<Encoding::kACGT, L>>(
                     window.substr(28 * j, len)
                 );

@@ -13,7 +13,7 @@ std::uint64_t run_var_unchecked_bytewise_simd_full_width_scalar_lsb(
     SinkBuffer& sink_buffer
 ) {
     auto sink = make_sink(sink_buffer);
-    for_each_kmer_packed_bytewise_simd_full_width_<SimdScalar>(
+    detail::for_each_kmer_packed_bytewise_simd_full_width<SimdScalar>(
         seq, k,
         [&](std::size_t, std::uint64_t v, std::size_t valid_count) FISK_ALWAYS_INLINE_LAMBDA {
             consume_valid_lanes<SimdScalar>(sink, v, valid_count);
