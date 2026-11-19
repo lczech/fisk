@@ -123,3 +123,60 @@ jobs:
         with:
           name: benchmarks-${{ matrix.config.os }}-${{ matrix.config.compiler }}-${{ matrix.sink }}
           path: ${{ env.OUTPUT_DIR }}
+
+  # A short run of scripts/run_benchmarks.sh, which build-benchmark does not cover: the script
+  # itself, the genome sweep, and the example via example/run_human_genome.sh. The small FASTA of
+  # the example stands in for the human genome, and the suites run with short samples, so the
+  # timings are meaningless; only the run and its output files are checked. One compiler per OS
+  # suffices, as the script does the same for each: Apple Clang on macOS (the script's default),
+  # Clang on Linux.
+  run-script:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - os: macos-latest
+            compilers: ""
+          - os: ubuntu-latest
+            compilers: clang
+
+    runs-on: ${{ matrix.config.os }}
+
+    env:
+      OUTPUT_DIR: artifacts/run-script-${{ matrix.config.os }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run the benchmark script
+        run: |
+          compiler_args=()
+          if [ -n "${{ matrix.config.compilers }}" ]; then
+            compiler_args=( --compilers "${{ matrix.config.compilers }}" )
+          fi
+          scripts/run_benchmarks.sh --modes sum --genome-file example/test.fa \
+            --results-dir "${OUTPUT_DIR}" "${compiler_args[@]}" \
+            -- --sample-ms 1 --warmup-ms 0 --repeats 1 --scaling-max-length 65536
+
+      - name: Check the output files
+        run: |
+          for name in sys_info.txt log.txt for_each_scaling.csv genome_sweep.csv \
+              genome_sweep_log.txt human_genome.csv; do
+            if [ -z "$(find "${OUTPUT_DIR}" -name "$name" -size +0)" ]; then
+              echo "Missing or empty: $name" >&2
+              exit 1
+            fi
+          done
+          find "${OUTPUT_DIR}" -type f | sort
+
+      - name: Upload artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: run-script-${{ matrix.config.os }}
+          path: ${{ env.OUTPUT_DIR }}
