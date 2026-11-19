@@ -89,7 +89,7 @@ All of them are in namespace `fisk`. Namespace `fisk::detail` holds the internal
 
 In `core/types.hpp`:
 
- - `Encoding`, `Layout`, and `InputCheck` select the 2-bit codes of the nucleotides, their order in a word, and whether the input is checked, see the [main README](../../README.md#k-mer-extraction).
+ - `Encoding`, `Layout`, and `InputCheck` select the 2-bit codes of the nucleotides, their order in a word, and whether the input is checked, see the [main README](../../README.md#details-of-the-extraction).
  - `Kmer<E, L>` holds the codes of a k-mer of up to 32 nucleotides in a 64-bit word, `value`. It does not store its length k, which the functions that need it take as an argument. `KmerAcgtMsb`, `KmerAcgtLsb`, `KmerActgMsb`, and `KmerActgLsb` name its four conventions.
  - `SpacedKmer<E, L>` holds the codes of the kept nucleotides of a spaced k-mer, densely packed, and `SpacedKmerAcgtMsb` and the others name its conventions.
  - `KmerVector<E, L, Simd>` and `SpacedKmerVector<E, L, Simd>` hold a SIMD vector of them, one per 64-bit lane, as the SIMD algorithms hand them out. `SimdVectorValidLanes<Simd>` marks which of their lanes are valid, for the checked functions.
@@ -122,7 +122,7 @@ In `core/kmer_spaced.hpp`; for creating the masks, see [above](#spaced-k-mer-mas
 
 In `core/kmer_callback.hpp`:
 
- - `callback_overload{...}` combines several lambdas into one callback, such as one for single k-mers and one for vectors, see the [main README](../../README.md#k-mer-extraction).
+ - `callback_overload{...}` combines several lambdas into one callback, such as one for single k-mers and one for vectors, see the [main README](../../README.md#details-of-the-extraction).
  - `for_each_valid_lane()` calls a function with each valid k-mer of a vector, and `store_valid_lanes()` stores them in an array and returns their number.
  - `KmerCallback`, `SpacedKmerCallback`, and the other concepts list the forms of callbacks that the functions take. A callback of single k-mers can leave out the position, and one of single spaced k-mers of a single mask can leave out the mask index, or both.
 

@@ -47,7 +47,8 @@ or as a subdirectory, e.g., a git submodule, via `add_subdirectory(path/to/fisk)
 using namespace fisk;
 
 for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
-    seq, 31, [&](std::size_t pos, KmerAcgtMsb kmer) {
+    seq, 31,
+    [&](std::size_t pos, KmerAcgtMsb kmer) {
         // ...
     }
 );
@@ -62,13 +63,14 @@ SpacedKmerMaskForms<Layout::kMSB> const mask_forms({
     "1011011011011011011011011011011"
 });
 for_each_spaced_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
-    seq, mask_forms, [&](std::size_t pos, std::size_t mask_idx, SpacedKmerAcgtMsb kmer) {
+    seq, mask_forms,
+    [&](std::size_t pos, std::size_t mask_idx, SpacedKmerAcgtMsb kmer) {
         // ...
     }
 );
 ```
 
-The input is a `std::string_view` (or anything that converts to one, such as a `std::string`), or a [packed sequence](#k-mer-extraction), whose type then gives the template arguments. `InputCheck::kChecked` skips the k-mers with characters other than ACGT, such as N; `kUnchecked` is faster for input without them.
+The input is a `std::string_view` (or anything that converts to one, such as a `std::string`), or a [packed sequence](#details-of-the-extraction), whose type then gives the template arguments. `InputCheck::kChecked` skips the k-mers with characters other than ACGT, such as N; `kUnchecked` is faster for input without them.
 
 By default, fisk runs on any CPU of its architecture, using SSE2 on x86-64 and Neon on Apple Silicon. For the faster algorithms of AVX2 and PEXT, build for recent x86-64 CPUs, see [Performance and build options](#performance-and-build-options). The [example](example/README.md) is a complete program that uses both functions.
 
@@ -84,17 +86,20 @@ By default, fisk runs on any CPU of its architecture, using SSE2 on x86-64 and N
 **Vectors.** The callback can also take the vectors of the SIMD algorithms directly, for consumers that process the k-mers with SIMD themselves, which saves unpacking them:
 
 ```cpp
-for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(seq, 31, callback_overload{
-    [&](std::size_t pos, KmerAcgtMsb kmer) {
-        // a single k-mer
-    },
-    [&](std::size_t pos, auto kmers, auto valid_lanes) {
-        // a KmerVector of any SIMD arch
+for_each_kmer<InputCheck::kChecked, Encoding::kACGT, Layout::kMSB>(
+    seq, 31,
+    callback_overload{
+        [&](std::size_t pos, KmerAcgtMsb kmer) {
+            // a single k-mer
+        },
+        [&](std::size_t pos, auto kmers, auto valid_lanes) {
+            // a KmerVector of any SIMD arch
+        }
     }
-});
+);
 ```
 
-The algorithms that are not SIMD hand the callback single k-mers. This includes the PEXT choice for spaced k-mers, so that a callback that takes vectors can there be faster with a SIMD algorithm called directly.
+Alternatively, a struct can be used, as in the [example](example/README.md). The algorithms that are not SIMD hand the callback single k-mers. This includes the PEXT choice for spaced k-mers, so that a callback that takes vectors can there be faster with a SIMD algorithm called directly.
 
 **Order.** The k-mers are handed out in order of their positions. For spaced k-mers with several masks, the scalar loops hand out the spaced k-mers of all masks at one position before the next position, and the SIMD loops those of one mask for a whole vector of positions before the next mask.
 

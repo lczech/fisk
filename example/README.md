@@ -26,7 +26,7 @@ cmake --build build-example
 
 ## Notes
 
- - The callback takes one k-mer at a time, as most programs do. A callback that also takes the vectors of the SIMD algorithms can be faster, for consumers that work on vectors themselves, see [K-mer extraction](../README.md#k-mer-extraction).
+ - The callback takes one k-mer at a time, as most programs do. A callback that also takes the vectors of the SIMD algorithms can be faster, for consumers that work on vectors themselves, see [Details of the extraction](../README.md#details-of-the-extraction).
  - For input with only the characters ACGT, the unchecked extraction (`InputCheck::kUnchecked`) is faster.
  - The example reads the sequences into `AlignedString`, and builds with code alignment flags, for the best speed; any string works, and the flags are optional, see [Performance and build options](../README.md#performance-and-build-options).
  - The example uses a function per k-mer that does almost nothing, as a showcase of the pure extraction work. A program that does more with each k-mer of course takes additional time.
